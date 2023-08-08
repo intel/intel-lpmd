@@ -1,0 +1,96 @@
+.\" intel_lpmd (8) manual page
+.\"
+.\" This is free documentation; you can redistribute it and/or
+.\" modify it under the terms of the GNU General Public License as
+.\" published by the Free Software Foundation; either version 2 of
+.\" the License, or (at your option) any later version.
+.\"
+.\" The GNU General Public License's references to "object code"
+.\" and "executables" are to be interpreted as the output of any
+.\" document formatting or typesetting system, including
+.\" intermediate and printed output.
+.\"
+.\" This manual is distributed in the hope that it will be useful,
+.\" but WITHOUT ANY WARRANTY; without even the implied warranty of
+.\" MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+.\" GNU General Public License for more details.
+.\"
+.\" You should have received a copy of the GNU General Public Licence along
+.\" with this manual; if not, write to the Free Software Foundation, Inc.,
+.\" 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+.\"
+.\" Copyright (C) 2012 Intel Corporation. All rights reserved.
+.\"
+.TH intel_lpmd "8" "1 Jun 2023"
+
+.SH NAME
+intel_lpmd \- Intel Low Power Mode Daemon
+.SH SYNOPSIS
+.B intel_lpmd
+.RI " [ " OPTIONS " ]
+
+.SH DESCRIPTION
+.B intel_lpmd
+is a Linux daemon used to optimize active idle power. This
+daemon uses a configuration file "intel_lpmd_config.xml".
+Based on the configuration, it will choose right set of CPUs
+to enable. For example, this daemon can monitor system utilization
+and choose a set of low power CPUs to enable and disable the rest.
+This enable disable of CPUs are done using Linux cpuset feature
+of intel power clamp driver.
+
+There is a control utility distributed along with this daemon.
+This control utility is called "intel_lpmd_control". This utility
+can be used to set different modes for this daemon.
+For example:
+intel_lpmd_control ON
+	To turn on low power mode operation.
+intel_lpmd_control OFF
+	To turn off low power mode operation.
+intel_lpmd_control AUTO
+	To turn on low power mode operation in auto mode, which
+	allows low power mode based on system utilization.
+.SH OPTIONS
+.TP
+.B -h --help
+Print the help message
+
+.TP
+.B --version
+Print intel_lpmd version and exit
+
+.TP
+.B --no-daemon
+Don't run as a daemon: Default is daemon mode
+
+.TP
+.B --systemd
+Assume daemon is started by systemd
+
+.TP
+.B --loglevel=
+log severity: can be info or debug
+
+.TP
+.B --dbus-enable
+Enable Dbus server to receive requests via Dbus
+
+.TP
+.B --dry-run
+Dry run without taking any action for debugging purpose.
+
+.SH EXAMPLES
+.TP
+.B intel_lpmd --loglevel=info --no-daemon --dbus-enable
+Run intel_lpmd with log directed to stdout
+
+.TP
+.B intel_lpmd --systemd --dbus-enable
+Run intel_lpmd as a service with logs directed to system journal
+
+.SH SEE ALSO
+intel_lpmd_config.xml(5)
+
+.SH AUTHOR
+Written by Zhang Rui <rui.zhang@intel.com>
+

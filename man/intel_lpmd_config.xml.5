@@ -1,0 +1,294 @@
+.\" intel_lpmd_config.xml(5) manual page
+.\"
+.\" This is free documentation; you can redistribute it and/or
+.\" modify it under the terms of the GNU General Public License as
+.\" published by the Free Software Foundation; either version 2 of
+.\" the License, or (at your option) any later version.
+.\"
+.\" The GNU General Public License's references to "object code"
+.\" and "executables" are to be interpreted as the output of any
+.\" document formatting or typesetting system, including
+.\" intermediate and printed output.
+.\"
+.\" This manual is distributed in the hope that it will be useful,
+.\" but WITHOUT ANY WARRANTY; without even the implied warranty of
+.\" MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+.\" GNU General Public License for more details.
+.\"
+.\" You should have received a copy of the GNU General Public Licence along
+.\" with this manual; if not, write to the Free Software Foundation, Inc.,
+.\" 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+.\"
+.\" Copyright (C) 2012 Intel Corporation. All rights reserved.
+.\"
+.TH intel_lpmd_config.xml "5" "1 Jun 2023"
+
+.SH NAME
+intel_lpmd_config.xml \- Configuration file for intel_lpmd
+.SH SYNOPSIS
+$(TDCONFDIR)/etc/intel_lpmd/intel_lpmd_config.xml
+
+.SH DESCRIPTION
+.B intel_lpmd_config.xml
+is a configuration file for the Intel Low Power Mode Daemon.
+It is used to describe the lp_mode_cpus to use in Low Power Mode,
+as well as the way to restrict work to those CPUs. It also describes
+if and how the HFI monitor and utilization monitor works. The location
+of this file depends on the configuration option used during build time.
+.PP
+.B lp_mode_cpus
+is a set of active CPUs when system is in Low Power Mode.
+This usually equals a group of most power efficient CPUs on a platform to
+achieve best power saving. When not specified, intel_lpmd tool can detect this
+automatically. E.g. it uses an E-core Module on Intel Alderlake platform, and
+it uses the Low Power E-cores on SoC Die on Intel Meteorlake platform.
+.PP
+.B Mode
+specifies the way to migrate the tasks to the lp_mode_cpus.
+.IP \(bu 2
+Mode 0: set cpuset to the lp_mode_cpus for systemd. All tasks created by
+systemd will run on these CPUs only. This is supported for cgroup v2 based
+systemd only.
+.IP \(bu 2
+Mode 1: Isolate the non-lp_mode_cpus so that tasks are scheduled to the
+lp_mode_cpus only.
+.IP \(bu 2
+Mode 2: Force idle injection to the non-lp_mode_cpus and leverage the
+scheduler to schedule the other tasks to the lp_mode_cpus.
+.PP
+.B PerformanceDef
+specifies the default behavior when power setting is set to Performance.
+.IP \(bu 2
+-1 : Never enter Low Power Mode.
+.IP \(bu 2
+0 : opportunistic Low Power Mode enter/exit based on HFI/Utilization request.
+.IP \(bu 2
+1 : Always stay in Low Power Mode.
+.PP
+.B BalancedDef
+specifies the default behavior when power setting is set to Balanced.
+.PP
+.B PowersaverDef
+specifies the default behavior when power setting is set to Power saver.
+.PP
+.B HfiLpmEnable
+specifies if the HFI monitor can capture the HFI hints for Low Power Mode.
+.PP
+.B HfiSuvEnable
+specifies if the HFI monitor can capture the HFI hints for survivability mode.
+.PP
+.B util_entry_threshold
+specifies the system utilization threshold for entering Low Power Mode.
+The system workload is considered to fit the lp_mode_cpus capacity when system
+utilization is under this threshold.
+Setting to 0 or leaving this empty disables the utilization monitor.
+
+.PP
+.B util_exit_threshold
+specifies the CPU utilization threshold for exiting Low Power Mode.
+The system workload is considered to not fit the lp_mode_cpus capacity when
+the utilization of the busiest lp_mode_cpus is above this threshold.
+Setting to 0 or leaving this empty disables the utilization monitor.
+.PP
+.B EntryDelayMS
+specifies the sample interval used by the utilization Monitor when system
+wants to enter Low Power Mode based on system utilization.
+Setting to 0 or leaving this empty will cause the utilization Monitor to use
+the default interval, 1000 milli seconds.
+.PP
+.B ExitDelayMS
+specifies the sample interval used by the utilization Monitor when system
+wants to exit Low Power Mode based on CPU utilization.
+Setting to 0 or leaving this empty will cause the utilization Monitor to use
+the adaptive value. The adaptive interval is based on CPU utilization.
+The busier the CPU is, the shorter interval the utilization monitor uses.
+.PP
+.B EntryHystMS
+specifies a hysteresis threshold when system is in Low Power Mode.
+If set, when the previous average time stayed in Low Power Mode is lower than
+this value, the current enter Low Power Mode request will be ignored because
+it is expected that the system will exit Low Power Mode soon.
+Setting to 0 or leaving this empty disables this hysteresis algorithm.
+.PP
+.B ExitHystMS
+specifies a hysteresis threshold when system is not in Low Power Mode.
+If set, when the previous average time stayed out of Low-Power-Mode is lower
+than this value, the current exit Low Power Mode request will be ignored
+because it is expected that the system will enter Low Power Mode soon.
+Setting to 0 or leaving this empty disables this hysteresis algorithm.
+
+.SH FILE FORMAT
+The configuration file format conforms to XML specifications.
+.sp 1
+.EX
+<Configuration>
+	<!--
+		CPU format example: 1,2,4..6,8-10
+	-->
+	<lp_mode_cpus>Example CPUs</lp_mode_cpus>
+
+	<!--
+		Mode values
+		0: Cgroup v2
+		1: Cgroup v2 isolate
+		2: CPU idle injection
+	-->
+	<Mode>0|1|2</Mode>
+
+	<!--
+		Default behavior when Performance power setting is used
+		-1: force off. (Never enter Low Power Mode)
+		 1: force on. (Always stay in Low Power Mode)
+		 0: auto. (opportunistic Low Power Mode enter/exit)
+	-->
+	<PerformanceDef>-1|0|1</PerformanceDef>
+
+	<!--
+		Default behavior when Balanced power setting is used
+		-1: force off. (Never enter Low Power Mode)
+		 1: force on. (Always stay in Low Power Mode)
+		 0: auto. (opportunistic Low Power Mode enter/exit)
+	-->
+	<BalancedDef>-1|0|1</BalancedDef>
+
+	<!--
+		Default behavior when Power saver setting is used
+		-1: force off. (Never enter Low Power Mode)
+		 1: force on. (Always stay in Low Power Mode)
+		 0: auto. (opportunistic Low Power Mode enter/exit)
+	-->
+	<PowersaverDef>-1|0|1</PowersaverDef>
+
+	<!--
+		Use HFI LPM hints
+		0 : No
+		1 : Yes
+	-->
+	<HfiLpmEnable>0|1</HfiLpmEnable>
+
+	<!--
+		Use HFI SUV hints
+		0 : No
+		1 : Yes
+	-->
+	<HfiSuvEnable>0|1</HfiSuvEnable>
+
+	<!--
+		System utilization threshold to enter LP mode
+		from 0 - 100
+	-->
+	<util_entry_threshold>Example threshold</util_entry_threshold>
+
+	<!--
+		System utilization threshold to exit LP mode
+		from 0 - 100
+	-->
+	<util_exit_threshold>Example threshold</util_exit_threshold>
+
+	<!--
+		Entry delay. Minimum delay in non Low Power mode to
+		enter LPM mode.
+	-->
+	<EntryDelayMS>Example delay</EntryDelayMS>
+
+	<!--
+		Exit delay. Minimum delay in Low Power mode to
+		exit LPM mode.
+	-->
+	<ExitDelayMS>Example delay</ExitDelayMS>
+
+	<!--
+		Lowest hyst average in-LP-mode time in msec to enter LP mode
+		0: to disable hyst support
+	-->
+	<EntryHystMS>Example hyst</EntryHystMS>
+
+	<!--
+		Lowest hyst average out-of-LP-mode time in msec to exit LP mode
+		0: to disable hyst support
+	-->
+	<ExitHystMS>Example hyst</ExitHystMS>
+
+</Configuration>
+
+.EE
+.SH EXAMPLE CONFIGURATIONS
+.PP
+.B Example 1:
+This is the minimum configuration.
+.IP \(bu 2
+lp_mode_cpus: not set. Detects the lp_mode_cpus automatically.
+.IP \(bu 2
+Mode: 0. Use cgroup-v2 systemd for task migration.
+.IP \(bu 2
+HfiLpmEnable: 0. Ignore HFI Low Power mode hints.
+.IP \(bu 2
+HfiSuvEnable: 0. Ignore HFI Survivability mode hints. With both HfiLpmEnable and HfiSuvEnable cleared, the HFI monitor will be disabled.
+.IP \(bu 2
+util_entry_threshold: 0. Disable utilization monitor.
+.IP \(bu 2
+util_exit_threshold: 0. Disable utilization monitor.
+.IP \(bu 2
+EntryDelayMS: 0. Do not take effect when utilization monitor is disabled.
+.IP \(bu 2
+ExitDelayMS: 0. Do not take effect when utilization monitor is disabled.
+.IP \(bu 2
+EntryHystMS: 0. Do not take effect when utilization monitor is disabled.
+.IP \(bu 2
+ExitHystMS: 0. Do not take effect when utilization monitor is disabled.
+
+.sp 1
+.EX
+<?xml version="1.0"?>
+<Configuration>
+	<lp_mode_cpus></lp_mode_cpus>
+	<Mode>0</Mode>
+	<HfiLpmEnable>0</HfiLpmEnable>
+	<HfiSuvEnable>0</HfiSuvEnable>
+	<util_entry_threshold>0</util_entry_threshold>
+	<util_exit_threshold>0</util_exit_threshold>
+	<EntryDelayMS>0</EntryDelayMS>
+	<ExitDelayMS>0</ExitDelayMS>
+	<EntryHystMS>0</EntryHystMS>
+	<ExitHystMS>0</ExitHystMS>
+</Configuration>
+.PP
+.B Example 2:
+This is the typical configuration. The utilization thresholds and delays may be different based on requirement.
+.IP \(bu 2
+lp_mode_cpus: not set. Detects the lp_mode_cpus automatically.
+.IP \(bu 2
+Mode: 0. Use cgroup-v2 systemd for task migration.
+.IP \(bu 2
+HfiLpmEnable: 1. Enter/Exit Low Power Mode based on HFI hints.
+.IP \(bu 2
+HfiSuvEnable: 1. Enter/Exit Survivability mode based on HFI hints.
+.IP \(bu 2
+util_entry_threshold: 5. Enter Low Power Mode when system utilization is lower than 5%.
+.IP \(bu 2
+util_exit_threshold: 95. Exit Low Power Mode when the utilization of any of the lp_mode_cpus is higher than 95%.
+.IP \(bu 2
+EntryDelayMS: 0. Resample every 1000ms when system is out of Low Power Mode.
+.IP \(bu 2
+ExitDelayMS: 0. Resample adaptively based on the utilization of lp_mode_cpus when system is in Low Power Mode.
+.IP \(bu 2
+EntryHystMS: 2000. Ignore the current Enter Low Power Mode request when the previous average time stayed in Low Power Mode is lower than 2000ms.
+.IP \(bu 2
+ExitHystMS: 3000. Ignore the current Exit Low Power Mode request when the previous average time stayed out of Low Power Mode is lower than 3000ms.
+
+.sp 1
+.EX
+<?xml version="1.0"?>
+<Configuration>
+	<lp_mode_cpus></lp_mode_cpus>
+	<Mode>0</Mode>
+	<HfiLpmEnable>1</HfiLpmEnable>
+	<HfiSuvEnable>1</HfiSuvEnable>
+	<util_entry_threshold>5</util_entry_threshold>
+	<util_exit_threshold>95</util_exit_threshold>
+	<EntryDelayMS>0</EntryDelayMS>
+	<ExitDelayMS>0</ExitDelayMS>
+	<EntryHystMS>2000</EntryHystMS>
+	<ExitHystMS>3000</ExitHystMS>
+</Configuration>
+.EE

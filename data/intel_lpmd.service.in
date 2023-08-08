@@ -1,0 +1,14 @@
+[Unit]
+Description= Intel Low Power Daemon Service
+ConditionVirtualization=no
+
+[Service]
+Type=dbus
+SuccessExitStatus=2
+BusName=org.freedesktop.intel_lpmd
+ExecStart=@sbindir@/intel_lpmd --systemd --dbus-enable
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+Alias=org.freedesktop.intel_lpmd.service
