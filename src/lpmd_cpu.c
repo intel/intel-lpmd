@@ -1187,8 +1187,8 @@ static int process_cpu_isolate_enter(void)
 			return ret;
 		}
 		lpmd_log_info ("\tCreate %s\n", "/sys/fs/cgroup/lpm");
+		closedir (dir);
 	}
-	closedir (dir);
 
 	if (lpmd_write_str ("/sys/fs/cgroup/lpm/cpuset.cpus.partition", "member", LPMD_LOG_INFO))
 		return 1;
