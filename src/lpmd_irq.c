@@ -317,9 +317,9 @@ int init_irq(void)
 			}
 		}
 		while ((entry) && (irqbalance_pid == -1));
+	
+		closedir (dir);
 	}
-
-	closedir (dir);
 
 	if (irqbalance_pid == -1) {
 		lpmd_log_info ("\tirqbalance not running, run in native mode\n");
