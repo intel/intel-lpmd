@@ -69,7 +69,7 @@ static int dump_smp_affinity(void)
 	struct dirent *d;
 	char path[MAX_STR_LENGTH * 2];
 	char str[MAX_STR_LENGTH];
-	int ret;
+	size_t ret;
 
 	if (!in_debug_mode())
 		return 0;
@@ -84,7 +84,8 @@ static int dump_smp_affinity(void)
 
 			str[0] = '\0';
 			ret = fread(str, 1, MAX_STR_LENGTH, filep);
-			lpmd_log_debug("%s:%s", path, str);
+			if (ret)
+				lpmd_log_debug("%s:%s", path, str);
 			fclose(filep);
 		}
 		closedir(dir);
