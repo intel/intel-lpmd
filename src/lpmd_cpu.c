@@ -1089,7 +1089,7 @@ static int enter_suv_mode(enum lpm_command cmd)
 	 * we need to exit LPM first because we need to reset the cpumask
 	 * of the intel_powerclamp sysfs I/F.
 	 *
-	 * In order to make the logic simplier, always exit LPM when Idle
+	 * In order to make the logic simpler, always exit LPM when Idle
 	 * injection is used for LPM.
 	 * The downside is that we need to do an extra LPM exit but this
 	 * should be rare because it is abnormal to get an SUV request when
