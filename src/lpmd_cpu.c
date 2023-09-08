@@ -645,15 +645,15 @@ static int detect_lpm_cpus_l3(void)
 	char path[MAX_STR_LENGTH];
 	int i, ret;
 
-	snprintf (path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cache/", i);
-	if (access(path, F_OK)) {
-		lpmd_log_error("Mandatory sysfs %s does not exist.\n", path);
-		return -1;
-	}
-
 	for (i = 0; i < topo_max_cpus; i++) {
 		if (!is_cpu_online (i))
 			continue;
+
+		snprintf (path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cache/", i);
+		if (access(path, F_OK)) {
+			lpmd_log_error("Mandatory sysfs %s does not exist.\n", path);
+			return -1;
+		}
 
 		snprintf (path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cache/index3/level", i);
 		if (lpmd_open (path, -1))
