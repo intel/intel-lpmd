@@ -7,6 +7,10 @@ for Intel Low Power Mode daemon
 
 <Configuration>
 	<!--
+		specify number of lpm cpu between 0 ~ max system support
+	-->
+	<max_lpm_cpus>8</max_lpm_cpus>
+	<!--
 		CPU format example: 1,2,4..6,8-10
 	-->
 	<lp_mode_cpus></lp_mode_cpus>

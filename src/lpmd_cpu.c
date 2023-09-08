@@ -52,6 +52,8 @@
 
 #include "lpmd.h"
 
+extern int max_lpm_cpus;
+
 static int topo_max_cpus;
 static int max_online_cpu;
 static size_t size_cpumask;
@@ -350,7 +352,7 @@ static int _add_cpu(int cpu, enum cpumask_idx idx)
 	if (!cpumasks[idx].mask)
 		alloc_cpu_set (&cpumasks[idx].mask);
 
-	if (idx != CPUMASK_ONLINE && CPU_COUNT_S(size_cpumask, cpumasks[idx].mask) >= MAX_LPM_CPUS)
+	if (idx != CPUMASK_ONLINE && CPU_COUNT_S(size_cpumask, cpumasks[idx].mask) >= max_lpm_cpus)
 		return LPMD_FATAL_ERROR;
 
 	CPU_SET_S(cpu, size_cpumask, cpumasks[idx].mask);

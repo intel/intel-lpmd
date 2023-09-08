@@ -183,6 +183,12 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_co
 					else
 						goto err;
 				}
+				else if (!strncmp (cur_node->name, "max_lpm_cpus", strlen ("max_lpm_cpus"))) {
+					errno = 0;
+					lpmd_config->max_lpm_cpus = strtol (tmp_value, &pos, 10);
+					if (errno || *pos != '\0'|| lpmd_config->max_lpm_cpus < 0 || lpmd_config->max_lpm_cpus > sysconf(_SC_NPROCESSORS_ONLN))
+						goto err;
+				}
 				else {
 					lpmd_log_info ("Invalid configuration data\n");
 					goto err;

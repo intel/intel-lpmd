@@ -123,6 +123,7 @@ typedef struct {
 	int util_entry_hyst;
 	int util_exit_hyst;
 	int ignore_itmt;
+	int max_lpm_cpus;
 	char lp_mode_cpus[MAX_STR_LENGTH];
 } lpmd_config_t;
 
@@ -203,6 +204,8 @@ int intel_dbus_server_init(gboolean (*exit_handler)(void));
 int lpmd_get_config(lpmd_config_t *lpmd_config);
 
 /* util.c */
+int init_util(lpmd_config_t *lpmd_config);
+int exit_util();
 int periodic_util_update(void);
 
 /* cpu.c */
