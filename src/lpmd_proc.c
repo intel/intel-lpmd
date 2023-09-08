@@ -231,7 +231,7 @@ static int lpm_can_process(enum lpm_command cmd)
 		case DBUS_SUV_ENTER:
 			lpm_state |= LPM_SUV_ON;
 			return 1;
-			/* Re-enter LPM when quiting SUV mode */
+			/* Re-enter LPM when quitting SUV mode */
 		case HFI_SUV_EXIT:
 		case DBUS_SUV_EXIT:
 			lpm_state &= ~LPM_SUV_ON;
@@ -536,7 +536,7 @@ static int proc_message(message_capsul_t *msg)
 	return ret;
 }
 
-// LPMD processing thread. This is callback to pthred lpmd_core_main
+// LPMD processing thread. This is callback to pthread lpmd_core_main
 static void* lpmd_core_main_loop(void *arg)
 {
 	int interval, n;
