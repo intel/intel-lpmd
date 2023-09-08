@@ -503,6 +503,7 @@ static int proc_message(message_capsul_t *msg)
 			lpmd_log_msg ("Terminating ...\n");
 			ret = -1;
 			main_loop_terminate = true;
+			exit_util ();
 			hfi_kill ();
 			exit_lpm (USER_EXIT);
 			break;
@@ -604,6 +605,8 @@ int lpmd_main(void)
 
 	pthread_mutex_init (&lpmd_mutex, NULL);
 
+	init_util(&lpmd_config);
+
 	ret = init_cpu (lpmd_config.lp_mode_cpus, lpmd_config.mode);
 	if (ret)
 		return ret;
@@ -651,6 +654,7 @@ int lpmd_main(void)
 		poll_fds[hfi_wakeup_fd].revents = 0;
 		poll_fd_cnt++;
 	}
+
 
 	pthread_attr_init (&lpmd_attr);
 	pthread_attr_setdetachstate (&lpmd_attr, PTHREAD_CREATE_DETACHED);

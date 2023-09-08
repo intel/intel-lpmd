@@ -59,9 +59,9 @@ enum type_stat {
 };
 
 // One for system utilization, MAX_LPM_CPUS for LPM cpu utilization
-unsigned long long proc_stat_prev[MAX_LPM_CPUS + 1][STAT_EXT_MAX];
-unsigned long long proc_stat_cur[MAX_LPM_CPUS + 1][STAT_EXT_MAX];
-
+unsigned long long **proc_stat_prev;
+unsigned long long **proc_stat_cur;
+int max_lpm_cpus = 0;
 static int busy_sys = -1;
 static int busy_cpu = -1;
 
@@ -72,7 +72,7 @@ static int calculate_busypct(unsigned long long *cur, unsigned long long *prev)
 
 	for (idx = STAT_USER; idx < STAT_MAX; idx++) {
 		total += (cur[idx] - prev[idx]);
-//		 Align with the "top" utility logic
+		// Align with the "top" utility logic
 		if (idx != STAT_IDLE && idx != STAT_IOWAIT)
 			busy += (cur[idx] - prev[idx]);
 	}
@@ -89,14 +89,22 @@ static int parse_proc_stat(void)
 	int i;
 	int val;
 	int pos = 0;
-	int size = sizeof(unsigned long long) * (MAX_LPM_CPUS + 1) * STAT_MAX;
+	int size = sizeof(unsigned long long) * STAT_MAX;
+	unsigned long long** tmp = proc_stat_prev;
+
+	if (!proc_stat_prev || !proc_stat_cur)
+		return 1; 
 
 	filep = fopen (PATH_PROC_STAT, "r");
 	if (!filep)
 		return 1;
 
-	memcpy (proc_stat_prev, proc_stat_cur, size);
-	memset (proc_stat_cur, 0, size);
+	proc_stat_prev = proc_stat_cur;	
+	proc_stat_cur  = tmp;	
+
+	for (i = 0; i < max_lpm_cpus; i ++) {
+		memset (proc_stat_cur[i], 0, size);
+	}
 
 	while (!feof (filep)) {
 		int idx;
@@ -137,18 +145,17 @@ static int parse_proc_stat(void)
 				continue;
 			}
 
-//			 array 0 is always for system utilization
+			// array 0 is always for system utilization
 			if (!pos)
 				pos = 1;
-			if (pos > MAX_LPM_CPUS) {
+			if (pos >= max_lpm_cpus) {
 				free (tmpline);
 				free (line);
 				break;;
 			}
 			proc_stat_cur[pos][STAT_VALID] = 1;
 			proc_stat_cur[pos++][STAT_CPU] = cpu;
-		}
-		else {
+		} else {
 			free (tmpline);
 			free (line);
 			continue;
@@ -181,7 +188,7 @@ static int parse_proc_stat(void)
 	busy_sys = calculate_busypct (proc_stat_cur[0], proc_stat_prev[0]);
 
 	busy_cpu = 0;
-	for (i = 1; i < MAX_LPM_CPUS + 1; i++) {
+	for (i = 1; i < max_lpm_cpus; i++) {
 		if (!proc_stat_cur[i][STAT_VALID])
 			continue;
 
@@ -306,6 +313,36 @@ static int get_util_interval(void)
 	if (!interval)
 		interval = 100;
 	return interval;
+}
+
+int init_util(lpmd_config_t *lpmd_config) 
+{
+	max_lpm_cpus = lpmd_config->max_lpm_cpus + 1;
+
+	proc_stat_prev = (unsigned long long**) malloc (sizeof(unsigned long long*) * max_lpm_cpus);
+	for (int i = 0; i < max_lpm_cpus; ++ i) {
+		proc_stat_prev[i] = (unsigned long long*) malloc(sizeof(unsigned long long) * STAT_EXT_MAX);
+	}
+
+	proc_stat_cur = (unsigned long long**) malloc (sizeof(unsigned long long*) * max_lpm_cpus);
+	for (int i = 0; i < max_lpm_cpus; ++ i) {
+		proc_stat_cur[i] = (unsigned long long*) malloc(sizeof(unsigned long long) * STAT_EXT_MAX);
+	}
+
+}
+
+int exit_util()
+{
+	for (int i = 0; i < max_lpm_cpus; ++ i) {
+		free(proc_stat_prev[i]);
+		proc_stat_prev[i] = NULL;
+		free(proc_stat_cur[i]);
+		proc_stat_cur[i] = NULL;
+	}
+	free(proc_stat_prev);
+	proc_stat_prev = NULL;
+	free(proc_stat_cur);
+	proc_stat_cur = NULL;
 }
 
 int periodic_util_update(void)
