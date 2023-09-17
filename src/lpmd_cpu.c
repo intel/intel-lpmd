@@ -1187,6 +1187,7 @@ static int process_cpu_isolate_enter(void)
 			return ret;
 		}
 		lpmd_log_info ("\tCreate %s\n", "/sys/fs/cgroup/lpm");
+	} else {
 		closedir (dir);
 	}
 
