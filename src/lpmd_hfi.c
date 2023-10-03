@@ -110,7 +110,7 @@ static int send_and_recv_msgs(struct hfi_event_data *drv, struct nl_msg *msg,
 		nl_cb_set (cb, NL_CB_VALID, NL_CB_CUSTOM, valid_handler, valid_data);
 
 	while (err > 0)
-		nl_recvmsgs (drv->nl_handle, cb);
+		err = nl_recvmsgs (drv->nl_handle, cb);
 out: nl_cb_put (cb);
 	nlmsg_free (msg);
 	return err;
