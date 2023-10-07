@@ -1,3 +1,8 @@
+# Intel Low Power Mode Daemon
+
+Intel Low Power Model Daemon is a Linux daemon used to optimize active idle power.
+It selects a set of most power efficient CPUs based on configuration file or CPU topology. Based on system utilization and other hints, it puts the system into Low Power Mode by activate the power efficient CPUs and disable the rest, and restore the system from Low Power Mode by activating all CPUs.
+
 <p>Use man pages to check command line arguments and xml configurations</p>
 <pre><code>man intel_lpmd
 man intel_lpmd_config.xml</code></pre></p>
