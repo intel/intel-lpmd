@@ -174,7 +174,6 @@ static int parse_proc_stat(void)
 
 		free (tmpline);
 		free (line);
-		continue;
 	}
 
 	fclose (filep);
