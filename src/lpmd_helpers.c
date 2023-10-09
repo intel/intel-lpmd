@@ -53,7 +53,7 @@ static int _write_str(const char *name, char *str, int print_level, int log_leve
 
 	ret = fprintf (filep, "%s", str);
 	if (ret <= 0) {
-		lpmd_log_error ("%sWrite \"%s\" to %s failed, strlen %lu, ret %d\n", prefix, str, name,
+		lpmd_log_error ("%sWrite \"%s\" to %s failed, strlen %zu, ret %d\n", prefix, str, name,
 						strlen (str), ret);
 		fclose (filep);
 		return 1;
