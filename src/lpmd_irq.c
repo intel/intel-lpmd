@@ -327,7 +327,7 @@ int init_irq(void)
 		return LPMD_SUCCESS;
 	}
 
-end: snprintf (irq_socket_name, 64, "%s/%s%d.sock", SOCKET_TMPFS, SOCKET_PATH, irqbalance_pid);
+	snprintf (irq_socket_name, 64, "%s/%s%d.sock", SOCKET_TMPFS, SOCKET_PATH, irqbalance_pid);
 	socket_fd = socket_init_connection (irq_socket_name);
 	if (socket_fd < 0) {
 		lpmd_log_error ("Can not connect to irqbalance socket /run/irqbalance/irqbalance%d.sock\n",
