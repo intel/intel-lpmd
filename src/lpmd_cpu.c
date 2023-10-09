@@ -123,7 +123,7 @@ static size_t alloc_cpu_set(cpu_set_t **cpu_set)
 		size_cpumask = size;
 
 	if (size_cpumask && size_cpumask != size) {
-		lpmd_log_error ("Conflict cpumask size %lu vs. %lu\n", size, size_cpumask);
+		lpmd_log_error ("Conflict cpumask size %zu vs. %zu\n", size, size_cpumask);
 		exit (-1);
 	}
 	return size;
