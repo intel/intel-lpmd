@@ -423,7 +423,7 @@ static int set_max_cpu_num(void)
 static int detect_supported_cpu(void)
 {
 	unsigned int eax, ebx, ecx, edx;
-	int val, ret;
+	int val;
 
 	__cpuid(7, eax, ebx, ecx, edx);
 
@@ -643,7 +643,7 @@ static int detect_lpm_cpus_cluster(void)
 static int detect_lpm_cpus_l3(void)
 {
 	char path[MAX_STR_LENGTH];
-	int i, ret;
+	int i;
 
 	for (i = 0; i < topo_max_cpus; i++) {
 		if (!is_cpu_online (i))
