@@ -167,7 +167,7 @@ static int parse_proc_stat(void)
 				continue;
 			}
 
-			sscanf (p, "%lld", &proc_stat_cur[pos - 1][idx]);
+			sscanf (p, "%llu", &proc_stat_cur[pos - 1][idx]);
 			p = strtok (NULL, " ");
 			idx++;
 		}
