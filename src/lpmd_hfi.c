@@ -318,12 +318,9 @@ void hfi_receive(void)
 
 int hfi_init(void)
 {
-	int ret;
-
 	struct nl_sock *sock;
 	struct nl_cb *cb;
 	int mcast_id;
-	int err = 0;
 
 	signal (SIGPIPE, SIG_IGN);
 
