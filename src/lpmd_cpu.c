@@ -471,7 +471,7 @@ static int parse_cpu_topology(void)
 		snprintf (path, sizeof(path), "/sys/devices/system/cpu/cpu%d/online", i);
 		filep = fopen (path, "r");
 		if (filep) {
-			if (fscanf (filep, "%d", &online) != 1)
+			if (fscanf (filep, "%u", &online) != 1)
 				lpmd_log_warn ("fread failed for %s\n", path);
 			fclose (filep);
 		}
