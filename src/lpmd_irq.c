@@ -143,8 +143,8 @@ end: socket_cmd[offset] = '\0';
 	clock_gettime (CLOCK_MONOTONIC, &tp1);
 	socket_send_cmd (irq_socket_name, socket_cmd);
 	clock_gettime (CLOCK_MONOTONIC, &tp2);
-	lpmd_log_info ("\tSend socket command %s (%ld ns)\n", socket_cmd,
-		1000000000 * (tp2.tv_sec - tp1.tv_sec) + tp2.tv_nsec - tp1.tv_nsec);
+	lpmd_log_info ("\tSend socket command %s (%lu ns)\n", socket_cmd,
+		1000000000UL * (tp2.tv_sec - tp1.tv_sec) + tp2.tv_nsec - tp1.tv_nsec);
 	return 0;
 }
 
