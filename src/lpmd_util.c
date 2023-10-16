@@ -167,14 +167,13 @@ static int parse_proc_stat(void)
 				continue;
 			}
 
-			sscanf (p, "%lld", &proc_stat_cur[pos - 1][idx]);
+			sscanf (p, "%llu", &proc_stat_cur[pos - 1][idx]);
 			p = strtok (NULL, " ");
 			idx++;
 		}
 
 		free (tmpline);
 		free (line);
-		continue;
 	}
 
 	fclose (filep);
@@ -237,10 +236,7 @@ static unsigned long avg_in, avg_out;
 static int util_should_proceed(enum system_status status)
 {
 	struct timespec tp_now;
-	unsigned long sample;
 	unsigned long cur_in, cur_out;
-	static int prev_in, prev_out;
-	int i, j, k;
 
 	if (!util_out_hyst && !util_in_hyst)
 		return 1;

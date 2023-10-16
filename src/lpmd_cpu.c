@@ -123,7 +123,7 @@ static size_t alloc_cpu_set(cpu_set_t **cpu_set)
 		size_cpumask = size;
 
 	if (size_cpumask && size_cpumask != size) {
-		lpmd_log_error ("Conflict cpumask size %lu vs. %lu\n", size, size_cpumask);
+		lpmd_log_error ("Conflict cpumask size %zu vs. %zu\n", size, size_cpumask);
 		exit (-1);
 	}
 	return size;
@@ -423,7 +423,7 @@ static int set_max_cpu_num(void)
 static int detect_supported_cpu(void)
 {
 	unsigned int eax, ebx, ecx, edx;
-	int val, ret;
+	int val;
 
 	__cpuid(7, eax, ebx, ecx, edx);
 
@@ -471,7 +471,7 @@ static int parse_cpu_topology(void)
 		snprintf (path, sizeof(path), "/sys/devices/system/cpu/cpu%d/online", i);
 		filep = fopen (path, "r");
 		if (filep) {
-			if (fscanf (filep, "%d", &online) != 1)
+			if (fscanf (filep, "%u", &online) != 1)
 				lpmd_log_warn ("fread failed for %s\n", path);
 			fclose (filep);
 		}
@@ -643,7 +643,7 @@ static int detect_lpm_cpus_cluster(void)
 static int detect_lpm_cpus_l3(void)
 {
 	char path[MAX_STR_LENGTH];
-	int i, ret;
+	int i;
 
 	for (i = 0; i < topo_max_cpus; i++) {
 		if (!is_cpu_online (i))

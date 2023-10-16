@@ -43,7 +43,6 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_co
 	xmlNode *cur_node = NULL;
 	char *tmp_value;
 	char *pos;
-	int ret;
 
 	if (!doc || !a_node || !lpmd_config)
 		return LPMD_ERROR;
