@@ -153,6 +153,16 @@ int lpm_state = LPM_USER_OFF;
 
 static pthread_mutex_t lpm_mutex;
 
+typedef enum {
+	WLT_IDLE,
+	WLT_BATTERY_LIFE,
+	WLT_SUSTAINED,
+	WLT_BURSTY,
+	WLT_INVALID,
+} wlt_type_t;
+
+static wlt_type_t wlt_process(int ignore_exit);
+
 /*
  * 1: request valid and already satisfied. 0: respond valid and need to continue to process. -1: request invalid
  */
@@ -179,6 +189,7 @@ static int lpm_can_process(enum lpm_command cmd)
 		case USER_AUTO:
 			lpm_state &= ~LPM_USER_ON;
 			lpm_state &= ~LPM_USER_OFF;
+			lpm_state |= LPM_UTIL_ON;
 			/* Do nothing but just clear the flag */
 			return 0;
 		case HFI_ENTER:
@@ -419,7 +430,7 @@ void lpmd_notify_hfi_event(void)
 	sleep (1);
 }
 
-#define LPMD_NUM_OF_POLL_FDS	4
+#define LPMD_NUM_OF_POLL_FDS	5
 
 static pthread_t lpmd_core_main;
 static pthread_attr_t lpmd_attr;
@@ -429,7 +440,7 @@ static int poll_fd_cnt;
 
 static int wakeup_fd;
 
-static int hfi_wakeup_fd;
+static int hfi_wakeup_fd, wlt_wakeup_fd = -1;
 
 #include <gio/gio.h>
 
@@ -492,6 +503,8 @@ static int poll_timeout_sec = POLL_TIMEOUT_DEFAULT_SECONDS;
 
 static bool main_loop_terminate;
 
+static void poll_for_wlt(int);
+
 // called from LPMD main thread to process user and system messages
 static int proc_message(message_capsul_t *msg)
 {
@@ -513,9 +526,11 @@ static int proc_message(message_capsul_t *msg)
 		case LPM_FORCE_OFF:
 			// Never enter LPM mode
 			exit_lpm (USER_EXIT);
+			poll_for_wlt(0);
 			break;
 		case LPM_AUTO:
 			// Enable oppotunistic LPM
+			poll_for_wlt(1);
 			process_lpm (USER_AUTO);
 			break;
 		case SUV_MODE_ENTER:
@@ -536,29 +551,161 @@ static int proc_message(message_capsul_t *msg)
 	return ret;
 }
 
-// LPMD processing thread. This is callback to pthread lpmd_core_main
+// Workload type classification
+#define WORKLOAD_NOTIFICATION_DELAY_ATTRIBUTE "/sys/bus/pci/devices/0000:00:04.0/workload_hint/notification_delay_ms"
+#define WORKLOAD_ENABLE_ATTRIBUTE "/sys/bus/pci/devices/0000:00:04.0/workload_hint/workload_hint_enable"
+#define WORKLOAD_TYPE_INDEX_ATTRIBUTE  "/sys/bus/pci/devices/0000:00:04.0/workload_hint/workload_type_index"
+
+#define NOTIFICATION_DELAY	100
+
+// Clear workload type notifications
+static void exit_wlt()
+{
+	int fd;
+
+	/* Disable feature via sysfs knob */
+	fd = open(WORKLOAD_ENABLE_ATTRIBUTE, O_RDWR);
+	if (fd < 0)
+		return;
+
+	// Disable WLT notification
+	if (write(fd, "0\n", 2) < 0) {
+		close (fd);
+		return;
+	}
+
+	close(fd);
+}
+
+// Initialize Workload type notifications
+static int init_wlt()
+{
+	char delay_str[64];
+	int fd;
+
+	lpmd_log_debug ("init_wlt begin\n");
+
+	// Set notification delay
+	fd = open(WORKLOAD_NOTIFICATION_DELAY_ATTRIBUTE, O_RDWR);
+	if (fd < 0)
+		return fd;
+
+	sprintf(delay_str, "%d\n", NOTIFICATION_DELAY);
+
+	if (write(fd, delay_str, strlen(delay_str)) < 0) {
+		close(fd);
+		return -1;
+	}
+
+	close(fd);
+
+	// Enable WLT notification
+	fd = open(WORKLOAD_ENABLE_ATTRIBUTE, O_RDWR);
+	if (fd < 0)
+		return fd;
+
+	if (write(fd, "1\n", 2) < 0) {
+		close(fd);
+		return -1;
+	}
+
+	close(fd);
+
+	// Open FD for workload type attribute
+	fd = open(WORKLOAD_TYPE_INDEX_ATTRIBUTE, O_RDONLY);
+	if (fd < 0) {
+		exit_wlt();
+		return fd;
+	}
+
+	lpmd_log_debug ("init_wlt end wlt fd:%d\n", fd);
+
+	return fd;
+}
+
+static int wlt_fd;
+
+// Read current Workload type
+static int read_wlt(int fd)
+{
+	char index_str[4];
+	int index, ret;
+
+	if (fd < 0)
+		return WLT_INVALID;
+
+	if ((lseek(fd, 0L, SEEK_SET)) < 0)
+		return WLT_INVALID;
+
+	if (read(fd, index_str, sizeof(index_str)) < 0)
+		return WLT_INVALID;
+
+	 ret = sscanf(index_str, "%d", &index);
+	 if (ret < 0)
+		return WLT_INVALID;
+
+	lpmd_log_debug("wlt:%d\n", index);
+
+	return index;
+}
+
+static void poll_for_wlt(int enable)
+{
+	static int wlt_enabled_once = 0;
+
+	if (wlt_fd <= 0) {
+		if (enable) {
+			wlt_fd = init_wlt();
+			if (wlt_fd < 0)
+				return;
+		} else {
+			return;
+		}
+	}
+
+	if (enable) {
+		wlt_wakeup_fd = poll_fd_cnt;
+		poll_fds[wlt_wakeup_fd].fd = wlt_fd;
+		poll_fds[wlt_wakeup_fd].events = POLLPRI;
+		poll_fds[wlt_wakeup_fd].revents = 0;
+		if (!wlt_enabled_once)
+			poll_fd_cnt++;
+		wlt_enabled_once = 1;
+	} else if (wlt_wakeup_fd >= 0) {
+		poll_fds[wlt_wakeup_fd].fd = -1;
+		wlt_wakeup_fd = -1;
+	}
+}
+
+// LPMD processing thread. This is callback to pthred lpmd_core_main
 static void* lpmd_core_main_loop(void *arg)
 {
 	int interval, n;
 	unsigned int i;
 	static int first_try = 1;
+	int wlt_index = WLT_INVALID;
 
 	for (;;) {
 
 		if (main_loop_terminate)
 			break;
 
+		interval = -1;
+
 		if (first_try) {
 			interval = 100;
 			first_try = 0;
-		} else {
-//			 Opportunistic LPM is disabled in below cases
-			if (lpm_state & (LPM_USER_ON | LPM_USER_OFF | LPM_SUV_ON))
+		}  else {
+			// Opportunistic LPM is disabled in below cases
+			// When workload type is available and idle don't poll
+			if ((lpm_state & (LPM_USER_ON | LPM_USER_OFF | LPM_SUV_ON)) ||
+				((lpm_state & LPM_UTIL_ON) && wlt_index <= WLT_IDLE))
 				interval = -1;
 			else
 				interval = periodic_util_update ();
 		}
 
+		lpmd_log_debug("wlt_index :%d interval: %d\n", wlt_index, interval);
 		n = poll (poll_fds, poll_fd_cnt, interval);
 		if (n < 0) {
 			lpmd_log_warn ("Write to pipe failed \n");
@@ -585,6 +732,9 @@ static void* lpmd_core_main_loop(void *arg)
 			hfi_receive ();
 		}
 
+		if (wlt_wakeup_fd >= 0 && (poll_fds[wlt_wakeup_fd].revents & POLLPRI)) {
+			wlt_index = read_wlt(poll_fds[wlt_wakeup_fd].fd);
+		}
 	}
 
 	return NULL;
