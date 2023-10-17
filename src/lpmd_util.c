@@ -198,8 +198,6 @@ enum system_status {
 
 static enum system_status sys_stat = SYS_NORMAL;
 
-static struct timespec tp1, tp2;
-
 static int first_run = 1;
 
 static enum system_status get_sys_stat(void)

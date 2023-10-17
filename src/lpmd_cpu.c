@@ -161,7 +161,7 @@ static int cpumask_to_hexstr(cpu_set_t *mask, char *str, int size)
 	int cpu;
 	int i;
 	int pos = 0;
-	char c;
+	char c = 0;
 
 	for (cpu = 0; cpu < topo_max_cpus; cpu++) {
 		i = cpu % 4;

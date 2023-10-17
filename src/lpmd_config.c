@@ -54,7 +54,7 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_co
 			if (tmp_value) {
 				lpmd_log_info ("node type: Element, name: %s, value: %s\n", cur_node->name,
 								tmp_value);
-				if (!strncmp (cur_node->name, "Mode", strlen ("Mode"))) {
+				if (!strncmp((const char*)cur_node->name, "Mode", strlen("Mode"))) {
 					errno = 0;
 					lpmd_config->mode = strtol (tmp_value, &pos, 10);
 					lpmd_log_info ("mode %d, errno %d, tmp_value %p, pos %p\n", lpmd_config->mode,
@@ -64,21 +64,21 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_co
 							|| lpmd_config->mode < 0)
 						goto err;
 				}
-				else if (!strncmp (cur_node->name, "HfiLpmEnable", strlen ("HfiEnable"))) {
+				else if (!strncmp((const char*)cur_node->name, "HfiLpmEnable", strlen("HfiEnable"))) {
 					errno = 0;
 					lpmd_config->hfi_lpm_enable = strtol (tmp_value, &pos, 10);
 					if (errno || *pos != '\0'
 							|| (lpmd_config->hfi_lpm_enable != 1 && lpmd_config->hfi_lpm_enable != 0))
 						goto err;
 				}
-				else if (!strncmp (cur_node->name, "HfiSuvEnable", strlen ("HfiEnable"))) {
+				else if (!strncmp((const char*)cur_node->name, "HfiSuvEnable", strlen("HfiEnable"))) {
 					errno = 0;
 					lpmd_config->hfi_suv_enable = strtol (tmp_value, &pos, 10);
 					if (errno || *pos != '\0'
 							|| (lpmd_config->hfi_suv_enable != 1 && lpmd_config->hfi_suv_enable != 0))
 						goto err;
 				}
-				else if (!strncmp (cur_node->name, "EntryDelayMS", strlen ("EntryDelayMS"))) {
+				else if (!strncmp((const char*)cur_node->name, "EntryDelayMS", strlen ("EntryDelayMS"))) {
 					errno = 0;
 					lpmd_config->util_entry_delay = strtol (tmp_value, &pos, 10);
 					if (errno
@@ -86,7 +86,7 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_co
 									!= '\0'|| lpmd_config->util_entry_delay < 0 || lpmd_config->util_entry_delay > UTIL_DELAY_MAX)
 						goto err;
 				}
-				else if (!strncmp (cur_node->name, "ExitDelayMS", strlen ("ExitDelayMS"))) {
+				else if (!strncmp((const char*)cur_node->name, "ExitDelayMS", strlen ("ExitDelayMS"))) {
 					errno = 0;
 					lpmd_config->util_exit_delay = strtol (tmp_value, &pos, 10);
 					if (errno
@@ -94,7 +94,7 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_co
 									!= '\0'|| lpmd_config->util_exit_delay < 0 || lpmd_config->util_exit_delay > UTIL_DELAY_MAX)
 						goto err;
 				}
-				else if (!strncmp (cur_node->name, "util_entry_threshold",
+				else if (!strncmp((const char*)cur_node->name, "util_entry_threshold",
 									strlen ("util_entry_threshold"))) {
 					errno = 0;
 					lpmd_config->util_entry_threshold = strtol (tmp_value, &pos, 10);
@@ -102,7 +102,7 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_co
 							|| lpmd_config->util_entry_threshold > 100)
 						goto err;
 				}
-				else if (!strncmp (cur_node->name, "util_exit_threshold",
+				else if (!strncmp((const char*)cur_node->name, "util_exit_threshold",
 									strlen ("util_exit_threshold"))) {
 					errno = 0;
 					lpmd_config->util_exit_threshold = strtol (tmp_value, &pos, 10);
@@ -110,7 +110,7 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_co
 							|| lpmd_config->util_exit_threshold > 100)
 						goto err;
 				}
-				else if (!strncmp (cur_node->name, "EntryHystMS", strlen ("EntryHystMS"))) {
+				else if (!strncmp((const char*)cur_node->name, "EntryHystMS", strlen ("EntryHystMS"))) {
 					errno = 0;
 					lpmd_config->util_entry_hyst = strtol (tmp_value, &pos, 10);
 					if (errno
@@ -118,7 +118,7 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_co
 									!= '\0'|| lpmd_config->util_entry_hyst < 0 || lpmd_config->util_entry_hyst > UTIL_HYST_MAX)
 						goto err;
 				}
-				else if (!strncmp (cur_node->name, "ExitHystMS", strlen ("ExitHystMS"))) {
+				else if (!strncmp((const char*)cur_node->name, "ExitHystMS", strlen ("ExitHystMS"))) {
 					errno = 0;
 					lpmd_config->util_exit_hyst = strtol (tmp_value, &pos, 10);
 					if (errno
@@ -126,7 +126,7 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_co
 									!= '\0'|| lpmd_config->util_exit_hyst < 0 || lpmd_config->util_exit_hyst > UTIL_HYST_MAX)
 						goto err;
 				}
-				else if (!strncmp (cur_node->name, "IgnoreITMT", strlen ("IgnoreITMT"))) {
+				else if (!strncmp((const char*)cur_node->name, "IgnoreITMT", strlen ("IgnoreITMT"))) {
 					errno = 0;
 					lpmd_config->ignore_itmt = strtol (tmp_value, &pos, 10);
 					if (errno
@@ -134,14 +134,14 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_co
 									!= '\0'|| lpmd_config->ignore_itmt < 0 || lpmd_config->ignore_itmt > 1)
 						goto err;
 				}
-				else if (!strncmp (cur_node->name, "lp_mode_cpus", strlen ("lp_mode_cpus"))) {
+				else if (!strncmp((const char*)cur_node->name, "lp_mode_cpus", strlen ("lp_mode_cpus"))) {
 					if (!strncmp (tmp_value, "-1", strlen ("-1")))
 						lpmd_config->lp_mode_cpus[0] = '\0';
 					else
 						snprintf (lpmd_config->lp_mode_cpus, sizeof(lpmd_config->lp_mode_cpus),
 									"%s", tmp_value);
 				}
-				else if (!strncmp (cur_node->name, "PerformanceDef", strlen ("PerformanceDef"))) {
+				else if (!strncmp((const char*)cur_node->name, "PerformanceDef", strlen ("PerformanceDef"))) {
 					errno = 0;
 					lpmd_config->performance_def = strtol (tmp_value, &pos, 10);
 					if (errno || *pos != '\0')
@@ -155,7 +155,7 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_co
 					else
 						goto err;
 				}
-				else if (!strncmp (cur_node->name, "BalancedDef", strlen ("BalancedDef"))) {
+				else if (!strncmp((const char*)cur_node->name, "BalancedDef", strlen ("BalancedDef"))) {
 					errno = 0;
 					lpmd_config->balanced_def = strtol (tmp_value, &pos, 10);
 					if (errno || *pos != '\0')
@@ -169,7 +169,7 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_co
 					else
 						goto err;
 				}
-				else if (!strncmp (cur_node->name, "PowersaverDef", strlen ("PowersaverDef"))) {
+				else if (!strncmp((const char*)cur_node->name, "PowersaverDef", strlen ("PowersaverDef"))) {
 					errno = 0;
 					lpmd_config->powersaver_def = strtol (tmp_value, &pos, 10);
 					if (errno || *pos != '\0')

@@ -157,9 +157,7 @@ int main(int argc, char *argv[])
 	gboolean log_info = FALSE;
 	gboolean log_debug = FALSE;
 	gboolean no_daemon = FALSE;
-	gboolean ignore_itmt = FALSE;
 	gboolean systemd = FALSE;
-	gchar *conf_file = NULL;
 	gboolean success;
 	GOptionContext *opt_ctx;
 	int ret;
