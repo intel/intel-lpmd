@@ -190,7 +190,10 @@ static int lpm_can_process(enum lpm_command cmd)
 			lpm_state &= ~LPM_USER_ON;
 			lpm_state &= ~LPM_USER_OFF;
 			lpm_state |= LPM_UTIL_ON;
-			/* Do nothing but just clear the flag */
+			if (has_hfi_lpm_monitor()) {
+				lpmd_log_debug("Use HFI \n");
+				lpm_state |= LPM_HFI_ON; 
+			}
 			return 0;
 		case HFI_ENTER:
 			if (lpm_state & LPM_USER_OFF)
@@ -230,9 +233,6 @@ static int lpm_can_process(enum lpm_command cmd)
 			if (lpm_state & LPM_SUV_ON)
 				return 0;
 
-			/* Trust HFI LPM hints over utilization monitor */
-			if (lpm_state & LPM_HFI_ON)
-				return 0;
 			return 1;
 
 			/* Quit LPM because of SUV mode */
@@ -268,7 +268,7 @@ int enter_lpm(enum lpm_command cmd)
 		return 1;
 	}
 
-	if (in_low_power_mode) {
+	if (in_low_power_mode && cmd != HFI_ENTER) {
 		lpmd_log_debug ("Request skipped because the system is already in Low Power Mode ---\n");
 		return 0;
 	}
@@ -541,6 +541,7 @@ static int proc_message(message_capsul_t *msg)
 			break;
 		case HFI_EVENT:
 			// Call the HFI callback from here
+			process_lpm (HFI_ENTER);
 			break;
 		default:
 			break;
@@ -650,6 +651,9 @@ static int read_wlt(int fd)
 static void poll_for_wlt(int enable)
 {
 	static int wlt_enabled_once = 0;
+
+	if (has_hfi_lpm_monitor())
+		return;
 
 	if (wlt_fd <= 0) {
 		if (enable) {
