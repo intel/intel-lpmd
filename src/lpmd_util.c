@@ -64,6 +64,7 @@ unsigned long long proc_stat_cur[MAX_LPM_CPUS + 1][STAT_EXT_MAX];
 
 static int busy_sys = -1;
 static int busy_cpu = -1;
+static int avg_cpu = -1;
 
 static int calculate_busypct(unsigned long long *cur, unsigned long long *prev)
 {
@@ -97,6 +98,7 @@ static int parse_proc_stat(void)
 	int val;
 	int pos = 0;
 	int size = sizeof(unsigned long long) * (MAX_LPM_CPUS + 1) * STAT_MAX;
+	int lpm_cpu_count;
 
 	filep = fopen (PATH_PROC_STAT, "r");
 	if (!filep)
@@ -187,6 +189,9 @@ static int parse_proc_stat(void)
 	busy_sys = calculate_busypct (proc_stat_cur[0], proc_stat_prev[0]);
 
 	busy_cpu = 0;
+	avg_cpu = 0;
+	lpm_cpu_count = 0;
+
 	for (i = 1; i < MAX_LPM_CPUS + 1; i++) {
 		if (!proc_stat_cur[i][STAT_VALID])
 			continue;
@@ -194,7 +199,12 @@ static int parse_proc_stat(void)
 		val = calculate_busypct (proc_stat_cur[i], proc_stat_prev[i]);
 		if (busy_cpu < val)
 			busy_cpu = val;
+
+		avg_cpu += val;
+		lpm_cpu_count++;
 	}
+
+	avg_cpu /= lpm_cpu_count;
 
 	return 0;
 }
