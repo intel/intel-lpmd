@@ -188,6 +188,9 @@ static void update_one_cpu(struct perf_cap *perf_cap)
 	if (perf_cap->cpu < 0)
 		return;
 
+	if (!perf_cap->cpu)
+		reset_cpus (CPUMASK_HFI);
+
 	if (perf_cap->eff == 255 * 4 && has_hfi_lpm_monitor ())
 		add_cpu (perf_cap->cpu, CPUMASK_HFI);
 	if (!perf_cap->perf && !perf_cap->eff && has_hfi_suv_monitor () && suv_bit_set ())
@@ -201,14 +204,14 @@ static void process_one_event(int first, int last, int nr)
 	if (nr < 16 || last >= get_max_online_cpu () - 1) {
 		if (has_cpus (CPUMASK_HFI)) {
 			if (in_lpm) {
-				lpmd_log_debug ("\tRedundant HFI LPM event ignored\n\n");
+				lpmd_log_debug ("\t Updated HFI LPM event\n\n");
+				process_lpm (HFI_ENTER);
 			}
 			else {
 				lpmd_log_debug ("\tHFI LPM hints detected\n");
 				process_lpm (HFI_ENTER);
 				in_lpm = 1;
 			}
-			reset_cpus (CPUMASK_HFI);
 		}
 		else if (has_cpus (CPUMASK_HFI_SUV)) {
 			if (in_hfi_suv_mode ()) {
@@ -225,6 +228,7 @@ static void process_one_event(int first, int last, int nr)
 //			 Don't override the DETECT_LPM_CPU_DEFAULT so it is auto recovered
 			process_lpm (HFI_EXIT);
 			in_lpm = 0;
+			reset_cpus (CPUMASK_HFI);
 		}
 		else if (in_hfi_suv_mode ()) {
 			lpmd_log_debug ("\tHFI SUV recover\n");
@@ -272,7 +276,7 @@ static int handle_event(struct nl_msg *n, void *arg)
 					perf_cap.perf = nla_get_u32 (cap);
 					break;
 				case 2:
-					offset += snprintf (buf + offset, MAX_STR_LENGTH - offset, " PERF %4d ",
+					offset += snprintf (buf + offset, MAX_STR_LENGTH - offset, " EFF %4d ",
 										nla_get_u32 (cap));
 					perf_cap.eff = nla_get_u32 (cap);
 					break;
@@ -293,8 +297,9 @@ static int handle_event(struct nl_msg *n, void *arg)
 				nr_cpus++;
 			}
 		}
+
+		process_one_event (first_cpu, last_cpu, nr_cpus);
 	}
-	process_one_event (first_cpu, last_cpu, nr_cpus);
 
 	return 0;
 }
