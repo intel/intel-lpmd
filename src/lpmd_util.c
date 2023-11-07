@@ -77,8 +77,15 @@ static int calculate_busypct(unsigned long long *cur, unsigned long long *prev)
 			busy += (cur[idx] - prev[idx]);
 	}
 
-	if (total)
-		return busy * 10000 / total;
+	if (total) {
+		int ret =  busy * 10000 / total;
+		// Ignore if the busy percent will be more than 100%
+		// This is possible when the previous count was invalid
+		// when the LPM CPUs are changed. This will mostly
+		// happen while using HFI
+		if (ret > 10000)
+			return 0;
+	}
 	else
 		return 0;
 }
