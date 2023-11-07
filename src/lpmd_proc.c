@@ -299,7 +299,6 @@ int enter_lpm(enum lpm_command cmd)
 		goto end;
 	}
 
-	process_itmt (1);
 	process_irqs (1, get_cpu_mode ());
 	process_cpus (1, get_cpu_mode ());
 
@@ -337,7 +336,6 @@ int exit_lpm(enum lpm_command cmd)
 
 	process_cpus (0, get_cpu_mode ());
 	process_irqs (0, get_cpu_mode ());
-	process_itmt (0);
 
 end:
 	lpmd_log_info ("----- Done (%s) ---\n", time_delta ());
