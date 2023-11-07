@@ -64,6 +64,7 @@ unsigned long long proc_stat_cur[MAX_LPM_CPUS + 1][STAT_EXT_MAX];
 
 static int busy_sys = -1;
 static int busy_cpu = -1;
+static int avg_cpu = -1;
 
 static int calculate_busypct(unsigned long long *cur, unsigned long long *prev)
 {
@@ -77,8 +78,15 @@ static int calculate_busypct(unsigned long long *cur, unsigned long long *prev)
 			busy += (cur[idx] - prev[idx]);
 	}
 
-	if (total)
-		return busy * 10000 / total;
+	if (total) {
+		int ret =  busy * 10000 / total;
+		// Ignore if the busy percent will be more than 100%
+		// This is possible when the previous count was invalid
+		// when the LPM CPUs are changed. This will mostly
+		// happen while using HFI
+		if (ret > 10000)
+			return 0;
+	}
 	else
 		return 0;
 }
@@ -90,6 +98,7 @@ static int parse_proc_stat(void)
 	int val;
 	int pos = 0;
 	int size = sizeof(unsigned long long) * (MAX_LPM_CPUS + 1) * STAT_MAX;
+	int lpm_cpu_count;
 
 	filep = fopen (PATH_PROC_STAT, "r");
 	if (!filep)
@@ -180,6 +189,9 @@ static int parse_proc_stat(void)
 	busy_sys = calculate_busypct (proc_stat_cur[0], proc_stat_prev[0]);
 
 	busy_cpu = 0;
+	avg_cpu = 0;
+	lpm_cpu_count = 0;
+
 	for (i = 1; i < MAX_LPM_CPUS + 1; i++) {
 		if (!proc_stat_cur[i][STAT_VALID])
 			continue;
@@ -187,7 +199,12 @@ static int parse_proc_stat(void)
 		val = calculate_busypct (proc_stat_cur[i], proc_stat_prev[i]);
 		if (busy_cpu < val)
 			busy_cpu = val;
+
+		avg_cpu += val;
+		lpm_cpu_count++;
 	}
+
+	avg_cpu /= lpm_cpu_count;
 
 	return 0;
 }
@@ -202,14 +219,17 @@ static struct timespec tp1, tp2;
 
 static int first_run = 1;
 
-static enum system_status get_sys_stat(void)
+static enum system_status get_sys_stat(int hfi_mode)
 {
 	if (first_run)
 		return SYS_NORMAL;
 
 	if (!in_lpm () && busy_sys <= (get_util_entry_threshold () * 100))
 		return SYS_IDLE;
-	else if (in_lpm () && busy_cpu > (get_util_exit_threshold () * 100))
+	else if (in_lpm () && hfi_mode) {
+		if (avg_cpu > (get_util_exit_threshold() * 100))
+			return SYS_OVERLOAD;
+	} else if (in_lpm () && busy_cpu > (get_util_exit_threshold () * 100))
 		return SYS_OVERLOAD;
 
 	return SYS_NORMAL;
@@ -304,7 +324,7 @@ static int get_util_interval(void)
 	return interval;
 }
 
-int periodic_util_update(void)
+int periodic_util_update(int hfi_mode)
 {
 	int interval;
 	static int initialized;
@@ -324,14 +344,15 @@ int periodic_util_update(void)
 	}
 
 	parse_proc_stat ();
-	sys_stat = get_sys_stat ();
+	sys_stat = get_sys_stat (hfi_mode);
 	interval = get_util_interval ();
 
 	lpmd_log_info (
 			"\t\tSYS util %3d.%02d (Entry threshold : %3d ),"
-			" CPU util %3d.%02d ( Exit threshold : %3d ), resample after"
+			" CPU util %3d.%02d ( Exit threshold : %3d ), avg_util: %3d.%02d, resample after"
 			" %4d ms\n", busy_sys / 100, busy_sys % 100, get_util_entry_threshold (),
-			busy_cpu / 100, busy_cpu % 100, get_util_exit_threshold (), interval);
+			busy_cpu / 100, busy_cpu % 100, get_util_exit_threshold (), avg_cpu / 100, avg_cpu % 100,
+			interval);
 
 	first_run = 0;
 

@@ -154,7 +154,7 @@ enum cpumask_idx {
 	CPUMASK_MAX,
 };
 
-#define MAX_LPM_CPUS		8
+#define MAX_LPM_CPUS		32
 
 #define UTIL_DELAY_MAX		5000
 #define UTIL_HYST_MAX		10000
@@ -202,7 +202,7 @@ int intel_dbus_server_init(gboolean (*exit_handler)(void));
 int lpmd_get_config(lpmd_config_t *lpmd_config);
 
 /* util.c */
-int periodic_util_update(void);
+int periodic_util_update(int);
 
 /* cpu.c */
 int init_cpu(char *cmd_cpus, enum lpm_cpu_process_mode mode);
