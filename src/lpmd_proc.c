@@ -704,7 +704,7 @@ static void* lpmd_core_main_loop(void *arg)
 				((lpm_state & LPM_UTIL_ON) && wlt_index <= WLT_IDLE))
 				interval = -1;
 			else
-				interval = periodic_util_update ();
+				interval = periodic_util_update (has_hfi_lpm_monitor());
 		}
 
 		lpmd_log_debug("wlt_index :%d interval: %d\n", wlt_index, interval);
