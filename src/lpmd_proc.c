@@ -151,8 +151,6 @@ enum lpm_state {
 /* Force off by default */
 int lpm_state = LPM_USER_OFF;
 
-static pthread_mutex_t lpm_mutex;
-
 /*
  * 1: request valid and already satisfied. 0: respond valid and need to continue to process. -1: request invalid
  */
@@ -488,8 +486,6 @@ static void connect_to_power_profile_daemon(void)
 /* Poll time out default */
 #define POLL_TIMEOUT_DEFAULT_SECONDS	1
 
-static int poll_timeout_sec = POLL_TIMEOUT_DEFAULT_SECONDS;
-
 static bool main_loop_terminate;
 
 // called from LPMD main thread to process user and system messages
@@ -540,7 +536,6 @@ static int proc_message(message_capsul_t *msg)
 static void* lpmd_core_main_loop(void *arg)
 {
 	int interval, n;
-	unsigned int i;
 	static int first_try = 1;
 
 	for (;;) {
