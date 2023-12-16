@@ -420,10 +420,59 @@ static int set_max_cpu_num(void)
 #define CPUFEATURE_HYBRID	(1 << 15)
 #define PATH_PM_PROFILE "/sys/firmware/acpi/pm_profile"
 
+struct cpu_model_entry {
+	unsigned int family;
+	unsigned int model;
+};
+
+static struct cpu_model_entry id_table[] = {
+		{ 6, 0x97 }, // Alderlake
+		{ 6, 0x9a }, // Alderlake
+		{ 6, 0xb7 }, // Raptorlake
+		{ 6, 0xba }, // Raptorlake
+		{ 6, 0xbf }, // Raptorlake S
+		{ 6, 0xaa }, // Meteorlake
+		{ 6, 0xac }, // Meteorlake
+		{ 0, 0 } // Last Invalid entry
+};
+
 static int detect_supported_cpu(void)
 {
 	unsigned int eax, ebx, ecx, edx;
+	unsigned int max_level, family, model, stepping;
 	int val;
+
+	__cpuid(0, eax, ebx, ecx, edx);
+
+	/* Unsupported vendor */
+        if (ebx != 0x756e6547 || edx != 0x49656e69 || ecx != 0x6c65746e)
+		return -1;
+
+	max_level = eax;
+
+	__cpuid(1, eax, ebx, ecx, edx);
+	family = (eax >> 8) & 0xf;
+	model = (eax >> 4) & 0xf;
+	stepping = eax & 0xf;
+
+	if (family == 6)
+		model += ((eax >> 16) & 0xf) << 4;
+
+	lpmd_log_info("%u CPUID levels; family:model:stepping 0x%x:%x:%x (%u:%u:%u)\n",
+			max_level, family, model, stepping, family, model, stepping);
+
+	val = 0;
+	while (id_table[val].family) {
+		if (id_table[val].family == family && id_table[val].model == model)
+			break;
+		val++;
+        }
+
+	/* Unsupported model */
+        if (!id_table[val].family || max_level < 7) {
+		lpmd_log_info("Unsupported platform\n");
+		return -1;
+        }
 
 	__cpuid(7, eax, ebx, ecx, edx);
 
