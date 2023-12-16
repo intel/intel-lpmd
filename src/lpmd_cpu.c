@@ -129,6 +129,22 @@ static size_t alloc_cpu_set(cpu_set_t **cpu_set)
 	return size;
 }
 
+static int cpu_migrate(int cpu)
+{
+	cpu_set_t *mask;
+	int ret;
+
+	alloc_cpu_set (&mask);
+	CPU_SET_S(cpu, size_cpumask, mask);
+	ret = sched_setaffinity(0, size_cpumask, mask);
+	CPU_FREE(mask);
+
+	if (ret == -1)
+		return -1;
+	else
+		return 0;
+}
+
 static int cpumask_to_str(cpu_set_t *mask, char *buf, int length)
 {
 	int i;
@@ -685,6 +701,42 @@ static int detect_lpm_cpus_cluster(void)
 	return CPU_COUNT_S(size_cpumask, cpumasks[CPUMASK_LPM_DEFAULT].mask);
 }
 
+static int detect_cpu_l3(int cpu)
+{
+	unsigned int eax, ebx, ecx, edx, subleaf;
+
+	if (cpu_migrate(cpu) < 0) {
+		lpmd_log_error("Failed to migrated to cpu%d\n", cpu);
+		return -1;
+	}
+
+	for(subleaf = 0;; subleaf++) {
+		unsigned int type, level;
+
+		__cpuid_count(4, subleaf, eax, ebx, ecx, edx);
+
+		type = eax & 0x1f;
+		level = (eax >> 5) & 0x7;
+
+		/* No more caches */
+		if (!type)
+			break;
+		/* Unified Cache */
+		if (type !=3 )
+			continue;
+		/* L3 */
+		if (level != 3)
+			continue;
+
+		/* Do nothing about CPUs that have L3 */
+		return 0;
+	}
+
+	/* Use CPUs don't have L3 as LPM CPUs */
+	_add_cpu (cpu, CPUMASK_LPM_DEFAULT);
+	return 0;
+}
+
 /*
  * Use CPUs that don't have L3 as LPM CPUs.
  * Applies on platforms like MeteorLake.
@@ -697,26 +749,17 @@ static int detect_lpm_cpus_l3(void)
 	for (i = 0; i < topo_max_cpus; i++) {
 		if (!is_cpu_online (i))
 			continue;
-
-		snprintf (path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cache/", i);
-		if (access(path, F_OK)) {
-			lpmd_log_error("Mandatory sysfs %s does not exist.\n", path);
+		if (detect_cpu_l3(i) < 0)
 			return -1;
-		}
-
-		snprintf (path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cache/index3/level", i);
-		if (lpmd_open (path, -1))
-			_add_cpu (i, CPUMASK_LPM_DEFAULT);
 	}
 
+	/* All cpus has L3 */
 	if (!has_cpus (CPUMASK_LPM_DEFAULT))
 		return 0;
 
+	/* All online cpus don't have L3 */
 	if (CPU_EQUAL_S(size_cpumask, cpumasks[CPUMASK_LPM_DEFAULT].mask,
 					cpumasks[CPUMASK_ONLINE].mask))
-		goto err;
-
-	if (!CPU_COUNT_S(size_cpumask, cpumasks[CPUMASK_LPM_DEFAULT].mask))
 		goto err;
 
 	return CPU_COUNT_S(size_cpumask, cpumasks[CPUMASK_LPM_DEFAULT].mask);
