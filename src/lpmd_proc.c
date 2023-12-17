@@ -655,6 +655,8 @@ int lpmd_main(void)
 	 * All other thread send message via pipe to trigger processing
 	 */
 	ret = pthread_create (&lpmd_core_main, &lpmd_attr, lpmd_core_main_loop, NULL);
+	if (ret)
+		return LPMD_FATAL_ERROR;
 
 	connect_to_power_profile_daemon ();
 
