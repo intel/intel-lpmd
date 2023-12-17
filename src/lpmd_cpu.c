@@ -500,7 +500,7 @@ static int detect_supported_cpu(void)
 		return -1;
         }
 
-	cpuid(7, eax, ebx, ecx, edx);
+	cpuid_count(7, 0, eax, ebx, ecx, edx);
 
 	/* Run on Hybrid platforms only */
 	if (!(edx & CPUFEATURE_HYBRID)) {
