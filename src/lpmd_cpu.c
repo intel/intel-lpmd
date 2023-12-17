@@ -485,7 +485,7 @@ static int detect_supported_cpu(void)
         }
 
 	/* Unsupported model */
-        if (!id_table[val].family || max_level < 7) {
+        if (!id_table[val].family || max_level < 0x1a) {
 		lpmd_log_info("Unsupported platform\n");
 		return -1;
         }
@@ -658,6 +658,23 @@ static int detect_lpm_cpus_cmd(char *cmd)
  * Use one Ecore Module as LPM CPUs.
  * Applies on Hybrid platforms like AlderLake/RaptorLake.
  */
+static int is_cpu_atom(int cpu)
+{
+	unsigned int eax, ebx, ecx, edx, subleaf;
+	unsigned int type;
+
+	if (cpu_migrate(cpu) < 0) {
+		lpmd_log_error("Failed to migrated to cpu%d\n", cpu);
+		return -1;
+	}
+
+	__cpuid(0x1a, eax, ebx, ecx, edx);
+
+	type = (eax >> 24) & 0xFF;
+
+	return type == 0x20;
+}
+
 static int detect_lpm_cpus_cluster(void)
 {
 	FILE *filep;
@@ -688,8 +705,10 @@ static int detect_lpm_cpus_cluster(void)
 		if (parse_cpu_str (str, CPUMASK_LPM_DEFAULT) <= 0)
 			continue;
 
-		if (CPU_COUNT_S(size_cpumask, cpumasks[CPUMASK_LPM_DEFAULT].mask) == 4)
+		/* An Ecore module contains 4 Atom cores */
+		if (CPU_COUNT_S(size_cpumask, cpumasks[CPUMASK_LPM_DEFAULT].mask) == 4 && is_cpu_atom(i))
 			break;
+
 		reset_cpus (CPUMASK_LPM_DEFAULT);
 	}
 
@@ -788,7 +807,7 @@ static int detect_lpm_cpus(char *cmd_cpus)
 		return ret;
 
 	if (ret > 0) {
-		str = "Ecores";
+		str = "Lcores";
 		goto end;
 	}
 
