@@ -452,13 +452,23 @@ static struct cpu_model_entry id_table[] = {
 		{ 0, 0 } // Last Invalid entry
 };
 
+#define cpuid(leaf, eax, ebx, ecx, edx)		\
+	__cpuid(leaf, eax, ebx, ecx, edx);	\
+	lpmd_log_debug("CPUID 0x%08x: eax = 0x%08x ebx = 0x%08x ecx = 0x%08x edx = 0x%08x\n",	\
+			leaf, eax, ebx, ecx, edx);
+
+#define cpuid_count(leaf, subleaf, eax, ebx, ecx, edx)		\
+	__cpuid_count(leaf, subleaf, eax, ebx, ecx, edx);	\
+	lpmd_log_debug("CPUID 0x%08x subleaf 0x%08x: eax = 0x%08x ebx = 0x%08x ecx = 0x%08x"	\
+			"edx = 0x%08x\n", leaf, subleaf, eax, ebx, ecx, edx);
+
 static int detect_supported_cpu(void)
 {
 	unsigned int eax, ebx, ecx, edx;
 	unsigned int max_level, family, model, stepping;
 	int val;
 
-	__cpuid(0, eax, ebx, ecx, edx);
+	cpuid(0, eax, ebx, ecx, edx);
 
 	/* Unsupported vendor */
         if (ebx != 0x756e6547 || edx != 0x49656e69 || ecx != 0x6c65746e)
@@ -466,7 +476,7 @@ static int detect_supported_cpu(void)
 
 	max_level = eax;
 
-	__cpuid(1, eax, ebx, ecx, edx);
+	cpuid(1, eax, ebx, ecx, edx);
 	family = (eax >> 8) & 0xf;
 	model = (eax >> 4) & 0xf;
 	stepping = eax & 0xf;
@@ -490,7 +500,7 @@ static int detect_supported_cpu(void)
 		return -1;
         }
 
-	__cpuid(7, eax, ebx, ecx, edx);
+	cpuid(7, eax, ebx, ecx, edx);
 
 	/* Run on Hybrid platforms only */
 	if (!(edx & CPUFEATURE_HYBRID)) {
@@ -668,7 +678,7 @@ static int is_cpu_atom(int cpu)
 		return -1;
 	}
 
-	__cpuid(0x1a, eax, ebx, ecx, edx);
+	cpuid(0x1a, eax, ebx, ecx, edx);
 
 	type = (eax >> 24) & 0xFF;
 
@@ -732,7 +742,7 @@ static int detect_cpu_l3(int cpu)
 	for(subleaf = 0;; subleaf++) {
 		unsigned int type, level;
 
-		__cpuid_count(4, subleaf, eax, ebx, ecx, edx);
+		cpuid_count(4, subleaf, eax, ebx, ecx, edx);
 
 		type = eax & 0x1f;
 		level = (eax >> 5) & 0x7;
