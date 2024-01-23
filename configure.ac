@@ -96,4 +96,10 @@ AS_IF([test "x$enable_werror" != "xno"], [CFLAGS="$CFLAGS -Werror"])
 AC_CONFIG_FILES([Makefile
                  data/Makefile])
 
+AC_ARG_ENABLE(gdbus,
+              [AS_HELP_STRING([--disable-gdbus],
+                              [Switch DBus backend to glib-dbus. (Default: GDBus)])],
+              [],
+              [AC_DEFINE([GDBUS], [1], [Enable GDBus support])])
+
 AC_OUTPUT
