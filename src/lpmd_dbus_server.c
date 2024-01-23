@@ -21,20 +21,21 @@
  * dbus messages.
  */
 
+#include <gio/gio.h>
+#include <glib.h>
+#include <glib/gprintf.h>
+#include <glib-object.h>
+
 #include "lpmd.h"
 
-typedef struct {
+struct _PrefObject {
 	GObject parent;
-} PrefObject;
+};
 
-typedef struct {
-	GObjectClass parent;
-} PrefObjectClass;
-
-GType
-pref_object_get_type(void);
-#define MAX_DBUS_REPLY_STR_LEN	100
 #define PREF_TYPE_OBJECT (pref_object_get_type())
+G_DECLARE_FINAL_TYPE(PrefObject, pref_object, PREF, OBJECT, GObject)
+
+#define MAX_DBUS_REPLY_STR_LEN	100
 G_DEFINE_TYPE(PrefObject, pref_object, G_TYPE_OBJECT)
 
 static gboolean
