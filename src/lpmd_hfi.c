@@ -362,5 +362,5 @@ int hfi_init(void)
 	if (drv.nl_handle)
 		return nl_socket_get_fd (drv.nl_handle);
 
-err_proc: return LPMD_ERROR;
+err_proc: return -1;
 }

@@ -425,9 +425,9 @@ static pthread_attr_t lpmd_attr;
 static struct pollfd poll_fds[LPMD_NUM_OF_POLL_FDS];
 static int poll_fd_cnt;
 
-static int wakeup_fd;
+static int idx_pipe_fd = -1;
 
-static int hfi_wakeup_fd;
+static int idx_hfi_fd = -1;
 
 #include <gio/gio.h>
 
@@ -560,15 +560,15 @@ static void* lpmd_core_main_loop(void *arg)
 			continue;
 		}
 
-		if (wakeup_fd >= 0 && (poll_fds[wakeup_fd].revents & POLLIN)) {
+		if (idx_pipe_fd >= 0 && (poll_fds[idx_pipe_fd].revents & POLLIN)) {
 //			 process message written on pipe here
 
 			message_capsul_t msg;
 
-			int result = read (poll_fds[wakeup_fd].fd, &msg, sizeof(message_capsul_t));
+			int result = read (poll_fds[idx_pipe_fd].fd, &msg, sizeof(message_capsul_t));
 			if (result < 0) {
 				lpmd_log_warn ("read on wakeup fd failed\n");
-				poll_fds[wakeup_fd].revents = 0;
+				poll_fds[idx_pipe_fd].revents = 0;
 				continue;
 			}
 			if (proc_message (&msg) < 0) {
@@ -576,7 +576,7 @@ static void* lpmd_core_main_loop(void *arg)
 			}
 		}
 
-		if (hfi_wakeup_fd >= 0 && (poll_fds[hfi_wakeup_fd].revents & POLLIN)) {
+		if (idx_hfi_fd >= 0 && (poll_fds[idx_hfi_fd].revents & POLLIN)) {
 			hfi_receive ();
 		}
 
@@ -588,7 +588,7 @@ static void* lpmd_core_main_loop(void *arg)
 int lpmd_main(void)
 {
 	int wake_fds[2];
-	int ret, hfi_fd;
+	int ret;
 
 	lpmd_log_debug ("lpmd_main begin\n");
 
@@ -610,10 +610,6 @@ int lpmd_main(void)
 	if (ret)
 		return ret;
 
-	hfi_fd = -1;
-	if (lpmd_config.hfi_lpm_enable || lpmd_config.hfi_suv_enable)
-		hfi_fd = hfi_init ();
-
 //	 Pipe is used for communication between two processes
 	ret = pipe (wake_fds);
 	if (ret) {
@@ -632,19 +628,20 @@ int lpmd_main(void)
 
 	memset (poll_fds, 0, sizeof(poll_fds));
 
-	wakeup_fd = poll_fd_cnt;
-	poll_fds[wakeup_fd].fd = wake_fds[0];
-	poll_fds[wakeup_fd].events = POLLIN;
-	poll_fds[wakeup_fd].revents = 0;
+	idx_pipe_fd = poll_fd_cnt;
+	poll_fds[idx_pipe_fd].fd = wake_fds[0];
+	poll_fds[idx_pipe_fd].events = POLLIN;
+	poll_fds[idx_pipe_fd].revents = 0;
 	poll_fd_cnt++;
 
-	hfi_wakeup_fd = -1;
-	if (hfi_fd > 0) {
-		hfi_wakeup_fd = poll_fd_cnt;
-		poll_fds[hfi_wakeup_fd].fd = hfi_fd;
-		poll_fds[hfi_wakeup_fd].events = POLLIN;
-		poll_fds[hfi_wakeup_fd].revents = 0;
-		poll_fd_cnt++;
+	if (lpmd_config.hfi_lpm_enable || lpmd_config.hfi_suv_enable) {
+		poll_fds[poll_fd_cnt].fd = hfi_init ();
+		if (poll_fds[poll_fd_cnt].fd > 0) {
+			idx_hfi_fd = poll_fd_cnt;
+			poll_fds[idx_hfi_fd].events = POLLIN;
+			poll_fds[idx_hfi_fd].revents = 0;
+			poll_fd_cnt++;
+		}
 	}
 
 	pthread_attr_init (&lpmd_attr);
