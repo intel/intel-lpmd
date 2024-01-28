@@ -432,6 +432,140 @@ static int set_max_cpu_num(void)
 	return 0;
 }
 
+static int uevent_fd = -1;
+
+int uevent_init(void)
+{
+	struct sockaddr_nl nls;
+
+	memset (&nls, 0, sizeof(struct sockaddr_nl));
+
+	nls.nl_family = AF_NETLINK;
+	nls.nl_pid = getpid();
+	nls.nl_groups = -1;
+
+	uevent_fd = socket (PF_NETLINK, SOCK_DGRAM, NETLINK_KOBJECT_UEVENT);
+	if (uevent_fd < 0)
+		return uevent_fd;
+
+	if (bind (uevent_fd, (struct sockaddr*) &nls, sizeof(struct sockaddr_nl))) {
+		lpmd_log_warn ("kob_uevent bind failed \n");
+		close (uevent_fd);
+		return -1;
+	}
+
+	lpmd_log_debug ("Uevent binded\n");
+	return uevent_fd;
+}
+
+static int has_cpu_uevent(void)
+{
+	ssize_t i = 0;
+	ssize_t len;
+	const char *dev_path = "DEVPATH=";
+	unsigned int dev_path_len = strlen(dev_path);
+	const char *cpu_path = "/devices/system/cpu/cpu";
+	char buffer[MAX_STR_LENGTH];
+
+	len = recv (uevent_fd, buffer, sizeof(buffer) - 1, MSG_DONTWAIT);
+	if (len <= 0)
+		return 0;
+	buffer[len] = '\0';
+
+	lpmd_log_debug ("Receive uevent: %s\n", buffer);
+
+	while (i < len) {
+		if (strlen (buffer + i) > dev_path_len
+				&& !strncmp (buffer + i, dev_path, dev_path_len)) {
+			if (!strncmp (buffer + i + dev_path_len, cpu_path,
+					strlen (cpu_path))) {
+				lpmd_log_debug ("\tMatches: %s\n", buffer + i + dev_path_len);
+				return 1;
+			}
+		}
+		i += strlen (buffer + i) + 1;
+	}
+
+	return 0;
+}
+
+#define PATH_PROC_STAT "/proc/stat"
+
+int check_cpu_hotplug(void)
+{
+	FILE *filep;
+	static cpu_set_t *curr;
+	static cpu_set_t *prev;
+	cpu_set_t *tmp;
+
+	if (!has_cpu_uevent ())
+		return 0;
+
+	if (!curr) {
+		alloc_cpu_set (&curr);
+		alloc_cpu_set (&prev);
+		CPU_OR_S (size_cpumask, curr, cpumasks[CPUMASK_ONLINE].mask, cpumasks[CPUMASK_ONLINE].mask);
+	}
+
+	tmp = prev;
+	prev = curr;
+	curr = tmp;
+	CPU_ZERO_S (size_cpumask, curr);
+
+	filep = fopen (PATH_PROC_STAT, "r");
+	if (!filep)
+		return 0;
+
+	while (!feof (filep)) {
+		char *tmpline = NULL;
+		size_t size = 0;
+		char *line;
+		int cpu;
+		char *p;
+		int ret;
+
+		tmpline = NULL;
+		size = 0;
+
+		if (getline (&tmpline, &size, filep) <= 0) {
+			free (tmpline);
+			break;
+		}
+
+		line = strdup (tmpline);
+
+		p = strtok (line, " ");
+
+		ret = sscanf (p, "cpu%d", &cpu);
+		if (ret != 1)
+			goto free;
+
+		CPU_SET_S (cpu, size_cpumask, curr);
+
+free:
+		free (tmpline);
+		free (line);
+	}
+
+	fclose (filep);
+
+	/* CPU Hotplug detected, should freeze lpmd */
+	if (!CPU_EQUAL_S (size_cpumask, curr, cpumasks[CPUMASK_ONLINE].mask)) {
+		lpmd_log_debug ("check_cpu_hotplug: CPU Hotplug detected, freeze lpmd\n");
+		return freeze_lpm ();
+	}
+
+	/* CPU restored to original state, should restore lpmd */
+	if (CPU_EQUAL_S (size_cpumask, curr, cpumasks[CPUMASK_ONLINE].mask) &&
+	    !CPU_EQUAL_S (size_cpumask, curr, prev)) {
+		lpmd_log_debug ("check_cpu_hotplug: CPU Hotplug restored, restore lpmd\n");
+		return restore_lpm ();
+	}
+
+	/* No update since last change */
+	return 0;
+}
+
 /* Bit 15 of CPUID.7 EDX stands for Hybrid support */
 #define CPUFEATURE_HYBRID	(1 << 15)
 #define PATH_PM_PROFILE "/sys/firmware/acpi/pm_profile"
@@ -1217,7 +1351,7 @@ static int enter_suv_mode(enum lpm_command cmd)
 	 * system is already in LPM.
 	 */
 	if (get_cpu_mode () == LPM_CPU_POWERCLAMP)
-		exit_lpm (cmd);
+		process_lpm_unlock (cmd);
 
 	lpmd_log_info ("------ Enter %s Survivability Mode ---\n", name);
 	ret = _process_cpu_powerclamp_enter (cpumask_str, SUV_IDLE_PCT, -1);
@@ -1253,7 +1387,7 @@ static int exit_suv_mode(enum lpm_command cmd)
 
 //	 Try to re-enter in case it was FORCED ON
 	if (get_cpu_mode () == LPM_CPU_POWERCLAMP)
-		enter_lpm (cmd);
+		process_lpm_unlock (cmd);
 	in_suv = 0;
 
 	return LPMD_SUCCESS;

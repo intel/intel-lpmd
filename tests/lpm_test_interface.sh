@@ -39,27 +39,27 @@ do
 		;;
 	1)
 		echo "1 : Terminate"
-		dbus-send --system --dest=org.freedesktop.intel_lpmd /org/freedesktop/intel_lpmd org.freedesktop.intel_lpmd.Terminate
+		dbus-send --system --dest=org.freedesktop.intel_lpmd --print-reply /org/freedesktop/intel_lpmd org.freedesktop.intel_lpmd.Terminate
 		;;
 	2)
 		echo "2 : LPM force on"
-		dbus-send --system --dest=org.freedesktop.intel_lpmd /org/freedesktop/intel_lpmd org.freedesktop.intel_lpmd.LPM_FORCE_ON
+		dbus-send --system --dest=org.freedesktop.intel_lpmd --print-reply /org/freedesktop/intel_lpmd org.freedesktop.intel_lpmd.LPM_FORCE_ON
 		;;
 	3)
 		echo "3 : LPM force off"
-		dbus-send --system --dest=org.freedesktop.intel_lpmd /org/freedesktop/intel_lpmd org.freedesktop.intel_lpmd.LPM_FORCE_OFF
+		dbus-send --system --dest=org.freedesktop.intel_lpmd --print-reply /org/freedesktop/intel_lpmd org.freedesktop.intel_lpmd.LPM_FORCE_OFF
 		;;
 	4)
 		echo "4 : LPM auto"
-		dbus-send --system --dest=org.freedesktop.intel_lpmd /org/freedesktop/intel_lpmd org.freedesktop.intel_lpmd.LPM_AUTO
+		dbus-send --system --dest=org.freedesktop.intel_lpmd --print-reply /org/freedesktop/intel_lpmd org.freedesktop.intel_lpmd.LPM_AUTO
 		;;
 	5)
 		echo "5 : SUV_MODE Enter"
-		dbus-send --system --dest=org.freedesktop.intel_lpmd /org/freedesktop/intel_lpmd org.freedesktop.intel_lpmd.SUV_MODE_ENTER
+		dbus-send --system --dest=org.freedesktop.intel_lpmd --print-reply /org/freedesktop/intel_lpmd org.freedesktop.intel_lpmd.SUV_MODE_ENTER
 		;;
 	6)
 		echo "6 : SUV_MODE Exit"
-		dbus-send --system --dest=org.freedesktop.intel_lpmd /org/freedesktop/intel_lpmd org.freedesktop.intel_lpmd.SUV_MODE_EXIT
+		dbus-send --system --dest=org.freedesktop.intel_lpmd --print-reply /org/freedesktop/intel_lpmd org.freedesktop.intel_lpmd.SUV_MODE_EXIT
 		;;
 	7)
 		exit 0
