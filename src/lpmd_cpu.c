@@ -458,7 +458,7 @@ int uevent_init(void)
 	return uevent_fd;
 }
 
-static int check_cpu_uevent(void)
+static int has_cpu_uevent(void)
 {
 	ssize_t i = 0;
 	ssize_t len;
@@ -489,9 +489,81 @@ static int check_cpu_uevent(void)
 	return 0;
 }
 
+#define PATH_PROC_STAT "/proc/stat"
+
 int check_cpu_hotplug(void)
 {
-	check_cpu_uevent ();
+	FILE *filep;
+	static cpu_set_t *curr;
+	static cpu_set_t *prev;
+	cpu_set_t *tmp;
+
+	if (!has_cpu_uevent ())
+		return 0;
+
+	if (!curr) {
+		alloc_cpu_set (&curr);
+		alloc_cpu_set (&prev);
+		CPU_OR_S (size_cpumask, curr, cpumasks[CPUMASK_ONLINE].mask, cpumasks[CPUMASK_ONLINE].mask);
+	}
+
+	tmp = prev;
+	prev = curr;
+	curr = tmp;
+	CPU_ZERO_S (size_cpumask, curr);
+
+	filep = fopen (PATH_PROC_STAT, "r");
+	if (!filep)
+		return 0;
+
+	while (!feof (filep)) {
+		char *tmpline = NULL;
+		size_t size = 0;
+		char *line;
+		int cpu;
+		char *p;
+		int ret;
+
+		tmpline = NULL;
+		size = 0;
+
+		if (getline (&tmpline, &size, filep) <= 0) {
+			free (tmpline);
+			break;
+		}
+
+		line = strdup (tmpline);
+
+		p = strtok (line, " ");
+
+		ret = sscanf (p, "cpu%d", &cpu);
+		if (ret != 1)
+			goto free;
+
+		CPU_SET_S (cpu, size_cpumask, curr);
+
+free:
+		free (tmpline);
+		free (line);
+	}
+
+	fclose (filep);
+
+	/* CPU Hotplug detected, should freeze lpmd */
+	if (!CPU_EQUAL_S (size_cpumask, curr, cpumasks[CPUMASK_ONLINE].mask)) {
+		lpmd_log_debug ("check_cpu_hotplug: CPU Hotplug detected, freeze lpmd\n");
+		return 1;
+	}
+
+	/* CPU restored to original state, should restore lpmd */
+	if (CPU_EQUAL_S (size_cpumask, curr, cpumasks[CPUMASK_ONLINE].mask) &&
+	    !CPU_EQUAL_S (size_cpumask, curr, prev)) {
+		lpmd_log_debug ("check_cpu_hotplug: CPU Hotplug restored, restore lpmd\n");
+		return -1;
+	}
+
+	/* No update since last change */
+	return 0;
 }
 
 /* Bit 15 of CPUID.7 EDX stands for Hybrid support */
