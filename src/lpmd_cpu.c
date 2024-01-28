@@ -1351,7 +1351,7 @@ static int enter_suv_mode(enum lpm_command cmd)
 	 * system is already in LPM.
 	 */
 	if (get_cpu_mode () == LPM_CPU_POWERCLAMP)
-		exit_lpm (cmd);
+		process_lpm_unlock (cmd);
 
 	lpmd_log_info ("------ Enter %s Survivability Mode ---\n", name);
 	ret = _process_cpu_powerclamp_enter (cpumask_str, SUV_IDLE_PCT, -1);
@@ -1387,7 +1387,7 @@ static int exit_suv_mode(enum lpm_command cmd)
 
 //	 Try to re-enter in case it was FORCED ON
 	if (get_cpu_mode () == LPM_CPU_POWERCLAMP)
-		enter_lpm (cmd);
+		process_lpm_unlock (cmd);
 	in_suv = 0;
 
 	return LPMD_SUCCESS;

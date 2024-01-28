@@ -334,27 +334,40 @@ end:
 }
 
 /* should be invoked without lock held */
-int process_lpm(enum lpm_command cmd)
+int process_lpm_unlock(enum lpm_command cmd)
 {
 	int ret;
 
-	lpmd_lock ();
 	switch (cmd) {
 		case USER_ENTER:
 		case HFI_ENTER:
 		case UTIL_ENTER:
 		case USER_AUTO:
+		case HFI_SUV_EXIT:
+		case DBUS_SUV_EXIT:
 			ret = enter_lpm (cmd);
 			break;
 		case USER_EXIT:
 		case HFI_EXIT:
 		case UTIL_EXIT:
+		case HFI_SUV_ENTER:
+		case DBUS_SUV_ENTER:
 			ret = exit_lpm (cmd);
 			break;
 		default:
 			ret = -1;
 			break;
 	}
+
+	return ret;
+}
+
+int process_lpm(enum lpm_command cmd)
+{
+	int ret;
+
+	lpmd_lock ();
+	ret = process_lpm_unlock (cmd);
 	lpmd_unlock ();
 	return ret;
 }
@@ -500,15 +513,15 @@ static int proc_message(message_capsul_t *msg)
 			ret = -1;
 			main_loop_terminate = true;
 			hfi_kill ();
-			exit_lpm (USER_EXIT);
+			process_lpm (USER_EXIT);
 			break;
 		case LPM_FORCE_ON:
 			// Always stay in LPM mode
-			enter_lpm (USER_ENTER);
+			process_lpm (USER_ENTER);
 			break;
 		case LPM_FORCE_OFF:
 			// Never enter LPM mode
-			exit_lpm (USER_EXIT);
+			process_lpm (USER_EXIT);
 			break;
 		case LPM_AUTO:
 			// Enable oppotunistic LPM
