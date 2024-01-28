@@ -333,10 +333,17 @@ end:
 	return 0;
 }
 
+static int lpmd_freezed = 0;
+
 /* should be invoked without lock held */
 int process_lpm_unlock(enum lpm_command cmd)
 {
 	int ret;
+
+	if (lpmd_freezed) {
+		lpmd_log_error("lpmd freezed, command (%s) ignored\n", lpm_cmd_str[cmd]);
+		return 0;
+	}
 
 	switch (cmd) {
 		case USER_ENTER:
@@ -370,6 +377,60 @@ int process_lpm(enum lpm_command cmd)
 	ret = process_lpm_unlock (cmd);
 	lpmd_unlock ();
 	return ret;
+}
+
+static int saved_lpm_state = -1;
+
+int freeze_lpm(void)
+{
+	lpmd_lock ();
+
+	if (lpmd_freezed)
+		goto end;
+
+	if (saved_lpm_state < 0)
+		saved_lpm_state = lpm_state & (LPM_USER_ON | LPM_USER_OFF);
+
+	process_lpm_unlock (USER_EXIT);
+
+	/* Set lpmd_freezed later to allow process_lpm () */
+	lpmd_freezed = 1;
+end:
+	lpmd_unlock ();
+	return 0;
+}
+
+int restore_lpm(void)
+{
+	lpmd_lock ();
+
+	if (!lpmd_freezed)
+		goto end;
+
+	if (saved_lpm_state >= 0) {
+		lpm_state = saved_lpm_state;
+		saved_lpm_state = -1;
+	}
+
+	/* Clear lpmd_freezed to allow process_lpm () */
+	lpmd_freezed = 0;
+
+	/* Restore previous USER_* cmd */
+	if (lpm_state & LPM_USER_ON) {
+		process_lpm_unlock (USER_ENTER);
+		goto end;
+	}
+
+	if (lpm_state & LPM_USER_OFF) {
+		process_lpm_unlock (USER_EXIT);
+		goto end;
+	}
+
+	process_lpm_unlock (USER_AUTO);
+
+end:
+	lpmd_unlock ();
+	return 0;
 }
 
 static int

@@ -182,6 +182,8 @@ void set_ignore_itmt(void);
 
 int process_lpm(enum lpm_command cmd);
 int process_lpm_unlock(enum lpm_command cmd);
+int freeze_lpm(void);
+int restore_lpm(void);
 
 void lpmd_terminate(void);
 void lpmd_force_on(void);
