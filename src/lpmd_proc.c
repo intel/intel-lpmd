@@ -426,7 +426,7 @@ static struct pollfd poll_fds[LPMD_NUM_OF_POLL_FDS];
 static int poll_fd_cnt;
 
 static int idx_pipe_fd = -1;
-
+static int idx_uevent_fd = -1;
 static int idx_hfi_fd = -1;
 
 #include <gio/gio.h>
@@ -576,6 +576,10 @@ static void* lpmd_core_main_loop(void *arg)
 			}
 		}
 
+		if (idx_uevent_fd >= 0 && (poll_fds[idx_uevent_fd].revents & POLLIN)) {
+			check_cpu_hotplug ();
+		}
+
 		if (idx_hfi_fd >= 0 && (poll_fds[idx_hfi_fd].revents & POLLIN)) {
 			hfi_receive ();
 		}
@@ -633,6 +637,14 @@ int lpmd_main(void)
 	poll_fds[idx_pipe_fd].events = POLLIN;
 	poll_fds[idx_pipe_fd].revents = 0;
 	poll_fd_cnt++;
+
+	poll_fds[poll_fd_cnt].fd = uevent_init ();
+	if (poll_fds[poll_fd_cnt].fd > 0) {
+		idx_uevent_fd = poll_fd_cnt;
+		poll_fds[idx_uevent_fd].events = POLLIN;
+		poll_fds[idx_uevent_fd].revents = 0;
+		poll_fd_cnt++;
+	}
 
 	if (lpmd_config.hfi_lpm_enable || lpmd_config.hfi_suv_enable) {
 		poll_fds[poll_fd_cnt].fd = hfi_init ();

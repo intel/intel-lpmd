@@ -221,6 +221,8 @@ int has_cpus(enum cpumask_idx idx);
 int add_cpu(int cpu, enum cpumask_idx idx);
 void reset_cpus(enum cpumask_idx idx);
 int set_lpm_cpus(enum cpumask_idx new);
+int uevent_init(void);
+int check_cpu_hotplug(void);
 
 /* cpu.c : APIs for SUV mode support */
 int process_suv_mode(enum lpm_command cmd);

@@ -432,6 +432,68 @@ static int set_max_cpu_num(void)
 	return 0;
 }
 
+static int uevent_fd = -1;
+
+int uevent_init(void)
+{
+	struct sockaddr_nl nls;
+
+	memset (&nls, 0, sizeof(struct sockaddr_nl));
+
+	nls.nl_family = AF_NETLINK;
+	nls.nl_pid = getpid();
+	nls.nl_groups = -1;
+
+	uevent_fd = socket (PF_NETLINK, SOCK_DGRAM, NETLINK_KOBJECT_UEVENT);
+	if (uevent_fd < 0)
+		return uevent_fd;
+
+	if (bind (uevent_fd, (struct sockaddr*) &nls, sizeof(struct sockaddr_nl))) {
+		lpmd_log_warn ("kob_uevent bind failed \n");
+		close (uevent_fd);
+		return -1;
+	}
+
+	lpmd_log_debug ("Uevent binded\n");
+	return uevent_fd;
+}
+
+static int check_cpu_uevent(void)
+{
+	ssize_t i = 0;
+	ssize_t len;
+	const char *dev_path = "DEVPATH=";
+	unsigned int dev_path_len = strlen(dev_path);
+	const char *cpu_path = "/devices/system/cpu/cpu";
+	char buffer[MAX_STR_LENGTH];
+
+	len = recv (uevent_fd, buffer, sizeof(buffer) - 1, MSG_DONTWAIT);
+	if (len <= 0)
+		return 0;
+	buffer[len] = '\0';
+
+	lpmd_log_debug ("Receive uevent: %s\n", buffer);
+
+	while (i < len) {
+		if (strlen (buffer + i) > dev_path_len
+				&& !strncmp (buffer + i, dev_path, dev_path_len)) {
+			if (!strncmp (buffer + i + dev_path_len, cpu_path,
+					strlen (cpu_path))) {
+				lpmd_log_debug ("\tMatches: %s\n", buffer + i + dev_path_len);
+				return 1;
+			}
+		}
+		i += strlen (buffer + i) + 1;
+	}
+
+	return 0;
+}
+
+int check_cpu_hotplug(void)
+{
+	check_cpu_uevent ();
+}
+
 /* Bit 15 of CPUID.7 EDX stands for Hybrid support */
 #define CPUFEATURE_HYBRID	(1 << 15)
 #define PATH_PM_PROFILE "/sys/firmware/acpi/pm_profile"
