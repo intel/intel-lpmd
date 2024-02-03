@@ -278,9 +278,6 @@ int main(int argc, char *argv[])
 		return LPMD_FATAL_ERROR;
 	}
 
-	if (dbus_enable)
-		intel_dbus_server_init (sig_int_handler);
-
 	if (intel_lpmd_daemonize) {
 		printf ("Ready to serve requests: Daemonizing..\n");
 		lpmd_log_info ("intel_lpmd ver %s: Ready to serve requests: Daemonizing..\n",
@@ -292,6 +289,9 @@ int main(int argc, char *argv[])
 			return LPMD_FATAL_ERROR;
 		}
 	}
+
+	if (dbus_enable)
+		intel_dbus_server_init (sig_int_handler);
 
 	ret = lpmd_main ();
 
