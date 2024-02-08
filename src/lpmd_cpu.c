@@ -129,6 +129,22 @@ static size_t alloc_cpu_set(cpu_set_t **cpu_set)
 	return size;
 }
 
+static int cpu_migrate(int cpu)
+{
+	cpu_set_t *mask;
+	int ret;
+
+	alloc_cpu_set (&mask);
+	CPU_SET_S(cpu, size_cpumask, mask);
+	ret = sched_setaffinity(0, size_cpumask, mask);
+	CPU_FREE(mask);
+
+	if (ret == -1)
+		return -1;
+	else
+		return 0;
+}
+
 static int cpumask_to_str(cpu_set_t *mask, char *buf, int length)
 {
 	int i;
@@ -416,16 +432,209 @@ static int set_max_cpu_num(void)
 	return 0;
 }
 
+static int uevent_fd = -1;
+
+int uevent_init(void)
+{
+	struct sockaddr_nl nls;
+
+	memset (&nls, 0, sizeof(struct sockaddr_nl));
+
+	nls.nl_family = AF_NETLINK;
+	nls.nl_pid = getpid();
+	nls.nl_groups = -1;
+
+	uevent_fd = socket (PF_NETLINK, SOCK_DGRAM, NETLINK_KOBJECT_UEVENT);
+	if (uevent_fd < 0)
+		return uevent_fd;
+
+	if (bind (uevent_fd, (struct sockaddr*) &nls, sizeof(struct sockaddr_nl))) {
+		lpmd_log_warn ("kob_uevent bind failed \n");
+		close (uevent_fd);
+		return -1;
+	}
+
+	lpmd_log_debug ("Uevent binded\n");
+	return uevent_fd;
+}
+
+static int has_cpu_uevent(void)
+{
+	ssize_t i = 0;
+	ssize_t len;
+	const char *dev_path = "DEVPATH=";
+	unsigned int dev_path_len = strlen(dev_path);
+	const char *cpu_path = "/devices/system/cpu/cpu";
+	char buffer[MAX_STR_LENGTH];
+
+	len = recv (uevent_fd, buffer, sizeof(buffer) - 1, MSG_DONTWAIT);
+	if (len <= 0)
+		return 0;
+	buffer[len] = '\0';
+
+	lpmd_log_debug ("Receive uevent: %s\n", buffer);
+
+	while (i < len) {
+		if (strlen (buffer + i) > dev_path_len
+				&& !strncmp (buffer + i, dev_path, dev_path_len)) {
+			if (!strncmp (buffer + i + dev_path_len, cpu_path,
+					strlen (cpu_path))) {
+				lpmd_log_debug ("\tMatches: %s\n", buffer + i + dev_path_len);
+				return 1;
+			}
+		}
+		i += strlen (buffer + i) + 1;
+	}
+
+	return 0;
+}
+
+#define PATH_PROC_STAT "/proc/stat"
+
+int check_cpu_hotplug(void)
+{
+	FILE *filep;
+	static cpu_set_t *curr;
+	static cpu_set_t *prev;
+	cpu_set_t *tmp;
+
+	if (!has_cpu_uevent ())
+		return 0;
+
+	if (!curr) {
+		alloc_cpu_set (&curr);
+		alloc_cpu_set (&prev);
+		CPU_OR_S (size_cpumask, curr, cpumasks[CPUMASK_ONLINE].mask, cpumasks[CPUMASK_ONLINE].mask);
+	}
+
+	tmp = prev;
+	prev = curr;
+	curr = tmp;
+	CPU_ZERO_S (size_cpumask, curr);
+
+	filep = fopen (PATH_PROC_STAT, "r");
+	if (!filep)
+		return 0;
+
+	while (!feof (filep)) {
+		char *tmpline = NULL;
+		size_t size = 0;
+		char *line;
+		int cpu;
+		char *p;
+		int ret;
+
+		tmpline = NULL;
+		size = 0;
+
+		if (getline (&tmpline, &size, filep) <= 0) {
+			free (tmpline);
+			break;
+		}
+
+		line = strdup (tmpline);
+
+		p = strtok (line, " ");
+
+		ret = sscanf (p, "cpu%d", &cpu);
+		if (ret != 1)
+			goto free;
+
+		CPU_SET_S (cpu, size_cpumask, curr);
+
+free:
+		free (tmpline);
+		free (line);
+	}
+
+	fclose (filep);
+
+	/* CPU Hotplug detected, should freeze lpmd */
+	if (!CPU_EQUAL_S (size_cpumask, curr, cpumasks[CPUMASK_ONLINE].mask)) {
+		lpmd_log_debug ("check_cpu_hotplug: CPU Hotplug detected, freeze lpmd\n");
+		return freeze_lpm ();
+	}
+
+	/* CPU restored to original state, should restore lpmd */
+	if (CPU_EQUAL_S (size_cpumask, curr, cpumasks[CPUMASK_ONLINE].mask) &&
+	    !CPU_EQUAL_S (size_cpumask, curr, prev)) {
+		lpmd_log_debug ("check_cpu_hotplug: CPU Hotplug restored, restore lpmd\n");
+		return restore_lpm ();
+	}
+
+	/* No update since last change */
+	return 0;
+}
+
 /* Bit 15 of CPUID.7 EDX stands for Hybrid support */
 #define CPUFEATURE_HYBRID	(1 << 15)
 #define PATH_PM_PROFILE "/sys/firmware/acpi/pm_profile"
 
+struct cpu_model_entry {
+	unsigned int family;
+	unsigned int model;
+};
+
+static struct cpu_model_entry id_table[] = {
+		{ 6, 0x97 }, // Alderlake
+		{ 6, 0x9a }, // Alderlake
+		{ 6, 0xb7 }, // Raptorlake
+		{ 6, 0xba }, // Raptorlake
+		{ 6, 0xbf }, // Raptorlake S
+		{ 6, 0xaa }, // Meteorlake
+		{ 6, 0xac }, // Meteorlake
+		{ 0, 0 } // Last Invalid entry
+};
+
+#define cpuid(leaf, eax, ebx, ecx, edx)		\
+	__cpuid(leaf, eax, ebx, ecx, edx);	\
+	lpmd_log_debug("CPUID 0x%08x: eax = 0x%08x ebx = 0x%08x ecx = 0x%08x edx = 0x%08x\n",	\
+			leaf, eax, ebx, ecx, edx);
+
+#define cpuid_count(leaf, subleaf, eax, ebx, ecx, edx)		\
+	__cpuid_count(leaf, subleaf, eax, ebx, ecx, edx);	\
+	lpmd_log_debug("CPUID 0x%08x subleaf 0x%08x: eax = 0x%08x ebx = 0x%08x ecx = 0x%08x"	\
+			"edx = 0x%08x\n", leaf, subleaf, eax, ebx, ecx, edx);
+
 static int detect_supported_cpu(void)
 {
 	unsigned int eax, ebx, ecx, edx;
+	unsigned int max_level, family, model, stepping;
 	int val;
 
-	__cpuid(7, eax, ebx, ecx, edx);
+	cpuid(0, eax, ebx, ecx, edx);
+
+	/* Unsupported vendor */
+        if (ebx != 0x756e6547 || edx != 0x49656e69 || ecx != 0x6c65746e)
+		return -1;
+
+	max_level = eax;
+
+	cpuid(1, eax, ebx, ecx, edx);
+	family = (eax >> 8) & 0xf;
+	model = (eax >> 4) & 0xf;
+	stepping = eax & 0xf;
+
+	if (family == 6)
+		model += ((eax >> 16) & 0xf) << 4;
+
+	lpmd_log_info("%u CPUID levels; family:model:stepping 0x%x:%x:%x (%u:%u:%u)\n",
+			max_level, family, model, stepping, family, model, stepping);
+
+	val = 0;
+	while (id_table[val].family) {
+		if (id_table[val].family == family && id_table[val].model == model)
+			break;
+		val++;
+        }
+
+	/* Unsupported model */
+        if (!id_table[val].family || max_level < 0x1a) {
+		lpmd_log_info("Unsupported platform\n");
+		return -1;
+        }
+
+	cpuid_count(7, 0, eax, ebx, ecx, edx);
 
 	/* Run on Hybrid platforms only */
 	if (!(edx & CPUFEATURE_HYBRID)) {
@@ -593,6 +802,23 @@ static int detect_lpm_cpus_cmd(char *cmd)
  * Use one Ecore Module as LPM CPUs.
  * Applies on Hybrid platforms like AlderLake/RaptorLake.
  */
+static int is_cpu_atom(int cpu)
+{
+	unsigned int eax, ebx, ecx, edx, subleaf;
+	unsigned int type;
+
+	if (cpu_migrate(cpu) < 0) {
+		lpmd_log_error("Failed to migrated to cpu%d\n", cpu);
+		return -1;
+	}
+
+	cpuid(0x1a, eax, ebx, ecx, edx);
+
+	type = (eax >> 24) & 0xFF;
+
+	return type == 0x20;
+}
+
 static int detect_lpm_cpus_cluster(void)
 {
 	FILE *filep;
@@ -623,8 +849,10 @@ static int detect_lpm_cpus_cluster(void)
 		if (parse_cpu_str (str, CPUMASK_LPM_DEFAULT) <= 0)
 			continue;
 
-		if (CPU_COUNT_S(size_cpumask, cpumasks[CPUMASK_LPM_DEFAULT].mask) == 4)
+		/* An Ecore module contains 4 Atom cores */
+		if (CPU_COUNT_S(size_cpumask, cpumasks[CPUMASK_LPM_DEFAULT].mask) == 4 && is_cpu_atom(i))
 			break;
+
 		reset_cpus (CPUMASK_LPM_DEFAULT);
 	}
 
@@ -634,6 +862,42 @@ static int detect_lpm_cpus_cluster(void)
 	}
 
 	return CPU_COUNT_S(size_cpumask, cpumasks[CPUMASK_LPM_DEFAULT].mask);
+}
+
+static int detect_cpu_l3(int cpu)
+{
+	unsigned int eax, ebx, ecx, edx, subleaf;
+
+	if (cpu_migrate(cpu) < 0) {
+		lpmd_log_error("Failed to migrated to cpu%d\n", cpu);
+		return -1;
+	}
+
+	for(subleaf = 0;; subleaf++) {
+		unsigned int type, level;
+
+		cpuid_count(4, subleaf, eax, ebx, ecx, edx);
+
+		type = eax & 0x1f;
+		level = (eax >> 5) & 0x7;
+
+		/* No more caches */
+		if (!type)
+			break;
+		/* Unified Cache */
+		if (type !=3 )
+			continue;
+		/* L3 */
+		if (level != 3)
+			continue;
+
+		/* Do nothing about CPUs that have L3 */
+		return 0;
+	}
+
+	/* Use CPUs don't have L3 as LPM CPUs */
+	_add_cpu (cpu, CPUMASK_LPM_DEFAULT);
+	return 0;
 }
 
 /*
@@ -648,26 +912,17 @@ static int detect_lpm_cpus_l3(void)
 	for (i = 0; i < topo_max_cpus; i++) {
 		if (!is_cpu_online (i))
 			continue;
-
-		snprintf (path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cache/", i);
-		if (access(path, F_OK)) {
-			lpmd_log_error("Mandatory sysfs %s does not exist.\n", path);
+		if (detect_cpu_l3(i) < 0)
 			return -1;
-		}
-
-		snprintf (path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cache/index3/level", i);
-		if (lpmd_open (path, -1))
-			_add_cpu (i, CPUMASK_LPM_DEFAULT);
 	}
 
+	/* All cpus has L3 */
 	if (!has_cpus (CPUMASK_LPM_DEFAULT))
 		return 0;
 
+	/* All online cpus don't have L3 */
 	if (CPU_EQUAL_S(size_cpumask, cpumasks[CPUMASK_LPM_DEFAULT].mask,
 					cpumasks[CPUMASK_ONLINE].mask))
-		goto err;
-
-	if (!CPU_COUNT_S(size_cpumask, cpumasks[CPUMASK_LPM_DEFAULT].mask))
 		goto err;
 
 	return CPU_COUNT_S(size_cpumask, cpumasks[CPUMASK_LPM_DEFAULT].mask);
@@ -696,7 +951,7 @@ static int detect_lpm_cpus(char *cmd_cpus)
 		return ret;
 
 	if (ret > 0) {
-		str = "Ecores";
+		str = "Lcores";
 		goto end;
 	}
 
@@ -1096,7 +1351,7 @@ static int enter_suv_mode(enum lpm_command cmd)
 	 * system is already in LPM.
 	 */
 	if (get_cpu_mode () == LPM_CPU_POWERCLAMP)
-		exit_lpm (cmd);
+		process_lpm_unlock (cmd);
 
 	lpmd_log_info ("------ Enter %s Survivability Mode ---\n", name);
 	ret = _process_cpu_powerclamp_enter (cpumask_str, SUV_IDLE_PCT, -1);
@@ -1132,7 +1387,7 @@ static int exit_suv_mode(enum lpm_command cmd)
 
 //	 Try to re-enter in case it was FORCED ON
 	if (get_cpu_mode () == LPM_CPU_POWERCLAMP)
-		enter_lpm (cmd);
+		process_lpm_unlock (cmd);
 	in_suv = 0;
 
 	return LPMD_SUCCESS;

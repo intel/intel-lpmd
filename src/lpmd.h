@@ -181,8 +181,9 @@ int get_util_exit_hyst(void);
 void set_ignore_itmt(void);
 
 int process_lpm(enum lpm_command cmd);
-int enter_lpm(enum lpm_command cmd);
-int exit_lpm(enum lpm_command cmd);
+int process_lpm_unlock(enum lpm_command cmd);
+int freeze_lpm(void);
+int restore_lpm(void);
 
 void lpmd_terminate(void);
 void lpmd_force_on(void);
@@ -221,6 +222,8 @@ int has_cpus(enum cpumask_idx idx);
 int add_cpu(int cpu, enum cpumask_idx idx);
 void reset_cpus(enum cpumask_idx idx);
 int set_lpm_cpus(enum cpumask_idx new);
+int uevent_init(void);
+int check_cpu_hotplug(void);
 
 /* cpu.c : APIs for SUV mode support */
 int process_suv_mode(enum lpm_command cmd);

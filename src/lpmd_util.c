@@ -155,7 +155,6 @@ static int parse_proc_stat(void)
 		}
 
 		idx = STAT_CPU;
-		line[MAX_STR_LENGTH - 1] = '\0';
 
 		while (p != NULL) {
 			if (idx >= STAT_MAX)

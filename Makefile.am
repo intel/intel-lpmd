@@ -39,7 +39,8 @@ intel_lpmd_LDADD = \
 	$(SYSTEMD_LIBS)
 
 BUILT_SOURCES = \
-	intel_lpmd_dbus_interface.h
+	intel_lpmd_dbus_interface.h	\
+	lpmd-resource.c
 
 intel_lpmd_SOURCES = \
 	src/lpmd_main.c \
@@ -51,12 +52,17 @@ intel_lpmd_SOURCES = \
 	src/lpmd_hfi.c \
 	src/lpmd_irq.c \
 	src/lpmd_socket.c \
-	src/lpmd_util.c
+	src/lpmd_util.c	\
+	lpmd-resource.c
 
 man8_MANS = man/intel_lpmd.8
 man5_MANS = man/intel_lpmd_config.xml.5
 
 intel_lpmd_dbus_interface.h: $(top_srcdir)/src/intel_lpmd_dbus_interface.xml
 	$(AM_V_GEN) dbus-binding-tool --prefix=dbus_interface --mode=glib-server --output=$@ $<
+
+lpmd-resource.c: $(top_srcdir)/lpmd-resource.gresource.xml
+	$(AM_V_GEN) glib-compile-resources --generate-source lpmd-resource.gresource.xml
+
 
 CLEANFILES = $(BUILT_SOURCES)
