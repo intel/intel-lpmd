@@ -1,5 +1,5 @@
 [D-BUS Service]
 Name=org.freedesktop.intel_lpmd
-Exec=/bin/false
+Exec=/usr/bin/false
 User=root
 SystemdService=org.freedesktop.intel_lpmd.service
