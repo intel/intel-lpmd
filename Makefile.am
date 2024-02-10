@@ -2,7 +2,9 @@ SUBDIRS = data
 
 # Programs to build
 sbin_PROGRAMS = \
-	intel_lpmd \
+	intel_lpmd
+
+bin_PROGRAMS = \
 	intel_lpmd_control
 
 intel_lpmd_CPPFLAGS = \
