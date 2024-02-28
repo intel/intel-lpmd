@@ -472,6 +472,141 @@ static int set_max_cpu_num(void)
 	return 0;
 }
 
+/* Handling EPP */
+static int lp_mode_epp;
+
+struct cpu_epp {
+	char str[32];
+	int val;
+};
+static struct cpu_epp *cpu_saved_epp;
+
+int get_epp(int cpu, int *val, char *str, int size)
+{
+	FILE *filep;
+	char path[MAX_STR_LENGTH];
+	int epp;
+	int ret;
+
+	snprintf (path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cpufreq/energy_performance_preference", cpu);
+
+	filep = fopen (path, "r");
+	if (!filep)
+		return 1;
+
+	ret = fscanf (filep, "%d", &epp);
+	if (ret == 1) {
+		*val = epp;
+		ret = 0;
+		goto end;
+	}
+
+	ret = fread (str, 1, size, filep);
+	if (ret <= 0)
+		ret = 1;
+	else {
+		if (ret >= size)
+			ret = size - 1;
+		str[ret - 1] = '\0';
+		ret = 0;
+	}
+end:
+	fclose (filep);
+	return ret;
+}
+
+int set_epp(int cpu, int val, char *str)
+{
+	FILE *filep;
+	char path[MAX_STR_LENGTH];
+	int epp;
+	int ret;
+
+	snprintf (path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cpufreq/energy_performance_preference", cpu);
+
+	filep = fopen (path, "r+");
+	if (!filep)
+		return 1;
+
+	if (val >= 0)
+		ret = fprintf (filep, "%d", val);
+	else if (str)
+		ret = fprintf (filep, "%s", str);
+	else {
+		fclose (filep);
+		return 1;
+	}
+
+	fclose (filep);
+
+	if (ret <= 0) {
+		if (val >= 0)
+			lpmd_log_error ("Write \"%d\" to %s failed, ret %d\n", val, path, ret);
+		else
+			lpmd_log_error ("Write \"%s\" to %s failed, ret %d\n", str, path, ret);
+	}
+	return !(ret > 0);
+}
+
+int init_epp(int epp)
+{
+	int max_cpus = get_max_cpus ();
+	int c;
+	int ret;
+
+	lp_mode_epp = epp;
+
+	if (lp_mode_epp < 0)
+		return 0;
+
+	cpu_saved_epp = malloc (sizeof(struct cpu_epp) * max_cpus);
+
+	for (c = 0; c < max_cpus; c++) {
+		cpu_saved_epp[c].str[0] = '\0';
+		cpu_saved_epp[c].val = -1;
+
+		if (!is_cpu_online (c))
+			continue;
+		ret = get_epp (c, &cpu_saved_epp[c].val, cpu_saved_epp[c].str, 32);
+		if (ret)
+			continue;
+		if (cpu_saved_epp[c].val != -1)
+			lpmd_log_debug("CPU%d EPP: 0x%x\n", c, cpu_saved_epp[c].val);
+		else
+			lpmd_log_debug("CPU%d EPP: %s\n", c, cpu_saved_epp[c].str);
+	}
+	lpmd_log_debug("Use EPP 0x%x in Low Power Mode\n", lp_mode_epp);
+	return 0;
+}
+
+int process_epp(int enter)
+{
+	int max_cpus = get_max_cpus ();
+	int c;
+	int ret;
+
+	if (lp_mode_epp < 0)
+		return 0;
+
+	for (c = 0; c < max_cpus; c++) {
+		int val;
+
+		if (!is_cpu_online (c))
+			continue;
+
+		val = enter ? lp_mode_epp : cpu_saved_epp[c].val;
+		ret = set_epp (c, val, cpu_saved_epp[c].str);
+
+		if (!ret) {
+			if (val != -1)
+				lpmd_log_debug ("Set CPU%d EPP to 0x%x\n", c, val);
+			else
+				lpmd_log_debug ("Set CPU%d EPP to %s\n", c, cpu_saved_epp[c].str);
+		}
+	}
+	return 0;
+}
+
 static int uevent_fd = -1;
 
 int uevent_init(void)
@@ -1545,7 +1680,7 @@ static int check_cpu_mode_support(enum lpm_cpu_process_mode mode)
 	return ret;
 }
 
-int init_cpu(char *cmd_cpus, enum lpm_cpu_process_mode mode)
+int init_cpu(char *cmd_cpus, enum lpm_cpu_process_mode mode, int epp)
 {
 	int ret;
 
@@ -1562,6 +1697,7 @@ int init_cpu(char *cmd_cpus, enum lpm_cpu_process_mode mode)
 	if (ret)
 		return ret;
 
+	init_epp (epp);
 	return 0;
 }
 
@@ -1571,6 +1707,8 @@ int process_cpus(int enter, enum lpm_cpu_process_mode mode)
 
 	if (enter != 1 && enter != 0)
 		return LPMD_ERROR;
+
+	process_epp (enter);
 
 	lpmd_log_info ("Process CPUs ...\n");
 	switch (mode) {
