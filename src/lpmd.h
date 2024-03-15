@@ -123,6 +123,7 @@ typedef struct {
 	int util_entry_hyst;
 	int util_exit_hyst;
 	int ignore_itmt;
+	int lp_mode_epp;
 	char lp_mode_cpus[MAX_STR_LENGTH];
 } lpmd_config_t;
 
