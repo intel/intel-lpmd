@@ -12,6 +12,13 @@ for Intel Low Power Mode daemon
 	<lp_mode_cpus></lp_mode_cpus>
 
 	<!--
+		EPP to use in Low Power Mode
+		0-255: Valid EPP value to use in Low Power Mode
+		   -1: Don't change EPP in Low Power Mode
+	-->
+	<lp_mode_epp>-1</lp_mode_epp>
+
+	<!--
 		Mode values
 		0: Cgroup v2
 		1: Cgroup v2 isolate

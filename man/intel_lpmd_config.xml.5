@@ -209,6 +209,13 @@ The configuration file format conforms to XML specifications.
 	-->
 	<ExitHystMS>Example hyst</ExitHystMS>
 
+	<!--
+		EPP to use in Low Power Mode
+		0-255: Valid EPP value to use in Low Power Mode
+		   -1: Don't change EPP in Low Power Mode
+	-->
+	<lp_mode_epp>-1 | EPP value</lp_mode_epp>
+
 </Configuration>
 
 .EE
@@ -236,6 +243,8 @@ ExitDelayMS: 0. Do not take effect when utilization monitor is disabled.
 EntryHystMS: 0. Do not take effect when utilization monitor is disabled.
 .IP \(bu 2
 ExitHystMS: 0. Do not take effect when utilization monitor is disabled.
+.IP \(bu 2
+lp_mode_epp: -1. Do not change EPP when entering Low Power Mode.
 
 .sp 1
 .EX
@@ -251,6 +260,7 @@ ExitHystMS: 0. Do not take effect when utilization monitor is disabled.
 	<ExitDelayMS>0</ExitDelayMS>
 	<EntryHystMS>0</EntryHystMS>
 	<ExitHystMS>0</ExitHystMS>
+	<lp_mode_epp>-1</lp_mode_epp>
 </Configuration>
 .PP
 .B Example 2:
@@ -275,6 +285,8 @@ ExitDelayMS: 0. Resample adaptively based on the utilization of lp_mode_cpus whe
 EntryHystMS: 2000. Ignore the current Enter Low Power Mode request when the previous average time stayed in Low Power Mode is lower than 2000ms.
 .IP \(bu 2
 ExitHystMS: 3000. Ignore the current Exit Low Power Mode request when the previous average time stayed out of Low Power Mode is lower than 3000ms.
+.IP \(bu 2
+lp_mode_epp: -1. Do not change EPP when entering Low Power Mode.
 
 .sp 1
 .EX
@@ -290,5 +302,6 @@ ExitHystMS: 3000. Ignore the current Exit Low Power Mode request when the previo
 	<ExitDelayMS>0</ExitDelayMS>
 	<EntryHystMS>2000</EntryHystMS>
 	<ExitHystMS>3000</ExitHystMS>
+	<lp_mode_epp>-1</lp_mode_epp>
 </Configuration>
 .EE
