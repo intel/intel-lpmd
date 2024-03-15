@@ -36,6 +36,7 @@ static void lpmd_dump_config(lpmd_config_t *lpmd_config)
 	lpmd_log_info ("Util entry threshold:%d\n", lpmd_config->util_entry_threshold);
 	lpmd_log_info ("Util exit threshold:%d\n", lpmd_config->util_exit_threshold);
 	lpmd_log_info ("Util LP Mode CPUs:%s\n", lpmd_config->lp_mode_cpus);
+	lpmd_log_info ("EPP in LP Mode:%d\n", lpmd_config->lp_mode_epp);
 }
 
 static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_config)
@@ -48,6 +49,7 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_co
 		return LPMD_ERROR;
 
 	lpmd_config->performance_def = lpmd_config->balanced_def = lpmd_config->powersaver_def = LPM_FORCE_OFF;
+	lpmd_config->lp_mode_epp = -1;
 	for (cur_node = a_node; cur_node; cur_node = cur_node->next) {
 		if (cur_node->type == XML_ELEMENT_NODE) {
 			tmp_value = (char*) xmlNodeListGetString (doc, cur_node->xmlChildrenNode, 1);
@@ -125,6 +127,16 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_co
 							|| *pos
 									!= '\0'|| lpmd_config->util_exit_hyst < 0 || lpmd_config->util_exit_hyst > UTIL_HYST_MAX)
 						goto err;
+				}
+				else if (!strncmp((const char*)cur_node->name, "lp_mode_epp", strlen ("lp_mode_epp"))) {
+					errno = 0;
+					lpmd_config->lp_mode_epp = strtol (tmp_value, &pos, 10);
+					if (errno
+							|| *pos
+									!= '\0'|| lpmd_config->lp_mode_epp > 255 || lpmd_config->lp_mode_epp < -1)
+						goto err;
+					if (lpmd_config->lp_mode_epp < 0)
+						lpmd_config->lp_mode_epp = -1;
 				}
 				else if (!strncmp((const char*)cur_node->name, "IgnoreITMT", strlen ("IgnoreITMT"))) {
 					errno = 0;
