@@ -154,7 +154,7 @@ enum cpumask_idx {
 	CPUMASK_MAX,
 };
 
-#define MAX_LPM_CPUS		8
+#define MAX_LPM_CPUS		32
 
 #define UTIL_DELAY_MAX		5000
 #define UTIL_HYST_MAX		10000
