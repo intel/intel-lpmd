@@ -109,4 +109,54 @@ for Intel Low Power Mode daemon
 	-->
 	<IgnoreITMT>0</IgnoreITMT>
 
+	<!--
+		Example config states applied to 4Pcore-8Ecore-2Lcore 15W TDP Meteor Lake platform
+	-->
+	<States>
+		<CPUFamily> 6 </CPUFamily>
+		<CPUModel> 170 </CPUModel>
+		<CPUConfig> 4P8E2L-15W </CPUConfig>
+		<State>
+			<ID> 1 </ID>
+			<Name> LPM_DEEP </Name>
+			<EntrySystemLoadThres> 2 </EntrySystemLoadThres>
+			<EnterCPULoadThres> 50 </EnterCPULoadThres>
+			<EPP> -1 </EPP>
+			<EPB> -1 </EPB>
+			<ITMTState> -1 </ITMTState>
+			<IRQMigrate> -1 </IRQMigrate>
+			<ActiveCPUs>16,17</ActiveCPUs>
+			<MinPollInterval> 500 </MinPollInterval>
+			<PollIntervalIncrement> 500 </PollIntervalIncrement>
+			<MaxPollInterval> 2000 </MaxPollInterval>
+		</State>
+		<State>
+			<ID> 2 </ID>
+			<Name> LPM_LOW </Name>
+			<EntrySystemLoadThres> 10 </EntrySystemLoadThres>
+			<ExitSystemLoadhysteresis> 3 </ExitSystemLoadhysteresis>
+			<EPP> -1 </EPP>
+			<EPB> -1 </EPB>
+			<ITMTState> -1 </ITMTState>
+			<IRQMigrate> -1 </IRQMigrate>
+			<ActiveCPUs>12,13,14,15</ActiveCPUs>
+			<MinPollInterval> 1000 </MinPollInterval>
+			<PollIntervalIncrement> 1000 </PollIntervalIncrement>
+			<MaxPollInterval> 3000 </MaxPollInterval>
+		</State>
+		<State>
+			<ID> 3 </ID>
+			<Name> FULL_POWER </Name>
+			<EntrySystemLoadThres></EntrySystemLoadThres>
+			<EnterCPULoadThres></EnterCPULoadThres>
+			<EPP> -1 </EPP>
+			<EPB> -1 </EPB>
+			<ITMTState> -1 </ITMTState>
+			<IRQMigrate> -1 </IRQMigrate>
+			<ActiveCPUs>0-17</ActiveCPUs>
+			<MinPollInterval> 500 </MinPollInterval>
+			<PollIntervalIncrement> -1 </PollIntervalIncrement>
+			<MaxPollInterval> 2000 </MaxPollInterval>
+		</State>
+	</States>
 </Configuration>
