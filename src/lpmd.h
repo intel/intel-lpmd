@@ -107,6 +107,40 @@ typedef struct {
 } message_capsul_t;
 
 #define MAX_STR_LENGTH		256
+#define MAX_CONFIG_STATES	10
+#define MAX_STATE_NAME		16
+#define MAX_CONFIG_LEN		64
+
+typedef struct {
+	int id;
+	char name[MAX_STATE_NAME];
+	int entry_system_load_thres;
+	int exit_system_load_thres;
+	int exit_system_load_hyst;
+	int enter_cpu_load_thres;
+	int exit_cpu_load_thres;
+	int min_poll_interval;
+	int max_poll_interval;
+	int poll_interval_increment;
+	int epp;
+	int epb;
+	char active_cpus[MAX_STR_LENGTH];
+	// If active CPUs are specified then
+	// the below counts don't matter
+	int island_0_number_p_cores;
+	int island_0_number_e_cores;
+	int island_1_number_p_cores;
+	int island_1_number_e_cores;
+	int island_2_number_p_cores;
+	int island_2_number_e_cores;
+
+	int itmt_state;
+	int irq_migrate;
+
+	// Private state variables, not configurable
+	int entry_load_sys;
+	int entry_load_cpu;
+}lpmd_config_state_t;
 
 // lpmd config data
 typedef struct {
@@ -126,6 +160,11 @@ typedef struct {
 	int ignore_itmt;
 	int lp_mode_epp;
 	char lp_mode_cpus[MAX_STR_LENGTH];
+	int cpu_family;
+	int cpu_model;
+	char cpu_config[MAX_CONFIG_LEN];
+	int config_state_count;
+	lpmd_config_state_t config_states[MAX_CONFIG_STATES];
 } lpmd_config_t;
 
 enum lpm_cpu_process_mode {
