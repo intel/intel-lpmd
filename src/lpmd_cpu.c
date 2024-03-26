@@ -69,7 +69,9 @@ static struct lpm_cpus cpumasks[CPUMASK_MAX] = {
 		[CPUMASK_LPM_DEFAULT] = { .name = "Low Power", },
 		[CPUMASK_ONLINE] = { .name = "Online", },
 		[CPUMASK_HFI] = { .name = "HFI Low Power", },
+		[CPUMASK_HFI_BANNED] = { .name = "HFI BANNED", },
 		[CPUMASK_HFI_SUV] = { .name = "HFI SUV", },
+		[CPUMASK_HFI_LAST] = { .name = "HFI LAST", },
 };
 
 static enum cpumask_idx lpm_cpus_cur = CPUMASK_LPM_DEFAULT;
@@ -330,6 +332,17 @@ set_val: if (j == 7) {
 	return 0;
 }
 
+int is_equal(enum cpumask_idx idx1, enum cpumask_idx idx2)
+{
+	if (!cpumasks[idx1].mask || !cpumasks[idx2].mask)
+		return 0;
+
+	if (CPU_EQUAL_S(size_cpumask, cpumasks[idx1].mask, cpumasks[idx2].mask))
+		return 1;
+
+	return 0;
+}
+
 int has_cpus(enum cpumask_idx idx)
 {
 	if (!cpumasks[idx].mask)
@@ -386,6 +399,18 @@ void reset_cpus(enum cpumask_idx idx)
 	cpumasks[idx].hexstr = NULL;
 	cpumasks[idx].hexstr_reverse = NULL;
 	lpm_cpus_cur = CPUMASK_LPM_DEFAULT;
+}
+
+void copy_cpu_mask(enum cpumask_idx source, enum cpumask_idx dest)
+{
+	int i;
+
+	for (i = 0; i < topo_max_cpus; i++) {
+		if (!CPU_ISSET_S(i, size_cpumask, cpumasks[source].mask))
+			continue;
+
+		_add_cpu(i, dest);
+	}
 }
 
 void copy_cpu_mask_exclude(enum cpumask_idx source, enum cpumask_idx dest, enum cpumask_idx exlude)

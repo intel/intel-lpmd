@@ -208,6 +208,9 @@ static void process_one_event(int first, int last, int nr)
 		return;
 
 	if (has_cpus (CPUMASK_HFI)) {
+		/* Ignore duplicate event */
+		if (is_equal (CPUMASK_HFI_LAST, CPUMASK_HFI ))
+			return;
 		if (in_hfi_lpm ()) {
 			lpmd_log_debug ("\tUpdate HFI LPM event\n\n");
 		}
@@ -215,6 +218,8 @@ static void process_one_event(int first, int last, int nr)
 			lpmd_log_debug ("\tDetect HFI LPM event\n");
 		}
 		process_lpm (HFI_ENTER);
+		reset_cpus (CPUMASK_HFI_LAST);
+		copy_cpu_mask(CPUMASK_HFI, CPUMASK_HFI_LAST);
 	}
 	else if (has_cpus (CPUMASK_HFI_SUV)) {
 		if (in_suv_lpm ()) {
@@ -228,6 +233,9 @@ static void process_one_event(int first, int last, int nr)
 	}
 	else if (has_cpus (CPUMASK_HFI_BANNED)) {
 		copy_cpu_mask_exclude(CPUMASK_ONLINE, CPUMASK_HFI, CPUMASK_HFI_BANNED);
+		/* Ignore duplicate event */
+		if (is_equal (CPUMASK_HFI_LAST, CPUMASK_HFI ))
+			return;
 		if (in_hfi_lpm ()) {
 			lpmd_log_debug ("\tUpdate HFI LPM event with banned CPUs\n\n");
 		}
@@ -235,6 +243,8 @@ static void process_one_event(int first, int last, int nr)
 			lpmd_log_debug ("\tDetect HFI LPM event with banned CPUs\n");
 		}
 		process_lpm (HFI_ENTER);
+		reset_cpus (CPUMASK_HFI_LAST);
+		copy_cpu_mask(CPUMASK_HFI, CPUMASK_HFI_LAST);
 	}
 	else if (in_hfi_lpm ()) {
 		lpmd_log_debug ("\tHFI LPM recover\n");
@@ -333,6 +343,8 @@ int hfi_init(void)
 	struct nl_sock *sock;
 	struct nl_cb *cb;
 	int mcast_id;
+
+	reset_cpus (CPUMASK_HFI_LAST);
 
 	signal (SIGPIPE, SIG_IGN);
 
