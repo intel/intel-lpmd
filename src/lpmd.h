@@ -151,7 +151,7 @@ enum lpm_command {
 
 enum cpumask_idx {
 	CPUMASK_LPM_DEFAULT, CPUMASK_ONLINE, CPUMASK_HFI, CPUMASK_HFI_BANNED, CPUMASK_HFI_SUV, /* HFI Survivability mode */
-	CPUMASK_MAX,
+	CPUMASK_HFI_LAST, CPUMASK_MAX,
 };
 
 #define MAX_LPM_CPUS		32
@@ -222,6 +222,10 @@ int has_lpm_cpus(void);
 int has_cpus(enum cpumask_idx idx);
 
 void copy_cpu_mask_exclude(enum cpumask_idx source, enum cpumask_idx dest, enum cpumask_idx exlude);
+void copy_cpu_mask(enum cpumask_idx source, enum cpumask_idx dest);
+void copy_cpu_mask_exclude(enum cpumask_idx source, enum cpumask_idx dest, enum cpumask_idx exlude);
+
+int is_equal(enum cpumask_idx idx1, enum cpumask_idx idx2);
 
 int add_cpu(int cpu, enum cpumask_idx idx);
 void reset_cpus(enum cpumask_idx idx);
