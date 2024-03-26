@@ -161,6 +161,19 @@ int in_suv_lpm(void)
 	return lpm_state & LPM_SUV_ON;
 }
 
+static int handle_irq(void)
+{
+	return !has_hfi_lpm_monitor();
+}
+
+static int handle_itmt(void)
+{
+	if (lpmd_config.ignore_itmt)
+		return 0;
+
+	return !has_hfi_lpm_monitor();
+}
+
 /*
  * 1: request valid and already satisfied. 0: respond valid and need to continue to process. -1: request invalid
  */
@@ -300,8 +313,11 @@ int enter_lpm(enum lpm_command cmd)
 		goto end;
 	}
 
-	process_itmt (1);
-	process_irqs (1, get_cpu_mode ());
+	if (handle_itmt())
+		process_itmt (1);
+	if (handle_irq())
+		process_irqs (1, get_cpu_mode ());
+
 	process_cpus (1, get_cpu_mode ());
 
 end:
@@ -337,8 +353,11 @@ int exit_lpm(enum lpm_command cmd)
 	}
 
 	process_cpus (0, get_cpu_mode ());
-	process_irqs (0, get_cpu_mode ());
-	process_itmt (0);
+
+	if (handle_irq())
+		process_irqs (0, get_cpu_mode ());
+	if (handle_itmt())
+		process_itmt (0);
 
 end:
 	lpmd_log_info ("----- Done (%s) ---\n", time_delta ());
