@@ -271,7 +271,7 @@ static int handle_event(struct nl_msg *n, void *arg)
 				perf_cap.perf = nla_get_u32 (cap);
 				break;
 			case 2:
-				offset += snprintf (buf + offset, MAX_STR_LENGTH - offset, " PERF %4d ",
+				offset += snprintf (buf + offset, MAX_STR_LENGTH - offset, " EFF %4d ",
 									nla_get_u32 (cap));
 				perf_cap.eff = nla_get_u32 (cap);
 				break;
