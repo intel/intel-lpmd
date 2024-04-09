@@ -196,22 +196,19 @@ static void update_one_cpu(struct perf_cap *perf_cap)
 
 static void process_one_event(int first, int last, int nr)
 {
-	static int in_lpm = 0;
-
 	if (nr < 16 || last >= get_max_online_cpu () - 1) {
 		if (has_cpus (CPUMASK_HFI)) {
-			if (in_lpm) {
+			if (in_hfi_lpm ()) {
 				lpmd_log_debug ("\tRedundant HFI LPM event ignored\n\n");
 			}
 			else {
 				lpmd_log_debug ("\tHFI LPM hints detected\n");
 				process_lpm (HFI_ENTER);
-				in_lpm = 1;
 			}
 			reset_cpus (CPUMASK_HFI);
 		}
 		else if (has_cpus (CPUMASK_HFI_SUV)) {
-			if (in_hfi_suv_mode ()) {
+			if (in_suv_lpm ()) {
 				lpmd_log_debug ("\tRedundant HFI SUV event ignored\n\n");
 			}
 			else {
@@ -220,13 +217,12 @@ static void process_one_event(int first, int last, int nr)
 			}
 			reset_cpus (CPUMASK_HFI_SUV);
 		}
-		else if (in_lpm) {
+		else if (in_hfi_lpm ()) {
 			lpmd_log_debug ("\tHFI LPM recover\n");
 //			 Don't override the DETECT_LPM_CPU_DEFAULT so it is auto recovered
 			process_lpm (HFI_EXIT);
-			in_lpm = 0;
 		}
-		else if (in_hfi_suv_mode ()) {
+		else if (in_suv_lpm ()) {
 			lpmd_log_debug ("\tHFI SUV recover\n");
 //			 Don't override the DETECT_LPM_CPU_DEFAULT so it is auto recovered
 			process_suv_mode (HFI_SUV_EXIT);
