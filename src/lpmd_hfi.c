@@ -202,22 +202,23 @@ static void process_one_event(int first, int last, int nr)
 
 	if (has_cpus (CPUMASK_HFI)) {
 		if (in_hfi_lpm ()) {
-			lpmd_log_debug ("\tRedundant HFI LPM event ignored\n\n");
+			lpmd_log_debug ("\tUpdate HFI LPM event\n\n");
 		}
 		else {
-			lpmd_log_debug ("\tHFI LPM hints detected\n");
-			process_lpm (HFI_ENTER);
+			lpmd_log_debug ("\tDetect HFI LPM event\n");
 		}
+		process_lpm (HFI_ENTER);
 		reset_cpus (CPUMASK_HFI);
 	}
 	else if (has_cpus (CPUMASK_HFI_SUV)) {
 		if (in_suv_lpm ()) {
-			lpmd_log_debug ("\tRedundant HFI SUV event ignored\n\n");
+			lpmd_log_debug ("\tUpdate HFI SUV event\n\n");
 		}
 		else {
-			lpmd_log_debug ("\tHFI SUV hints detected\n");
-			process_suv_mode (HFI_SUV_ENTER);
+			lpmd_log_debug ("\tDetect HFI SUV event\n");
 		}
+//		 TODO: SUV re-enter is not supported for now
+		process_suv_mode (HFI_SUV_ENTER);
 		reset_cpus (CPUMASK_HFI_SUV);
 	}
 	else if (in_hfi_lpm ()) {
