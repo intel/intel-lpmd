@@ -166,6 +166,8 @@ int in_debug_mode(void);
 int lpmd_lock(void);
 int lpmd_unlock(void);
 int in_lpm(void);
+int in_hfi_lpm(void);
+int in_suv_lpm(void);
 int get_idle_percentage(void);
 int get_idle_duration(void);
 int get_cpu_mode(void);
@@ -228,7 +230,6 @@ int check_cpu_hotplug(void);
 /* cpu.c : APIs for SUV mode support */
 int process_suv_mode(enum lpm_command cmd);
 int has_suv_support(void);
-int in_hfi_suv_mode(void);
 
 /* irq.c */
 int init_irq(void);

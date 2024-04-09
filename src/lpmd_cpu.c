@@ -1413,17 +1413,6 @@ int has_suv_support(void)
 	return !(in_suv == -1);
 }
 
-int in_hfi_suv_mode(void)
-{
-	int ret;
-
-	lpmd_lock ();
-	ret = in_suv;
-	lpmd_unlock ();
-
-	return ret == HFI_SUV_ENTER;
-}
-
 static int check_cpu_isolate_support(void)
 {
 	return check_cpu_cgroupv2_support ();

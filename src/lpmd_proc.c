@@ -151,6 +151,16 @@ enum lpm_state {
 /* Force off by default */
 int lpm_state = LPM_USER_OFF;
 
+int in_hfi_lpm(void)
+{
+	return lpm_state & LPM_HFI_ON;
+}
+
+int in_suv_lpm(void)
+{
+	return lpm_state & LPM_SUV_ON;
+}
+
 /*
  * 1: request valid and already satisfied. 0: respond valid and need to continue to process. -1: request invalid
  */
