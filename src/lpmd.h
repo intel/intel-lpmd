@@ -35,6 +35,7 @@
 #include <string.h>
 #include <signal.h>
 #include <poll.h>
+#include <cpuid.h>
 
 #include "config.h"
 #include "thermal.h"
@@ -159,6 +160,16 @@ enum cpumask_idx {
 
 #define UTIL_DELAY_MAX		5000
 #define UTIL_HYST_MAX		10000
+
+#define cpuid(leaf, eax, ebx, ecx, edx)		\
+	__cpuid(leaf, eax, ebx, ecx, edx);	\
+	lpmd_log_debug("CPUID 0x%08x: eax = 0x%08x ebx = 0x%08x ecx = 0x%08x edx = 0x%08x\n",	\
+			leaf, eax, ebx, ecx, edx);
+
+#define cpuid_count(leaf, subleaf, eax, ebx, ecx, edx)		\
+	__cpuid_count(leaf, subleaf, eax, ebx, ecx, edx);	\
+	lpmd_log_debug("CPUID 0x%08x subleaf 0x%08x: eax = 0x%08x ebx = 0x%08x ecx = 0x%08x"	\
+			"edx = 0x%08x\n", leaf, subleaf, eax, ebx, ecx, edx);
 
 /* lpmd_main.c */
 int in_debug_mode(void);
