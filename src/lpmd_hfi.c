@@ -242,56 +242,54 @@ static int handle_event(struct nl_msg *n, void *arg)
 	struct nlmsghdr *nlh = nlmsg_hdr (n);
 	struct genlmsghdr *genlhdr = genlmsg_hdr (nlh);
 	struct nlattr *attrs[THERMAL_GENL_ATTR_MAX + 1];
-	int first_cpu = -1, last_cpu = -1, nr_cpus = 0;
+	struct nlattr *cap;
 	struct perf_cap perf_cap;
-	int ret;
+	int first_cpu = -1, last_cpu = -1, nr_cpus = 0;
+	int j, index = 0, offset = 0;
+	char buf[MAX_STR_LENGTH];
 
-	ret = genlmsg_parse (nlh, 0, attrs, THERMAL_GENL_ATTR_MAX, NULL);
-	if (ret)
+	if (genlhdr->cmd != THERMAL_GENL_EVENT_CAPACITY_CHANGE)
+		return 0;
+
+	if (genlmsg_parse (nlh, 0, attrs, THERMAL_GENL_ATTR_MAX, NULL))
 		return -1;
 
 	perf_cap.cpu = perf_cap.perf = perf_cap.eff = -1;
 
-	if (genlhdr->cmd == THERMAL_GENL_EVENT_CAPACITY_CHANGE) {
-		struct nlattr *cap;
-		int j, index = 0, offset = 0;
-		char buf[MAX_STR_LENGTH];
+	nla_for_each_nested (cap, attrs[THERMAL_GENL_ATTR_CAPACITY], j)
+	{
 
-		nla_for_each_nested (cap, attrs[THERMAL_GENL_ATTR_CAPACITY], j)
-		{
+		switch (index) {
+			case 0:
+				offset += snprintf (buf + offset, MAX_STR_LENGTH - offset, "\tCPU %3d: ",
+									nla_get_u32 (cap));
+				perf_cap.cpu = nla_get_u32 (cap);
+				break;
+			case 1:
+				offset += snprintf (buf + offset, MAX_STR_LENGTH - offset, " PERF %4d: ",
+									nla_get_u32 (cap));
+				perf_cap.perf = nla_get_u32 (cap);
+				break;
+			case 2:
+				offset += snprintf (buf + offset, MAX_STR_LENGTH - offset, " PERF %4d ",
+									nla_get_u32 (cap));
+				perf_cap.eff = nla_get_u32 (cap);
+				break;
+			default:
+				break;
+		}
+		index++;
 
-			switch (index) {
-				case 0:
-					offset += snprintf (buf + offset, MAX_STR_LENGTH - offset, "\tCPU %3d: ",
-										nla_get_u32 (cap));
-					perf_cap.cpu = nla_get_u32 (cap);
-					break;
-				case 1:
-					offset += snprintf (buf + offset, MAX_STR_LENGTH - offset, " PERF %4d: ",
-										nla_get_u32 (cap));
-					perf_cap.perf = nla_get_u32 (cap);
-					break;
-				case 2:
-					offset += snprintf (buf + offset, MAX_STR_LENGTH - offset, " PERF %4d ",
-										nla_get_u32 (cap));
-					perf_cap.eff = nla_get_u32 (cap);
-					break;
-				default:
-					break;
-			}
-			index++;
-
-			if (index == 3) {
-				index = 0;
-				offset = 0;
-				buf[MAX_STR_LENGTH - 1] = '\0';
-				lpmd_log_debug ("\t\t\t%s\n", buf);
-				update_one_cpu (&perf_cap);
-				if (first_cpu == -1)
-					first_cpu = perf_cap.cpu;
-				last_cpu = perf_cap.cpu;
-				nr_cpus++;
-			}
+		if (index == 3) {
+			index = 0;
+			offset = 0;
+			buf[MAX_STR_LENGTH - 1] = '\0';
+			lpmd_log_debug ("\t\t\t%s\n", buf);
+			update_one_cpu (&perf_cap);
+			if (first_cpu == -1)
+				first_cpu = perf_cap.cpu;
+			last_cpu = perf_cap.cpu;
+			nr_cpus++;
 		}
 	}
 	process_one_event (first_cpu, last_cpu, nr_cpus);
