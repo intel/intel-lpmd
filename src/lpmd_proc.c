@@ -187,7 +187,11 @@ static int lpm_can_process(enum lpm_command cmd)
 		case USER_AUTO:
 			lpm_state &= ~LPM_USER_ON;
 			lpm_state &= ~LPM_USER_OFF;
-			/* Do nothing but just clear the flag */
+			/* Assume the system is already in HFI_LPM so that we can handle next HFI update whatever it is */
+			if (has_hfi_lpm_monitor()) {
+				lpmd_log_info("Use HFI \n");
+				lpm_state |= LPM_HFI_ON;
+			}
 			return 0;
 		case HFI_ENTER:
 			if (lpm_state & LPM_USER_OFF)
@@ -265,7 +269,7 @@ int enter_lpm(enum lpm_command cmd)
 		return 1;
 	}
 
-	if (in_low_power_mode) {
+	if (in_low_power_mode && cmd != HFI_ENTER) {
 		lpmd_log_debug ("Request skipped because the system is already in Low Power Mode ---\n");
 		return 0;
 	}
@@ -632,7 +636,7 @@ static void* lpmd_core_main_loop(void *arg)
 			first_try = 0;
 		} else {
 //			 Opportunistic LPM is disabled in below cases
-			if (lpm_state & (LPM_USER_ON | LPM_USER_OFF | LPM_SUV_ON))
+			if (lpm_state & (LPM_USER_ON | LPM_USER_OFF | LPM_SUV_ON) | has_hfi_lpm_monitor ())
 				interval = -1;
 			else
 				interval = periodic_util_update ();
