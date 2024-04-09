@@ -377,6 +377,9 @@ int add_cpu(int cpu, enum cpumask_idx idx)
 
 	_add_cpu (cpu, idx);
 
+	if (idx & (CPUMASK_HFI | CPUMASK_HFI_SUV | CPUMASK_HFI_BANNED))
+		return 0;
+
 	if (idx == CPUMASK_LPM_DEFAULT)
 		lpmd_log_info ("\tDetected %s CPU%d\n", cpumasks[idx].name, cpu);
 	else
