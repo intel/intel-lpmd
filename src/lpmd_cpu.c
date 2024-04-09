@@ -388,6 +388,21 @@ void reset_cpus(enum cpumask_idx idx)
 	lpm_cpus_cur = CPUMASK_LPM_DEFAULT;
 }
 
+void copy_cpu_mask_exclude(enum cpumask_idx source, enum cpumask_idx dest, enum cpumask_idx exlude)
+{
+	int i;
+
+	for (i = 0; i < topo_max_cpus; i++) {
+		if (!CPU_ISSET_S(i, size_cpumask, cpumasks[source].mask))
+			continue;
+
+		if (CPU_ISSET_S(i, size_cpumask, cpumasks[exlude].mask))
+			continue;
+
+		_add_cpu(i, dest);
+	}
+}
+
 int set_lpm_cpus(enum cpumask_idx new)
 {
 	if (lpm_cpus_cur == new)
