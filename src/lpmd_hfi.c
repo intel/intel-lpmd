@@ -183,22 +183,36 @@ static int suv_bit_set(void)
 	return 0;
 }
 
-static void update_one_cpu(struct perf_cap *perf_cap)
+/*
+ * Detect differernt kinds of CPU HFI hint
+ * "LPM". EFF == 255
+ * "SUV". PERF == EFF == 0, suv bit set.
+ * "BAN". PERF == EFF == 0, suv bit not set.
+ * "NOR".
+ */
+static char *update_one_cpu(struct perf_cap *perf_cap)
 {
 	if (perf_cap->cpu < 0)
-		return;
+		return NULL;
 
 	if (!perf_cap->cpu) {
 		reset_cpus (CPUMASK_HFI);
 		reset_cpus (CPUMASK_HFI_BANNED);
 	}
 
-	if (perf_cap->eff == 255 * 4 && has_hfi_lpm_monitor ())
+	if (perf_cap->eff == 255 * 4 && has_hfi_lpm_monitor ()) {
 		add_cpu (perf_cap->cpu, CPUMASK_HFI);
-	if (!perf_cap->perf && !perf_cap->eff && has_hfi_suv_monitor () && suv_bit_set ())
+		return "LPM";
+	}
+	if (!perf_cap->perf && !perf_cap->eff && has_hfi_suv_monitor () && suv_bit_set ()) {
 		add_cpu (perf_cap->cpu, CPUMASK_HFI_SUV);
-	if (!perf_cap->perf && !perf_cap->eff)
+		return "SUV";
+	}
+	if (!perf_cap->perf && !perf_cap->eff) {
 		add_cpu (perf_cap->cpu, CPUMASK_HFI_BANNED);
+		return "BAN";
+	}
+	return "NOR";
 }
 
 static void process_one_event(int first, int last, int nr)
@@ -290,12 +304,12 @@ static int handle_event(struct nl_msg *n, void *arg)
 				perf_cap.cpu = nla_get_u32 (cap);
 				break;
 			case 1:
-				offset += snprintf (buf + offset, MAX_STR_LENGTH - offset, " PERF %4d: ",
+				offset += snprintf (buf + offset, MAX_STR_LENGTH - offset, " PERF [%4d] ",
 									nla_get_u32 (cap));
 				perf_cap.perf = nla_get_u32 (cap);
 				break;
 			case 2:
-				offset += snprintf (buf + offset, MAX_STR_LENGTH - offset, " EFF %4d ",
+				offset += snprintf (buf + offset, MAX_STR_LENGTH - offset, " EFF [%4d] ",
 									nla_get_u32 (cap));
 				perf_cap.eff = nla_get_u32 (cap);
 				break;
@@ -305,11 +319,16 @@ static int handle_event(struct nl_msg *n, void *arg)
 		index++;
 
 		if (index == 3) {
-			index = 0;
-			offset = 0;
+			char *str;
+
+			str = update_one_cpu (&perf_cap);
+			offset += snprintf (buf + offset, MAX_STR_LENGTH - offset, " TYPE [%s]", str);
 			buf[MAX_STR_LENGTH - 1] = '\0';
 			lpmd_log_debug ("\t\t\t%s\n", buf);
-			update_one_cpu (&perf_cap);
+
+			index = 0;
+			offset = 0;
+
 			if (first_cpu == -1)
 				first_cpu = perf_cap.cpu;
 			last_cpu = perf_cap.cpu;
