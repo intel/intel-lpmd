@@ -80,6 +80,18 @@ int get_cpu_mode(void)
 	return lpmd_config.mode;
 }
 
+static int has_hfi_capability(void)
+{
+	unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
+
+	cpuid(6, eax, ebx, ecx, edx);
+	if (eax & (1 << 19)) {
+		lpmd_log_info("HFI capability detected\n");
+		return 1;
+	}
+	return 0;
+}
+
 int has_hfi_lpm_monitor(void)
 {
 	return !!lpmd_config.hfi_lpm_enable;
@@ -716,6 +728,9 @@ int lpmd_main(void)
 
 	if (!has_suv_support () && lpmd_config.hfi_suv_enable)
 		lpmd_config.hfi_suv_enable = 0;
+
+	if (!has_hfi_capability ())
+		lpmd_config.hfi_lpm_enable = 0;
 
 	ret = init_irq ();
 	if (ret)
