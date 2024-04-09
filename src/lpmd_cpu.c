@@ -40,7 +40,6 @@
 #include <sys/un.h>
 #include <errno.h>
 #include <getopt.h>
-#include <cpuid.h>
 #include <sched.h>
 #include <dirent.h>
 #include <ctype.h>
@@ -760,16 +759,6 @@ static struct cpu_model_entry id_table[] = {
 		{ 6, 0xac }, // Meteorlake
 		{ 0, 0 } // Last Invalid entry
 };
-
-#define cpuid(leaf, eax, ebx, ecx, edx)		\
-	__cpuid(leaf, eax, ebx, ecx, edx);	\
-	lpmd_log_debug("CPUID 0x%08x: eax = 0x%08x ebx = 0x%08x ecx = 0x%08x edx = 0x%08x\n",	\
-			leaf, eax, ebx, ecx, edx);
-
-#define cpuid_count(leaf, subleaf, eax, ebx, ecx, edx)		\
-	__cpuid_count(leaf, subleaf, eax, ebx, ecx, edx);	\
-	lpmd_log_debug("CPUID 0x%08x subleaf 0x%08x: eax = 0x%08x ebx = 0x%08x ecx = 0x%08x"	\
-			"edx = 0x%08x\n", leaf, subleaf, eax, ebx, ecx, edx);
 
 static int detect_supported_cpu(void)
 {
