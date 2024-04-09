@@ -188,13 +188,17 @@ static void update_one_cpu(struct perf_cap *perf_cap)
 	if (perf_cap->cpu < 0)
 		return;
 
-	if (!perf_cap->cpu)
+	if (!perf_cap->cpu) {
 		reset_cpus (CPUMASK_HFI);
+		reset_cpus (CPUMASK_HFI_BANNED);
+	}
 
 	if (perf_cap->eff == 255 * 4 && has_hfi_lpm_monitor ())
 		add_cpu (perf_cap->cpu, CPUMASK_HFI);
 	if (!perf_cap->perf && !perf_cap->eff && has_hfi_suv_monitor () && suv_bit_set ())
 		add_cpu (perf_cap->cpu, CPUMASK_HFI_SUV);
+	if (!perf_cap->perf && !perf_cap->eff)
+		add_cpu (perf_cap->cpu, CPUMASK_HFI_BANNED);
 }
 
 static void process_one_event(int first, int last, int nr)
@@ -221,6 +225,16 @@ static void process_one_event(int first, int last, int nr)
 		}
 //		 TODO: SUV re-enter is not supported for now
 		process_suv_mode (HFI_SUV_ENTER);
+	}
+	else if (has_cpus (CPUMASK_HFI_BANNED)) {
+		copy_cpu_mask_exclude(CPUMASK_ONLINE, CPUMASK_HFI, CPUMASK_HFI_BANNED);
+		if (in_hfi_lpm ()) {
+			lpmd_log_debug ("\tUpdate HFI LPM event with banned CPUs\n\n");
+		}
+		else {
+			lpmd_log_debug ("\tDetect HFI LPM event with banned CPUs\n");
+		}
+		process_lpm (HFI_ENTER);
 	}
 	else if (in_hfi_lpm ()) {
 		lpmd_log_debug ("\tHFI LPM recover\n");

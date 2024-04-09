@@ -150,7 +150,7 @@ enum lpm_command {
 };
 
 enum cpumask_idx {
-	CPUMASK_LPM_DEFAULT, CPUMASK_ONLINE, CPUMASK_HFI, CPUMASK_HFI_SUV, /* HFI Survivability mode */
+	CPUMASK_LPM_DEFAULT, CPUMASK_ONLINE, CPUMASK_HFI, CPUMASK_HFI_BANNED, CPUMASK_HFI_SUV, /* HFI Survivability mode */
 	CPUMASK_MAX,
 };
 
@@ -220,6 +220,8 @@ int get_max_online_cpu(void);
 char* get_lpm_cpus_hexstr(void);
 int has_lpm_cpus(void);
 int has_cpus(enum cpumask_idx idx);
+
+void copy_cpu_mask_exclude(enum cpumask_idx source, enum cpumask_idx dest, enum cpumask_idx exlude);
 
 int add_cpu(int cpu, enum cpumask_idx idx);
 void reset_cpus(enum cpumask_idx idx);
