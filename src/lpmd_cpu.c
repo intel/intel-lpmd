@@ -208,7 +208,7 @@ int cpumask_to_hexstr(cpu_set_t *mask, char *str, int size)
 	return 0;
 }
 
-static char* get_cpus_str(enum cpumask_idx idx)
+char* get_cpus_str(enum cpumask_idx idx)
 {
 	if (!cpumasks[idx].mask)
 		return NULL;

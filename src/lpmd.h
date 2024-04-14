@@ -282,6 +282,7 @@ int is_cpu_for_lpm(int cpu);
 int get_max_cpus(void);
 int get_max_online_cpu(void);
 
+char* get_cpus_str(enum cpumask_idx idx);
 char* get_lpm_cpus_hexstr(void);
 int has_lpm_cpus(void);
 int has_cpus(enum cpumask_idx idx);

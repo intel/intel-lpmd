@@ -751,6 +751,43 @@ static void* lpmd_core_main_loop(void *arg)
 	return NULL;
 }
 
+static void build_default_config_state(void)
+{
+	lpmd_config_state_t *state;
+
+	if (lpmd_config.config_state_count)
+		return;
+
+	state = &lpmd_config.config_states[0];
+	state->id = 1;
+	snprintf(state->name, MAX_STATE_NAME, "LPM_DEEP");
+	state->entry_system_load_thres = lpmd_config.util_entry_threshold;
+	state->enter_cpu_load_thres = lpmd_config.util_exit_threshold;
+	state->itmt_state = lpmd_config.ignore_itmt ? SETTING_IGNORE : 0;
+	state->irq_migrate = 1;
+	state->min_poll_interval = 100;
+	state->max_poll_interval = 1000;
+	state->poll_interval_increment = -1;
+	state->epp = lpmd_config.lp_mode_epp;
+	state->epb = SETTING_IGNORE;
+	snprintf(state->active_cpus, MAX_STR_LENGTH, "%s", get_cpus_str(CPUMASK_LPM_DEFAULT));
+
+	state = &lpmd_config.config_states[1];
+	state->id = 2;
+	snprintf(state->name, MAX_STATE_NAME, "FULL_POWER");
+	state->entry_system_load_thres = 100;
+	state->enter_cpu_load_thres = 100;
+	state->itmt_state = lpmd_config.ignore_itmt ? SETTING_IGNORE : SETTING_RESTORE;
+	state->irq_migrate = 1;
+	state->min_poll_interval = 1000;
+	state->max_poll_interval = 1000;
+	state->epp = lpmd_config.lp_mode_epp == SETTING_IGNORE ? SETTING_IGNORE : SETTING_RESTORE;
+	state->epb = SETTING_IGNORE;
+	snprintf(state->active_cpus, MAX_STR_LENGTH, "%s", get_cpus_str(CPUMASK_ONLINE));
+
+	lpmd_config.config_state_count = 2;
+}
+
 int lpmd_main(void)
 {
 	int wake_fds[2];
@@ -778,6 +815,9 @@ int lpmd_main(void)
 
 	if (!has_hfi_capability ())
 		lpmd_config.hfi_lpm_enable = 0;
+
+	/* Must done after init_cpu() */
+	build_default_config_state();
 
 	ret = init_irq ();
 	if (ret)
