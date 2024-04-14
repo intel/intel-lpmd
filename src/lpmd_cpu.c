@@ -212,7 +212,7 @@ int cpumask_to_hexstr(cpu_set_t *mask, char *str, int size)
 	return 0;
 }
 
-static char* get_cpus_str(enum cpumask_idx idx)
+char* get_cpus_str(enum cpumask_idx idx)
 {
 	if (!cpumasks[idx].mask)
 		return NULL;
@@ -934,7 +934,7 @@ static void lpmd_set_cpu_affinity(void)
  * parse cpuset with following syntax
  * 1,2,4..6,8-10 and set bits in cpu_subset
  */
-static int parse_cpu_str(char *buf, enum cpumask_idx idx)
+int parse_cpu_str(char *buf, enum cpumask_idx idx)
 {
 	unsigned int start, end;
 	char *next;

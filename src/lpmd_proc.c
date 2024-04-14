@@ -312,7 +312,7 @@ int enter_lpm(enum lpm_command cmd)
 		return 1;
 	}
 
-	if (in_low_power_mode && cmd != HFI_ENTER) {
+	if (in_low_power_mode && cmd != HFI_ENTER && cmd != UTIL_ENTER) {
 		lpmd_log_debug ("Request skipped because the system is already in Low Power Mode ---\n");
 		return 0;
 	}
@@ -393,9 +393,19 @@ int process_lpm_unlock(enum lpm_command cmd)
 	}
 
 	switch (cmd) {
-		case USER_ENTER:
 		case UTIL_ENTER:
+			if (!use_config_states()) {
+				set_lpm_epp (lpmd_config.lp_mode_epp);
+				set_lpm_epb (SETTING_IGNORE);
+				set_lpm_itmt (lpmd_config.ignore_itmt ? SETTING_IGNORE : 0); /* Disable ITMT */
+				set_lpm_irq(get_cpumask(CPUMASK_LPM_DEFAULT), 1);
+				set_lpm_cpus (CPUMASK_LPM_DEFAULT);
+			}
+			ret = enter_lpm (cmd);
+			break;
+		case USER_ENTER:
 		case USER_AUTO:
+			reset_config_state();
 			set_lpm_epp (lpmd_config.lp_mode_epp);
 			set_lpm_epb (SETTING_IGNORE);
 			set_lpm_itmt (lpmd_config.ignore_itmt ? SETTING_IGNORE : 0); /* Disable ITMT */
@@ -423,6 +433,7 @@ int process_lpm_unlock(enum lpm_command cmd)
 		/* exit_lpm does not require to invoke set_lpm_cpus() */
 		case USER_EXIT:
 		case UTIL_EXIT:
+			reset_config_state();
 			set_lpm_epp (lpmd_config.lp_mode_epp == SETTING_IGNORE ? SETTING_IGNORE : SETTING_RESTORE);
 			set_lpm_epb (SETTING_IGNORE);
 			set_lpm_itmt (lpmd_config.ignore_itmt ? SETTING_IGNORE : SETTING_RESTORE); /* Restore ITMT */
@@ -692,8 +703,7 @@ static int proc_message(message_capsul_t *msg)
 // LPMD processing thread. This is callback to pthread lpmd_core_main
 static void* lpmd_core_main_loop(void *arg)
 {
-	int interval, n;
-	static int first_try = 1;
+	int interval = -1, n;
 
 	for (;;) {
 
@@ -703,10 +713,8 @@ static void* lpmd_core_main_loop(void *arg)
 //		 Opportunistic LPM is disabled in below cases
 		if (lpm_state & (LPM_USER_ON | LPM_USER_OFF | LPM_SUV_ON) | has_hfi_lpm_monitor ())
 			interval = -1;
-		else if (first_try) {
+		else if (interval == -1)
 			interval = 100;
-			first_try = 0;
-		}
 
 		n = poll (poll_fds, poll_fd_cnt, interval);
 		if (n < 0) {
@@ -716,7 +724,7 @@ static void* lpmd_core_main_loop(void *arg)
 
 		/* Time out, need to choose next util state and interval */
 		if (n == 0 && interval > 0)
-			interval = periodic_util_update ();
+			interval = periodic_util_update (&lpmd_config);
 
 		if (idx_pipe_fd >= 0 && (poll_fds[idx_pipe_fd].revents & POLLIN)) {
 //			 process message written on pipe here
@@ -747,6 +755,45 @@ static void* lpmd_core_main_loop(void *arg)
 	return NULL;
 }
 
+static void build_default_config_state(void)
+{
+	lpmd_config_state_t *state;
+
+	if (lpmd_config.config_state_count)
+		return;
+
+	state = &lpmd_config.config_states[0];
+	state->id = 1;
+	snprintf(state->name, MAX_STATE_NAME, "LPM_DEEP");
+	state->entry_system_load_thres = lpmd_config.util_entry_threshold;
+	state->enter_cpu_load_thres = lpmd_config.util_exit_threshold;
+	state->itmt_state = lpmd_config.ignore_itmt ? SETTING_IGNORE : 0;
+	state->irq_migrate = 1;
+	state->min_poll_interval = 100;
+	state->max_poll_interval = 1000;
+	state->poll_interval_increment = -1;
+	state->epp = lpmd_config.lp_mode_epp;
+	state->epb = SETTING_IGNORE;
+	state->valid = 1;
+	snprintf(state->active_cpus, MAX_STR_LENGTH, "%s", get_cpus_str(CPUMASK_LPM_DEFAULT));
+
+	state = &lpmd_config.config_states[1];
+	state->id = 2;
+	snprintf(state->name, MAX_STATE_NAME, "FULL_POWER");
+	state->entry_system_load_thres = 100;
+	state->enter_cpu_load_thres = 100;
+	state->itmt_state = lpmd_config.ignore_itmt ? SETTING_IGNORE : SETTING_RESTORE;
+	state->irq_migrate = 1;
+	state->min_poll_interval = 1000;
+	state->max_poll_interval = 1000;
+	state->epp = lpmd_config.lp_mode_epp == SETTING_IGNORE ? SETTING_IGNORE : SETTING_RESTORE;
+	state->epb = SETTING_IGNORE;
+	state->valid = 1;
+	snprintf(state->active_cpus, MAX_STR_LENGTH, "%s", get_cpus_str(CPUMASK_ONLINE));
+
+	lpmd_config.config_state_count = 2;
+}
+
 int lpmd_main(void)
 {
 	int wake_fds[2];
@@ -774,6 +821,11 @@ int lpmd_main(void)
 
 	if (!has_hfi_capability ())
 		lpmd_config.hfi_lpm_enable = 0;
+
+	/* Must done after init_cpu() */
+	build_default_config_state();
+
+	util_init(&lpmd_config);
 
 	ret = init_irq ();
 	if (ret)
