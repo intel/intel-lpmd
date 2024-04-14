@@ -662,15 +662,12 @@ static void* lpmd_core_main_loop(void *arg)
 		if (main_loop_terminate)
 			break;
 
-		if (first_try) {
+//		 Opportunistic LPM is disabled in below cases
+		if (lpm_state & (LPM_USER_ON | LPM_USER_OFF | LPM_SUV_ON) | has_hfi_lpm_monitor ())
+			interval = -1;
+		else if (first_try) {
 			interval = 100;
 			first_try = 0;
-		} else {
-//			 Opportunistic LPM is disabled in below cases
-			if (lpm_state & (LPM_USER_ON | LPM_USER_OFF | LPM_SUV_ON) | has_hfi_lpm_monitor ())
-				interval = -1;
-			else
-				interval = periodic_util_update ();
 		}
 
 		n = poll (poll_fds, poll_fd_cnt, interval);
@@ -678,6 +675,10 @@ static void* lpmd_core_main_loop(void *arg)
 			lpmd_log_warn ("Write to pipe failed \n");
 			continue;
 		}
+
+		/* Time out, need to choose next util state and interval */
+		if (n == 0 && interval > 0)
+			interval = periodic_util_update ();
 
 		if (idx_pipe_fd >= 0 && (poll_fds[idx_pipe_fd].revents & POLLIN)) {
 //			 process message written on pipe here
