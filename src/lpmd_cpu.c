@@ -475,13 +475,25 @@ static int set_max_cpu_num(void)
 }
 
 /* Handling EPP */
-static int lp_mode_epp;
 
-struct cpu_epp {
-	char str[32];
-	int val;
+#define MAX_EPP_STRING_LENGTH	32
+struct cpu_info {
+	char epp_str[MAX_EPP_STRING_LENGTH];
+	int epp;
 };
-static struct cpu_epp *cpu_saved_epp;
+static struct cpu_info *saved_cpu_info;
+
+static int lp_mode_epp = SETTING_IGNORE;
+
+int get_lpm_epp(void)
+{
+	return lp_mode_epp;
+}
+
+void set_lpm_epp(int val)
+{
+	lp_mode_epp = val;
+}
 
 int get_epp(int cpu, int *val, char *str, int size)
 {
@@ -532,7 +544,7 @@ int set_epp(int cpu, int val, char *str)
 
 	if (val >= 0)
 		ret = fprintf (filep, "%d", val);
-	else if (str)
+	else if (str[0] != '\0')
 		ret = fprintf (filep, "%s", str);
 	else {
 		fclose (filep);
@@ -556,28 +568,24 @@ int init_epp(int epp)
 	int c;
 	int ret;
 
-	lp_mode_epp = epp;
-
-	if (lp_mode_epp < 0)
-		return 0;
-
-	cpu_saved_epp = malloc (sizeof(struct cpu_epp) * max_cpus);
+	saved_cpu_info = malloc (sizeof(struct cpu_info) * max_cpus);
 
 	for (c = 0; c < max_cpus; c++) {
-		cpu_saved_epp[c].str[0] = '\0';
-		cpu_saved_epp[c].val = -1;
+		saved_cpu_info[c].epp_str[0] = '\0';
+		saved_cpu_info[c].epp = -1;
 
 		if (!is_cpu_online (c))
 			continue;
-		ret = get_epp (c, &cpu_saved_epp[c].val, cpu_saved_epp[c].str, 32);
+
+		ret = get_epp (c, &saved_cpu_info[c].epp, saved_cpu_info[c].epp_str, MAX_EPP_STRING_LENGTH);
 		if (ret)
 			continue;
-		if (cpu_saved_epp[c].val != -1)
-			lpmd_log_debug("CPU%d EPP: 0x%x\n", c, cpu_saved_epp[c].val);
+
+		if (saved_cpu_info[c].epp != -1)
+			lpmd_log_debug ("CPU%d EPP: 0x%x\n", c, saved_cpu_info[c].epp);
 		else
-			lpmd_log_debug("CPU%d EPP: %s\n", c, cpu_saved_epp[c].str);
+			lpmd_log_debug ("CPU%d EPP: %s\n", c, saved_cpu_info[c].epp_str);
 	}
-	lpmd_log_debug("Use EPP 0x%x in Low Power Mode\n", lp_mode_epp);
 	return 0;
 }
 
@@ -587,8 +595,10 @@ int process_epp(int enter)
 	int c;
 	int ret;
 
-	if (lp_mode_epp < 0)
+	if (lp_mode_epp == SETTING_IGNORE) {
+		lpmd_log_debug ("Ignore EPP\n");
 		return 0;
+	}
 
 	for (c = 0; c < max_cpus; c++) {
 		int val;
@@ -596,15 +606,19 @@ int process_epp(int enter)
 		if (!is_cpu_online (c))
 			continue;
 
-		val = enter ? lp_mode_epp : cpu_saved_epp[c].val;
-		ret = set_epp (c, val, cpu_saved_epp[c].str);
+		if (lp_mode_epp == SETTING_RESTORE)
+			val = saved_cpu_info[c].epp;
+		else
+			val = lp_mode_epp;
 
-		if (!ret) {
-			if (val != -1)
-				lpmd_log_debug ("Set CPU%d EPP to 0x%x\n", c, val);
-			else
-				lpmd_log_debug ("Set CPU%d EPP to %s\n", c, cpu_saved_epp[c].str);
-		}
+		ret = set_epp (c, val, saved_cpu_info[c].epp_str);
+		if (ret)
+			continue;
+
+		if (val != -1)
+			lpmd_log_debug ("Set CPU%d EPP to 0x%x\n", c, val);
+		else
+			lpmd_log_debug ("Set CPU%d EPP to %s\n", c, saved_cpu_info[c].epp_str);
 	}
 	return 0;
 }
