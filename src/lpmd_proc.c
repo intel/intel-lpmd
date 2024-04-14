@@ -395,15 +395,23 @@ int process_lpm_unlock(enum lpm_command cmd)
 		case HFI_ENTER:
 		case UTIL_ENTER:
 		case USER_AUTO:
+			set_lpm_epp (lpmd_config.lp_mode_epp);
+			ret = enter_lpm (cmd);
+			break;
 		case HFI_SUV_EXIT:
 		case DBUS_SUV_EXIT:
+			set_lpm_epp (SETTING_IGNORE);
 			ret = enter_lpm (cmd);
 			break;
 		case USER_EXIT:
 		case HFI_EXIT:
 		case UTIL_EXIT:
+			set_lpm_epp (lpmd_config.lp_mode_epp == SETTING_IGNORE ? SETTING_IGNORE : SETTING_RESTORE);
+			ret = exit_lpm (cmd);
+			break;
 		case HFI_SUV_ENTER:
 		case DBUS_SUV_ENTER:
+			set_lpm_epp (SETTING_IGNORE);
 			ret = exit_lpm (cmd);
 			break;
 		default:

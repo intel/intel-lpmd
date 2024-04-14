@@ -174,6 +174,10 @@ enum cpumask_idx {
 #define SETTING_RESTORE	-2
 #define SETTING_IGNORE	-1
 
+/* Helpers for entering LPMode */
+void set_lpm_epp(int val);
+int get_lpm_epp(void);
+
 /* lpmd_main.c */
 int in_debug_mode(void);
 
