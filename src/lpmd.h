@@ -171,6 +171,9 @@ enum cpumask_idx {
 	lpmd_log_debug("CPUID 0x%08x subleaf 0x%08x: eax = 0x%08x ebx = 0x%08x ecx = 0x%08x"	\
 			"edx = 0x%08x\n", leaf, subleaf, eax, ebx, ecx, edx);
 
+#define SETTING_RESTORE	-2
+#define SETTING_IGNORE	-1
+
 /* lpmd_main.c */
 int in_debug_mode(void);
 
