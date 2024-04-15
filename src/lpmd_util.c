@@ -298,7 +298,18 @@ static int get_util_interval(void)
 	return interval;
 }
 
-int periodic_util_update(void)
+static int current_state = 0;
+
+static int process_next_config_state(lpmd_config_t *config)
+{
+	lpmd_config_state_t *states = config->config_states;
+
+	lpmd_log_info ("State: %d/%d: %s\n", current_state, config->config_state_count, states[current_state].name);
+}
+
+static int use_config_state = 0;
+
+int periodic_util_update(lpmd_config_t *lpmd_config)
 {
 	int interval;
 	static int initialized;
@@ -318,34 +329,40 @@ int periodic_util_update(void)
 	}
 
 	parse_proc_stat ();
-	sys_stat = get_sys_stat ();
-	interval = get_util_interval ();
 
-	lpmd_log_info (
+	if (!lpmd_config->config_state_count || !use_config_state) {
+		sys_stat = get_sys_stat ();
+		interval = get_util_interval ();
+
+		lpmd_log_info (
 			"\t\tSYS util %3d.%02d (Entry threshold : %3d ),"
 			" CPU util %3d.%02d ( Exit threshold : %3d ), resample after"
 			" %4d ms\n", busy_sys / 100, busy_sys % 100, get_util_entry_threshold (),
 			busy_cpu / 100, busy_cpu % 100, get_util_exit_threshold (), interval);
 
-	first_run = 0;
+		first_run = 0;
 
-	if (!util_should_proceed (sys_stat))
+		if (!util_should_proceed (sys_stat))
+			return interval;
+
+		switch (sys_stat) {
+			case SYS_IDLE:
+				process_lpm (UTIL_ENTER);
+				first_run = 1;
+				clock_gettime (CLOCK_MONOTONIC, &tp_last_in);
+				interval = 1000;
+				break;
+			case SYS_OVERLOAD:
+				process_lpm (UTIL_EXIT);
+				first_run = 1;
+				clock_gettime (CLOCK_MONOTONIC, &tp_last_out);
+				break;
+			default:
+				break;
+		}
 		return interval;
+	} else
+		process_next_config_state(lpmd_config);
 
-	switch (sys_stat) {
-		case SYS_IDLE:
-			process_lpm (UTIL_ENTER);
-			first_run = 1;
-			clock_gettime (CLOCK_MONOTONIC, &tp_last_in);
-			interval = 1000;
-			break;
-		case SYS_OVERLOAD:
-			process_lpm (UTIL_EXIT);
-			first_run = 1;
-			clock_gettime (CLOCK_MONOTONIC, &tp_last_out);
-			break;
-		default:
-			break;
-	}
-	return interval;
+	return 1000;
 }

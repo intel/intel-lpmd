@@ -269,7 +269,7 @@ int intel_dbus_server_init(gboolean (*exit_handler)(void));
 int lpmd_get_config(lpmd_config_t *lpmd_config);
 
 /* util.c */
-int periodic_util_update(void);
+int periodic_util_update(lpmd_config_t *lpmd_config);
 
 /* cpu.c */
 int check_cpu_capability(lpmd_config_t *lpmd_config);

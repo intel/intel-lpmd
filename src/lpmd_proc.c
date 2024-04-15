@@ -720,7 +720,7 @@ static void* lpmd_core_main_loop(void *arg)
 
 		/* Time out, need to choose next util state and interval */
 		if (n == 0 && interval > 0)
-			interval = periodic_util_update ();
+			interval = periodic_util_update (&lpmd_config);
 
 		if (idx_pipe_fd >= 0 && (poll_fds[idx_pipe_fd].revents & POLLIN)) {
 //			 process message written on pipe here
