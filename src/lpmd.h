@@ -177,8 +177,10 @@ void set_lpm_epp(int val);
 int get_lpm_epp(void);
 void set_lpm_epb(int val);
 int get_lpm_epb(void);
+int get_epp_epb(int *epp, char *epp_string, int size, int *epb);
 void set_lpm_itmt(int val);
 int get_lpm_itmt(void);
+int get_itmt(void);
 int set_lpm_irq(cpu_set_t *cpumask, int action);
 int set_lpm_cpus(enum cpumask_idx idx);
 

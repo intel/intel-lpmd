@@ -571,6 +571,27 @@ int set_epp(char *path, int val, char *str)
 	return !(ret > 0);
 }
 
+int get_epp_epb(int *epp, char *epp_str, int size, int *epb)
+{
+	int c;
+	char path[MAX_STR_LENGTH];
+
+	for (c = 0; c < max_online_cpu; c++) {
+		if (!is_cpu_online (c))
+			continue;
+
+		*epp = -1;
+		epp_str[0] = '\0';
+		snprintf (path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cpufreq/energy_performance_preference", c);
+		get_epp (path, epp, epp_str, size);
+
+		snprintf(path, MAX_STR_LENGTH, "/sys/devices/system/cpu/cpu%d/power/energy_perf_bias", c);
+		lpmd_read_int(path, epb, -1);
+		return 0;
+	}
+	return 1;
+}
+
 int init_epp_epb(void)
 {
 	int max_cpus = get_max_cpus ();

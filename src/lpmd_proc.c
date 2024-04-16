@@ -153,6 +153,14 @@ void set_lpm_itmt(int val)
 	lp_mode_itmt = val;
 }
 
+int get_itmt(void)
+{
+	int val;
+
+	lpmd_read_int(PATH_ITMT_CONTROL, &val, -1);
+	return val;
+}
+
 static int init_itmt(void)
 {
 	return lpmd_read_int(PATH_ITMT_CONTROL, &saved_itmt, -1);
