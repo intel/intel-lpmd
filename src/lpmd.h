@@ -182,6 +182,7 @@ int get_lpm_epb(void);
 void set_lpm_itmt(int val);
 int get_lpm_itmt(void);
 int set_lpm_irq(cpu_set_t *cpumask, int action);
+int set_lpm_cpus(enum cpumask_idx idx);
 
 /* lpmd_main.c */
 int in_debug_mode(void);
