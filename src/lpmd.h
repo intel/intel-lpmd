@@ -177,6 +177,8 @@ enum cpumask_idx {
 /* Helpers for entering LPMode */
 void set_lpm_epp(int val);
 int get_lpm_epp(void);
+void set_lpm_epb(int val);
+int get_lpm_epb(void);
 
 /* lpmd_main.c */
 int in_debug_mode(void);
