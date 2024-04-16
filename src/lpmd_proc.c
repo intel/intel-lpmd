@@ -311,15 +311,7 @@ int enter_lpm(enum lpm_command cmd)
 
 	time_start ();
 
-	switch (cmd) {
-		case USER_ENTER:
-		case UTIL_ENTER:
-			set_lpm_cpus (CPUMASK_LPM_DEFAULT);
-			break;
-		case HFI_ENTER:
-			set_lpm_cpus (CPUMASK_HFI);
-			break;
-		default:
+	if (cmd != USER_ENTER && cmd != UTIL_ENTER && cmd != HFI_ENTER) {
 			lpmd_log_info ("Unsupported LPM reason %d\n", cmd);
 			return 1;
 	}
@@ -404,6 +396,7 @@ int process_lpm_unlock(enum lpm_command cmd)
 			set_lpm_epb (SETTING_IGNORE);
 			set_lpm_itmt (lpmd_config.ignore_itmt ? SETTING_IGNORE : 0); /* Disable ITMT */
 			set_lpm_irq(get_cpumask(CPUMASK_LPM_DEFAULT), 1);
+			set_lpm_cpus (CPUMASK_LPM_DEFAULT);
 			ret = enter_lpm (cmd);
 			break;
 		case HFI_SUV_EXIT:
@@ -412,6 +405,7 @@ int process_lpm_unlock(enum lpm_command cmd)
 			set_lpm_epb (SETTING_IGNORE);
 			set_lpm_itmt (SETTING_IGNORE);
 			set_lpm_irq(NULL, SETTING_IGNORE);	/* SUV ignores IRQ */
+			set_lpm_cpus (CPUMASK_HFI_SUV);
 			ret = enter_lpm (cmd);
 			break;
 		case HFI_ENTER:
@@ -419,8 +413,10 @@ int process_lpm_unlock(enum lpm_command cmd)
 			set_lpm_epb (SETTING_IGNORE);
 			set_lpm_itmt (0);	/* HFI always disables ITMT */
 			set_lpm_irq(NULL, SETTING_IGNORE);	/* HFI ignores IRQ */
+			set_lpm_cpus (CPUMASK_HFI);
 			ret = enter_lpm (cmd);
 			break;
+		/* exit_lpm does not require to invoke set_lpm_cpus() */
 		case USER_EXIT:
 		case UTIL_EXIT:
 			set_lpm_epp (lpmd_config.lp_mode_epp == SETTING_IGNORE ? SETTING_IGNORE : SETTING_RESTORE);

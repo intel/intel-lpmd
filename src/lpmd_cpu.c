@@ -1657,12 +1657,18 @@ static int process_cpu_isolate_enter(void)
 	if (lpmd_write_str ("/sys/fs/cgroup/lpm/cpuset.cpus.partition", "member", LPMD_LOG_INFO))
 		return 1;
 
-	if (lpmd_write_str ("/sys/fs/cgroup/lpm/cpuset.cpus", get_cpus_str_reverse (lpm_cpus_cur),
-						LPMD_LOG_INFO))
-		return 1;
+	if (!CPU_EQUAL_S(size_cpumask, cpumasks[lpm_cpus_cur].mask, cpumasks[CPUMASK_ONLINE].mask)) {
+		if (lpmd_write_str ("/sys/fs/cgroup/lpm/cpuset.cpus", get_cpus_str_reverse (lpm_cpus_cur),
+						LPMD_LOG_DEBUG))
+			return 1;
 
-	if (lpmd_write_str ("/sys/fs/cgroup/lpm/cpuset.cpus.partition", "isolated", LPMD_LOG_INFO))
-		return 1;
+		if (lpmd_write_str ("/sys/fs/cgroup/lpm/cpuset.cpus.partition", "isolated", LPMD_LOG_DEBUG))
+			return 1;
+	} else {
+		if (lpmd_write_str ("/sys/fs/cgroup/lpm/cpuset.cpus", get_cpus_str (CPUMASK_ONLINE),
+						LPMD_LOG_DEBUG))
+			return 1;
+	}
 
 	return 0;
 }
@@ -1753,6 +1759,11 @@ int process_cpus(int enter, enum lpm_cpu_process_mode mode)
 		return LPMD_ERROR;
 
 	process_epp_epb ();
+
+	if (lpm_cpus_cur == CPUMASK_MAX) {
+		lpmd_log_info ("Ignore Task migration\n");
+		return 0;
+	}
 
 	lpmd_log_info ("Process CPUs ...\n");
 	switch (mode) {
