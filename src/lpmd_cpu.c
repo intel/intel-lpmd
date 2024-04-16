@@ -480,6 +480,7 @@ static int set_max_cpu_num(void)
 struct cpu_info {
 	char epp_str[MAX_EPP_STRING_LENGTH];
 	int epp;
+	int epb;
 };
 static struct cpu_info *saved_cpu_info;
 
@@ -495,14 +496,23 @@ void set_lpm_epp(int val)
 	lp_mode_epp = val;
 }
 
-int get_epp(int cpu, int *val, char *str, int size)
+static int lp_mode_epb = SETTING_IGNORE;
+
+int get_lpm_epb(void)
+{
+	return lp_mode_epb;
+}
+
+void set_lpm_epb(int val)
+{
+	lp_mode_epb = val;
+}
+
+int get_epp(char *path, int *val, char *str, int size)
 {
 	FILE *filep;
-	char path[MAX_STR_LENGTH];
 	int epp;
 	int ret;
-
-	snprintf (path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cpufreq/energy_performance_preference", cpu);
 
 	filep = fopen (path, "r");
 	if (!filep)
@@ -529,14 +539,11 @@ end:
 	return ret;
 }
 
-int set_epp(int cpu, int val, char *str)
+int set_epp(char *path, int val, char *str)
 {
 	FILE *filep;
-	char path[MAX_STR_LENGTH];
 	int epp;
 	int ret;
-
-	snprintf (path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cpufreq/energy_performance_preference", cpu);
 
 	filep = fopen (path, "r+");
 	if (!filep)
@@ -562,11 +569,12 @@ int set_epp(int cpu, int val, char *str)
 	return !(ret > 0);
 }
 
-int init_epp(int epp)
+int init_epp_epb(void)
 {
 	int max_cpus = get_max_cpus ();
 	int c;
 	int ret;
+	char path[MAX_STR_LENGTH];
 
 	saved_cpu_info = malloc (sizeof(struct cpu_info) * max_cpus);
 
@@ -577,28 +585,39 @@ int init_epp(int epp)
 		if (!is_cpu_online (c))
 			continue;
 
-		ret = get_epp (c, &saved_cpu_info[c].epp, saved_cpu_info[c].epp_str, MAX_EPP_STRING_LENGTH);
-		if (ret)
-			continue;
+		snprintf (path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cpufreq/energy_performance_preference", c);
+		ret = get_epp (path, &saved_cpu_info[c].epp, saved_cpu_info[c].epp_str, MAX_EPP_STRING_LENGTH);
+		if (!ret) {
+			if (saved_cpu_info[c].epp != -1)
+				lpmd_log_debug ("CPU%d EPP: 0x%x\n", c, saved_cpu_info[c].epp);
+			else
+				lpmd_log_debug ("CPU%d EPP: %s\n", c, saved_cpu_info[c].epp_str);
+		}
 
-		if (saved_cpu_info[c].epp != -1)
-			lpmd_log_debug ("CPU%d EPP: 0x%x\n", c, saved_cpu_info[c].epp);
-		else
-			lpmd_log_debug ("CPU%d EPP: %s\n", c, saved_cpu_info[c].epp_str);
+		snprintf(path, MAX_STR_LENGTH, "/sys/devices/system/cpu/cpu%d/power/energy_perf_bias", c);
+		ret = lpmd_read_int(path, &saved_cpu_info[c].epb, -1);
+		if (ret) {
+			saved_cpu_info[c].epb = -1;
+			continue;
+		}
+		lpmd_log_debug ("CPU%d EPB: 0x%x\n", c, saved_cpu_info[c].epb);
 	}
 	return 0;
 }
 
-int process_epp(int enter)
+int process_epp_epb(void)
 {
 	int max_cpus = get_max_cpus ();
 	int c;
 	int ret;
+	char path[MAX_STR_LENGTH];
 
-	if (lp_mode_epp == SETTING_IGNORE) {
+	if (lp_mode_epp == SETTING_IGNORE)
 		lpmd_log_debug ("Ignore EPP\n");
+	if (lp_mode_epb == SETTING_IGNORE)
+		lpmd_log_debug ("Ignore EPB\n");
+	if (lp_mode_epp == SETTING_IGNORE && lp_mode_epb == SETTING_IGNORE)
 		return 0;
-	}
 
 	for (c = 0; c < max_cpus; c++) {
 		int val;
@@ -606,19 +625,33 @@ int process_epp(int enter)
 		if (!is_cpu_online (c))
 			continue;
 
-		if (lp_mode_epp == SETTING_RESTORE)
-			val = saved_cpu_info[c].epp;
-		else
-			val = lp_mode_epp;
+		if (lp_mode_epp != SETTING_IGNORE) {
+			if (lp_mode_epp == SETTING_RESTORE)
+				val = saved_cpu_info[c].epp;
+			else
+				val = lp_mode_epp;
 
-		ret = set_epp (c, val, saved_cpu_info[c].epp_str);
-		if (ret)
-			continue;
+			snprintf (path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cpufreq/energy_performance_preference", c);
+			ret = set_epp (path, val, saved_cpu_info[c].epp_str);
+			if (!ret) {
+				if (val != -1)
+					lpmd_log_debug ("Set CPU%d EPP to 0x%x\n", c, val);
+				else
+					lpmd_log_debug ("Set CPU%d EPP to %s\n", c, saved_cpu_info[c].epp_str);
+			}
+		}
 
-		if (val != -1)
-			lpmd_log_debug ("Set CPU%d EPP to 0x%x\n", c, val);
-		else
-			lpmd_log_debug ("Set CPU%d EPP to %s\n", c, saved_cpu_info[c].epp_str);
+		if (lp_mode_epb != SETTING_IGNORE) {
+			if (lp_mode_epb == SETTING_RESTORE)
+				val = saved_cpu_info[c].epb;
+			else
+				val = lp_mode_epb;
+
+			snprintf (path, MAX_STR_LENGTH, "/sys/devices/system/cpu/cpu%d/power/energy_perf_bias", c);
+			ret = lpmd_write_int(path, val, -1);
+			if (!ret)
+				lpmd_log_debug ("Set CPU%d EPB to 0x%x\n", c, val);
+		}
 	}
 	return 0;
 }
@@ -1703,7 +1736,7 @@ int init_cpu(char *cmd_cpus, enum lpm_cpu_process_mode mode, int epp)
 	if (ret)
 		return ret;
 
-	init_epp (epp);
+	init_epp_epb ();
 	return 0;
 }
 
@@ -1714,7 +1747,7 @@ int process_cpus(int enter, enum lpm_cpu_process_mode mode)
 	if (enter != 1 && enter != 0)
 		return LPMD_ERROR;
 
-	process_epp (enter);
+	process_epp_epb ();
 
 	lpmd_log_info ("Process CPUs ...\n");
 	switch (mode) {
