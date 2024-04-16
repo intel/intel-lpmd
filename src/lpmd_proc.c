@@ -140,14 +140,37 @@ int get_util_exit_hyst(void)
 /* ITMT Management */
 #define PATH_ITMT_CONTROL "/proc/sys/kernel/sched_itmt_enabled"
 
-static int process_itmt(int enter)
+static int saved_itmt = SETTING_IGNORE;
+static int lp_mode_itmt = SETTING_IGNORE;
+
+int get_lpm_itmt(void)
 {
-	if (lpmd_config.ignore_itmt)
+	return lp_mode_itmt;
+}
+
+void set_lpm_itmt(int val)
+{
+	lp_mode_itmt = val;
+}
+
+static int init_itmt(void)
+{
+	return lpmd_read_int(PATH_ITMT_CONTROL, &saved_itmt, -1);
+}
+
+static int process_itmt(void)
+{
+	if (lp_mode_itmt == SETTING_RESTORE)
+		lp_mode_itmt = saved_itmt;
+
+	if (lp_mode_itmt == SETTING_IGNORE) {
+		lpmd_log_debug("Ignore ITMT\n");
 		return 0;
+	}
 
-	lpmd_log_info ("Process ITMT ...\n");
+	lpmd_log_info ("%s ITMT\n", lp_mode_itmt ? "Enable" : "Disable");
 
-	return lpmd_write_int (PATH_ITMT_CONTROL, enter > 0 ? 0 : 1, LPMD_LOG_INFO);
+	return lpmd_write_int(PATH_ITMT_CONTROL, lp_mode_itmt, -1);
 }
 
 /* Main functions */
@@ -175,14 +198,6 @@ int in_suv_lpm(void)
 
 static int handle_irq(void)
 {
-	return !has_hfi_lpm_monitor();
-}
-
-static int handle_itmt(void)
-{
-	if (lpmd_config.ignore_itmt)
-		return 0;
-
 	return !has_hfi_lpm_monitor();
 }
 
@@ -325,8 +340,7 @@ int enter_lpm(enum lpm_command cmd)
 		goto end;
 	}
 
-	if (handle_itmt())
-		process_itmt (1);
+	process_itmt ();
 	if (handle_irq())
 		process_irqs (1, get_cpu_mode ());
 
@@ -368,8 +382,7 @@ int exit_lpm(enum lpm_command cmd)
 
 	if (handle_irq())
 		process_irqs (0, get_cpu_mode ());
-	if (handle_itmt())
-		process_itmt (0);
+	process_itmt ();
 
 end:
 	lpmd_log_info ("----- Done (%s) ---\n", time_delta ());
@@ -392,30 +405,44 @@ int process_lpm_unlock(enum lpm_command cmd)
 
 	switch (cmd) {
 		case USER_ENTER:
-		case HFI_ENTER:
 		case UTIL_ENTER:
 		case USER_AUTO:
 			set_lpm_epp (lpmd_config.lp_mode_epp);
 			set_lpm_epb (SETTING_IGNORE);
+			set_lpm_itmt (lpmd_config.ignore_itmt ? SETTING_IGNORE : 0); /* Disable ITMT */
 			ret = enter_lpm (cmd);
 			break;
 		case HFI_SUV_EXIT:
 		case DBUS_SUV_EXIT:
 			set_lpm_epp (SETTING_IGNORE);
 			set_lpm_epb (SETTING_IGNORE);
+			set_lpm_itmt (SETTING_IGNORE);
+			ret = enter_lpm (cmd);
+			break;
+		case HFI_ENTER:
+			set_lpm_epp (lpmd_config.lp_mode_epp);
+			set_lpm_epb (SETTING_IGNORE);
+			set_lpm_itmt (0);	/* HFI always disables ITMT */
 			ret = enter_lpm (cmd);
 			break;
 		case USER_EXIT:
-		case HFI_EXIT:
 		case UTIL_EXIT:
 			set_lpm_epp (lpmd_config.lp_mode_epp == SETTING_IGNORE ? SETTING_IGNORE : SETTING_RESTORE);
 			set_lpm_epb (SETTING_IGNORE);
+			set_lpm_itmt (lpmd_config.ignore_itmt ? SETTING_IGNORE : SETTING_RESTORE); /* Restore ITMT */
 			ret = exit_lpm (cmd);
 			break;
 		case HFI_SUV_ENTER:
 		case DBUS_SUV_ENTER:
 			set_lpm_epp (SETTING_IGNORE);
 			set_lpm_epb (SETTING_IGNORE);
+			set_lpm_itmt (SETTING_IGNORE);
+			ret = exit_lpm (cmd);
+			break;
+		case HFI_EXIT:
+			set_lpm_epp (lpmd_config.lp_mode_epp == SETTING_IGNORE ? SETTING_IGNORE : SETTING_RESTORE);
+			set_lpm_epb (SETTING_IGNORE);
+			set_lpm_itmt (SETTING_RESTORE); /* Restore ITMT */
 			ret = exit_lpm (cmd);
 			break;
 		default:
