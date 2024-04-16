@@ -196,11 +196,6 @@ int in_suv_lpm(void)
 	return lpm_state & LPM_SUV_ON;
 }
 
-static int handle_irq(void)
-{
-	return !has_hfi_lpm_monitor();
-}
-
 /*
  * 1: request valid and already satisfied. 0: respond valid and need to continue to process. -1: request invalid
  */
@@ -341,8 +336,7 @@ int enter_lpm(enum lpm_command cmd)
 	}
 
 	process_itmt ();
-	if (handle_irq())
-		process_irqs (1, get_cpu_mode ());
+	process_irqs (1, get_cpu_mode ());
 
 	process_cpus (1, get_cpu_mode ());
 
@@ -380,8 +374,7 @@ int exit_lpm(enum lpm_command cmd)
 
 	process_cpus (0, get_cpu_mode ());
 
-	if (handle_irq())
-		process_irqs (0, get_cpu_mode ());
+	process_irqs (0, get_cpu_mode ());
 	process_itmt ();
 
 end:
@@ -410,6 +403,7 @@ int process_lpm_unlock(enum lpm_command cmd)
 			set_lpm_epp (lpmd_config.lp_mode_epp);
 			set_lpm_epb (SETTING_IGNORE);
 			set_lpm_itmt (lpmd_config.ignore_itmt ? SETTING_IGNORE : 0); /* Disable ITMT */
+			set_lpm_irq(get_cpumask(CPUMASK_LPM_DEFAULT), 1);
 			ret = enter_lpm (cmd);
 			break;
 		case HFI_SUV_EXIT:
@@ -417,12 +411,14 @@ int process_lpm_unlock(enum lpm_command cmd)
 			set_lpm_epp (SETTING_IGNORE);
 			set_lpm_epb (SETTING_IGNORE);
 			set_lpm_itmt (SETTING_IGNORE);
+			set_lpm_irq(NULL, SETTING_IGNORE);	/* SUV ignores IRQ */
 			ret = enter_lpm (cmd);
 			break;
 		case HFI_ENTER:
 			set_lpm_epp (lpmd_config.lp_mode_epp);
 			set_lpm_epb (SETTING_IGNORE);
 			set_lpm_itmt (0);	/* HFI always disables ITMT */
+			set_lpm_irq(NULL, SETTING_IGNORE);	/* HFI ignores IRQ */
 			ret = enter_lpm (cmd);
 			break;
 		case USER_EXIT:
@@ -430,6 +426,7 @@ int process_lpm_unlock(enum lpm_command cmd)
 			set_lpm_epp (lpmd_config.lp_mode_epp == SETTING_IGNORE ? SETTING_IGNORE : SETTING_RESTORE);
 			set_lpm_epb (SETTING_IGNORE);
 			set_lpm_itmt (lpmd_config.ignore_itmt ? SETTING_IGNORE : SETTING_RESTORE); /* Restore ITMT */
+			set_lpm_irq(NULL, SETTING_RESTORE);
 			ret = exit_lpm (cmd);
 			break;
 		case HFI_SUV_ENTER:
@@ -437,12 +434,14 @@ int process_lpm_unlock(enum lpm_command cmd)
 			set_lpm_epp (SETTING_IGNORE);
 			set_lpm_epb (SETTING_IGNORE);
 			set_lpm_itmt (SETTING_IGNORE);
+			set_lpm_irq(NULL, SETTING_IGNORE);
 			ret = exit_lpm (cmd);
 			break;
 		case HFI_EXIT:
 			set_lpm_epp (lpmd_config.lp_mode_epp == SETTING_IGNORE ? SETTING_IGNORE : SETTING_RESTORE);
 			set_lpm_epb (SETTING_IGNORE);
 			set_lpm_itmt (SETTING_RESTORE); /* Restore ITMT */
+			set_lpm_irq(NULL, SETTING_IGNORE);	/* HFI ignores IRQ */
 			ret = exit_lpm (cmd);
 			break;
 		default:

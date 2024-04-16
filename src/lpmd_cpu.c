@@ -146,11 +146,12 @@ static int cpu_migrate(int cpu)
 		return 0;
 }
 
-static int cpumask_to_str(cpu_set_t *mask, char *buf, int length)
+int cpumask_to_str(cpu_set_t *mask, char *buf, int length)
 {
 	int i;
 	int offset = 0;
 
+	buf[0] = '\0';
 	for (i = 0; i < topo_max_cpus; i++) {
 		if (!CPU_ISSET_S(i, size_cpumask, mask))
 			continue;
@@ -173,7 +174,7 @@ static char to_hexchar(int val)
 	return val - 10 + 'a';
 }
 
-static int cpumask_to_hexstr(cpu_set_t *mask, char *str, int size)
+int cpumask_to_hexstr(cpu_set_t *mask, char *str, int size)
 {
 	int cpu;
 	int i;
@@ -276,6 +277,18 @@ static char* get_cpus_hexstr_reverse(enum cpumask_idx idx)
 	return cpumasks[idx].hexstr_reverse;
 }
 
+int cpumask_to_str_reverse(cpu_set_t *mask, char *buf, int size)
+{
+	cpu_set_t *tmp;
+
+	alloc_cpu_set (&tmp);
+	CPU_XOR_S(size_cpumask, tmp, mask, cpumasks[CPUMASK_ONLINE].mask);
+	cpumask_to_str (tmp, buf, size);
+	CPU_FREE(tmp);
+
+	return 0;
+}
+
 static char* get_cpus_str_reverse(enum cpumask_idx idx)
 {
 	cpu_set_t *mask;
@@ -352,6 +365,11 @@ int has_cpus(enum cpumask_idx idx)
 int has_lpm_cpus(void)
 {
 	return has_cpus (lpm_cpus_cur);
+}
+
+cpu_set_t *get_cpumask(enum cpumask_idx idx)
+{
+	return cpumasks[idx].mask;
 }
 
 static int _add_cpu(int cpu, enum cpumask_idx idx)
