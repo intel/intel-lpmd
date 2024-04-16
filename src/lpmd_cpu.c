@@ -367,9 +367,6 @@ static int _add_cpu(int cpu, enum cpumask_idx idx)
 	if (!cpumasks[idx].mask)
 		alloc_cpu_set (&cpumasks[idx].mask);
 
-	if (idx != CPUMASK_ONLINE && CPU_COUNT_S(size_cpumask, cpumasks[idx].mask) >= MAX_LPM_CPUS)
-		return LPMD_FATAL_ERROR;
-
 	CPU_SET_S(cpu, size_cpumask, cpumasks[idx].mask);
 
 	return LPMD_SUCCESS;

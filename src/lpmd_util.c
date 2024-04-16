@@ -54,27 +54,30 @@ enum type_stat {
 	STAT_GUEST,
 	STAT_GUEST_NICE,
 	STAT_MAX,
-	STAT_VALID = STAT_MAX,
-	STAT_EXT_MAX,
 };
 
-// One for system utilization, MAX_LPM_CPUS for LPM cpu utilization
-unsigned long long proc_stat_prev[MAX_LPM_CPUS + 1][STAT_EXT_MAX];
-unsigned long long proc_stat_cur[MAX_LPM_CPUS + 1][STAT_EXT_MAX];
+struct proc_stat_info {
+	int cpu;
+	int valid;
+	unsigned long long stat[STAT_MAX];
+};
+
+struct proc_stat_info *proc_stat_prev;
+struct proc_stat_info *proc_stat_cur;
 
 static int busy_sys = -1;
 static int busy_cpu = -1;
 
-static int calculate_busypct(unsigned long long *cur, unsigned long long *prev)
+static int calculate_busypct(struct proc_stat_info *cur, struct proc_stat_info *prev)
 {
 	int idx;
 	unsigned long long busy = 0, total = 0;
 
 	for (idx = STAT_USER; idx < STAT_MAX; idx++) {
-		total += (cur[idx] - prev[idx]);
+		total += (cur->stat[idx] - prev->stat[idx]);
 //		 Align with the "top" utility logic
 		if (idx != STAT_IDLE && idx != STAT_IOWAIT)
-			busy += (cur[idx] - prev[idx]);
+			busy += (cur->stat[idx] - prev->stat[idx]);
 	}
 
 	if (total)
@@ -89,11 +92,18 @@ static int parse_proc_stat(void)
 	int i;
 	int val;
 	int pos = 0;
-	int size = sizeof(unsigned long long) * (MAX_LPM_CPUS + 1) * STAT_MAX;
+	int count = get_max_online_cpu() + 1;
+	int sys_idx = count - 1;
+	int size = sizeof(struct proc_stat_info) * count;
 
 	filep = fopen (PATH_PROC_STAT, "r");
 	if (!filep)
 		return 1;
+
+	if (!proc_stat_prev)
+		proc_stat_prev = calloc(sizeof(struct proc_stat_info), count);
+	if (!proc_stat_cur)
+		proc_stat_cur = calloc(sizeof(struct proc_stat_info), count);
 
 	memcpy (proc_stat_prev, proc_stat_cur, size);
 	memset (proc_stat_cur, 0, size);
@@ -101,6 +111,7 @@ static int parse_proc_stat(void)
 	while (!feof (filep)) {
 		int idx;
 		char *tmpline = NULL;
+		struct proc_stat_info *info;
 		size_t size = 0;
 		char *line;
 		int cpu;
@@ -127,26 +138,11 @@ static int parse_proc_stat(void)
 
 		ret = sscanf (p, "cpu%d", &cpu);
 		if (ret == -1 && !(strncmp (p, "cpu", 3))) {
-			proc_stat_cur[pos][STAT_VALID] = 1;
-			proc_stat_cur[pos++][STAT_CPU] = -1;
+			/* Read system line */
+			info = &proc_stat_cur[sys_idx];
 		}
 		else if (ret == 1) {
-			if (!is_cpu_for_lpm (cpu)) {
-				free (tmpline);
-				free (line);
-				continue;
-			}
-
-//			 array 0 is always for system utilization
-			if (!pos)
-				pos = 1;
-			if (pos > MAX_LPM_CPUS) {
-				free (tmpline);
-				free (line);
-				break;;
-			}
-			proc_stat_cur[pos][STAT_VALID] = 1;
-			proc_stat_cur[pos++][STAT_CPU] = cpu;
+			info = &proc_stat_cur[cpu];
 		}
 		else {
 			free (tmpline);
@@ -154,6 +150,7 @@ static int parse_proc_stat(void)
 			continue;
 		}
 
+		info->valid = 1;
 		idx = STAT_CPU;
 
 		while (p != NULL) {
@@ -166,7 +163,7 @@ static int parse_proc_stat(void)
 				continue;
 			}
 
-			sscanf (p, "%llu", &proc_stat_cur[pos - 1][idx]);
+			sscanf (p, "%llu", &info->stat[idx]);
 			p = strtok (NULL, " ");
 			idx++;
 		}
@@ -176,14 +173,14 @@ static int parse_proc_stat(void)
 	}
 
 	fclose (filep);
-	busy_sys = calculate_busypct (proc_stat_cur[0], proc_stat_prev[0]);
+	busy_sys = calculate_busypct (&proc_stat_cur[sys_idx], &proc_stat_prev[sys_idx]);
 
 	busy_cpu = 0;
-	for (i = 1; i < MAX_LPM_CPUS + 1; i++) {
-		if (!proc_stat_cur[i][STAT_VALID])
+	for (i = 1; i <= get_max_online_cpu(); i++) {
+		if (!proc_stat_cur[i].valid)
 			continue;
 
-		val = calculate_busypct (proc_stat_cur[i], proc_stat_prev[i]);
+		val = calculate_busypct (&proc_stat_cur[i], &proc_stat_prev[i]);
 		if (busy_cpu < val)
 			busy_cpu = val;
 	}
