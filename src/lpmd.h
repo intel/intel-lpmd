@@ -179,6 +179,8 @@ void set_lpm_epp(int val);
 int get_lpm_epp(void);
 void set_lpm_epb(int val);
 int get_lpm_epb(void);
+void set_lpm_itmt(int val);
+int get_lpm_itmt(void);
 
 /* lpmd_main.c */
 int in_debug_mode(void);
