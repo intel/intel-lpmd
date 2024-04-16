@@ -146,7 +146,7 @@ static int cpu_migrate(int cpu)
 		return 0;
 }
 
-static int cpumask_to_str(cpu_set_t *mask, char *buf, int length)
+int cpumask_to_str(cpu_set_t *mask, char *buf, int length)
 {
 	int i;
 	int offset = 0;
@@ -173,7 +173,7 @@ static char to_hexchar(int val)
 	return val - 10 + 'a';
 }
 
-static int cpumask_to_hexstr(cpu_set_t *mask, char *str, int size)
+int cpumask_to_hexstr(cpu_set_t *mask, char *str, int size)
 {
 	int cpu;
 	int i;
@@ -352,6 +352,11 @@ int has_cpus(enum cpumask_idx idx)
 int has_lpm_cpus(void)
 {
 	return has_cpus (lpm_cpus_cur);
+}
+
+cpu_set_t *get_cpumask(enum cpumask_idx idx)
+{
+	return cpumasks[idx].mask;
 }
 
 static int _add_cpu(int cpu, enum cpumask_idx idx)
