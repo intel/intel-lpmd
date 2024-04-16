@@ -73,7 +73,7 @@ static struct lpm_cpus cpumasks[CPUMASK_MAX] = {
 		[CPUMASK_HFI_LAST] = { .name = "HFI LAST", },
 };
 
-static enum cpumask_idx lpm_cpus_cur = CPUMASK_LPM_DEFAULT;
+static enum cpumask_idx lpm_cpus_cur = CPUMASK_MAX;
 
 int is_cpu_online(int cpu)
 {
@@ -89,6 +89,9 @@ int is_cpu_online(int cpu)
 int is_cpu_for_lpm(int cpu)
 {
 	if (cpu < 0 || cpu >= topo_max_cpus)
+		return 0;
+
+	if (lpm_cpus_cur == CPUMASK_MAX)
 		return 0;
 
 	if (!cpumasks[lpm_cpus_cur].mask)
@@ -357,8 +360,12 @@ int is_equal(enum cpumask_idx idx1, enum cpumask_idx idx2)
 
 int has_cpus(enum cpumask_idx idx)
 {
+	if (idx == CPUMASK_MAX)
+		return 0;
+
 	if (!cpumasks[idx].mask)
 		return 0;
+
 	return CPU_COUNT_S(size_cpumask, cpumasks[idx].mask);
 }
 
@@ -1669,12 +1676,18 @@ static int process_cpu_isolate_enter(void)
 	if (lpmd_write_str ("/sys/fs/cgroup/lpm/cpuset.cpus.partition", "member", LPMD_LOG_INFO))
 		return 1;
 
-	if (lpmd_write_str ("/sys/fs/cgroup/lpm/cpuset.cpus", get_cpus_str_reverse (lpm_cpus_cur),
-						LPMD_LOG_INFO))
-		return 1;
+	if (!CPU_EQUAL_S(size_cpumask, cpumasks[lpm_cpus_cur].mask, cpumasks[CPUMASK_ONLINE].mask)) {
+		if (lpmd_write_str ("/sys/fs/cgroup/lpm/cpuset.cpus", get_cpus_str_reverse (lpm_cpus_cur),
+						LPMD_LOG_DEBUG))
+			return 1;
 
-	if (lpmd_write_str ("/sys/fs/cgroup/lpm/cpuset.cpus.partition", "isolated", LPMD_LOG_INFO))
-		return 1;
+		if (lpmd_write_str ("/sys/fs/cgroup/lpm/cpuset.cpus.partition", "isolated", LPMD_LOG_DEBUG))
+			return 1;
+	} else {
+		if (lpmd_write_str ("/sys/fs/cgroup/lpm/cpuset.cpus", get_cpus_str (CPUMASK_ONLINE),
+						LPMD_LOG_DEBUG))
+			return 1;
+	}
 
 	return 0;
 }
@@ -1765,6 +1778,11 @@ int process_cpus(int enter, enum lpm_cpu_process_mode mode)
 		return LPMD_ERROR;
 
 	process_epp_epb ();
+
+	if (lpm_cpus_cur == CPUMASK_MAX) {
+		lpmd_log_info ("Ignore Task migration\n");
+		return 0;
+	}
 
 	lpmd_log_info ("Process CPUs ...\n");
 	switch (mode) {
