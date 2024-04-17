@@ -914,7 +914,7 @@ static void lpmd_set_cpu_affinity(void)
  * parse cpuset with following syntax
  * 1,2,4..6,8-10 and set bits in cpu_subset
  */
-static int parse_cpu_str(char *buf, enum cpumask_idx idx)
+int parse_cpu_str(char *buf, enum cpumask_idx idx)
 {
 	unsigned int start, end;
 	char *next;

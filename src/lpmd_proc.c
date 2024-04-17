@@ -312,7 +312,7 @@ int enter_lpm(enum lpm_command cmd)
 		return 1;
 	}
 
-	if (in_low_power_mode && cmd != HFI_ENTER) {
+	if (in_low_power_mode && cmd != HFI_ENTER && cmd != UTIL_ENTER) {
 		lpmd_log_debug ("Request skipped because the system is already in Low Power Mode ---\n");
 		return 0;
 	}
@@ -397,8 +397,17 @@ int process_lpm_unlock(enum lpm_command cmd)
 	}
 
 	switch (cmd) {
-		case USER_ENTER:
 		case UTIL_ENTER:
+			if (!use_config_states()) {
+				set_lpm_epp (lpmd_config.lp_mode_epp);
+				set_lpm_epb (SETTING_IGNORE);
+				set_lpm_itmt (lpmd_config.ignore_itmt ? SETTING_IGNORE : 0); /* Disable ITMT */
+				set_lpm_irq(get_cpumask(CPUMASK_LPM_DEFAULT), 1);
+				set_lpm_cpus (CPUMASK_LPM_DEFAULT);
+			}
+			ret = enter_lpm (cmd);
+			break;
+		case USER_ENTER:
 		case USER_AUTO:
 			set_lpm_epp (lpmd_config.lp_mode_epp);
 			set_lpm_epb (SETTING_IGNORE);
@@ -818,6 +827,8 @@ int lpmd_main(void)
 
 	/* Must done after init_cpu() */
 	build_default_config_state();
+
+	util_init(&lpmd_config);
 
 	ret = init_irq ();
 	if (ret)

@@ -113,6 +113,7 @@ typedef struct {
 
 typedef struct {
 	int id;
+	int valid;
 	char name[MAX_STATE_NAME];
 	int entry_system_load_thres;
 	int exit_system_load_thres;
@@ -192,7 +193,7 @@ enum lpm_command {
 
 enum cpumask_idx {
 	CPUMASK_LPM_DEFAULT, CPUMASK_ONLINE, CPUMASK_HFI, CPUMASK_HFI_BANNED, CPUMASK_HFI_SUV, /* HFI Survivability mode */
-	CPUMASK_HFI_LAST, CPUMASK_MAX,
+	CPUMASK_HFI_LAST, CPUMASK_UTIL, CPUMASK_MAX,
 };
 
 #define UTIL_DELAY_MAX		5000
@@ -270,11 +271,14 @@ int lpmd_get_config(lpmd_config_t *lpmd_config);
 
 /* util.c */
 int periodic_util_update(lpmd_config_t *lpmd_config);
+int util_init(lpmd_config_t *lpmd_config);
+int use_config_states(void);
 
 /* cpu.c */
 int check_cpu_capability(lpmd_config_t *lpmd_config);
 int init_cpu(char *cmd_cpus, enum lpm_cpu_process_mode mode, int lp_mode_epp);
 int process_cpus(int enter, enum lpm_cpu_process_mode mode);
+int parse_cpu_str(char *buf, enum cpumask_idx idx);
 
 /* cpu.c: helpers */
 int is_cpu_online(int cpu);
