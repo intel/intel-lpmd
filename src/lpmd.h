@@ -272,6 +272,7 @@ int lpmd_get_config(lpmd_config_t *lpmd_config);
 int periodic_util_update(void);
 
 /* cpu.c */
+int check_cpu_capability(lpmd_config_t *lpmd_config);
 int init_cpu(char *cmd_cpus, enum lpm_cpu_process_mode mode, int lp_mode_epp);
 int process_cpus(int enter, enum lpm_cpu_process_mode mode);
 
