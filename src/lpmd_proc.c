@@ -754,6 +754,10 @@ int lpmd_main(void)
 
 	lpmd_log_debug ("lpmd_main begin\n");
 
+	ret = check_cpu_capability(&lpmd_config);
+	if (ret)
+		return ret;
+
 //	 Call all lpmd related functions here
 	ret = lpmd_get_config (&lpmd_config);
 	if (ret)
