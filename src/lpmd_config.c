@@ -148,6 +148,8 @@ static void lpmd_parse_states(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_
 	char *tmp_value;
 	char *pos;
 	int config_state_count = 0;
+	int cpu_family = -1, cpu_model = -1;
+	char cpu_config[MAX_CONFIG_LEN];
 
 	if (!doc || !a_node || !lpmd_config)
 		return;
@@ -156,24 +158,33 @@ static void lpmd_parse_states(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_
 	if (lpmd_config->config_state_count)
 		return;
 
+	cpu_config[0] = '\0';
+
 	for (cur_node = a_node; cur_node; cur_node = cur_node->next) {
 		if (cur_node->type == XML_ELEMENT_NODE) {
 			if (cur_node->name) {
+
 				tmp_value = (char*) xmlNodeListGetString (doc, cur_node->xmlChildrenNode, 1);
 
 				if (!strncmp ((const char*) cur_node->name, "CPUFamily", strlen ("CPUFamily")))
-					lpmd_config->cpu_family = strtol (tmp_value, &pos, 10);
+					cpu_family = strtol (tmp_value, &pos, 10);
 
 				if (!strncmp ((const char*) cur_node->name, "CPUModel", strlen ("CPUModel")))
-					lpmd_config->cpu_model = strtol (tmp_value, &pos, 10);
+					cpu_model = strtol (tmp_value, &pos, 10);
 
 				if (!strncmp ((const char*) cur_node->name, "CPUConfig", strlen ("CPUConfig"))) {
-					snprintf (lpmd_config->cpu_config, MAX_CONFIG_LEN - 1, "%s", tmp_value);
-					lpmd_config->cpu_config[MAX_CONFIG_LEN - 1] = '\0';
+					snprintf (cpu_config, MAX_CONFIG_LEN - 1, "%s", tmp_value);
+					cpu_config[MAX_CONFIG_LEN - 1] = '\0';
 				}
 
 				if (strncmp ((const char*) cur_node->name, "State", strlen ("State")))
 					continue;
+
+				/* Must check cpu family/model/config first to make sure the states applies */
+				if (cpu_family != lpmd_config->cpu_family || cpu_model != lpmd_config->cpu_model || strncmp(cpu_config, lpmd_config->cpu_config, MAX_CONFIG_LEN)) {
+					lpmd_log_info("Ignore unsupported states for CPU family:%d,model%d,config:%s\n", cpu_family, cpu_model, cpu_config);
+					return;
+				}
 
 				if (lpmd_config->config_state_count >= MAX_CONFIG_STATES)
 					break;
