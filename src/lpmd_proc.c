@@ -176,7 +176,7 @@ static int process_itmt(void)
 		return 0;
 	}
 
-	lpmd_log_info ("%s ITMT\n", lp_mode_itmt ? "Enable" : "Disable");
+	lpmd_log_debug ("%s ITMT\n", lp_mode_itmt ? "Enable" : "Disable");
 
 	return lpmd_write_int(PATH_ITMT_CONTROL, lp_mode_itmt, -1);
 }
