@@ -656,9 +656,9 @@ int process_epp_epb(void)
 	char path[MAX_STR_LENGTH];
 
 	if (lp_mode_epp == SETTING_IGNORE)
-		lpmd_log_debug ("Ignore EPP\n");
+		lpmd_log_info ("Ignore EPP\n");
 	if (lp_mode_epb == SETTING_IGNORE)
-		lpmd_log_debug ("Ignore EPB\n");
+		lpmd_log_info ("Ignore EPB\n");
 	if (lp_mode_epp == SETTING_IGNORE && lp_mode_epb == SETTING_IGNORE)
 		return 0;
 
@@ -1445,7 +1445,7 @@ static int check_cpu_cgroupv2_support(void)
 
 static int process_cpu_cgroupv2_enter(void)
 {
-	if (lpmd_write_str (PATH_CG2_SUBTREE_CONTROL, "+cpuset", LPMD_LOG_INFO))
+	if (lpmd_write_str (PATH_CG2_SUBTREE_CONTROL, "+cpuset", LPMD_LOG_DEBUG))
 		return 1;
 
 	return update_systemd_cgroup ();
@@ -1455,7 +1455,7 @@ static int process_cpu_cgroupv2_exit(void)
 {
 	restore_systemd_cgroup ();
 
-	return lpmd_write_str (PATH_CG2_SUBTREE_CONTROL, "-cpuset", LPMD_LOG_INFO);
+	return lpmd_write_str (PATH_CG2_SUBTREE_CONTROL, "-cpuset", LPMD_LOG_DEBUG);
 }
 
 static int process_cpu_cgroupv2(int enter)
@@ -1528,21 +1528,21 @@ static int default_dur = -1;
 
 static int _process_cpu_powerclamp_enter(char *cpumask_str, int pct, int dur)
 {
-	if (lpmd_write_str (PATH_CPUMASK, cpumask_str, LPMD_LOG_INFO))
+	if (lpmd_write_str (PATH_CPUMASK, cpumask_str, LPMD_LOG_DEBUG))
 		return 1;
 
 	if (dur > 0) {
-		if (lpmd_read_int (PATH_DURATION, &default_dur, LPMD_LOG_INFO))
+		if (lpmd_read_int (PATH_DURATION, &default_dur, LPMD_LOG_DEBUG))
 			return 1;
 
-		if (lpmd_write_int (PATH_DURATION, dur, LPMD_LOG_INFO))
+		if (lpmd_write_int (PATH_DURATION, dur, LPMD_LOG_DEBUG))
 			return 1;
 	}
 
-	if (lpmd_write_int (PATH_MAXIDLE, pct, LPMD_LOG_INFO))
+	if (lpmd_write_int (PATH_MAXIDLE, pct, LPMD_LOG_DEBUG))
 		return 1;
 
-	if (lpmd_write_int (path_powerclamp, pct, LPMD_LOG_INFO))
+	if (lpmd_write_int (path_powerclamp, pct, LPMD_LOG_DEBUG))
 		return 1;
 
 	return 0;
@@ -1558,10 +1558,10 @@ static int process_cpu_powerclamp_enter(void)
 
 static int process_cpu_powerclamp_exit()
 {
-	if (lpmd_write_int (PATH_DURATION, default_dur, LPMD_LOG_INFO))
+	if (lpmd_write_int (PATH_DURATION, default_dur, LPMD_LOG_DEBUG))
 		return 1;
 
-	return lpmd_write_int (path_powerclamp, 0, LPMD_LOG_INFO);
+	return lpmd_write_int (path_powerclamp, 0, LPMD_LOG_DEBUG);
 }
 
 static int process_cpu_powerclamp(int enter)
@@ -1691,7 +1691,7 @@ static int process_cpu_isolate_enter(void)
 		closedir (dir);
 	}
 
-	if (lpmd_write_str ("/sys/fs/cgroup/lpm/cpuset.cpus.partition", "member", LPMD_LOG_INFO))
+	if (lpmd_write_str ("/sys/fs/cgroup/lpm/cpuset.cpus.partition", "member", LPMD_LOG_DEBUG))
 		return 1;
 
 	if (!CPU_EQUAL_S(size_cpumask, cpumasks[lpm_cpus_cur].mask, cpumasks[CPUMASK_ONLINE].mask)) {
@@ -1712,11 +1712,11 @@ static int process_cpu_isolate_enter(void)
 
 static int process_cpu_isolate_exit(void)
 {
-	if (lpmd_write_str ("/sys/fs/cgroup/lpm/cpuset.cpus.partition", "member", LPMD_LOG_INFO))
+	if (lpmd_write_str ("/sys/fs/cgroup/lpm/cpuset.cpus.partition", "member", LPMD_LOG_DEBUG))
 		return 1;
 
 	if (lpmd_write_str ("/sys/fs/cgroup/lpm/cpuset.cpus", get_cpus_str (CPUMASK_ONLINE),
-						LPMD_LOG_INFO))
+						LPMD_LOG_DEBUG))
 		return 1;
 
 	return 0;

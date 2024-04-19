@@ -135,9 +135,9 @@ static int irqbalance_ban_cpus(int enter)
 	int first = 1;
 
 	if (lp_mode_irq == SETTING_RESTORE)
-		lpmd_log_info ("\tRestore IRQ affinity (irqbalance)\n");
+		lpmd_log_debug ("\tRestore IRQ affinity (irqbalance)\n");
 	else
-		lpmd_log_info ("\tUpdate IRQ affinity (irqbalance)\n");
+		lpmd_log_debug ("\tUpdate IRQ affinity (irqbalance)\n");
 
 	offset = snprintf (socket_cmd, MAX_STR_LENGTH, "settings cpus %s", irq_str);
 	if (offset >= MAX_STR_LENGTH)
@@ -147,7 +147,7 @@ static int irqbalance_ban_cpus(int enter)
 	clock_gettime (CLOCK_MONOTONIC, &tp1);
 	socket_send_cmd (irq_socket_name, socket_cmd);
 	clock_gettime (CLOCK_MONOTONIC, &tp2);
-	lpmd_log_info ("\tSend socket command %s (%lu ns)\n", socket_cmd,
+	lpmd_log_debug ("\tSend socket command %s (%lu ns)\n", socket_cmd,
 		1000000000UL * (tp2.tv_sec - tp1.tv_sec) + tp2.tv_nsec - tp1.tv_nsec);
 	return 0;
 }
@@ -157,7 +157,7 @@ static int native_restore_irqs(void)
 	char path[MAX_STR_LENGTH];
 	int i;
 
-	lpmd_log_info ("\tRestore IRQ affinity (native)\n");
+	lpmd_log_debug ("\tRestore IRQ affinity (native)\n");
 
 	for (i = 0; i < info->nr_irqs; i++) {
 		char *str = info->irq[i].affinity;
@@ -222,7 +222,7 @@ static int native_update_irqs(void)
 	char *line = NULL;
 	size_t size = 0;
 
-	lpmd_log_info ("\tUpdate IRQ affinity (native)\n");
+	lpmd_log_debug ("\tUpdate IRQ affinity (native)\n");
 
 	filep = fopen ("/proc/interrupts", "r");
 	if (!filep) {
@@ -294,7 +294,7 @@ int process_irqs(int enter, enum lpm_cpu_process_mode mode)
 		return 0;
 
 	if (lp_mode_irq == SETTING_IGNORE) {
-		lpmd_log_info("Ignore IRQ migration\n");
+		lpmd_log_info ("Ignore IRQ migration\n");
 		return 0;
 	}
 
