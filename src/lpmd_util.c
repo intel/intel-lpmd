@@ -444,7 +444,7 @@ int periodic_util_update(lpmd_config_t *lpmd_config, int wlt_index)
 	int interval;
 	static int initialized;
 
-	if (wlt_index > 0) {
+	if (wlt_index >= 0) {
 		process_next_config_state(lpmd_config, wlt_index);
 		return -1;
 	}
