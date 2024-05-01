@@ -434,9 +434,9 @@ int process_lpm_unlock(enum lpm_command cmd)
 		case USER_EXIT:
 		case UTIL_EXIT:
 			reset_config_state();
-			set_lpm_epp (lpmd_config.lp_mode_epp == SETTING_IGNORE ? SETTING_IGNORE : SETTING_RESTORE);
-			set_lpm_epb (SETTING_IGNORE);
-			set_lpm_itmt (lpmd_config.ignore_itmt ? SETTING_IGNORE : SETTING_RESTORE); /* Restore ITMT */
+			set_lpm_epp (SETTING_RESTORE);
+			set_lpm_epb (SETTING_RESTORE);
+			set_lpm_itmt (SETTING_RESTORE);
 			set_lpm_irq(NULL, SETTING_RESTORE);
 			ret = exit_lpm (cmd);
 			break;
@@ -961,6 +961,8 @@ int lpmd_main(void)
 	ret = init_cpu (lpmd_config.lp_mode_cpus, lpmd_config.mode, lpmd_config.lp_mode_epp);
 	if (ret)
 		return ret;
+
+	init_itmt();
 
 	if (!has_suv_support () && lpmd_config.hfi_suv_enable)
 		lpmd_config.hfi_suv_enable = 0;
