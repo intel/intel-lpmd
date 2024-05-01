@@ -120,10 +120,12 @@ for Intel Low Power Mode daemon
 				atleast +-5 percent to leave the state
 	-->
 
-
 	<!--
 		MTL 6+8+2 with HT enabled with WLT Type
+		Make sure that the above config for WLT enable is set
+			<WLTHintEnable>1</WLTHintEnable>
 	-->
+
         <States>
                 <CPUFamily> 6 </CPUFamily>
                 <CPUModel> 170 </CPUModel>
@@ -162,6 +164,65 @@ for Intel Low Power Mode daemon
 		</State>
 	</States>
 
+	<!--
+		Applies to Swift SFG14-72 6+8+2 system
+		But should be good for any MTL 6+8+2 with HT enabled.
+		The values for test only.
+	-->
+
+	<States>
+		<CPUFamily> 6 </CPUFamily>
+		<CPUModel> 170 </CPUModel>
+		<CPUConfig> 12P8E2L-28W </CPUConfig>
+		<State>
+			<ID> 1 </ID>
+			<Name> LPM_DEEP </Name>
+			<EntrySystemLoadThres> 2 </EntrySystemLoadThres>
+			<EnterCPULoadThres> 50 </EnterCPULoadThres>
+			<EPP> 178 </EPP>
+			<EPB> 8 </EPB>
+			<ITMTState> 0 </ITMTState>
+			<IRQMigrate> -1 </IRQMigrate>
+			<ActiveCPUs>20,21</ActiveCPUs>
+			<MinPollInterval> 500 </MinPollInterval>
+			<PollIntervalIncrement> 500 </PollIntervalIncrement>
+			<MaxPollInterval> 2000 </MaxPollInterval>
+			<Island0Pcores> 0 </Island0Pcores>
+			<Island0Ecores> 0 </Island0Ecores>
+			<Island1Pcores> 0 </Island1Pcores>
+			<Island1Ecores> 0 </Island1Ecores>
+			<Island2Pcores> 0 </Island2Pcores>
+			<Island2Ecores> 0 </Island2Ecores>
+		</State>
+		<State>
+			<ID> 2 </ID>
+			<Name> LPM_LOW </Name>
+			<EntrySystemLoadThres> 10 </EntrySystemLoadThres>
+			<ExitSystemLoadhysteresis> 3 </ExitSystemLoadhysteresis>
+			<EPP> 128 </EPP>
+			<EPB> 7 </EPB>
+			<ITMTState> 0 </ITMTState>
+			<IRQMigrate> -1 </IRQMigrate>
+			<ActiveCPUs>16-21</ActiveCPUs>
+			<MinPollInterval> 1000 </MinPollInterval>
+			<PollIntervalIncrement> 1000 </PollIntervalIncrement>
+			<MaxPollInterval> 3000 </MaxPollInterval>
+		</State>
+		<State>
+			<ID> 3 </ID>
+			<Name> FULL_POWER </Name>
+			<EntrySystemLoadThres></EntrySystemLoadThres>
+			<EnterCPULoadThres></EnterCPULoadThres>
+			<EPP> 64 </EPP>
+			<EPB> 6 </EPB>
+			<ITMTState> 1 </ITMTState>
+			<IRQMigrate> -1 </IRQMigrate>
+			<ActiveCPUs>0-21</ActiveCPUs>
+			<MinPollInterval> 500 </MinPollInterval>
+			<PollIntervalIncrement> -1 </PollIntervalIncrement>
+			<MaxPollInterval> 2000 </MaxPollInterval>
+		</State>
+	</States>
 
 	<!--
 		Applies to otcpl-mtl-p-pnp
