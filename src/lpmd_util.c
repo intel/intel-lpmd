@@ -339,13 +339,13 @@ static int enter_state(lpmd_config_state_t *state, int bsys, int bcpu)
 {
 	static int interval = DEFAULT_POLL_RATE_MS;
 
-        state->entry_load_sys = bsys;
-        state->entry_load_cpu = bcpu;
+	state->entry_load_sys = bsys;
+	state->entry_load_cpu = bcpu;
 
 	/* Adjust polling interval only */
 	if (state == current_state) {
 		if (state->poll_interval_increment > 0) {
-			interval +=  state->poll_interval_increment;
+			interval += state->poll_interval_increment;
 		}
 		/* Adaptive polling interval based on cpu utilization */
 		if (state->poll_interval_increment == -1) {
@@ -353,34 +353,34 @@ static int enter_state(lpmd_config_state_t *state, int bsys, int bcpu)
 			interval /= 100;
 			interval *= 100;
 		}
-		if (state->min_poll_interval && interval <  state->min_poll_interval)
+		if (state->min_poll_interval && interval < state->min_poll_interval)
 			interval = state->min_poll_interval;
-		if (state->max_poll_interval && interval >  state->max_poll_interval)
+		if (state->max_poll_interval && interval > state->max_poll_interval)
 			interval = state->max_poll_interval;
 		return interval;
 	}
 
-	set_lpm_epp (state->epp);
-	set_lpm_epb (state->epb);
-	set_lpm_itmt (state->itmt_state);
+	set_lpm_epp(state->epp);
+	set_lpm_epb(state->epb);
+	set_lpm_itmt(state->itmt_state);
 
 	if (state->active_cpus[0] != '\0') {
-		reset_cpus (CPUMASK_UTIL);
-		parse_cpu_str (state->active_cpus, CPUMASK_UTIL);
+		reset_cpus(CPUMASK_UTIL);
+		parse_cpu_str(state->active_cpus, CPUMASK_UTIL);
 		if (state->irq_migrate != SETTING_IGNORE)
 			set_lpm_irq(get_cpumask(CPUMASK_UTIL), 1);
 		else
 			set_lpm_irq(NULL, SETTING_IGNORE);
-		set_lpm_cpus (CPUMASK_UTIL);
+		set_lpm_cpus(CPUMASK_UTIL);
 	} else {
 		set_lpm_irq(NULL, SETTING_IGNORE);
-		set_lpm_cpus(CPUMASK_MAX);	/* Ignore Task migration */
+		set_lpm_cpus(CPUMASK_MAX); /* Ignore Task migration */
 	}
 
-	process_lpm (UTIL_ENTER);
+	process_lpm(UTIL_ENTER);
 
-        if (state->min_poll_interval)
-                interval = state->min_poll_interval;
+	if (state->min_poll_interval)
+		interval = state->min_poll_interval;
 	else
 		interval = DEFAULT_POLL_RATE_MS;
 
@@ -400,8 +400,8 @@ static int process_next_config_state(lpmd_config_t *config)
 	// Check for new state
 	for (i = 0; i < config->config_state_count; ++i) {
 		state = &config->config_states[i];
-		if (state_match (state, busy_sys, busy_cpu)) {
-			interval = enter_state (state, busy_sys, busy_cpu);
+		if (state_match(state, busy_sys, busy_cpu)) {
+			interval = enter_state(state, busy_sys, busy_cpu);
 			break;
 		}
 	}
@@ -411,9 +411,18 @@ static int process_next_config_state(lpmd_config_t *config)
 
 	get_epp_epb(&epp, epp_str, 32, &epb);
 	if (epp >= 0)
-		lpmd_log_info ("[%d/%d] %12s: bsys: %3d.%02d, bcpu: %3d.%02d, epp %20d, epb %3d, itmt %2d, interval %4d\n", current_state->id, config->config_state_count, current_state->name, busy_sys / 100, busy_sys % 100, busy_cpu / 100, busy_cpu % 100, epp, epb, get_itmt(), interval);
+		lpmd_log_info(
+				"[%d/%d] %12s: bsys: %3d.%02d, bcpu: %3d.%02d, epp %20d, epb %3d, itmt %2d, interval %4d\n",
+				current_state->id, config->config_state_count,
+				current_state->name, busy_sys / 100, busy_sys % 100,
+				busy_cpu / 100, busy_cpu % 100, epp, epb, get_itmt(), interval);
 	else
-		lpmd_log_info ("[%d/%d] %12s: bsys: %3d.%02d, bcpu: %3d.%02d, epp %20s, epb %3d, itmt %2d, interval %4d\n", current_state->id, config->config_state_count, current_state->name, busy_sys / 100, busy_sys % 100, busy_cpu / 100, busy_cpu % 100, epp_str, epb, get_itmt(), interval);
+		lpmd_log_info(
+				"[%d/%d] %12s: bsys: %3d.%02d, bcpu: %3d.%02d, epp %20s, epb %3d, itmt %2d, interval %4d\n",
+				current_state->id, config->config_state_count,
+				current_state->name, busy_sys / 100, busy_sys % 100,
+				busy_cpu / 100, busy_cpu % 100, epp_str, epb, get_itmt(),
+				interval);
 
 	return interval;
 }
