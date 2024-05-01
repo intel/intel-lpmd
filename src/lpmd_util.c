@@ -401,7 +401,7 @@ static int process_next_config_state(lpmd_config_t *config, int wlt_index)
 {
 	lpmd_config_state_t *state;
 	int i;
-	int interval;
+	int interval = -1;
 	int epp, epb;
 	char epp_str[32];
 
@@ -413,6 +413,9 @@ static int process_next_config_state(lpmd_config_t *config, int wlt_index)
 			break;
 		}
 	}
+
+	if (!current_state)
+		return interval;
 
 	get_epp_epb(&epp, epp_str, 32, &epb);
 	if (epp >= 0)
