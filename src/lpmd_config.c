@@ -36,6 +36,7 @@ static void lpmd_dump_config(lpmd_config_t *lpmd_config)
 	lpmd_log_info ("Mode:%d\n", lpmd_config->mode);
 	lpmd_log_info ("HFI LPM Enable:%d\n", lpmd_config->hfi_lpm_enable);
 	lpmd_log_info ("HFI SUV Enable:%d\n", lpmd_config->hfi_suv_enable);
+	lpmd_log_info ("WLT Hint Enable:%d\n", lpmd_config->wlt_hint_enable);
 	lpmd_log_info ("Util entry threshold:%d\n", lpmd_config->util_entry_threshold);
 	lpmd_log_info ("Util exit threshold:%d\n", lpmd_config->util_exit_threshold);
 	lpmd_log_info ("Util LP Mode CPUs:%s\n", lpmd_config->lp_mode_cpus);
@@ -58,6 +59,7 @@ static void lpmd_dump_config(lpmd_config_t *lpmd_config)
 		lpmd_log_info ("\texit_system_load_hyst:%d\n", state->exit_system_load_hyst);
 		lpmd_log_info ("\tentry_cpu_load_thres:%d\n", state->enter_cpu_load_thres);
 		lpmd_log_info ("\texit_cpu_load_thres:%d\n", state->exit_cpu_load_thres);
+		lpmd_log_info ("\tWLT Type:%d\n", state->wlt_type);
 		lpmd_log_info ("\tmin_poll_interval:%d\n", state->min_poll_interval);
 		lpmd_log_info ("\tmax_poll_interval:%d\n", state->max_poll_interval);
 		lpmd_log_info ("\tpoll_interval_increment:%d\n", state->poll_interval_increment);
@@ -85,6 +87,8 @@ static void lpmd_parse_state(xmlDoc *doc, xmlNode *a_node, lpmd_config_state_t *
 	if (!doc || !a_node || !state)
 		return;
 
+	state->wlt_type = -1;
+
 	for (cur_node = a_node; cur_node; cur_node = cur_node->next) {
 		if (cur_node->type == XML_ELEMENT_NODE) {
 			tmp_value = (char*) xmlNodeListGetString (doc, cur_node->xmlChildrenNode, 1);
@@ -95,6 +99,8 @@ static void lpmd_parse_state(xmlDoc *doc, xmlNode *a_node, lpmd_config_state_t *
 					snprintf(state->name, MAX_STATE_NAME - 1, "%s", tmp_value);
 					state->name[MAX_STATE_NAME - 1] = '\0';
 				}
+				if (!strncmp((const char*)cur_node->name, "WLTType", strlen("WLTType")))
+					state->wlt_type = strtol (tmp_value, &pos, 10);
 				if (!strncmp((const char*)cur_node->name, "EntrySystemLoadThres", strlen("EntrySystemLoadThres")))
 					state->entry_system_load_thres = strtol (tmp_value, &pos, 10);
 				if (!strncmp((const char*)cur_node->name, "ExitSystemLoadThres", strlen("ExitSystemLoadThres")))
@@ -230,6 +236,13 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_co
 					lpmd_config->hfi_suv_enable = strtol (tmp_value, &pos, 10);
 					if (errno || *pos != '\0'
 							|| (lpmd_config->hfi_suv_enable != 1 && lpmd_config->hfi_suv_enable != 0))
+						goto err;
+				}
+				else if (!strncmp((const char*)cur_node->name, "WLTHintEnable", strlen("WLtHintEnable"))) {
+					errno = 0;
+					lpmd_config->wlt_hint_enable = strtol (tmp_value, &pos, 10);
+					if (errno || *pos != '\0'
+							|| (lpmd_config->wlt_hint_enable != 1 && lpmd_config->wlt_hint_enable != 0))
 						goto err;
 				}
 				else if (!strncmp((const char*)cur_node->name, "EntryDelayMS", strlen ("EntryDelayMS"))) {

@@ -305,10 +305,18 @@ static int get_util_interval(void)
 	return interval;
 }
 
-static int state_match(lpmd_config_state_t *state, int bsys, int bcpu)
+static int state_match(lpmd_config_state_t *state, int bsys, int bcpu, int wlt_index)
 {
 	if (!state->valid)
 		return 0;
+
+	if (state->wlt_type != -1) {
+		if (state->wlt_type == wlt_index) {
+			lpmd_log_debug("Match  %12s: WLT index:%d\n", state->name, wlt_index);
+			return 1;
+		}
+		return 0;
+	}
 
 	if (state->enter_cpu_load_thres) {
 		if (bcpu > state->enter_cpu_load_thres)
@@ -389,7 +397,7 @@ static int enter_state(lpmd_config_state_t *state, int bsys, int bcpu)
 	return interval;
 }
 
-static int process_next_config_state(lpmd_config_t *config)
+static int process_next_config_state(lpmd_config_t *config, int wlt_index)
 {
 	lpmd_config_state_t *state;
 	int i;
@@ -400,7 +408,7 @@ static int process_next_config_state(lpmd_config_t *config)
 	// Check for new state
 	for (i = 0; i < config->config_state_count; ++i) {
 		state = &config->config_states[i];
-		if (state_match(state, busy_sys, busy_cpu)) {
+		if (state_match(state, busy_sys, busy_cpu, wlt_index)) {
 			interval = enter_state(state, busy_sys, busy_cpu);
 			break;
 		}
@@ -434,10 +442,15 @@ int use_config_states(void)
 	return use_config_state;
 }
 
-int periodic_util_update(lpmd_config_t *lpmd_config)
+int periodic_util_update(lpmd_config_t *lpmd_config, int wlt_index)
 {
 	int interval;
 	static int initialized;
+
+	if (wlt_index >= 0) {
+		process_next_config_state(lpmd_config, wlt_index);
+		return -1;
+	}
 
 //	 poll() timeout should be -1 when util monitor not enabled
 	if (!has_util_monitor ())
@@ -486,7 +499,7 @@ int periodic_util_update(lpmd_config_t *lpmd_config)
 				break;
 		}
 	} else
-		interval = process_next_config_state(lpmd_config);
+		interval = process_next_config_state(lpmd_config, wlt_index);
 
 	return interval;
 }
