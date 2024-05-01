@@ -43,6 +43,11 @@
 
 static lpmd_config_state_t *current_state;
 
+void reset_config_state(void)
+{
+	current_state = NULL;
+}
+
 enum type_stat {
 	STAT_CPU,
 	STAT_USER,

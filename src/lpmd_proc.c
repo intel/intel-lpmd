@@ -409,6 +409,7 @@ int process_lpm_unlock(enum lpm_command cmd)
 			break;
 		case USER_ENTER:
 		case USER_AUTO:
+			reset_config_state();
 			set_lpm_epp (lpmd_config.lp_mode_epp);
 			set_lpm_epb (SETTING_IGNORE);
 			set_lpm_itmt (lpmd_config.ignore_itmt ? SETTING_IGNORE : 0); /* Disable ITMT */
@@ -436,6 +437,7 @@ int process_lpm_unlock(enum lpm_command cmd)
 		/* exit_lpm does not require to invoke set_lpm_cpus() */
 		case USER_EXIT:
 		case UTIL_EXIT:
+			reset_config_state();
 			set_lpm_epp (lpmd_config.lp_mode_epp == SETTING_IGNORE ? SETTING_IGNORE : SETTING_RESTORE);
 			set_lpm_epb (SETTING_IGNORE);
 			set_lpm_itmt (lpmd_config.ignore_itmt ? SETTING_IGNORE : SETTING_RESTORE); /* Restore ITMT */
@@ -705,8 +707,7 @@ static int proc_message(message_capsul_t *msg)
 // LPMD processing thread. This is callback to pthread lpmd_core_main
 static void* lpmd_core_main_loop(void *arg)
 {
-	int interval, n;
-	static int first_try = 1;
+	int interval = -1, n;
 
 	for (;;) {
 
@@ -716,10 +717,8 @@ static void* lpmd_core_main_loop(void *arg)
 //		 Opportunistic LPM is disabled in below cases
 		if (lpm_state & (LPM_USER_ON | LPM_USER_OFF | LPM_SUV_ON) | has_hfi_lpm_monitor ())
 			interval = -1;
-		else if (first_try) {
+		else if (interval == -1)
 			interval = 100;
-			first_try = 0;
-		}
 
 		n = poll (poll_fds, poll_fd_cnt, interval);
 		if (n < 0) {

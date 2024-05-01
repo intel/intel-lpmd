@@ -273,6 +273,7 @@ int lpmd_get_config(lpmd_config_t *lpmd_config);
 int periodic_util_update(lpmd_config_t *lpmd_config);
 int util_init(lpmd_config_t *lpmd_config);
 int use_config_states(void);
+void reset_config_state(void);
 
 /* cpu.c */
 int check_cpu_capability(lpmd_config_t *lpmd_config);
