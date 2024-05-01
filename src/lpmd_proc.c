@@ -323,10 +323,6 @@ int enter_lpm(enum lpm_command cmd)
 			lpmd_log_info ("Unsupported LPM reason %d\n", cmd);
 			return 1;
 	}
-	if (!has_lpm_cpus ()) {
-		lpmd_log_error ("No LPM CPUs available\n");
-		return 1;
-	}
 
 	lpmd_log_msg ("------ Enter Low Power Mode (%10s) --- %s", lpm_cmd_str[cmd], get_time ());
 

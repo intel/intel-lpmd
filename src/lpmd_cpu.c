@@ -73,7 +73,7 @@ static struct lpm_cpus cpumasks[CPUMASK_MAX] = {
 		[CPUMASK_HFI_LAST] = { .name = "HFI LAST", },
 };
 
-static enum cpumask_idx lpm_cpus_cur = CPUMASK_LPM_DEFAULT;
+static enum cpumask_idx lpm_cpus_cur = CPUMASK_MAX;
 
 int is_cpu_online(int cpu)
 {
@@ -89,6 +89,9 @@ int is_cpu_online(int cpu)
 int is_cpu_for_lpm(int cpu)
 {
 	if (cpu < 0 || cpu >= topo_max_cpus)
+		return 0;
+
+	if (lpm_cpus_cur == CPUMASK_MAX)
 		return 0;
 
 	if (!cpumasks[lpm_cpus_cur].mask)
@@ -344,8 +347,12 @@ int is_equal(enum cpumask_idx idx1, enum cpumask_idx idx2)
 
 int has_cpus(enum cpumask_idx idx)
 {
+	if (idx == CPUMASK_MAX)
+		return 0;
+
 	if (!cpumasks[idx].mask)
 		return 0;
+
 	return CPU_COUNT_S(size_cpumask, cpumasks[idx].mask);
 }
 
