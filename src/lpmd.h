@@ -115,6 +115,7 @@ typedef struct {
 	int id;
 	int valid;
 	char name[MAX_STATE_NAME];
+	int wlt_type;
 	int entry_system_load_thres;
 	int exit_system_load_thres;
 	int exit_system_load_hyst;
@@ -151,6 +152,7 @@ typedef struct {
 	int powersaver_def;
 	int hfi_lpm_enable;
 	int hfi_suv_enable;
+	int wlt_hint_enable;
 	int util_enable;
 	int util_entry_threshold;
 	int util_exit_threshold;
@@ -270,7 +272,7 @@ int intel_dbus_server_init(gboolean (*exit_handler)(void));
 int lpmd_get_config(lpmd_config_t *lpmd_config);
 
 /* util.c */
-int periodic_util_update(lpmd_config_t *lpmd_config);
+int periodic_util_update(lpmd_config_t *lpmd_config, int wlt_index);
 int util_init(lpmd_config_t *lpmd_config);
 int use_config_states(void);
 void reset_config_state(void);

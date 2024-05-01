@@ -51,6 +51,13 @@ for Intel Low Power Mode daemon
 	<HfiLpmEnable>0</HfiLpmEnable>
 
 	<!--
+		Use WLT hints
+		0 : No
+		1 : Yes
+	-->
+	<WLTHintEnable>1</WLTHintEnable>
+
+	<!--
 		Use HFI SUV hints
 		0 : No
 		1 : Yes
@@ -112,6 +119,48 @@ for Intel Low Power Mode daemon
 			- In FULL POWER state, whatever system util entered, it needs to
 				atleast +-5 percent to leave the state
 	-->
+
+
+	<!--
+		MTL 6+8+2 with HT enabled with WLT Type
+	-->
+        <States>
+                <CPUFamily> 6 </CPUFamily>
+                <CPUModel> 170 </CPUModel>
+                <CPUConfig> 12P8E2L-28W </CPUConfig>
+		<State>
+			<ID> 1 </ID>
+			<Name> WLT_IDLE </Name>
+			<WLTType> 0 </WLTType>
+			<EPP> 255 </EPP>
+			<ITMTState> -1 </ITMTState>
+			<IRQMigrate> -1 </IRQMigrate>
+		</State>
+		<State>
+			<ID> 1 </ID>
+			<Name> WLT_BATTERY_LIFE </Name>
+			<WLTType> 1 </WLTType>
+			<EPP> 192 </EPP>
+			<ITMTState> -1 </ITMTState>
+			<IRQMigrate> -1 </IRQMigrate>
+		</State>
+		<State>
+			<ID> 1 </ID>
+			<Name> WLT_SUSTAINED </Name>
+			<WLTType> 2 </WLTType>
+			<EPP> 64 </EPP>
+			<ITMTState> -1 </ITMTState>
+			<IRQMigrate> -1 </IRQMigrate>
+		</State>
+		<State>
+			<ID> 1 </ID>
+			<Name> WLT_BURSTY </Name>
+			<WLTType> 3 </WLTType>
+			<EPP> 64 </EPP>
+			<ITMTState> -1 </ITMTState>
+			<IRQMigrate> -1 </IRQMigrate>
+		</State>
+	</States>
 
 
 	<!--
