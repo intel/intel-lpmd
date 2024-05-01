@@ -434,8 +434,8 @@ int process_lpm_unlock(enum lpm_command cmd)
 		case USER_EXIT:
 		case UTIL_EXIT:
 			reset_config_state();
-			set_lpm_epp (lpmd_config.lp_mode_epp == SETTING_IGNORE ? SETTING_IGNORE : SETTING_RESTORE);
-			set_lpm_epb (SETTING_IGNORE);
+			set_lpm_epp (SETTING_RESTORE);
+			set_lpm_epb (SETTING_RESTORE);
 			set_lpm_itmt (SETTING_RESTORE);
 			set_lpm_irq(NULL, SETTING_RESTORE);
 			ret = exit_lpm (cmd);
