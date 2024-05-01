@@ -58,6 +58,13 @@ for Intel Low Power Mode daemon
 	<HfiLpmEnable>0</HfiLpmEnable>
 
 	<!--
+		Use WLT hints
+		0 : No
+		1 : Yes
+	-->
+	<WLTHintEnable>0</WLTHintEnable>
+
+	<!--
 		Use HFI SUV hints
 		0 : No
 		1 : Yes
@@ -110,7 +117,51 @@ for Intel Low Power Mode daemon
 	<IgnoreITMT>0</IgnoreITMT>
 
 	<!--
-		Example config states applied to 4Pcore-8Ecore-2Lcore 15W TDP Meteor Lake platform
+		Example WorkLoad Type hints based config states applied to
+		12Pcore-8Ecore-2Lcore 28W TDP Meteor Lake platform.
+		Need to set WLTHintEnable to make it work.
+	-->
+	<States>
+		<CPUFamily> 6 </CPUFamily>
+		<CPUModel> 170 </CPUModel>
+		<CPUConfig> 12P8E2L-28W </CPUConfig>
+		<State>
+			<ID> 1 </ID>
+			<Name> WLT_IDLE </Name>
+			<WLTType> 0 </WLTType>
+			<EPP> 255 </EPP>
+			<ITMTState> -1 </ITMTState>
+			<IRQMigrate> -1 </IRQMigrate>
+		</State>
+		<State>
+			<ID> 2 </ID>
+			<Name> WLT_BATTERY_LIFE </Name>
+			<WLTType> 1 </WLTType>
+			<EPP> 192 </EPP>
+			<ITMTState> -1 </ITMTState>
+			<IRQMigrate> -1 </IRQMigrate>
+		</State>
+		<State>
+			<ID> 3 </ID>
+			<Name> WLT_SUSTAINED </Name>
+			<WLTType> 2 </WLTType>
+			<EPP> 64 </EPP>
+			<ITMTState> -1 </ITMTState>
+			<IRQMigrate> -1 </IRQMigrate>
+		</State>
+		<State>
+			<ID> 4 </ID>
+			<Name> WLT_BURSTY </Name>
+			<WLTType> 3 </WLTType>
+			<EPP> 64 </EPP>
+			<ITMTState> -1 </ITMTState>
+			<IRQMigrate> -1 </IRQMigrate>
+		</State>
+	</States>
+
+	<!--
+		Example Utilization based config states applied to
+		4Pcore-8Ecore-2Lcore 15W TDP Meteor Lake platform.
 	-->
 	<States>
 		<CPUFamily> 6 </CPUFamily>
