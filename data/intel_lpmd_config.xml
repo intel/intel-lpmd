@@ -33,7 +33,7 @@ for Intel Low Power Mode daemon
 		 1: force on. (Always stay in Low Power Mode)
 		 0: auto. (opportunistic Low Power Mode enter/exit)
 	-->
-	<BalancedDef>-1</BalancedDef>
+	<BalancedDef>0</BalancedDef>
 
 	<!--
 		Default behavior when Power saver setting is used
@@ -41,7 +41,7 @@ for Intel Low Power Mode daemon
 		 1: force on. (Always stay in Low Power Mode)
 		 0: auto. (opportunistic Low Power Mode enter/exit)
 	-->
-	<PowersaverDef>-1</PowersaverDef>
+	<PowersaverDef>1</PowersaverDef>
 
 	<!--
 		Use HFI LPM hints
@@ -115,22 +115,21 @@ for Intel Low Power Mode daemon
 
 
 	<!--
-		Applies to otcpl-mtl-p-pnp
+		Applies to any MTL-P
 	-->
 	<States>
 		<CPUFamily> 6 </CPUFamily>
 		<CPUModel> 170 </CPUModel>
-		<CPUConfig> 4P8E2L-15W </CPUConfig>
+		<CPUConfig> * </CPUConfig>
 		<State>
 			<ID> 1 </ID>
-			<Name> LPM_DEEP </Name>
-			<EntrySystemLoadThres> 2 </EntrySystemLoadThres>
-			<EnterCPULoadThres> 50 </EnterCPULoadThres>
+			<Name> POWER </Name>
+                        <ActiveCPUs></ActiveCPUs>
+			<EntrySystemLoadThres> 30 </EntrySystemLoadThres>
 			<EPP> 178 </EPP>
 			<EPB> 8 </EPB>
-			<ITMTState> 0 </ITMTState>
+			<ITMTState> -1 </ITMTState>
 			<IRQMigrate> -1 </IRQMigrate>
-			<ActiveCPUs>12,13</ActiveCPUs>
 			<MinPollInterval> 500 </MinPollInterval>
 			<PollIntervalIncrement> 500 </PollIntervalIncrement>
 			<MaxPollInterval> 2000 </MaxPollInterval>
@@ -143,147 +142,18 @@ for Intel Low Power Mode daemon
 		</State>
 		<State>
 			<ID> 2 </ID>
-			<Name> LPM_LOW </Name>
-			<EntrySystemLoadThres> 10 </EntrySystemLoadThres>
-			<ExitSystemLoadhysteresis> 3 </ExitSystemLoadhysteresis>
-			<EPP> 128 </EPP>
-			<EPB> 7 </EPB>
-			<ITMTState> 1 </ITMTState>
-			<IRQMigrate> -1 </IRQMigrate>
-			<ActiveCPUs>10,11</ActiveCPUs>
-			<MinPollInterval> 1000 </MinPollInterval>
-			<PollIntervalIncrement> 1000 </PollIntervalIncrement>
-			<MaxPollInterval> 3000 </MaxPollInterval>
-		</State>
-		<State>
-			<ID> 3 </ID>
-			<Name> FULL_POWER </Name>
+			<Name> PERF </Name>
+                        <ActiveCPUs>12,13</ActiveCPUs>
 			<EntrySystemLoadThres></EntrySystemLoadThres>
 			<EnterCPULoadThres></EnterCPULoadThres>
 			<EPP> 64 </EPP>
 			<EPB> 6 </EPB>
-			<ITMTState> 1 </ITMTState>
+			<ITMTState> -1 </ITMTState>
 			<IRQMigrate> -1 </IRQMigrate>
-			<ActiveCPUs>0-13</ActiveCPUs>
 			<MinPollInterval> 500 </MinPollInterval>
 			<PollIntervalIncrement> -1 </PollIntervalIncrement>
 			<MaxPollInterval> 2000 </MaxPollInterval>
 		</State>
 	</States>
 
-	<!--
-		Applies to otcpl-mtl-p-3, not finished yet
-	-->
-	<States>
-		<CPUFamily> 6 </CPUFamily>
-		<CPUModel> 170 </CPUModel>
-		<CPUConfig> 4P8E2L-28W </CPUConfig>
-		<State>
-			<ID> 1 </ID>
-			<Name> LPM_DEEP </Name>
-			<EntrySystemLoadThres> 5 </EntrySystemLoadThres>
-			<EnterCPULoadThres> 50 </EnterCPULoadThres>
-			<EPP> 178 </EPP>
-			<EPB> 8 </EPB>
-			<ITMTState> 0 </ITMTState>
-			<IRQMigrate> -1 </IRQMigrate>
-			<ActiveCPUs>14,15</ActiveCPUs>
-			<MinPollInterval> 500 </MinPollInterval>
-			<PollIntervalIncrement> 500 </PollIntervalIncrement>
-			<MaxPollInterval> 2000 </MaxPollInterval>
-			<Island0Pcores> 0 </Island0Pcores>
-			<Island0Ecores> 0 </Island0Ecores>
-			<Island1Pcores> 0 </Island1Pcores>
-			<Island1Ecores> 0 </Island1Ecores>
-			<Island2Pcores> 0 </Island2Pcores>
-			<Island2Ecores> 0 </Island2Ecores>
-		</State>
-		<State>
-			<ID> 2 </ID>
-			<Name> LPM_LOW </Name>
-			<EntrySystemLoadThres> 20 </EntrySystemLoadThres>
-			<EnterCPULoadThres> 95 </EnterCPULoadThres>
-			<ExitSystemLoadhysteresis> 3 </ExitSystemLoadhysteresis>
-			<EPP> 128 </EPP>
-			<EPB> 7 </EPB>
-			<ITMTState> 1 </ITMTState>
-			<IRQMigrate> -1 </IRQMigrate>
-			<ActiveCPUs>12-15</ActiveCPUs>
-			<MinPollInterval> 1000 </MinPollInterval>
-			<PollIntervalIncrement> 1000 </PollIntervalIncrement>
-			<MaxPollInterval> 3000 </MaxPollInterval>
-		</State>
-		<State>
-			<ID> 3 </ID>
-			<Name> FULL_POWER </Name>
-			<EntrySystemLoadThres> 100 </EntrySystemLoadThres>
-			<EnterCPULoadThres> 100 </EnterCPULoadThres>
-			<EPP> 64 </EPP>
-			<EPB> 6 </EPB>
-			<ITMTState> 1 </ITMTState>
-			<IRQMigrate> -1 </IRQMigrate>
-			<ActiveCPUs>0-15</ActiveCPUs>
-			<MinPollInterval> 500 </MinPollInterval>
-			<PollIntervalIncrement> -1 </PollIntervalIncrement>
-			<MaxPollInterval> 2000 </MaxPollInterval>
-		</State>
-	</States>
-
-	<!--
-		Applies to Rui' Rapterlake laptop
-	-->
-	<States>
-		<CPUFamily> 6 </CPUFamily>
-		<CPUModel> 186 </CPUModel>
-		<CPUConfig> 8P8E0L-28W </CPUConfig>
-		<State>
-			<ID> 1 </ID>
-			<Name> LPM_DEEP </Name>
-			<EntrySystemLoadThres> 5 </EntrySystemLoadThres>
-			<EnterCPULoadThres> 50 </EnterCPULoadThres>
-			<EPP> 178 </EPP>
-			<EPB> 8 </EPB>
-			<ITMTState> 0 </ITMTState>
-			<IRQMigrate> -1 </IRQMigrate>
-			<ActiveCPUs>14,15</ActiveCPUs>
-			<MinPollInterval> 500 </MinPollInterval>
-			<PollIntervalIncrement> 500 </PollIntervalIncrement>
-			<MaxPollInterval> 2000 </MaxPollInterval>
-			<Island0Pcores> 0 </Island0Pcores>
-			<Island0Ecores> 0 </Island0Ecores>
-			<Island1Pcores> 0 </Island1Pcores>
-			<Island1Ecores> 0 </Island1Ecores>
-			<Island2Pcores> 0 </Island2Pcores>
-			<Island2Ecores> 0 </Island2Ecores>
-		</State>
-		<State>
-			<ID> 2 </ID>
-			<Name> LPM_LOW </Name>
-			<EntrySystemLoadThres> 20 </EntrySystemLoadThres>
-			<EnterCPULoadThres> 95 </EnterCPULoadThres>
-			<ExitSystemLoadhysteresis> 3 </ExitSystemLoadhysteresis>
-			<EPP> 128 </EPP>
-			<EPB> 7 </EPB>
-			<ITMTState> 1 </ITMTState>
-			<IRQMigrate> -1 </IRQMigrate>
-			<ActiveCPUs>12-15</ActiveCPUs>
-			<MinPollInterval> 1000 </MinPollInterval>
-			<PollIntervalIncrement> 1000 </PollIntervalIncrement>
-			<MaxPollInterval> 3000 </MaxPollInterval>
-		</State>
-		<State>
-			<ID> 3 </ID>
-			<Name> FULL_POWER </Name>
-			<EntrySystemLoadThres> 100 </EntrySystemLoadThres>
-			<EnterCPULoadThres> 100 </EnterCPULoadThres>
-			<EPP> 64 </EPP>
-			<EPB> 6 </EPB>
-			<ITMTState> 1 </ITMTState>
-			<IRQMigrate> -1 </IRQMigrate>
-			<ActiveCPUs>0-15</ActiveCPUs>
-			<MinPollInterval> 500 </MinPollInterval>
-			<PollIntervalIncrement> -1 </PollIntervalIncrement>
-			<MaxPollInterval> 2000 </MaxPollInterval>
-		</State>
-	</States>
 </Configuration>
