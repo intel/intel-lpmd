@@ -153,6 +153,8 @@ typedef struct {
 	int hfi_lpm_enable;
 	int hfi_suv_enable;
 	int wlt_hint_enable;
+	int wlt_proxy_enable;
+	int wlt_proxy_interval;
 	int util_enable;
 	int util_entry_threshold;
 	int util_exit_threshold;
@@ -338,5 +340,9 @@ int lpmd_read_int(const char *name, int *val, int print_level);
 char* get_time(void);
 void time_start(void);
 char* time_delta(void);
+
+/* WLT Proxy */
+int wlt_proxy_init(lpmd_config_t *lpmd_config);
+void wlt_proxy_action_loop(void);
 
 #endif

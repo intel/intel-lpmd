@@ -847,7 +847,9 @@ static void* lpmd_core_main_loop(void *arg)
 			break;
 
 //		 Opportunistic LPM is disabled in below cases
-		if (lpm_state & (LPM_USER_ON | LPM_USER_OFF | LPM_SUV_ON) | has_hfi_lpm_monitor ())
+		if (lpmd_config.wlt_proxy_enable)
+			interval = lpmd_config.wlt_proxy_interval;
+		else if (lpm_state & (LPM_USER_ON | LPM_USER_OFF | LPM_SUV_ON) | has_hfi_lpm_monitor ())
 			interval = -1;
 		else if (interval == -1)
 			interval = 100;
@@ -859,8 +861,12 @@ static void* lpmd_core_main_loop(void *arg)
 		}
 
 		/* Time out, need to choose next util state and interval */
-		if (n == 0 && interval > 0)
-			interval = periodic_util_update (&lpmd_config, -1);
+		if (n == 0 && interval > 0) {
+			if (lpmd_config.wlt_proxy_enable)
+				wlt_proxy_action_loop ();
+			else
+				interval = periodic_util_update (&lpmd_config, -1);
+		}
 
 		if (idx_pipe_fd >= 0 && (poll_fds[idx_pipe_fd].revents & POLLIN)) {
 //			 process message written on pipe here
@@ -1019,7 +1025,14 @@ int lpmd_main(void)
 
 	if (lpmd_config.wlt_hint_enable) {
 		lpmd_config.util_enable = 0;
-		poll_for_wlt(1);
+		if (lpmd_config.wlt_proxy_enable) {
+			if (wlt_proxy_init(&lpmd_config) != LPMD_SUCCESS || !lpmd_config.wlt_proxy_interval) {
+				lpmd_config.wlt_proxy_enable = 0;
+				lpmd_log_error ("Invalid WLT Proxy setup\n");
+			}
+		} else {
+			poll_for_wlt(1);
+		}
 	}
 
 	pthread_attr_init (&lpmd_attr);
