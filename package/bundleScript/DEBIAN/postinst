@@ -1,0 +1,71 @@
+#change the ownership to root
+
+if test -f /usr/share/ia_pkg/EPPprofile ; then
+	chown root:root /usr/share/ia_pkg/EPPprofile/
+fi
+
+file="/usr/share/ia_pkg/EPPprofile/EPPprofile.install"
+if test -f $file ; then
+	chown root:root $file
+fi
+
+if test -f /usr/share/ia_pkg/EPPprofile/eco_linux_x86_64 ; then
+	chown root:root /usr/share/ia_pkg/EPPprofile/eco_linux_x86_64
+fi
+
+chown root:root /etc/tuned/intel_energy*
+chown root:root /etc/tuned/intel_energy*/*
+
+activeprofile=""
+
+if test -f /usr/sbin/tuned-adm; then
+    output=$(echo $(tuned-adm active) | grep -o ":")
+    if [ ! -z "$output" ]; then 
+        activeprofile=$(echo $(tuned-adm active) | cut -d ":" -f 2)
+        #echo "activeprofile is $activeprofile"
+        if echo $activeprofile | grep -q "intel"; then
+        	activeprofile=""
+        fi
+    fi
+fi
+
+model=$(grep -oP "model name\\K.*" /proc/cpuinfo | head -1)
+echo $model
+if [ ! -z "$model" ]; then
+	deli=$(echo $model | grep -o ":")
+    if [ ! -z "$deli" ]; then 	
+		cpumodel=${model##*:}
+	else 
+		cpumodel=$model
+	fi
+fi 
+
+cat << EOF > $file
+activeprofile:$activeprofile
+cpumodel:$cpumodel
+EOF
+
+echo "**************** PPD ***************************"
+sudo systemctl stop power-profiles-daemon
+sudo systemctl mask power-profiles-daemon
+
+echo "**************** re-start daemon ***************************"
+sudo systemctl restart tuned
+
+#make tuned persistent across reboots.
+sudo systemctl enable --now tuned
+
+echo "**************** activate profile ***************************"
+tuned-adm list | grep "intel*"
+
+if [ ! -z "$activeprofile" ]; then
+	#if the activeprofile already contains the intel profile, set to intel-best_performance_mode
+	if echo "$activeprofile" | grep -q "intel"; then
+		tuned-adm profile intel_energy_optimizer
+	else #add to the active profiles
+		tuned-adm profile intel_energy_optimizer $activeprofile
+	fi
+else 
+	tuned-adm profile intel_energy_optimizer
+fi 
+

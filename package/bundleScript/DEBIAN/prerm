@@ -1,0 +1,10 @@
+
+if test -f /usr/sbin/tuned-adm; then
+	tuned-adm off
+else 
+	sudo killall -9 eco_linux_x86_64 >/dev/null 2>&1 &	
+fi
+
+
+
+

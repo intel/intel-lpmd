@@ -1,0 +1,8 @@
+
+sudo systemctl unmask power-profiles-daemon
+
+if test -f /usr/share/ia_pkg/EPPprofile/log.txt ; then
+	rm /usr/share/ia_pkg/EPPprofile/log.txt 	
+fi
+
+

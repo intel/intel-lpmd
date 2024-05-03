@@ -1,0 +1,44 @@
+
+#check the platform, only MTL and above is supported
+MTL=0
+output=$(grep -oP "model name\\K.*" /proc/cpuinfo | head -1)
+#output=": Core Ultra 9 125U" #test
+#echo $output
+
+if [ ! -z "$output" ]; then
+	SUB='Ultra'
+	if echo "$output" | grep -q -E "$SUB"; then
+		model=${output##*:}
+		if [ ! -z "$model" ]; then
+			gen=${model##*" "} 
+			if [ ! -z "$model" ]; then
+				#echo "gen is $gen"
+				firstchar="$(echo $gen | head -c 1)"
+				#echo "firstchar is $firstchar"
+				if [ ! -z "$firstchar" ]; then
+					firstchar=$((firstchar+0))
+							
+					if [ $firstchar -ge 1 ]; then
+						MTL=1 
+					fi
+				fi		
+			fi
+		fi 		
+	else 
+		MTL=9
+	fi		
+	
+fi
+
+if [ $MTL = 9 ]; then
+	echo "*********Error: The platform is not supported and the installation process will be aborted*********"
+	#exit 1
+elif [ $MTL = 0 ]; then
+	echo "*********Warning: The platform is not supported but the installation process will proceed*********"
+fi
+
+
+
+
+
+
