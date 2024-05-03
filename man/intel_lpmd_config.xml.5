@@ -77,6 +77,9 @@ specifies if the HFI monitor can capture the HFI hints for Low Power Mode.
 .B HfiSuvEnable
 specifies if the HFI monitor can capture the HFI hints for survivability mode.
 .PP
+.B WLTHintEnable
+Enable use of hardware Workload type hints.
+.PP
 .B util_entry_threshold
 specifies the system utilization threshold for entering Low Power Mode.
 The system workload is considered to fit the lp_mode_cpus capacity when system
@@ -116,6 +119,86 @@ If set, when the previous average time stayed out of Low-Power-Mode is lower
 than this value, the current exit Low Power Mode request will be ignored
 because it is expected that the system will enter Low Power Mode soon.
 Setting to 0 or leaving this empty disables this hysteresis algorithm.
+.PP
+.B IgnoreITMT
+Avoid changing scheduler ITMT flag. This means that during transition to
+low power mode, ITMT flag is not changed. This reduces latency during
+switching. This flag is not used when configuration uses "State" based
+configuration, where this flag can be defined per state.
+.PP
+.B States
+Allows to define per platform low power states. Each state defines
+has an entry condition and set of parameters to use.
+
+.SH State Definition
+There can be multiple State configuration can be present. Each
+configuration is valid for a platform. A State header defines parameters,
+which are used to match a platform.
+.B CPUFamily
+CPU generation to match.
+.PP
+.B CPUModel
+CPU model to match.
+.PP
+.B CPUConfig
+Define a configuration of CPUs and TDP to match different skews for the
+same CPU model and family. CPU configuration string format is:
+xPyEzL-tdpW. For example: 12P8E2L-28W, defines a platform with 6 P-cores
+with hyper threading enabled, 8 E cores, 2 LPE cores and the TDP is 28W.
+This configuration allows wildcard "*" to match any combination.
+
+.SH Per State Definition
+Each "State" defines entry criteria and parameters to use.
+.B ID
+A unique ID for the state.
+.PP
+.B Name
+A name for the state.
+.PP
+.B EntrySystemLoadThres
+System Entry load threshold in percent. System utilization is different
+based on the number of CPUs are active in a configuration. This value
+is calculated from /proc/stat sysfs. To enter into this state, the
+system utilization must be less or equal to this value.
+.PP
+.B EnterCPULoadThres
+CPU Entry load threshold in percent. Per CPU utilization is also obtained
+from /proc/stat. To enter into this state any active CPU utilization must
+be less or equal to this value.
+EnterCPULoadThres is checked before EntrySystemLoadThres to match a state.
+.PP
+.B WLTType
+Workload type value to enter into this state. If this value is defined
+then utilization based entry triggers are not used. To use this
+WLTHintEnable must be enabled, so that hardware notifications are enabled.
+.PP
+.B ActiveCPUs
+Active CPUs in this state. The list can be comma separated or use "-" for
+a range. This is optional to have active CPUs in a state.
+.PP
+.B EPP
+EPP to apply for this state. -1 to ignore.
+.PP
+.B EPB
+EPB to apply for this state. -1 to ignore.
+.PP
+.B ITMTState
+Set the state of ITMT flag. -1 to ignore.
+.PP
+.B IRQMigrate
+Migrate IRQs to the active CPUs in this state. -1 to ignore.
+.PP
+.B MinPollInterval
+Minimum polling interval in milli seconds.
+.PP
+.B MaxPollInterval
+Maximum polling interval in milli seconds. This is optional,
+if there is no maximum is desired.
+.PP
+.B PollIntervalIncrement
+Polling interval increment in milli seconds. If this value
+is -1, then polling increment is adaptive based on the utilization.
+
 
 .SH FILE FORMAT
 The configuration file format conforms to XML specifications.
