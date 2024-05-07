@@ -120,8 +120,8 @@ for Intel Low Power Mode daemon
         if not in LP mode, set EPP to PREF
         if in LP mode, set EPP to POWER
         
-        CPU UTIL > 0.5 PREF
-        CPU UTIL < 0.5 POWER        
+        CPU UTIL > 0.5 set EPP to PREF
+        CPU UTIL < 0.5 set EPP to POWER      
 	-->
 	<States>
 		<CPUFamily> 6 </CPUFamily> <!-- MTL - 6 -->

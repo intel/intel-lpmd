@@ -21,12 +21,11 @@ BASEDIR="$( cd "$( dirname "$0" )" && pwd )"
 echo $BASEDIR
 
 echo "Prepare..."
-sudo apt install -y zip tar
 
 PKG_NAME="EPPprofile"
 PKG_CATEGORY="OPT"
 BASE=pkg.$PKG_CATEGORY.$PKG_NAME
-MAJOR="2"
+MAJOR="3"
 MINOR="01"
 ARCH="x86_64"
 BUILD_DATE=$(date +'%y%m%d')
@@ -49,11 +48,11 @@ echo "Target folder: $SOURCEFOLDER"
 echo "Create..."
 # make required directories
 rm -fr $SOURCEFOLDER
-mkdir -p $SOURCEFOLDER/profiles
+mkdir -p $SOURCEFOLDER/tuned-profile
 
-# copy profiles
-cp -r $BASEDIR/../profiles/intel* $SOURCEFOLDER/profiles
-chmod +x $SOURCEFOLDER/profiles/intel*/*.sh
+# copy tuned-profile
+cp -r $BASEDIR/../tuned-profile/intel* $SOURCEFOLDER/tuned-profile
+chmod +x $SOURCEFOLDER/tuned-profile/intel*/*.sh
 
 #build source code 
 BUILDSCRIPT_PATH=$BASEDIR/../buildScript
@@ -72,10 +71,6 @@ if [ -d "$BUILDSCRIPT_PATH" ]; then
     cp -r $BUILDOUT_PATH/* $SOURCEFOLDER/    
 fi
 
-#Copy binaries
-#cp $PKG_BUILD_DIR/bin/eco_linux_x86_64 $SOURCEFOLDER/
-
-
 #copy deploy and rollback script.
 cp $BASEDIR/../deploy.sh $SOURCEFOLDER/
 cp $BASEDIR/../rollback.sh $SOURCEFOLDER/
@@ -83,18 +78,20 @@ chmod +x $SOURCEFOLDER/*.sh
 
 #copy license, user guide
 cp $BASEDIR/../release_notes.txt $SOURCEFOLDER/
-cp $BASEDIR/../userGuide.txt $SOURCEFOLDER/
+cp $BASEDIR/../userGuide* $SOURCEFOLDER/
 cp $BASEDIR/../*.pdf $SOURCEFOLDER/
 
 #zip/tar folder
+sudo apt install -y tar
 mkdir -p $BASEDIR/bundle
 tar -czvf $FILENAME.tar.gz $SOURCEFOLDER
 sha512sum $FILENAME.tar.gz > $BASEDIR/bundle/$FILENAME.tar.gz.sha512sum.txt
 mv $FILENAME.tar.gz $BASEDIR/bundle/
 
-zip -vr $FILENAME.zip $SOURCEFOLDER/
-sha512sum $FILENAME.zip > $BASEDIR/bundle/$FILENAME.zip.sha512sum.txt
-mv $FILENAME.zip $BASEDIR/bundle/
+#sudo apt install -y zip
+#zip -vr $FILENAME.zip $SOURCEFOLDER/
+#sha512sum $FILENAME.zip > $BASEDIR/bundle/$FILENAME.zip.sha512sum.txt
+#mv $FILENAME.zip $BASEDIR/bundle/
 
 echo "cleanup..."
 rm -fr $SOURCEFOLDER
