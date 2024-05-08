@@ -11,6 +11,8 @@ function print_error() {
 }
 
 ########################## build environment setup - BEGIN ####################################
+BASEDIR="$( cd "$( dirname "$0" )" && pwd )"
+echo $BASEDIR
 SETUPSCRIPT_PATH=$BASEDIR/../setupScript
 if [ -d "$SETUPSCRIPT_PATH" ]; then
     echo "Setup: $SETUPSCRIPT_PATH"

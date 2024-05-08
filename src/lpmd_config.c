@@ -189,7 +189,7 @@ static void lpmd_parse_states(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_
 				/* Must check cpu family/model/config first to make sure the states applies */
 				if (cpu_family != lpmd_config->cpu_family || cpu_model != lpmd_config->cpu_model || (strncmp(cpu_config, lpmd_config->cpu_config, MAX_CONFIG_LEN) && strncmp(cpu_config, " * ", strlen(" * ")))) {
 					lpmd_log_info("Ignore unsupported states for CPU family:%d,model%d,config:%s\n", cpu_family, cpu_model, cpu_config);
-					return;
+					//return;
 				}
 
 				if (lpmd_config->config_state_count >= MAX_CONFIG_STATES)

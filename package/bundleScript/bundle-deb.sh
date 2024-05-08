@@ -23,9 +23,9 @@ echo $BASEDIR
 echo "Prepare..."
 
 PKG_CATEGORY="OPT"
-PKG_FOLDERNAME="EPPprofile"
+PKG_FOLDERNAME="HEPO"
 BASE=pkg.$PKG_CATEGORY.$PKG_FOLDERNAME
-MAJOR="2"
+MAJOR="0"
 MINOR="01"
 ARCH="x86_64"
 BUILD_DATE=$(date +'%y%m%d')
@@ -34,7 +34,6 @@ BUILD_DATE=$(date +'%y%m%d')
 VERSION=$MAJOR.$MINOR.$BUILD_DATE
 
 FILENAME="$BASE-$VERSION-$ARCH"
-PKG_BUILD_DIR=../buildScript/build
 
 if [ $(uname -r | sed -n 's/.*\( *Microsoft *\).*/\1/ip') ];
 then
@@ -48,7 +47,7 @@ fi
 # make required directories
 rm -fr $SOURCEFOLDER
 mkdir -p $SOURCEFOLDER
-mkdir -p $SOURCEFOLDER/usr/share/ia_pkg/$PKG_FOLDERNAME
+#mkdir -p $SOURCEFOLDER/usr/share/ia_pkg/$PKG_FOLDERNAME
 
 # copy debian files, this project have all preinst, prerm, postinst, postrm files
 mkdir -p $SOURCEFOLDER/DEBIAN
@@ -66,28 +65,43 @@ echo "Package: debkit-"$BASE >> $SOURCEFOLDER/DEBIAN/control
 echo "Version: "$VERSION >> $SOURCEFOLDER/DEBIAN/control
 echo "Maintainer: intel.com" >> $SOURCEFOLDER/DEBIAN/control
 echo "Architecture: amd64" >> $SOURCEFOLDER/DEBIAN/control
-echo "Depends: tuned intel-lpmd" >> $SOURCEFOLDER/DEBIAN/control
+echo "Depends: tuned" >> $SOURCEFOLDER/DEBIAN/control
 echo "Description: Package that dynamically changes the TuneD profile to optimize the device performance and battery life" >> $SOURCEFOLDER/DEBIAN/control
 
 #cat $SOURCEFOLDER/DEBIAN/control
 chmod 755 $SOURCEFOLDER/DEBIAN/*
 
-cp $BASEDIR/../EPPprofile.install $SOURCEFOLDER/usr/share/ia_pkg/$PKG_FOLDERNAME/
-
-
 #Copy binaries
-mkdir -p $SOURCEFOLDER/usr/share/ia_pkg/$PKG_FOLDERNAME/
-cp $PKG_BUILD_DIR/bin/eco_linux_x86_64 $SOURCEFOLDER/usr/share/ia_pkg/$PKG_FOLDERNAME/
+mkdir -p $SOURCEFOLDER/usr/bin
+cp ../../intel_lpmd $SOURCEFOLDER/usr/bin/
+cp ../../tools/intel_lpmd_control $SOURCEFOLDER/usr/bin/
 
 # copy profiles
 mkdir -p $SOURCEFOLDER/etc/tuned
-cp -r ../profiles/* $SOURCEFOLDER/etc/tuned/
-chmod +x $SOURCEFOLDER/etc/tuned/intel*/*.sh
+cp -r ../tuned-profile/* $SOURCEFOLDER/etc/tuned/
+
+# copy man
+mkdir -p $SOURCEFOLDER/usr/local/share/man/man5
+cp ../../man/intel_lpmd_config.xml.5 $SOURCEFOLDER/usr/local/share/man/man5
+mkdir -p $SOURCEFOLDER/usr/local/share/man/man8
+cp ../../man/intel_lpmd.8 $SOURCEFOLDER/usr/local/share/man/man8
+
+#copy config
+mkdir -p $SOURCEFOLDER/usr/local/etc/intel_lpmd
+cp ../../data/intel_lpmd_config.xml $SOURCEFOLDER/usr/local/etc/intel_lpmd
+
+mkdir -p $SOURCEFOLDER/etc/dbus-1/system.d
+cp ../../data/org.freedesktop.intel_lpmd.conf $SOURCEFOLDER/etc/dbus-1/system.d/
+
+#copy dbus service
+mkdir -p $SOURCEFOLDER/usr/local/share/dbus-1/system-services
+cp ../../data/org.freedesktop.intel_lpmd.service $SOURCEFOLDER/usr/local/share/dbus-1/system-services
+
+#copy service
+mkdir -p $SOURCEFOLDER/usr/lib/systemd/system
+cp ../../data/intel_lpmd.service $SOURCEFOLDER/usr/lib/systemd/system
 
 #copy license, user guide
-cp $BASEDIR/../release_notes.txt $SOURCEFOLDER/usr/share/ia_pkg/$PKG_FOLDERNAME
-cp $BASEDIR/../userGuide.txt $SOURCEFOLDER/usr/share/ia_pkg/$PKG_FOLDERNAME
-cp $BASEDIR/../*.pdf $SOURCEFOLDER/usr/share/ia_pkg/$PKG_FOLDERNAME
 
 mkdir -p $BASEDIR/bundle/
 dpkg-deb --build $SOURCEFOLDER/

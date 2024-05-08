@@ -16,16 +16,16 @@ print_error() {
 trap '[ $? -eq 0 ] && exit 0 || print_error' EXIT
 
 
-#BASEDIR=$(dirname $0)
-BASEDIR="$( cd "$( dirname "$0" )" && pwd )"
-echo $BASEDIR
+#BUNDLEDIR=$(dirname $0)
+BUNDLEDIR="$( cd "$( dirname "$0" )" && pwd )"
+echo $BUNDLEDIR
 
 echo "Prepare..."
 
-PKG_NAME="EPPprofile"
 PKG_CATEGORY="OPT"
+PKG_FOLDERNAME="HEPO"
 BASE=pkg.$PKG_CATEGORY.$PKG_NAME
-MAJOR="3"
+MAJOR="0"
 MINOR="01"
 ARCH="x86_64"
 BUILD_DATE=$(date +'%y%m%d')
@@ -45,17 +45,8 @@ else
 fi
 echo "Target folder: $SOURCEFOLDER"
 
-echo "Create..."
-# make required directories
-rm -fr $SOURCEFOLDER
-mkdir -p $SOURCEFOLDER/tuned-profile
-
-# copy tuned-profile
-cp -r $BASEDIR/../tuned-profile/intel* $SOURCEFOLDER/tuned-profile
-chmod +x $SOURCEFOLDER/tuned-profile/intel*/*.sh
-
 #build source code 
-BUILDSCRIPT_PATH=$BASEDIR/../buildScript
+BUILDSCRIPT_PATH=$BUNDLEDIR/../buildScript
 if [ -d "$BUILDSCRIPT_PATH" ]; then
     echo "building: $BUILDSCRIPT_PATH"
 
@@ -65,33 +56,63 @@ if [ -d "$BUILDSCRIPT_PATH" ]; then
     source build.sh || print_error
 	popd 
 	
-    echo "copy binaries to target folder ..."
-    BUILDOUT_PATH=$BUILDSCRIPT_PATH/build/bin
+    #echo "copy binaries to target folder ..."
+    #BUILDOUT_PATH=$BUILDSCRIPT_PATH/build/bin
 
-    cp -r $BUILDOUT_PATH/* $SOURCEFOLDER/    
+    #cp -r $BUILDOUT_PATH/* $SOURCEFOLDER/    
 fi
 
+echo "after build, BUNDLEDIR: "
+echo $BUNDLEDIR
+
+echo "Create..."
+# make required directories
+rm -fr $SOURCEFOLDER
+mkdir -p $SOURCEFOLDER/tuned-profile
+
+# copy tuned-profile
+cp -r $BUNDLEDIR/../tuned-profile/intel* $SOURCEFOLDER/tuned-profile
+chmod +x $SOURCEFOLDER/tuned-profile/intel*/*.sh
+
+#Copy binaries
+cp $BUNDLEDIR/../../intel_lpmd $SOURCEFOLDER/
+cp $BUNDLEDIR/../../tools/intel_lpmd_control $SOURCEFOLDER/
+
+# copy man
+cp $BUNDLEDIR/../../man/intel_lpmd_config.xml.5 $SOURCEFOLDER/
+cp $BUNDLEDIR/../../man/intel_lpmd.8 $SOURCEFOLDER/
+
+#copy config
+cp $BUNDLEDIR/../../data/intel_lpmd_config.xml $SOURCEFOLDER/
+cp $BUNDLEDIR/../../data/org.freedesktop.intel_lpmd.conf $SOURCEFOLDER/
+
+#copy dbus service
+cp $BUNDLEDIR/../../data/org.freedesktop.intel_lpmd.service $SOURCEFOLDER/
+
+#copy service
+cp $BUNDLEDIR/../../data/intel_lpmd.service $SOURCEFOLDER/
+
 #copy deploy and rollback script.
-cp $BASEDIR/../deploy.sh $SOURCEFOLDER/
-cp $BASEDIR/../rollback.sh $SOURCEFOLDER/
+cp $BUNDLEDIR/deploy.sh $SOURCEFOLDER/
+cp $BUNDLEDIR/rollback.sh $SOURCEFOLDER/
 chmod +x $SOURCEFOLDER/*.sh
 
 #copy license, user guide
-cp $BASEDIR/../release_notes.txt $SOURCEFOLDER/
-cp $BASEDIR/../userGuide* $SOURCEFOLDER/
-cp $BASEDIR/../*.pdf $SOURCEFOLDER/
+#cp $BUNDLEDIR/../release_notes.txt $SOURCEFOLDER/
+#cp $BUNDLEDIR/../userGuide* $SOURCEFOLDER/
+#cp $BUNDLEDIR/../*.pdf $SOURCEFOLDER/
 
 #zip/tar folder
 sudo apt install -y tar
-mkdir -p $BASEDIR/bundle
+mkdir -p $BUNDLEDIR/bundle
 tar -czvf $FILENAME.tar.gz $SOURCEFOLDER
-sha512sum $FILENAME.tar.gz > $BASEDIR/bundle/$FILENAME.tar.gz.sha512sum.txt
-mv $FILENAME.tar.gz $BASEDIR/bundle/
+sha512sum $FILENAME.tar.gz > $BUNDLEDIR/bundle/$FILENAME.tar.gz.sha512sum.txt
+mv $FILENAME.tar.gz $BUNDLEDIR/bundle/
 
 #sudo apt install -y zip
 #zip -vr $FILENAME.zip $SOURCEFOLDER/
-#sha512sum $FILENAME.zip > $BASEDIR/bundle/$FILENAME.zip.sha512sum.txt
-#mv $FILENAME.zip $BASEDIR/bundle/
+#sha512sum $FILENAME.zip > $BUNDLEDIR/bundle/$FILENAME.zip.sha512sum.txt
+#mv $FILENAME.zip $BUNDLEDIR/bundle/
 
 echo "cleanup..."
 rm -fr $SOURCEFOLDER

@@ -1,20 +1,6 @@
 #change the ownership to root
 
-if test -f /usr/share/ia_pkg/EPPprofile ; then
-	chown root:root /usr/share/ia_pkg/EPPprofile/
-fi
-
-file="/usr/share/ia_pkg/EPPprofile/EPPprofile.install"
-if test -f $file ; then
-	chown root:root $file
-fi
-
-if test -f /usr/share/ia_pkg/EPPprofile/eco_linux_x86_64 ; then
-	chown root:root /usr/share/ia_pkg/EPPprofile/eco_linux_x86_64
-fi
-
-chown root:root /etc/tuned/intel_energy*
-chown root:root /etc/tuned/intel_energy*/*
+chown root:root /etc/tuned/intel_hepo*
 
 activeprofile=""
 
@@ -40,12 +26,8 @@ if [ ! -z "$model" ]; then
 	fi
 fi 
 
-cat << EOF > $file
-activeprofile:$activeprofile
-cpumodel:$cpumodel
-EOF
 
-echo "**************** PPD ***************************"
+echo "****************mask PPD ***************************"
 sudo systemctl stop power-profiles-daemon
 sudo systemctl mask power-profiles-daemon
 
@@ -56,16 +38,16 @@ sudo systemctl restart tuned
 sudo systemctl enable --now tuned
 
 echo "**************** activate profile ***************************"
-tuned-adm list | grep "intel*"
+#tuned-adm list | grep "intel*"
 
 if [ ! -z "$activeprofile" ]; then
 	#if the activeprofile already contains the intel profile, set to intel-best_performance_mode
 	if echo "$activeprofile" | grep -q "intel"; then
-		tuned-adm profile intel_energy_optimizer
+		tuned-adm profile intel_hepo
 	else #add to the active profiles
-		tuned-adm profile intel_energy_optimizer $activeprofile
+		tuned-adm profile $activeprofile intel_hepo
 	fi
 else 
-	tuned-adm profile intel_energy_optimizer
+	tuned-adm profile intel_hepo
 fi 
 
