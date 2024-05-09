@@ -10,6 +10,10 @@ function print_error() {
     exit 1
 }
 
+#BASEDIR=$(dirname $0)
+BASEDIR="$( cd "$( dirname "$0" )" && pwd )"
+echo "BASEDIR = $BASEDIR"
+
 ########################## build environment setup - BEGIN ####################################
 BASEDIR="$( cd "$( dirname "$0" )" && pwd )"
 echo $BASEDIR
@@ -42,6 +46,9 @@ fi
 #cd $BUILD_DIR && cmake -G"Unix Makefiles" ../.. -DCMAKE_BUILD_TYPE=Release && make -j $(nproc) || print_error
 BUILDSCRIPT_PATH=$BASEDIR/../../
 pushd $BUILDSCRIPT_PATH
+sudo apt install -y dos2unix
+dos2unix *.sh
+dos2unix configure.ac
 ./autogen.sh prefix=/
 make
 #sudo make install
