@@ -20,7 +20,7 @@ cleanup()
     rm /usr/local/share/man/man5/intel_lpmd_config.xml.5
     rm /usr/local/share/man/man8/intel_lpmd.8
 
-    rm /usr/local/etc/intel_lpmd/intel_lpmd_config.xml
+    sudo rm -r /etc/intel_lpmd/
     rm /etc/dbus-1/system.d/org.freedesktop.intel_lpmd.conf
 
     rm /usr/local/share/dbus-1/system-services/org.freedesktop.intel_lpmd.service

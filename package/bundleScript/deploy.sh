@@ -82,15 +82,31 @@ cp intel_lpmd /usr/bin/
 cp intel_lpmd_control /usr/bin/
 
 # copy man
+if [ ! -d "/usr/local/share/man/man5" ]; then
+    mkdir -p /usr/local/share/man/man5
+fi    
 cp intel_lpmd_config.xml.5 /usr/local/share/man/man5
+
+if [ ! -d "/usr/local/share/man/man8" ]; then
+    mkdir -p /usr/local/share/man/man8
+fi    
 cp intel_lpmd.8 /usr/local/share/man/man8
 
 #copy config
-cp intel_lpmd_config.xml /usr/local/etc/intel_lpmd
+if [ ! -d "/etc/intel_lpmd" ]; then
+    mkdir -p /etc/intel_lpmd
+fi 
+cp intel_lpmd_config.xml /usr/local/etc/intel_lpmd/
 
+if [ ! -d "/etc/dbus-1/system.d/" ]; then
+    mkdir -p /etc/dbus-1/system.d/
+fi
 cp org.freedesktop.intel_lpmd.conf /etc/dbus-1/system.d/
 
 #copy dbus service
+if [ ! -d "/usr/local/share/dbus-1/system-services" ]; then
+    mkdir -p /usr/local/share/dbus-1/system-services
+fi
 cp org.freedesktop.intel_lpmd.service /usr/local/share/dbus-1/system-services
 
 #copy service
