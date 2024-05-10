@@ -32,7 +32,7 @@ fi
 
 if [ $MTL = 9 ]; then
 	echo "*********Error: The platform is not supported and the installation process will be aborted*********"
-	#exit 1
+	exit 1
 elif [ $MTL = 0 ]; then
 	echo "*********Warning: The platform is not supported but the installation process will proceed*********"
 fi

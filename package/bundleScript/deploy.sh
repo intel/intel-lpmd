@@ -82,19 +82,35 @@ cp intel_lpmd /usr/bin/
 cp intel_lpmd_control /usr/bin/
 
 # copy man
-cp intel_lpmd_config.xml.5 /usr/local/share/man/man5
-cp intel_lpmd.8 /usr/local/share/man/man8
+if [ ! -d "/usr/local/share/man/man5" ]; then
+    mkdir -p /usr/local/share/man/man5
+fi    
+cp intel_lpmd_config.xml.5 /usr/local/share/man/man5/
+
+if [ ! -d "/usr/local/share/man/man8" ]; then
+    mkdir -p /usr/local/share/man/man8
+fi    
+cp intel_lpmd.8 /usr/local/share/man/man8/
 
 #copy config
-cp intel_lpmd_config.xml /usr/local/etc/intel_lpmd
+if [ ! -d "/etc/intel_lpmd" ]; then
+    mkdir -p /etc/intel_lpmd
+fi 
+cp intel_lpmd_config.xml /etc/intel_lpmd/
 
+if [ ! -d "/etc/dbus-1/system.d/" ]; then
+    mkdir -p /etc/dbus-1/system.d/
+fi
 cp org.freedesktop.intel_lpmd.conf /etc/dbus-1/system.d/
 
 #copy dbus service
-cp org.freedesktop.intel_lpmd.service /usr/local/share/dbus-1/system-services
+if [ ! -d "/usr/local/share/dbus-1/system-services" ]; then
+    mkdir -p /usr/local/share/dbus-1/system-services
+fi
+cp org.freedesktop.intel_lpmd.service /usr/local/share/dbus-1/system-services/
 
 #copy service
-cp intel_lpmd.service /usr/lib/systemd/system
+cp intel_lpmd.service /usr/lib/systemd/system/
 
 #echo "**************** copy license and user guide information ***************************"
 #cp $BASEDIR/*.txt $BINDIR/
@@ -111,7 +127,6 @@ sudo systemctl stop power-profiles-daemon
 sudo systemctl mask power-profiles-daemon
 
 echo "**************** re-start daemon ***************************"
-sudo systemctl daemon-reload
 sudo systemctl restart tuned
 
 #make tuned persistent across reboots.
@@ -132,7 +147,7 @@ else
 fi 
 
 #echo "**************** 4. verify ***************************"
-#tuned-adm active
+tuned-adm active
 
 sudo systemctl mask power-profiles-daemon
 
