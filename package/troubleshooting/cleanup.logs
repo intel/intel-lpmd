@@ -1,0 +1,69 @@
+
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+        .deps/
+        .vscode/
+        Makefile
+        Makefile.in
+        aclocal.m4
+        autom4te.cache/
+        build-aux/
+        config.h
+        config.h.in
+        config.log
+        config.status
+        configure
+        configure~
+        data/Makefile
+        data/Makefile.in
+        data/intel_lpmd.service
+        data/org.freedesktop.intel_lpmd.service
+        gtk-doc.make
+        intel_lpmd
+        intel_lpmd-lpmd-resource.o
+        intel_lpmd_dbus_interface.h
+        lpmd-resource.c
+        m4/
+        src/.deps/
+        src/.dirstamp
+        src/intel_lpmd-lpmd_config.o
+        src/intel_lpmd-lpmd_cpu.o
+        src/intel_lpmd-lpmd_dbus_server.o
+        src/intel_lpmd-lpmd_helpers.o
+        src/intel_lpmd-lpmd_hfi.o
+        src/intel_lpmd-lpmd_irq.o
+        src/intel_lpmd-lpmd_main.o
+        src/intel_lpmd-lpmd_proc.o
+        src/intel_lpmd-lpmd_socket.o
+        src/intel_lpmd-lpmd_util.o        
+        src/wlt_proxy/.deps/
+        src/wlt_proxy/.dirstamp
+        src/wlt_proxy/intel_lpmd-wlt_proxy_def.o
+        stamp-h1
+        tools/intel_lpmd_control
+        
+        
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+        .deps/
+        Makefile
+        Makefile.in
+        aclocal.m4
+        autom4te.cache/
+        build-aux/
+        config.h
+        config.h.in
+        config.log
+        config.status
+        configure
+        configure~
+        data/Makefile
+        data/Makefile.in
+        gtk-doc.make
+        m4/
+        src/.deps/
+        src/.dirstamp
+        src/wlt_proxy/.deps/
+        src/wlt_proxy/.dirstamp
+        stamp-h1
