@@ -1,4 +1,28 @@
-
+/*
+ *
+ * Copyright (C) 2023 Intel Corporation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+ *
+ * This source file contains main() function, which parses command line
+ * option. Call lpmd init function. Provide logging support.
+ * Also allow to daemonize.
+ */
+ 
+#define _GNU_SOURCE         /* See feature_test_macros(7) */
+#include <unistd.h>
 #include <unistd.h>
 #include <sys/capability.h>
 #include <sys/prctl.h>
@@ -64,47 +88,47 @@ int _drop_privilege() {
     int ret = -1;
 
     if (!(caps = cap_get_proc())) {
-        PROGRAM_DEBUG("drop privilege: couldn't get process caps");
+        //PROGRAM_DEBUG("drop privilege: couldn't get process caps");
         return -1;
     }
 
     // keeps caps upon user switch
     if (prctl(PR_SET_KEEPCAPS, 1L)) {
-        PROGRAM_DEBUG("drop privilege: error keeping caps");
+        //PROGRAM_DEBUG("drop privilege: error keeping caps");
         goto error;
     }
 
     if (getresuid(&ruid, &euid, &suid) == -1 || getresgid(&rgid, &egid, &sgid) == -1) {
-        PROGRAM_DEBUG("drop privilege: couldn't get User/Group IDs");
+        //PROGRAM_DEBUG("drop privilege: couldn't get User/Group IDs");
         goto error;
     }
 
     // switch users (root --> user)
     if (setresgid(-1, rgid, -1) < 0 || setresuid(-1, ruid, -1) < 0) {
-        PROGRAM_DEBUG("drop privilege: couldn't switch user");
+        //PROGRAM_DEBUG("drop privilege: couldn't switch user");
         goto error;
     }
 
     // We should always check if changes are made
     if (getresuid(&ruid, &euid, &suid) == -1 || getresgid(&rgid, &egid, &sgid) == -1) {
-        PROGRAM_DEBUG("drop privilege: couldn't get User/Group IDs!");
+        //PROGRAM_DEBUG("drop privilege: couldn't get User/Group IDs!");
         goto error;
     } else {
         if (euid != ruid || egid != rgid) {
-            PROGRAM_DEBUG("couldn't drop privilege");
+            //PROGRAM_DEBUG("couldn't drop privilege");
             goto error;
         }
     }
 
     // clear root caps passed to user
     if (cap_clear_flag(caps, CAP_EFFECTIVE) == -1) {
-        PROGRAM_DEBUG("drop privilege: couldn't clear caps");
+        //PROGRAM_DEBUG("drop privilege: couldn't clear caps");
         goto error;
     }
 
     // pass root caps to user
     if (cap_set_proc(caps) == -1) {
-        PROGRAM_DEBUG("drop privilege: couldn't set process caps");
+        //PROGRAM_DEBUG("drop privilege: couldn't set process caps");
         goto error;
     }
     ret = 0;
@@ -112,7 +136,7 @@ int _drop_privilege() {
 
 error:
     if (cap_free(caps) == -1) {
-        PROGRAM_DEBUG("drop privilege: couldn't free caps");
+        //PROGRAM_DEBUG("drop privilege: couldn't free caps");
     } else {
         ret = 0;
     }
@@ -125,21 +149,21 @@ int _raise_privilege() {
     gid_t rgid = -1, egid = -1, sgid = -1;
 
     if (getresuid(&ruid, &euid, &suid) == -1 || getresgid(&rgid, &egid, &sgid) == -1) {
-        PROGRAM_DEBUG("raise privilege: couldn't get User/Group IDs");
+        //PROGRAM_DEBUG("raise privilege: couldn't get User/Group IDs");
         return -1;
     }
 
     if (setresuid(-1, suid, -1) < 0 || setresgid(-1, sgid, -1) < 0) {
-        PROGRAM_DEBUG("raise privilege: couldn't switch user");
+        //PROGRAM_DEBUG("raise privilege: couldn't switch user");
         return -1;
     }
     // We should always check if changes are made
     if (getresuid(&ruid, &euid, &suid) == -1 || getresgid(&rgid, &egid, &sgid) == -1) {
-        PROGRAM_DEBUG("raise privilege: couldn't get User/Group IDs!");
+        //PROGRAM_DEBUG("raise privilege: couldn't get User/Group IDs!");
         return -1;
     } else {
         if (euid != suid || egid != sgid) {
-            PROGRAM_DEBUG("couldn't raise privilege");
+            //PROGRAM_DEBUG("couldn't raise privilege");
             return -1;
         }
     }
@@ -152,35 +176,35 @@ int _modify_capability(int capability, cap_flag_value_t setting) {
     cap_value_t capList[1];
 
     if (!(caps = cap_get_proc())) {
-        PROGRAM_DEBUG("couldn't get process capabilities");
+        //PROGRAM_DEBUG("couldn't get process capabilities");
         return -1;
     }
 
     capList[0] = capability;
     if (cap_set_flag(caps, CAP_EFFECTIVE, 1, capList, setting) == -1) {
-        PROGRAM_DEBUG("couldn't set capability");
+        //PROGRAM_DEBUG("couldn't set capability");
         cap_free(caps);
         return -1;
     }
 
     if (cap_set_flag(caps, CAP_INHERITABLE, 1, capList, setting) == -1) {
-        PROGRAM_DEBUG("couldn't set capability!");
+        //PROGRAM_DEBUG("couldn't set capability!");
         cap_free(caps);
         return -1;
     }
 
     if (cap_set_proc(caps) == -1) {
-        PROGRAM_DEBUG("couldn't set process capabilities");
+        //PROGRAM_DEBUG("couldn't set process capabilities");
         cap_free(caps);
         return -1;
     }
 
     if (cap_set_ambient(capList[0], setting) < 0) {
-       PROGRAM_DEBUG("couldn't set Capabilities");
+       //PROGRAM_DEBUG("couldn't set Capabilities");
     }
 
     if (cap_free(caps) == -1) {
-        PROGRAM_DEBUG("couldn't free capabilities");
+        //PROGRAM_DEBUG("couldn't free capabilities");
         return -1;
     }
 
@@ -189,7 +213,7 @@ int _modify_capability(int capability, cap_flag_value_t setting) {
 
 
 int _set_capability(int capability) {
-    return _modify_capabilityp(capability, CAP_SET);
+    return _modify_capability(capability, CAP_SET);
 }
 
 int _clear_capability(int capability) {
