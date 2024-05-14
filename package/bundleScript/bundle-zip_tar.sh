@@ -83,7 +83,7 @@ cp $BUNDLEDIR/../../man/intel_lpmd_config.xml.5 $SOURCEFOLDER/
 cp $BUNDLEDIR/../../man/intel_lpmd.8 $SOURCEFOLDER/
 
 #copy config
-cp $BUNDLEDIR/../../data/intel_lpmd_config.xml $SOURCEFOLDER/
+cp $BUNDLEDIR/../data/platform_mtl.xml $SOURCEFOLDER/intel_lpmd_config.xml
 cp $BUNDLEDIR/../../data/org.freedesktop.intel_lpmd.conf $SOURCEFOLDER/
 
 #copy dbus service

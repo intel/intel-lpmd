@@ -8,7 +8,8 @@ echo "executing setup_ubuntu script ..."
 #echo "BASEDIR = $BASEDIR"
 
 #auto config for software source packages
-sudo apt install -y autoconf autoconf-archive
+sudo apt install -y autoconf 
+#autoconf-archive
 
 #compilier
 sudo apt install -y gcc
@@ -35,7 +36,7 @@ sudo apt-get install -y cmake
 sudo apt-get install -y libcap-dev libssl-dev
 
 #build plugins
-sudo apt-get install -y nlohmann-json3-dev
+#sudo apt-get install -y nlohmann-json3-dev
 
 #bundle as zip, tar
 sudo apt-get install -y zip tar
