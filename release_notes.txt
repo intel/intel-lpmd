@@ -1,0 +1,17 @@
+5/9/2024
+pkg.OPT.HEPO release notes
+package name: pkg.OPT.HEPO-0.01.240509-x86_64
+tag: pkg-hepo-0.01.240509
+ww: 19.4
+
+Support Ubuntu distro 22.04 and 24.04
+Installation/Uninstallation of using deb package and gz package
+Please verify profile intel_hepo under /etc/tuned
+Please verify HEPO binary is running after the installation “ps aux|grep lpmd”
+The floor value is 1 and the interval is 2 second.  Below 1% cpu utilization, the mode is Power mode and above 1% cpu utilitzation, the mode is switched to perf mode.  Please verify the EPP and EPB value in different mode.  
+Using "sudo tuned-adm off" will stop the program 
+
+Known issue: 
+the .gz file name is missing the component name 
+previous intel tuned epp profiles are not copied to /etc/tuned
+coverity scan is not ready

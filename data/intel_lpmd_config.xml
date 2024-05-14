@@ -115,23 +115,17 @@ for Intel Low Power Mode daemon
 
 
 	<!--
-		Applies to any MTL
-        
-        if not in LP mode, set EPP to PREF
-        if in LP mode, set EPP to POWER
-        
-        CPU UTIL >= 1 PREF
-        CPU UTIL < 1 POWER        
+		Applies to any MTL-P
 	-->
 	<States>
-		<CPUFamily> 6 </CPUFamily> <!-- MTL - 6 -->
-		<CPUModel> * </CPUModel> <!-- 155,170 [U,H,S...]... -->
-		<CPUConfig> * </CPUConfig> <!-- 682,246,244... -->
+		<CPUFamily> 6 </CPUFamily>
+		<CPUModel> 170 </CPUModel>
+		<CPUConfig> * </CPUConfig>
 		<State>
 			<ID> 1 </ID>
 			<Name> POWER </Name>
-			<EntrySystemLoadThres> 1 </EntrySystemLoadThres>
-			<ExitSystemLoadhysteresis></ExitSystemLoadhysteresis>           
+                        <ActiveCPUs></ActiveCPUs>
+			<EntrySystemLoadThres> 30 </EntrySystemLoadThres>
 			<EPP> 178 </EPP>
 			<EPB> 8 </EPB>
 			<ITMTState> -1 </ITMTState>
@@ -139,19 +133,25 @@ for Intel Low Power Mode daemon
 			<MinPollInterval> 500 </MinPollInterval>
 			<PollIntervalIncrement> 500 </PollIntervalIncrement>
 			<MaxPollInterval> 2000 </MaxPollInterval>
+			<Island0Pcores> 0 </Island0Pcores>
+			<Island0Ecores> 0 </Island0Ecores>
+			<Island1Pcores> 0 </Island1Pcores>
+			<Island1Ecores> 0 </Island1Ecores>
+			<Island2Pcores> 0 </Island2Pcores>
+			<Island2Ecores> 0 </Island2Ecores>
 		</State>
 		<State>
 			<ID> 2 </ID>
 			<Name> PERF </Name>
-            <ActiveCPUs></ActiveCPUs>
-			<EntrySystemLoadThres>100</EntrySystemLoadThres>
+                        <ActiveCPUs>12,13</ActiveCPUs>
+			<EntrySystemLoadThres></EntrySystemLoadThres>
 			<EnterCPULoadThres></EnterCPULoadThres>
 			<EPP> 64 </EPP>
 			<EPB> 6 </EPB>
 			<ITMTState> -1 </ITMTState>
 			<IRQMigrate> -1 </IRQMigrate>
 			<MinPollInterval> 500 </MinPollInterval>
-			<PollIntervalIncrement> 500 </PollIntervalIncrement>
+			<PollIntervalIncrement> -1 </PollIntervalIncrement>
 			<MaxPollInterval> 2000 </MaxPollInterval>
 		</State>
 	</States>
