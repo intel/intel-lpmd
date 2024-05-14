@@ -437,7 +437,7 @@ uint64_t diff_ms(struct timespec *ts_then, struct timespec *ts_now);
 static struct timespec ts_start, ts_prev;
 static struct timespec ts_init = { 0, 0 };
 
-extern bool plotting;
+//extern bool plotting;
 float max_Qperf = 1;;
 float max_Wattage = 1;
 float max_QperW = 1;
@@ -549,7 +549,7 @@ static int util_main(enum slider_value sld)
 		     get_burst_rate_per_min());
 
 		record++;
-		if (plotting) {
+		/*if (plotting) {
 			float Qperf = dummy/max_Qperf;
 			float Wattage = soc_mw/max_Wattage;
 			float QperW = Qperf/Wattage;
@@ -561,7 +561,7 @@ static int util_main(enum slider_value sld)
 				max_Wattage = soc_mw;
 			if (QperW > max_QperW)
 				max_QperW = QperW;
-		}
+		}*/
 		ts_prev = ts_start;
 	}
 
@@ -605,7 +605,7 @@ uint64_t diff_ms(struct timespec *ts_then, struct timespec *ts_now)
 	return diff;
 }
 
-extern enum slider_value sld;
+//extern enum slider_value sld;
 void *state_handler(void)
 {
 	int next_poll;
@@ -623,7 +623,8 @@ void *state_handler(void)
 		if (clock_gettime(clk, &ts_start))
 			perror("clock_gettime start");
 
-		util_max = util_main(sld);
+		//util_max = util_main(sld);
+		util_max = util_main(0);//todo: update slider value 
 
 		if (check_reset_status()) {
 			apply_state_change();
@@ -724,7 +725,8 @@ int revert_orig_epp(void)
 	return 1;
 }
 
-int util_init2(void)
+/*defined in lpmd_util*/
+int util_init_proxy(void)
 {
 	float dummy;
 
