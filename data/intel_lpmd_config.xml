@@ -33,7 +33,7 @@ for Intel Low Power Mode daemon
 		 1: force on. (Always stay in Low Power Mode)
 		 0: auto. (opportunistic Low Power Mode enter/exit)
 	-->
-	<BalancedDef>0</BalancedDef>
+	<BalancedDef>-1</BalancedDef>
 
 	<!--
 		Default behavior when Power saver setting is used
@@ -41,7 +41,7 @@ for Intel Low Power Mode daemon
 		 1: force on. (Always stay in Low Power Mode)
 		 0: auto. (opportunistic Low Power Mode enter/exit)
 	-->
-	<PowersaverDef>1</PowersaverDef>
+	<PowersaverDef>-1</PowersaverDef>
 
 	<!--
 		Use HFI LPM hints
@@ -49,6 +49,17 @@ for Intel Low Power Mode daemon
 		1 : Yes
 	-->
 	<HfiLpmEnable>0</HfiLpmEnable>
+
+	<!--
+		Use WLT hints
+		0 : No
+		1 : Yes
+	-->
+	<WLTHintEnable>1</WLTHintEnable>
+	
+	<WLTProxyEnable>1</WLTProxyEnable>
+		
+	<WLTProxyInterval>2000</WLTProxyInterval>
 
 	<!--
 		Use HFI SUV hints
@@ -113,46 +124,51 @@ for Intel Low Power Mode daemon
 				atleast +-5 percent to leave the state
 	-->
 
-
 	<!--
-		Applies to any MTL
-        
-        if not in LP mode, set EPP to PREF
-        if in LP mode, set EPP to POWER
-        
-        CPU UTIL >= 1 PREF
-        CPU UTIL < 1 POWER        
+		MTL 6+8+2 with HT enabled with WLT Type
+		Make sure that the above config for WLT enable is set
+			<WLTHintEnable>1</WLTHintEnable>
 	-->
-	<States>
-		<CPUFamily> 6 </CPUFamily> <!-- MTL - 6 -->
-		<CPUModel> * </CPUModel> <!-- 155,170 [U,H,S...]... -->
-		<CPUConfig> * </CPUConfig> <!-- 682,246,244... -->
+
+        <States>
+                <CPUFamily> 6 </CPUFamily>
+                <CPUModel> 170 </CPUModel>
+                <CPUConfig> * </CPUConfig>
 		<State>
 			<ID> 1 </ID>
-			<Name> POWER </Name>
-			<EntrySystemLoadThres> 1 </EntrySystemLoadThres>
-			<ExitSystemLoadhysteresis></ExitSystemLoadhysteresis>           
-			<EPP> 178 </EPP>
-			<EPB> 8 </EPB>
+			<Name> WLT_IDLE </Name>
+			<WLTType> 0 </WLTType>
+			<EPP> 255 </EPP>
+			<EPB> 8 </EPB>			
 			<ITMTState> -1 </ITMTState>
 			<IRQMigrate> -1 </IRQMigrate>
-			<MinPollInterval> 500 </MinPollInterval>
-			<PollIntervalIncrement> 500 </PollIntervalIncrement>
-			<MaxPollInterval> 2000 </MaxPollInterval>
 		</State>
 		<State>
 			<ID> 2 </ID>
-			<Name> PERF </Name>
-            <ActiveCPUs></ActiveCPUs>
-			<EntrySystemLoadThres>100</EntrySystemLoadThres>
-			<EnterCPULoadThres></EnterCPULoadThres>
+			<Name> WLT_BATTERY_LIFE </Name>
+			<WLTType> 1 </WLTType>
+			<EPP> 192 </EPP>
+			<EPB> 6 </EPB>			
+			<ITMTState> -1 </ITMTState>
+			<IRQMigrate> -1 </IRQMigrate>
+		</State>
+		<State>
+			<ID> 3 </ID>
+			<Name> WLT_SUSTAINED </Name>
+			<WLTType> 2 </WLTType>
+			<EPP> 64 </EPP>
+			<EPB> 6 </EPB>			
+			<ITMTState> -1 </ITMTState>
+			<IRQMigrate> -1 </IRQMigrate>
+		</State>
+		<State>
+			<ID> 4 </ID>
+			<Name> WLT_BURSTY </Name>
+			<WLTType> 3 </WLTType>
 			<EPP> 64 </EPP>
 			<EPB> 6 </EPB>
 			<ITMTState> -1 </ITMTState>
 			<IRQMigrate> -1 </IRQMigrate>
-			<MinPollInterval> 500 </MinPollInterval>
-			<PollIntervalIncrement> 500 </PollIntervalIncrement>
-			<MaxPollInterval> 2000 </MaxPollInterval>
 		</State>
 	</States>
 

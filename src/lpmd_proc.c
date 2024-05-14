@@ -258,8 +258,10 @@ static int lpm_can_process(enum lpm_command cmd)
 
 			return 1;
 		case UTIL_ENTER:
-			if (lpm_state & (LPM_USER_OFF))
+			if (lpm_state & (LPM_USER_OFF) && !lpmd_config.wlt_proxy_enable){
+				lpmd_log_info("USER_OFF, return 0\n");
 				return 0;
+			}
 
 			/* Do not proceed when in SUV mode */
 			if (lpm_state & LPM_SUV_ON)
@@ -333,7 +335,6 @@ int enter_lpm(enum lpm_command cmd)
 
 	process_itmt ();
 	process_irqs (1, get_cpu_mode ());
-
 	process_cpus (1, get_cpu_mode ());
 
 end:
