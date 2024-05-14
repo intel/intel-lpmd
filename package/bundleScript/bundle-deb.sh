@@ -88,7 +88,7 @@ cp ../../man/intel_lpmd.8 $SOURCEFOLDER/usr/local/share/man/man8
 
 #copy config
 mkdir -p $SOURCEFOLDER/etc/intel_lpmd
-cp ../../data/intel_lpmd_config.xml $SOURCEFOLDER/etc/intel_lpmd/
+cp ../data/platform_mtl.xml $SOURCEFOLDER/etc/intel_lpmd/intel_lpmd_config.xml
 
 mkdir -p $SOURCEFOLDER/etc/dbus-1/system.d
 cp ../../data/org.freedesktop.intel_lpmd.conf $SOURCEFOLDER/etc/dbus-1/system.d/
