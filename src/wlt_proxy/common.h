@@ -204,13 +204,13 @@ int is_state_valid(enum lp_state_idx);
 
 /* irq.c */
 int init_irq(void);
-int process_irqs(int);
+int process_irqs_proxy(int);//defined in lpmd
 int dump_interrupts(int);
 int restore_irq_mask(void);
 int update_irqs(void);
 
 /* util.c */
-int util_init(void);
+int util_init_proxy(void);//defined in lpmd_util
 void set_eco_timeout(int);
 int get_msr_fd(int);
 int perf_stat_init(void);

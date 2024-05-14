@@ -7,7 +7,7 @@ cd ../../
 
 rm -r .deps 
 rm -r Makefile    
-rm -r Makefile.in 
+rm -r Makefile.in
 rm -r aclocal.m4  
 rm -r autom4te.cache  
 rm -r build-aux  
@@ -20,9 +20,24 @@ rm -r configure~
 rm -r data/Makefile  
 rm -r data/Makefile.in  
 rm -r gtk-doc.make  
-rm -r m4  
-rm -r src/.deps  
-rm -r src/.dirstamp  
-rm -r src/wlt_proxy/.deps  
-rm -r src/wlt_proxy/.dirstamp  
+rm -r m4
 rm -r stamp-h1
+rm *.o
+
+rm -r src/.deps  
+rm src/.dirstamp
+rm src/*.o
+
+rm -r src/wlt_proxy/.deps  
+rm src/wlt_proxy/.dirstamp  
+rm src/wlt_proxy/*.o
+
+rm -r src/additional/.deps  
+rm src/additional/.dirstamp
+rm src/additional/*.o
+
+rm -r src/visualize/.deps  
+rm src/visualize/.dirstamp
+rm src/visualize/*.o
+
+

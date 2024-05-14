@@ -1,6 +1,6 @@
 include $(GLIB_MAKEFILE)
 
-SUBDIRS = . data tools
+SUBDIRS = . data tools 
 
 ACLOCAL_AMFLAGS =
 
@@ -33,6 +33,8 @@ intel_lpmd_LDADD = \
 	$(GLIB_LIBS) \
 	$(LIBNL_LIBS) \
 	$(LIBM) \
+    -lm \
+    -lcap \
 	$(LIBDL) \
 	$(XML_LIBS) \
 	$(libnlgenl30_LIBS) \
@@ -53,7 +55,17 @@ intel_lpmd_SOURCES = \
 	src/lpmd_irq.c \
 	src/lpmd_socket.c \
 	src/lpmd_util.c	\
+    src/wlt_proxy/helper.c \
+    src/wlt_proxy/helper_gaps.c \
 	src/wlt_proxy/wlt_proxy_def.c \
+    src/wlt_proxy/spike_mgmt.c \    
+    src/wlt_proxy/state_machine.c \
+    src/wlt_proxy/util.c \
+    src/wlt_proxy/irq.c \
+    src/wlt_proxy/perf_msr.c \
+    src/wlt_proxy/cpu_group.c \
+    src/additional/privilege.c \
+    #src/visualize/plotting.c \
 	lpmd-resource.c
 
 man8_MANS = man/intel_lpmd.8

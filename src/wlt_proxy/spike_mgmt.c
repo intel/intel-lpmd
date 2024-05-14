@@ -28,8 +28,8 @@
 #include <stdbool.h>
 
 #include "common.h"
-#include "cpu_group.h"
-#include "perf_msr.h"
+//#include "cpu_group.h"
+//#include "perf_msr.h"
 
 /*
  * spike burst refers to coninous spikes in a series of back to back samples.
@@ -109,7 +109,7 @@ int update_burst_count(int real_spike_burst)
 		return 0;
 	}
 
-	if (real_spike_burst && (get_cur_state() <= MDRT4E_MODE)) {
+	if (real_spike_burst /*&& (get_cur_state() <= MDRT4E_MODE)*/) { //todo: error function not found
 		burst_count++;
 		spike_sec_prev = ts.tv_sec;
 	} else if ((minutes > 1.0) || (burst_count > MAX_BURST_COUNT)) {
