@@ -16,23 +16,23 @@ trap '[ $? -eq 0 ] && exit 0 || print_error' EXIT
 
 echo "bundle start"
 
-BASEDIR="$( cd "$( dirname "$0" )" && pwd )"
-echo $BASEDIR
+BUNDLEDIR="$( cd "$( dirname "$0" )" && pwd )"
+echo $BUNDLEDIR
 
-sed -i -e 's/\r$//' $BASEDIR/*.sh
-chmod +x $BASEDIR/*.sh
+sed -i -e 's/\r$//' $BUNDLEDIR/*.sh
+chmod +x $BUNDLEDIR/*.sh
 
-sed -i -e 's/\r$//' $BASEDIR/bundle-zip_tar.sh
-source $BASEDIR/bundle-zip_tar.sh
+sed -i -e 's/\r$//' $BUNDLEDIR/bundle-zip_tar.sh
+source $BUNDLEDIR/bundle-zip_tar.sh
 
 #check distro
 if test -f /etc/lsb-release; then
 	echo "ubuntu!"
-	source $BASEDIR/bundle-deb.sh || print_error
+	source $BUNDLEDIR/bundle-deb.sh || print_error
 fi
 if test -f /etc/redhat-release; then
 	echo "redhat!"
-	source $BASEDIR/bundle-rpm.sh || print_error
+	source $BUNDLEDIR/bundle-rpm.sh || print_error
 fi
 
 
