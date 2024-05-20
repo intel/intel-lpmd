@@ -22,6 +22,7 @@
  */
 
 #include "lpmd.h"
+#include "cpu_group.h"
 
 #define DEFAULT_ACTION_INTERVAL	1
 #define CPU_UTIL_SUSTAIN		50
@@ -32,7 +33,7 @@
 static int tdp_mw;
 static int burst_count;
 static int burst_len;
-
+static bool proxy_initialized = false;
 int action_interval = DEFAULT_ACTION_INTERVAL;
 
 static lpmd_config_t *lpmd_config;
@@ -238,7 +239,11 @@ void wlt_proxy_action_loop(void) {
 		burst_seen = 0;
 	}
 
-	action_loop(power_mw, tdp_mw);
+	//action_loop(power_mw, tdp_mw);
+	if (proxy_initialized){
+		lpmd_log_info("proxy initialzied\n");
+		state_machine_auto(get_cur_state());
+	}
 }
 
 static int get_tdp() {
@@ -263,6 +268,9 @@ static int get_tdp() {
 int wlt_proxy_init(lpmd_config_t *_lpmd_config) {
 	int ret;
 
+    init_cpu_proxy();
+    util_init_proxy();
+
 	/* Check model check and fail */
 	/* TODO */
 	lpmd_config = _lpmd_config;
@@ -271,5 +279,6 @@ int wlt_proxy_init(lpmd_config_t *_lpmd_config) {
 	if (ret)
 		return ret;
 
+	proxy_initialized = true; 
 	return LPMD_SUCCESS;
 }
