@@ -650,6 +650,7 @@ void *state_handler(void)
 
 void update_state_epp(enum lp_state_idx state)
 {
+printf("test: update epp of state %d\n", state);
 	for (int t = 0; t < get_max_online_cpu(); t++) {
 		update_epp(perf_stats[t].dev_msr_fd,
 			   (uint64_t) get_state_epp(state));
@@ -707,6 +708,7 @@ int revert_orig_epb(void)
 /* EP Preference. XXX switch to sysfs */
 uint32_t update_epp(int fd, uint64_t new_value)
 {
+printf("test: update epp to %ld\n", new_value);
 	uint64_t orig_value;
 	read_msr(fd, (uint32_t) MSR_HWP, &orig_value);
 	new_value = (((orig_value << 40) >> 40) | (new_value << 24));
@@ -740,8 +742,12 @@ int util_init_proxy(void)
 	update_perf_diffs(&dummy, 1);
 
 	initialize_cpu_hfm_mhz(perf_stats[0].dev_msr_fd);
-	state_handler();
 
-	close_all_fd();
+	//state_handler();
+    initialize_state_mask();
+    sma_init();
+
+
+	//close_all_fd();
 	return 1;
 }

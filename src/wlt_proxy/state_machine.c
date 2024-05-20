@@ -42,6 +42,7 @@ int state_machine_power(int present_state)
 extern int state_demote;
 int state_machine_auto(int present_state)
 {
+printf("test: present_state is %d\n", present_state);
 	int completed_poll = get_last_poll();
 	float sum_c0 = grp.c0_max + grp.c0_2nd_max + grp.c0_3rd_max;
 	//float sum_avg = grp.sma_avg1 + grp.sma_avg2 + grp.sma_avg3;
@@ -78,6 +79,7 @@ int state_machine_auto(int present_state)
 		 *  to system default. That way, untreated scenarios do not regress power/perf.
 		 */
 	case INIT_MODE:
+printf("state:  INIT_MODE\n");
 		/*
 		 * init mode is super-set of all default/available cpu on the system.
 		 */
@@ -86,11 +88,13 @@ int state_machine_auto(int present_state)
 			prep_state_change(INIT_MODE, PERF_MODE, 0);
 			break;
 		}
+printf("state:  INIT_MODE no max\n");
 		// stay -- full MT
 		break;
 
 	case PERF_MODE:
 		// Demote -- if highly MT
+printf("state:  PERF_MODE\n");
 		if (max_mt_detected(PERF_MODE)) {
 			prep_state_change(PERF_MODE, INIT_MODE, 0);
 			break;
@@ -116,6 +120,7 @@ int state_machine_auto(int present_state)
 		break;
 
 	case RESP_MODE:
+printf("state:  RESP_MODE\n");
 		// Demote -- if ST above halfway mark and avg trending higher
 		if (A_GT_B(grp.c0_max, UTIL_ABOVE_HALF)
 		    && A_GT_B(grp.sma_avg1, UTIL_BELOW_HALF)) {
@@ -129,6 +134,7 @@ int state_machine_auto(int present_state)
 		prep_state_change(RESP_MODE, MDRT3E_MODE, 0);
 		break;
 	case MDRT4E_MODE:
+printf("state:  MDRT4E_MODE\n");
 		if (A_LTE_B(grp.worst_stall * 100, STALL_SCALE_LOWER_MARK)) {
 			prep_state_change(MDRT4E_MODE, RESP_MODE, 0);
 			break;
@@ -152,6 +158,7 @@ int state_machine_auto(int present_state)
 		// stay
 		break;
 	case MDRT3E_MODE:
+printf("state:  MDRT3E_MODE\n");
 		// Demote -- if mem bound work is stalling but didn't show higher utilization
 		if (A_LTE_B(grp.worst_stall * 100, STALL_SCALE_LOWER_MARK)) {
 			prep_state_change(MDRT3E_MODE, RESP_MODE, 0);
@@ -193,6 +200,7 @@ int state_machine_auto(int present_state)
 		break;
 
 	case MDRT2E_MODE:
+printf("state:  MDRT2E_MODE\n");
 		// Demote -- if mem bound work is stalling but didn't show higher utilization
 		if (A_LTE_B(grp.worst_stall * 100, STALL_SCALE_LOWER_MARK)) {
 			prep_state_change(MDRT2E_MODE, RESP_MODE, 0);
@@ -220,6 +228,7 @@ int state_machine_auto(int present_state)
 		// stay
 		break;
 	case NORM_MODE:
+printf("state:  NORM_MODE\n");
 		// Demote -- if mem bound work is stalling but didn't show higher utilization
 		if (A_LTE_B(grp.worst_stall * 100, STALL_SCALE_LOWER_MARK)) {
 			prep_state_change(NORM_MODE, RESP_MODE, 0);
@@ -246,6 +255,7 @@ int state_machine_auto(int present_state)
 		}
 		break;
 	case DEEP_MODE:
+printf("state:  DEEP_MODE\n");
 		// Demote -- if mem bound work is stalling but didn't show higher util.
 		if (A_LTE_B(grp.worst_stall * 100, STALL_SCALE_LOWER_MARK)) {
 			prep_state_change(DEEP_MODE, RESP_MODE, 0);
