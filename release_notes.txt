@@ -1,3 +1,25 @@
+5/15/2024
+pkg.OPT.HEPO release notes
+package name: pkg.OPT.HEPO-0.02.240515-x86_64
+tag: pkg-hepo-0.02.240515
+ww: 20.3
+
+Support Ubuntu distro 22.04 and 24.04
+proxy workload is enabled in this release 
+Please verify the cpu workload change triggers the change of the state and the EPP/EPB value 
+Please refer to the intel_lpmd_config.xml in /etc/intel_lpmd for the different states and EPP/EPB value 
+In the four states:
+cpu utilitzation > 50 will be state WLT_SUSTAINED
+cpu utilitzation > 20 and < 50 will be state WLT_BATTERY_LIFE 
+cpu utilitzation < 20 will be state WLT_IDLE
+
+
+Known issue: 
+user guide not ready
+coverity scan is not ready
+
+
+****************************************************************************
 5/9/2024
 pkg.OPT.HEPO release notes
 package name: pkg.OPT.HEPO-0.01.240509-x86_64

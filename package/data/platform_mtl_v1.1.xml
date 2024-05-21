@@ -187,10 +187,10 @@ version:
 			<ITMTState> -1 </ITMTState>
 			<IRQMigrate> -1 </IRQMigrate>
 		</State>
-		<!-- <State>
+		<State>
 			<ID> 5 </ID>
 			<Name> WLT_BATTERY_LIFE_BAT </Name>
-			<WLTType> 1 </WLTType>
+			<WLTType> 4 </WLTType>
 			<EPP> 192 </EPP>
 			<EPB> 8 </EPB>			
 			<ITMTState> -1 </ITMTState>
@@ -199,11 +199,11 @@ version:
 		<State>
 			<ID> 6 </ID>
 			<Name> WLT_SUSTAINED_BAT </Name>
-			<WLTType> 2 </WLTType>
+			<WLTType> 5 </WLTType>
 			<EPP> 64 </EPP>
 			<EPB> 8 </EPB>			
 			<ITMTState> -1 </ITMTState>
 			<IRQMigrate> -1 </IRQMigrate>
-		</State> -->
+		</State>
 	</States>
 </Configuration>

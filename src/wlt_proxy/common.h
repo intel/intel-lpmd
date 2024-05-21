@@ -202,6 +202,9 @@ int get_cpu_mode(void);
 void set_cur_state(enum lp_state_idx);
 int is_state_valid(enum lp_state_idx);
 
+/*mapping the state to wlt proxy workload type*/
+int getStateMapping(int state); 
+
 /* irq.c */
 int init_irq(void);
 int process_irqs_proxy(int);//defined in lpmd
@@ -281,4 +284,16 @@ int clear_spike_rate_maxima();
 int init_gnuplot(void);
 int exit_gnuplot(void);
 int update_plot(float R1, float R2, float R3, float max1, int mode);
+
+/*wlt_proxy_def.c*/
+/* WLT hints parsing */
+typedef enum {
+	WLT_IDLE,
+	WLT_BATTERY_LIFE,
+	WLT_SUSTAINED,
+	WLT_BURSTY,
+	WLT_INVALID,
+} wlt_type_t;
+
+void set_workload_hint(int type); 
 #endif				/* _COMMON_H_ */

@@ -23,6 +23,7 @@
 
 #include "lpmd.h"
 #include "cpu_group.h"
+#include "common.h"
 
 #define DEFAULT_ACTION_INTERVAL	1
 #define CPU_UTIL_SUSTAIN		50
@@ -51,15 +52,6 @@ static struct _threshold thereshold = {
 		.cpu_util_battery_life = CPU_UTIL_BATTERY_LIFE,
 		.burst_count = BURST_COUNT_ABOVE_TDP
 };
-
-/* WLT hints parsing */
-typedef enum {
-	WLT_IDLE,
-	WLT_BATTERY_LIFE,
-	WLT_SUSTAINED,
-	WLT_BURSTY,
-	WLT_INVALID,
-} wlt_type_t;
 
 static int current_workload_type;
 
@@ -171,7 +163,7 @@ static int check_cpu_busy(int power_mw, int tdp) {
 	return avg_cpu_usage;
 }
 
-static void set_workload_hint(int type) {
+void set_workload_hint(int type) {
 	lpmd_log_info("proxy WLT hint :%d\n", type);
 	periodic_util_update(lpmd_config, type);
 }
