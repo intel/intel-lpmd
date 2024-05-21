@@ -253,6 +253,40 @@ enum lp_state_idx nearest_supported(enum lp_state_idx from_state, enum lp_state_
 
 }
 
+int getStateMapping(int state){
+    //for now, AC_CONNECTED is set true by default
+    //it needs to read the battery status 
+    bool AC_CONNECTED = true; 
+    
+    switch(state){
+	case PERF_MODE:
+    	return WLT_BURSTY;
+	
+	case RESP_MODE:
+	    if (AC_CONNECTED)	
+            return WLT_SUSTAINED;
+        else 
+            return WLT_SUSTAINED_BAT;
+            
+	case MDRT4E_MODE:
+	case MDRT3E_MODE:
+	case MDRT2E_MODE:
+	case NORM_MODE:
+	    if (AC_CONNECTED)
+    	    return WLT_BATTERY_LIFE;
+    	else 
+        	return WLT_BATTERY_LIFE_BAT;
+	
+	case DEEP_MODE:							
+        return WLT_IDLE; 
+	
+	case INIT_MODE:
+	default:	
+	    return WLT_INVALID; 	
+    }
+    return WLT_INVALID; 
+}
+
 int state_demote = 0;
 int prep_state_change(enum lp_state_idx from_state, enum lp_state_idx to_state,
 		      int reset)
@@ -274,14 +308,13 @@ int prep_state_change(enum lp_state_idx from_state, enum lp_state_idx to_state,
 #if 0
 	update_state_epp(to_state);
 	update_state_epb(to_state);
-#elseif
+#endif
     //switch(to_state)
     //do to_state to WLT mapping
-    int type = 0;
-    lpmd_log_info("proxy WLT hint :%d\n", type);
-    lpmd_log_info("proxy WLT hint :%d\n", type);
-	periodic_util_update(lpmd_config, type);
-#end
+    int type = getStateMapping(to_state); 
+    printf("proxy WLT hint :%d\n", type);
+	set_workload_hint(type);
+
 	set_cur_state(to_state);
 	set_state_reset();
 	set_last_maxutil(DEACTIVATED);
