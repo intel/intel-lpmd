@@ -271,9 +271,17 @@ int prep_state_change(enum lp_state_idx from_state, enum lp_state_idx to_state,
 	/* state exit: p-state reset back */
 	if (!reset && state_support_freq_ctl(from_state))
 		unclamp_default_freq(from_state);
-
+#if 0
 	update_state_epp(to_state);
 	update_state_epb(to_state);
+#elseif
+    //switch(to_state)
+    //do to_state to WLT mapping
+    int type = 0;
+    lpmd_log_info("proxy WLT hint :%d\n", type);
+    lpmd_log_info("proxy WLT hint :%d\n", type);
+	periodic_util_update(lpmd_config, type);
+#end
 	set_cur_state(to_state);
 	set_state_reset();
 	set_last_maxutil(DEACTIVATED);
