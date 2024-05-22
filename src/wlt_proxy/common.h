@@ -292,8 +292,13 @@ typedef enum {
 	WLT_BATTERY_LIFE,
 	WLT_SUSTAINED,
 	WLT_BURSTY,
+    WLT_SUSTAINED_BAT,
+    WLT_BATTERY_LIFE_BAT,    
 	WLT_INVALID,
 } wlt_type_t;
 
 void set_workload_hint(int type); 
+
+/*help.c*/
+void close_all_fd(void);
 #endif				/* _COMMON_H_ */

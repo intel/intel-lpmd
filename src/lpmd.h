@@ -344,5 +344,6 @@ char* time_delta(void);
 /* WLT Proxy */
 int wlt_proxy_init(lpmd_config_t *lpmd_config);
 void wlt_proxy_action_loop(void);
+void wlt_proxy_uninit(void);
 
 #endif

@@ -22,6 +22,7 @@
  */
 
 #include "lpmd.h"
+#include "wlt_proxy/common.h"
 
 static lpmd_config_t lpmd_config;
 
@@ -602,13 +603,13 @@ static int wlt_fd;
 static int idx_wlt_fd = -1;
 
 /* WLT hints parsing */
-typedef enum {
+/*typedef enum {
 	WLT_IDLE,
 	WLT_BATTERY_LIFE,
 	WLT_SUSTAINED,
 	WLT_BURSTY,
 	WLT_INVALID,
-} wlt_type_t;
+} wlt_type_t;*/
 
 // Workload type classification
 #define WORKLOAD_NOTIFICATION_DELAY_ATTRIBUTE "/sys/bus/pci/devices/0000:00:04.0/workload_hint/notification_delay_ms"
