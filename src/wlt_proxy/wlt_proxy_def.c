@@ -168,6 +168,7 @@ void set_workload_hint(int type) {
 	periodic_util_update(lpmd_config, type);
 }
 
+/*this is replaced by state_machine_auto*/
 static void action_loop(int power_mw, int tdp_mw) {
 	static int interval;
 	int avg_cpu_usage;
@@ -273,4 +274,12 @@ int wlt_proxy_init(lpmd_config_t *_lpmd_config) {
 
 	proxy_initialized = true; 
 	return LPMD_SUCCESS;
+}
+
+/*make sure all resource are properly released and clsoed*/
+void wlt_proxy_uninit(void){
+    //if proxy is enabled, make sure we close all open fd. 
+    if (lpmd_config->wlt_proxy_enable){
+        close_all_fd();
+    }
 }

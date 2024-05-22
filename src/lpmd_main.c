@@ -152,6 +152,7 @@ static gboolean sig_int_handler(void)
 
 //	 Clean up if any
 	clean_up_lockfile ();
+	wlt_proxy_uninit(); 
 
 	exit (EXIT_SUCCESS);
 
