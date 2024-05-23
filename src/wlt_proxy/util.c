@@ -253,7 +253,7 @@ enum lp_state_idx nearest_supported(enum lp_state_idx from_state, enum lp_state_
 
 }
 
-int getStateMapping(int state){
+static int get_state_mapping(enum lp_state_idx state){
     //for now, AC_CONNECTED is set true by default
     //it needs to read the battery status 
     bool AC_CONNECTED = true; 
@@ -282,9 +282,10 @@ int getStateMapping(int state){
 	
 	case INIT_MODE:
 	default:	
-	    return WLT_INVALID; 	
+	    return WLT_SUSTAINED;//WLT_INVALID; 	
     }
-    return WLT_INVALID; 
+    
+    return WLT_SUSTAINED;//WLT_INVALID; 
 }
 
 int state_demote = 0;
@@ -311,7 +312,7 @@ int prep_state_change(enum lp_state_idx from_state, enum lp_state_idx to_state,
 #endif
     //switch(to_state)
     //do to_state to WLT mapping
-    int type = getStateMapping(to_state); 
+    int type = get_state_mapping((int)to_state); 
     printf("proxy WLT hint :%d\n", type);
 	set_workload_hint(type);
 
