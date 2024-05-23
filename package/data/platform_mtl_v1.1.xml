@@ -149,8 +149,9 @@ version:
 			<ID> 1 </ID>
 			<Name> WLT_IDLE </Name>
 			<WLTType> 0 </WLTType>
-			<EPP> 255 </EPP>
+			<EPP> 178 </EPP>
 			<EPB> 8 </EPB>			
+			<MinPollInterval>2000</MinPollInterval>
 			<ITMTState> -1 </ITMTState>
 			<IRQMigrate> -1 </IRQMigrate>
 		</State>
@@ -158,9 +159,10 @@ version:
 			<ID> 2 </ID>
 			<Name> WLT_BATTERY_LIFE </Name>
 			<WLTType> 1 </WLTType>
-			<EPP> 192 </EPP>
+			<EPP> 178 </EPP>
             <!-- <PS>AC</PS> -->
 			<EPB> 6 </EPB>
+			<MinPollInterval>2000</MinPollInterval>
             <!-- <PS>BAT</PS> -->
 			<!-- <EPB> 8</EPB> -->
 			<ITMTState> -1 </ITMTState>
@@ -173,6 +175,7 @@ version:
 			<EPP> 64 </EPP>
             <!-- <PS>AC</PS> -->
 			<EPB> 6 </EPB>
+			<MinPollInterval>2000</MinPollInterval>
             <!-- <PS>BAT</PS> -->
 			<!-- <EPB> 8</EPB> -->
 			<ITMTState> -1 </ITMTState>
@@ -184,6 +187,7 @@ version:
 			<WLTType> 3 </WLTType>
 			<EPP> 64 </EPP>
 			<EPB> 6 </EPB>
+			<MinPollInterval>2000</MinPollInterval>
 			<ITMTState> -1 </ITMTState>
 			<IRQMigrate> -1 </IRQMigrate>
 		</State>
@@ -191,8 +195,9 @@ version:
 			<ID> 5 </ID>
 			<Name> WLT_BATTERY_LIFE_BAT </Name>
 			<WLTType> 4 </WLTType>
-			<EPP> 192 </EPP>
-			<EPB> 8 </EPB>			
+			<EPP> 178 </EPP>
+			<EPB> 8 </EPB>
+			<MinPollInterval>2000</MinPollInterval>			
 			<ITMTState> -1 </ITMTState>
 			<IRQMigrate> -1 </IRQMigrate>
 		</State>
@@ -202,6 +207,7 @@ version:
 			<WLTType> 5 </WLTType>
 			<EPP> 64 </EPP>
 			<EPB> 8 </EPB>			
+			<MinPollInterval>2000</MinPollInterval>
 			<ITMTState> -1 </ITMTState>
 			<IRQMigrate> -1 </IRQMigrate>
 		</State>
