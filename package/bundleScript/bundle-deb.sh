@@ -26,7 +26,7 @@ PKG_CATEGORY="OPT"
 PKG_FOLDERNAME="HEPO"
 BASE=pkg.$PKG_CATEGORY.$PKG_FOLDERNAME
 MAJOR="0"
-MINOR="02"
+MINOR="03"
 ARCH="x86_64"
 BUILD_DATE=$(date +'%y%m%d')
 #DISTRO_CODENAME=$(cat /etc/lsb-release |grep DISTRIB_CODENAME|cut -d"=" -f2)
@@ -88,7 +88,7 @@ cp ../../man/intel_lpmd.8 $SOURCEFOLDER/usr/local/share/man/man8
 
 #copy config
 mkdir -p $SOURCEFOLDER/etc/intel_lpmd
-cp ../data/platform_mtl_v1.1.xml $SOURCEFOLDER/etc/intel_lpmd/intel_lpmd_config.xml
+cp ../data/platform_mtl.xml $SOURCEFOLDER/etc/intel_lpmd/intel_lpmd_config.xml
 
 mkdir -p $SOURCEFOLDER/etc/dbus-1/system.d
 cp ../../data/org.freedesktop.intel_lpmd.conf $SOURCEFOLDER/etc/dbus-1/system.d/
