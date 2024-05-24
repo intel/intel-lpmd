@@ -98,9 +98,10 @@ cp $BUNDLEDIR/rollback.sh $SOURCEFOLDER/
 chmod +x $SOURCEFOLDER/*.sh
 
 #copy license, user guide
-#cp $BUNDLEDIR/../release_notes.txt $SOURCEFOLDER/
-#cp $BUNDLEDIR/../userGuide* $SOURCEFOLDER/
-#cp $BUNDLEDIR/../*.pdf $SOURCEFOLDER/
+cp $BUNDLEDIR/../release-notes* $SOURCEFOLDER/
+cp $BUNDLEDIR/../license/readme-license* $SOURCEFOLDER/
+cp $BUNDLEDIR/../license/*.pdf $SOURCEFOLDER/
+cp $BUNDLEDIR/../user-guide* $SOURCEFOLDER/
 
 #zip/tar folder
 sudo apt install -y tar
