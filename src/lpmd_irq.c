@@ -88,6 +88,8 @@ int set_lpm_irq(cpu_set_t *cpumask, int action)
 		if (lp_mode_irq != SETTING_RESTORE)
 			cpumask_to_hexstr(cpumask, irq_str, MAX_STR_LENGTH);
 	}
+
+	return 0;
 }
 
 static int dump_smp_affinity(void)
