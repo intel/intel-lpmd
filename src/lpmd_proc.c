@@ -695,7 +695,8 @@ static int read_wlt(int fd)
 	if ((lseek(fd, 0L, SEEK_SET)) < 0)
 		return WLT_INVALID;
 
-	if (read(fd, index_str, sizeof(index_str)) < 0)
+	ret = read(fd, index_str, sizeof(index_str));
+	if (ret <= 0)
 		return WLT_INVALID;
 
 	 ret = sscanf(index_str, "%d", &index);
