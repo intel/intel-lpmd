@@ -64,7 +64,8 @@ intel_lpmd_SOURCES = \
     src/wlt_proxy/irq.c \
     src/wlt_proxy/perf_msr.c \
     src/wlt_proxy/cpu_group.c \
-    src/additional/privilege.c \
+	src/weights/power-supply-status.c \
+    #src/additional/privilege.c \
     #src/visualize/plotting.c \
 	lpmd-resource.c
 

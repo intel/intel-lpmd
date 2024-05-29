@@ -32,6 +32,7 @@
 #include "common.h"
 #include "cpu_group.h"
 #include "perf_msr.h"
+#include "../weights/weights_common.h"
 
 perf_stats_t *perf_stats;
 struct group_util grp;
@@ -256,7 +257,7 @@ enum lp_state_idx nearest_supported(enum lp_state_idx from_state, enum lp_state_
 static int get_state_mapping(enum lp_state_idx state){
     //for now, AC_CONNECTED is set true by default
     //it needs to read the battery status 
-    bool AC_CONNECTED = true; 
+    bool AC_CONNECTED = is_ac_powered_power_supply_status() == 0  ? false: true; //unknown is considered as ac powered.
     
     switch(state){
 	case PERF_MODE:
