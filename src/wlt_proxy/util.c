@@ -55,6 +55,7 @@ int get_msr_fd(int cpu)
 	return perf_stats[cpu].dev_msr_fd;
 }
 
+extern int max_util;
 int update_perf_diffs(float *sum_norm_perf, int stat_init_only)
 {
 	int fd, min_cpu, maxed_cpu = -1;
@@ -142,6 +143,7 @@ int update_perf_diffs(float *sum_norm_perf, int stat_init_only)
 		    (float)perf_stats[maxed_cpu].aperf_diff * 0.01 /
 		    perf_stats[maxed_cpu].mperf_diff * cpu_hfm_mhz;
 	grp.worst_stall = min_s0;
+//printf("test, grp.worst_stall %.2f\n", grp.worst_stall);
 	grp.worst_stall_cpu = min_s0_cpu;
 
 	grp.c0_max = max_load;
@@ -290,6 +292,7 @@ static int get_state_mapping(enum lp_state_idx state){
 }
 
 int state_demote = 0;
+int next_proxy_poll = 2000; 
 int prep_state_change(enum lp_state_idx from_state, enum lp_state_idx to_state,
 		      int reset)
 {
@@ -324,6 +327,13 @@ int prep_state_change(enum lp_state_idx from_state, enum lp_state_idx to_state,
 
 	if (to_state < from_state)
 		state_demote = 1;
+	
+	//proxy: apply state change and get poll of different states
+	apply_state_change(); 
+	if (likely(is_state_valid(to_state))) {
+		next_proxy_poll = get_state_poll(max_util, to_state);
+		next_proxy_poll = next_proxy_poll * 1000; 
+	}//proxy: change end
 
 	return 1;
 }

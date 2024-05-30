@@ -1,3 +1,20 @@
+5/22/2024
+pkg.OPT.HEPO release notes
+package name: pkg.OPT.HEPO-0.03.240522-x86_64
+tag: pkg-hepo-0.03.240533
+ww: 21.3
+
+Support Ubuntu distro 22.04 and 24.04
+Six proxy workload types and their parameters are defined in the intel_lpmd_config.xml (check under /etc/intel_lpmd) 
+Please verify the cpu workload change triggers the change of the EPP/EPB value 
+
+Known issue: 
+Currently the state change seems only happen between sustained and battery load
+user guide not ready
+
+
+****************************************************************************
+
 5/15/2024
 pkg.OPT.HEPO release notes
 package name: pkg.OPT.HEPO-0.02.240515-x86_64
