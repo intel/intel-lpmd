@@ -234,8 +234,9 @@ void wlt_proxy_action_loop(void) {
 
 	//action_loop(power_mw, tdp_mw);
 	if (proxy_initialized){
-		lpmd_log_info("proxy initialzied\n");
+		lpmd_log_info("\n\nwlt_proxy_action_loop, proxy initialzied\n");
 		state_machine_auto(get_cur_state());
+		lpmd_log_info("wlt_proxy_action_loop, handled states\n");		
 	}
 }
 
@@ -257,6 +258,7 @@ static int get_tdp() {
 	return 0;
 }
 
+extern int next_proxy_poll; 
 /* Return non zero if the proxy is not present for a platform */
 int wlt_proxy_init(lpmd_config_t *_lpmd_config) {
 	int ret;
@@ -273,6 +275,7 @@ int wlt_proxy_init(lpmd_config_t *_lpmd_config) {
 		return ret;
 
 	proxy_initialized = true; 
+	next_proxy_poll = 2000;
 	return LPMD_SUCCESS;
 }
 

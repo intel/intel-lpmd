@@ -39,10 +39,16 @@ int state_machine_power(int present_state)
 	return 1;
 }
 
+
 extern int state_demote;
+int max_util; 
 int state_machine_auto(int present_state)
 {
-printf("test: present_state is %d\n", present_state);
+	//this used to be part of function util_main
+	float dummy;
+	update_perf_diffs(&dummy, 0);
+	max_util = (int)round(grp.c0_max); //end	
+	
 	int completed_poll = get_last_poll();
 	float sum_c0 = grp.c0_max + grp.c0_2nd_max + grp.c0_3rd_max;
 	//float sum_avg = grp.sma_avg1 + grp.sma_avg2 + grp.sma_avg3;
@@ -79,22 +85,22 @@ printf("test: present_state is %d\n", present_state);
 		 *  to system default. That way, untreated scenarios do not regress power/perf.
 		 */
 	case INIT_MODE:
-printf("state:  INIT_MODE\n");
+printf("present state:  INIT_MODE\n");
 		/*
 		 * init mode is super-set of all default/available cpu on the system.
 		 */
 		/* promote -- if not high multi-thread trend */
 		if (!max_mt_detected(INIT_MODE)) {
+printf("INIT_MODE to PERF_MODE\n");			
 			prep_state_change(INIT_MODE, PERF_MODE, 0);
 			break;
 		}
-printf("state:  INIT_MODE no max\n");
 		// stay -- full MT
 		break;
 
 	case PERF_MODE:
 		// Demote -- if highly MT
-printf("state:  PERF_MODE\n");
+printf("present state:  PERF_MODE\n");
 		if (max_mt_detected(PERF_MODE)) {
 			prep_state_change(PERF_MODE, INIT_MODE, 0);
 			break;
@@ -103,10 +109,13 @@ printf("state:  PERF_MODE\n");
 		//if (get_burst_rate_per_min() > BURST_COUNT_THRESHOLD)
 		if (!do_countdown(PERF_MODE))
 			break;
+		
+printf("PERF_MODE to ....\n");		
 		// Promote but through responsive watch -- if top sampled util and their avg are receeding.
 		if (A_LTE_B(sum_c0, (2 * UTIL_LOW)) &&
 		    A_LTE_B(grp.sma_avg1, UTIL_ABOVE_HALF)) {
 			prep_state_change(PERF_MODE, RESP_MODE, 0);
+printf("PERF_MODE to RESP_MODE\n");			
 			break;
 		}
 		// Promote -- to moderate (3) MT state
@@ -114,29 +123,34 @@ printf("state:  PERF_MODE\n");
 		{
 			set_stay_count(MDRT3E_MODE, 0);
 			prep_state_change(PERF_MODE, MDRT3E_MODE, 0);
+printf("PERF_MODE to MDRT3E_MODE\n");			
 			break;
 		}
+printf("PERF_MODE to all else\n");			
 		// Stay -- all else
 		break;
 
 	case RESP_MODE:
-printf("state:  RESP_MODE\n");
+printf("present state:  RESP_MODE\n");
 		// Demote -- if ST above halfway mark and avg trending higher
 		if (A_GT_B(grp.c0_max, UTIL_ABOVE_HALF)
 		    && A_GT_B(grp.sma_avg1, UTIL_BELOW_HALF)) {
 			prep_state_change(RESP_MODE, PERF_MODE, 0);
+printf("RESP_MODE to PERF_MODE\n");			
 			break;
 		}
 		// Stay -- if there were recent burst of spikes
 		if (perf_count && burst_rate_breach())
 			break;
 		// Promote -- all else
+printf("All else RESP_MODE to MDRT3E_MODE\n");			
 		prep_state_change(RESP_MODE, MDRT3E_MODE, 0);
 		break;
 	case MDRT4E_MODE:
-printf("state:  MDRT4E_MODE\n");
+printf("present state:  MDRT4E_MODE\n");
 		if (A_LTE_B(grp.worst_stall * 100, STALL_SCALE_LOWER_MARK)) {
 			prep_state_change(MDRT4E_MODE, RESP_MODE, 0);
+			printf("MDRT4E_MODE to RESP_MODE\n");
 			break;
 		}
 		// Demote
@@ -144,6 +158,7 @@ printf("state:  MDRT4E_MODE\n");
 			if (!burst_rate_breach() && strikeout_once(N_STRIKE))
 				break;
 			prep_state_change(MDRT4E_MODE, PERF_MODE, 0);
+			printf("MDRT4E_MODE to PERF_MODE\n");
 			break;
 		}
 		// promote
@@ -153,14 +168,16 @@ printf("state:  MDRT4E_MODE\n");
 			if (!do_countdown(MDRT4E_MODE))
 				break;
 			prep_state_change(MDRT4E_MODE, NORM_MODE, 0);
+			printf("MDRT4E_MODE to NORM_MODE\n");
 			break;
 		}
 		// stay
 		break;
 	case MDRT3E_MODE:
-printf("state:  MDRT3E_MODE\n");
+printf("present state:  MDRT3E_MODE\n");
 		// Demote -- if mem bound work is stalling but didn't show higher utilization
 		if (A_LTE_B(grp.worst_stall * 100, STALL_SCALE_LOWER_MARK)) {
+printf("MDRT3E_MODE to RESP_MODE %.2f < %d\n", grp.worst_stall, STALL_SCALE_LOWER_MARK);			
 			prep_state_change(MDRT3E_MODE, RESP_MODE, 0);
 			break;
 		}
@@ -169,12 +186,14 @@ printf("state:  MDRT3E_MODE\n");
 			if (!burst_rate_breach() && strikeout_once(N_STRIKE))
 				break;
 			prep_state_change(MDRT3E_MODE, PERF_MODE, 0);
+printf("MDRT3E_MODE to PERF_MODE %.2f < %d\n", grp.c0_max, UTIL_NEAR_FULL);					
 			break;
 		}
 		// Demote to 4 thread sustained
 		if (A_GTE_B(grp.sma_avg1, SUS_LOW_RANGE_END) &&
 		    A_GTE_B(grp.sma_avg2, (SUS_LOW_RANGE_END - 5))) {
 			prep_state_change(MDRT3E_MODE, MDRT4E_MODE, 0);
+printf("MDRT3E_MODE to PERF_MODE %d < %d\n", grp.sma_avg1, SUS_LOW_RANGE_END);				
 			break;
 		}
 		// promote
@@ -185,6 +204,7 @@ printf("state:  MDRT3E_MODE\n");
 			if (!do_countdown(MDRT3E_MODE))
 				break;
 			prep_state_change(MDRT3E_MODE, MDRT2E_MODE, 0);
+printf("MDRT3E_MODE to MDRT2E_MODE %d < %d\n", grp.sma_avg1, MDRT2E_MODE);			
 			break;
 		}
 		// Promote -- if top three avg util are trending lower.
@@ -194,16 +214,19 @@ printf("state:  MDRT3E_MODE\n");
 			if (!do_countdown(MDRT3E_MODE))
 				break;
 			prep_state_change(MDRT3E_MODE, NORM_MODE, 0);
+printf("MDRT3E_MODE to NORM_MODE %d < %d\n", grp.sma_avg1, MDRT2E_MODE);			
 			break;
 		}
 		// stay
+printf("***********no change state:  MDRT3E_MODE\n");		
 		break;
 
 	case MDRT2E_MODE:
-printf("state:  MDRT2E_MODE\n");
+printf("present state:  MDRT2E_MODE\n");
 		// Demote -- if mem bound work is stalling but didn't show higher utilization
 		if (A_LTE_B(grp.worst_stall * 100, STALL_SCALE_LOWER_MARK)) {
 			prep_state_change(MDRT2E_MODE, RESP_MODE, 0);
+			printf("MDRT2E_MODE to RESP_MODE\n");
 			break;
 		}
 		// Demote -- if instant util nearing full or sustained moderate avg1 trend with avg2 trailing closeby
@@ -213,6 +236,7 @@ printf("state:  MDRT2E_MODE\n");
 			if (!burst_rate_breach() && strikeout_once(N_STRIKE))
 				break;
 			prep_state_change(MDRT2E_MODE, MDRT3E_MODE, 0);
+			printf("MDRT2E_MODE to MDRT3E_MODE\n");
 			break;
 		}
 		// Promote -- if top two avg util are trending lower.
@@ -223,15 +247,17 @@ printf("state:  MDRT2E_MODE\n");
 				break;
 			}
 			prep_state_change(MDRT2E_MODE, NORM_MODE, 0);
+			printf("MDRT2E_MODE to NORM_MODE\n");
 			break;
 		}
 		// stay
 		break;
 	case NORM_MODE:
-printf("state:  NORM_MODE\n");
+printf("present state:  NORM_MODE\n");
 		// Demote -- if mem bound work is stalling but didn't show higher utilization
 		if (A_LTE_B(grp.worst_stall * 100, STALL_SCALE_LOWER_MARK)) {
 			prep_state_change(NORM_MODE, RESP_MODE, 0);
+			printf("NORM_MODE to RESP_MODE\n");
 			break;
 		}
 		// Demote -- if instant util more than half or if signs of sustained ST activity.
@@ -241,6 +267,7 @@ printf("state:  NORM_MODE\n");
 			if (!burst_rate_breach() && strikeout_once(N_STRIKE))
 				break;
 			prep_state_change(NORM_MODE, MDRT2E_MODE, 0);
+			printf("NORM_MODE to MDRT2E_MODE\n");
 			break;
 		}
 		// Promote -- if top few instant util or top avg is trending lower.
@@ -251,19 +278,22 @@ printf("state:  NORM_MODE\n");
 			if (!do_countdown(NORM_MODE))
 				break;
 			prep_state_change(NORM_MODE, DEEP_MODE, 0);
+			printf("NORM_MODE to DEEP_MODE\n");
 			break;
 		}
 		break;
 	case DEEP_MODE:
-printf("state:  DEEP_MODE\n");
+printf("present state:  DEEP_MODE\n");
 		// Demote -- if mem bound work is stalling but didn't show higher util.
 		if (A_LTE_B(grp.worst_stall * 100, STALL_SCALE_LOWER_MARK)) {
 			prep_state_change(DEEP_MODE, RESP_MODE, 0);
+			printf("DEEP_MODE to RESP_MODE\n");
 			break;
 		}
 		// Demote -- if there are early signs of instantaneous utilization build-up.
 		if (A_GT_B(grp.c0_max, UTIL_FILL_START)) {
 			prep_state_change(DEEP_MODE, NORM_MODE, 0);
+			printf("DEEP_MODE to NORM_MODE\n");
 			break;
 		}
 		// Stay -- all else

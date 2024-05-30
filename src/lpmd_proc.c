@@ -23,7 +23,7 @@
 
 #include "lpmd.h"
 #include "wlt_proxy/common.h"
-
+extern int next_proxy_poll; 
 static lpmd_config_t lpmd_config;
 
 char *lpm_cmd_str[LPM_CMD_MAX] = {
@@ -864,8 +864,11 @@ static void* lpmd_core_main_loop(void *arg)
 
 		/* Time out, need to choose next util state and interval */
 		if (n == 0 && interval > 0) {
-			if (lpmd_config.wlt_proxy_enable)
+			if (lpmd_config.wlt_proxy_enable){
 				wlt_proxy_action_loop ();
+				//gets interval of different states 
+				interval = next_proxy_poll;
+			}
 			else
 				interval = periodic_util_update (&lpmd_config, -1);
 		}
