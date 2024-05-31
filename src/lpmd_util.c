@@ -397,6 +397,7 @@ static int enter_state(lpmd_config_state_t *state, int bsys, int bcpu)
 	return interval;
 }
 
+extern int next_proxy_poll; 
 static int process_next_config_state(lpmd_config_t *config, int wlt_index)
 {
 	lpmd_config_state_t *state;
@@ -418,6 +419,12 @@ static int process_next_config_state(lpmd_config_t *config, int wlt_index)
 		return interval;
 
 	get_epp_epb(&epp, epp_str, 32, &epb);
+	if (config->wlt_proxy_enable){
+		interval = config->wlt_proxy_interval;
+		//gets interval of different states 
+		if (interval != next_proxy_poll)
+			interval = next_proxy_poll;
+	}	
 	if (epp >= 0)
 		lpmd_log_info(
 				"[%d/%d] %12s: bsys: %3d.%02d, bcpu: %3d.%02d, epp %20d, epb %3d, itmt %2d, interval %4d\n",

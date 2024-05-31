@@ -849,13 +849,19 @@ static void* lpmd_core_main_loop(void *arg)
 			break;
 
 //		 Opportunistic LPM is disabled in below cases
-		if (lpmd_config.wlt_proxy_enable)
+		
+		if (lpmd_config.wlt_proxy_enable){
 			interval = lpmd_config.wlt_proxy_interval;
+			//gets interval of different states 
+			if (interval != next_proxy_poll)
+				interval = next_proxy_poll;
+		}
 		else if (lpm_state & (LPM_USER_ON | LPM_USER_OFF | LPM_SUV_ON) | has_hfi_lpm_monitor ())
 			interval = -1;
 		else if (interval == -1)
 			interval = 100;
 
+		lpmd_log_info("main loop polling interval is %d\n", interval);
 		n = poll (poll_fds, poll_fd_cnt, interval);
 		if (n < 0) {
 			lpmd_log_warn ("Write to pipe failed \n");
@@ -866,8 +872,6 @@ static void* lpmd_core_main_loop(void *arg)
 		if (n == 0 && interval > 0) {
 			if (lpmd_config.wlt_proxy_enable){
 				wlt_proxy_action_loop ();
-				//gets interval of different states 
-				interval = next_proxy_poll;
 			}
 			else
 				interval = periodic_util_update (&lpmd_config, -1);
@@ -899,7 +903,6 @@ static void* lpmd_core_main_loop(void *arg)
 
 		if (idx_wlt_fd >= 0 && (poll_fds[idx_wlt_fd].revents & POLLPRI)) {
 			int wlt_index;
-
 			wlt_index = read_wlt(poll_fds[idx_wlt_fd].fd);
 			interval = periodic_util_update (&lpmd_config, wlt_index);
 		}
