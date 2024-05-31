@@ -115,7 +115,8 @@ int find_dir(char *start_dir, int depth, char *dir_to_find)
     }
     closedir(dp);
 	printf("is_folder_found : %d\n", is_folder_found);
-    return is_folder_found;
+    //return is_folder_found;
+	return 1;//forcing for debug.
 }
 
 static int get_value(char *path, int *val)
@@ -181,14 +182,16 @@ static int enumerate_supply_names ()
 
 int get_power_supply_online_status(int *ret_val)
 {
+	
     //if ac_supply_name_path not empty then read online directly
     //if empty then call enumerate_supply_names
 	char path[MAX_STR_LENGTH];
     *ret_val = -1;
     //ret_str[0] = '\0';
-    snprintf (path, sizeof(path), POWER_SUPPLY_BASE_PATH);
-    get_value (path, ret_val);
-    return 0;
+    snprintf (path, sizeof(path), AC_POWER_SUPPLY_ONLINE_PATH);
+	
+	printf ("get_power_supply_online_status ");
+    return get_value (path, ret_val);
 }
 
 int init_power_supply_status() {
@@ -227,9 +230,12 @@ int is_ac_powered_power_supply_status() {
        init_power_supply_status();
        if(is_supported == 1) {
             int value = 0;
-            get_power_supply_online_status(&value);
+            if(get_power_supply_online_status(&value) == 0) {
+				is_power_connected = value;
+			}
        }
     }
 
+	printf ("is_power_connected %d " , is_power_connected);
     return is_power_connected;//unknown
 }
