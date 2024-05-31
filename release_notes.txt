@@ -1,3 +1,26 @@
+5/30/2024
+pkg.OPT.HEPO release notes
+package name: pkg.OPT.HEPO-0.04.240530-x86_64
+tag: pkg-hepo-0.04.240530
+ww: 22.4
+
+Support Ubuntu distro 22.04 and 24.04
+fix the state switching error
+log will show the workload type and detailed state switching with polling interval
+
+
+known issue: after killing the app and runs again from terminal, you might see the failure of the following.
+workaround: remove the reinstall the app or reboot the machine 
+$ sudo /usr/bin/intel_lpmd --loglevel=info --no-daemon
+[1717121783][INFO]32 CPUID levels; family:model:stepping 0x6:aa:1 (6:170:1)
+[1717121783][ERR]Failed to migrated to cpu0
+[1717121783][ERR]Failed to migrated to cpu0
+[1717121783][ERR]Failed to migrated to cpu0
+intel_lpmd: cpu migrate: Invalid argument
+
+
+****************************************************************************
+
 5/22/2024
 pkg.OPT.HEPO release notes
 package name: pkg.OPT.HEPO-0.03.240522-x86_64
