@@ -332,7 +332,6 @@ int prep_state_change(enum lp_state_idx from_state, enum lp_state_idx to_state,
 	apply_state_change(); 
 	if (likely(is_state_valid(to_state))) {
 		next_proxy_poll = get_state_poll(max_util, to_state);
-		next_proxy_poll = next_proxy_poll * 1000; 
 	}//proxy: change end
 
 	return 1;
