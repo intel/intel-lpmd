@@ -282,6 +282,7 @@ int wlt_proxy_init(lpmd_config_t *_lpmd_config) {
 /*make sure all resource are properly released and clsoed*/
 void wlt_proxy_uninit(void){
     //if proxy is enabled, make sure we close all open fd. 
+	exit_state_change();
     if (lpmd_config->wlt_proxy_enable){
         close_all_fd();
     }
