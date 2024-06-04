@@ -105,7 +105,11 @@ cp $BUNDLEDIR/../user-guide* $SOURCEFOLDER/
 
 #zip/tar folder
 sudo apt install -y tar
+if [ -d "$BUNDLEDIR/bundle" ]; then
+	rm -rf $BUNDLEDIR/bundle
+fi
 mkdir -p $BUNDLEDIR/bundle
+ 
 tar -czvf $FILENAME.tar.gz $SOURCEFOLDER
 sha512sum $FILENAME.tar.gz > $BUNDLEDIR/bundle/$FILENAME.tar.gz.sha512sum.txt
 mv $FILENAME.tar.gz $BUNDLEDIR/bundle/

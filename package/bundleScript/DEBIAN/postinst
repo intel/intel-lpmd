@@ -1,53 +1,15 @@
-#change the ownership to root
+pkgdir="/usr/share/ia_pkg/hepo"
+pkgfile="/usr/share/ia_pkg/hepo/pkg.opt.hepo.x86_64.tar.gz"
 
-chown root:root /etc/tuned/intel_hepo*
-
-activeprofile=""
-
-if test -f /usr/sbin/tuned-adm; then
-    output=$(echo $(tuned-adm active) | grep -o ":")
-    if [ ! -z "$output" ]; then 
-        activeprofile=$(echo $(tuned-adm active) | cut -d ":" -f 2)
-        #echo "activeprofile is $activeprofile"
-        if echo $activeprofile | grep -q "intel"; then
-        	activeprofile=""
+if [ -f "$pkgfile" ]; then
+        tar -zxvf $pkgfile -C $pkgdir
+        if [ -n "ls $pkgdir/pkg.OPT.HEPO*x86_64" ]; then
+                cd $pkgdir/pkg.OPT.HEPO*x86_64
+                sudo ./deploy.sh
+        else
+                echo "untared folder does not exist"
         fi
-    fi
+else
+        echo "package install file does not exist"
+        exit 1
 fi
-
-model=$(grep -oP "model name\\K.*" /proc/cpuinfo | head -1)
-echo $model
-if [ ! -z "$model" ]; then
-	deli=$(echo $model | grep -o ":")
-    if [ ! -z "$deli" ]; then 	
-		cpumodel=${model##*:}
-	else 
-		cpumodel=$model
-	fi
-fi 
-
-
-echo "****************mask PPD ***************************"
-sudo systemctl stop power-profiles-daemon
-sudo systemctl mask power-profiles-daemon
-
-echo "**************** re-start daemon ***************************"
-sudo systemctl restart tuned
-
-#make tuned persistent across reboots.
-sudo systemctl enable --now tuned
-
-echo "**************** activate profile ***************************"
-#tuned-adm list | grep "intel*"
-
-if [ ! -z "$activeprofile" ]; then
-	#if the activeprofile already contains the intel profile, set to intel-best_performance_mode
-	if echo "$activeprofile" | grep -q "intel"; then
-		tuned-adm profile intel_hepo
-	else #add to the active profiles
-		tuned-adm profile $activeprofile intel_hepo
-	fi
-else 
-	tuned-adm profile intel_hepo
-fi 
-
