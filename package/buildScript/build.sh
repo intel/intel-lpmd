@@ -65,7 +65,7 @@ if [ $SKIP_SETUP -eq 0 ]; then
         fi
         if test -f /etc/redhat-release; then
             echo "redhat!"
-            source $SETUPSCRIPT_PATH/setup_redhat.sh || print_error
+            source $SETUPSCRIPT_PATH/setup_fedora.sh || print_error
         fi
         
         popd
@@ -82,7 +82,6 @@ fi
 #cd $BUILD_DIR && cmake -G"Unix Makefiles" ../.. -DCMAKE_BUILD_TYPE=Release && make -j $(nproc) || print_error
 BUILDSCRIPT_PATH=$BASEDIR/../../
 pushd $BUILDSCRIPT_PATH
-sudo apt install -y dos2unix
 dos2unix *.sh
 dos2unix configure.ac
 ./autogen.sh prefix=/

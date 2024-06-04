@@ -3,8 +3,30 @@
 #include "../weights_common.h"
 
 int main() {
+	
+	printf("test 1: first call \n");
+	printf ("PPS_is_performance_governer = %d \n",PPS_is_performance_governer());
+	
+	
+   printf("test 1: first call \n");
+   printf ("is_available_hardware wlt hint _status = %d \n", HWS_is_available());
+   
+   printf("test 2: reset and try \n");
+   HWS_deinit();
+   printf ("is_available_hardware wlt hint _status = %d \n", HWS_is_available());
+   printf("######################## \n");
+   
+   printf("test 3: init gain \n");
+   HWS_deinit();
+   HWS_init();
+   printf("######################## \n");
+   
+   printf("test 4: status check \n");
+   printf ("is_available_hardware wlt hint _status = %d \n", HWS_is_available()); 
+   printf("######################## \n");
+   
+   
 
-   //printf("Hello, World!");
    printf("test 1: first call \n");
    //time_t t1 = time(0);
    is_ac_powered_power_supply_status();
