@@ -16,14 +16,27 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  * 
  */
- 
+  
 /* This file reads power supply online status information [AC or battery powered?]
 * battery presence, count and battery charging status.
 * 1. /power_supply - find power supply folder in /sys
 * 2. /supply_name - enumerate all supply_names [AC, BAT, USB] avialable under power supply
 * 3. /status - unknown, charging, discharging, not charging, full
 * 4. /online - 
+* 5. type - 
 */
+
+/*
+ * pseudo code:
+ *  get sysfs mount path as mnt path may vary
+ *  search for power_supply folder as different system may have different path
+ *  enumerate supply names - 
+ *   get "type" if present, if "type" == Battery check "status" == charging or full. return 1
+ *            if not present, then get "online" if present check for 1.
+
+ * interfaces: read only
+ * privelege needed:  none
+ */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -32,17 +45,21 @@
 #include <dirent.h>
 #include <sys/stat.h>
 
-
 #include "weights_common.h"
 
-#define POWER_SUPPLY_BASE_PATH "/sys/class/power_supply"
-#define AC_POWER_SUPPLY_ONLINE_PATH "/sys/class/power_supply/AC1/online"
-
-static int is_initialized = 0;//not initialized
+static int is_initialized = -1;//not initialized
 static int is_supported = -1; //unknown
 static int is_power_connected = -1; //unknown
+static int is_folder_found = 0;
+static char interface_path[PATH_MAX] = "";//todo: can be more than 1 power supply - wall charger /usb...
+static char base_path[PATH_MAX] = "";
+typedef char contents_array[100][PATH_MAX];
 
 /*
+#define POWER_SUPPLY_BASE_PATH "/sys/class/power_supply"
+#define AC_POWER_SUPPLY_ONLINE_PATH "/sys/class/power_supply/AC1/online"
+#define AC_POWER_SUPPLY_ONLINE_UEVENT sys/class/power_supply/AC1/uevent
+
 "ls -l /sys/class/power_supply/"
 
 on stock Ubuntu, 
@@ -60,19 +77,14 @@ AC -> ../../devices/LNXSYSTM:00/LNXSYBUS:00/ACPI0003:00/power_supply/AC
 BAT0 -> ../../devices/LNXSYSTM:00/LNXSYBUS:00/PNP0C0A:00/power_supply/BAT0
 */
 
-#define MAX_STR_LENGTH 256
-char base_path[MAX_STR_LENGTH];
-char ac_supply_name_path[MAX_STR_LENGTH];
-
 /**
 * returns -1 on error, 0 if not found; 1 if found
 */
-int find_dir(char *start_dir, int depth, char *dir_to_find)
+static int find_dir(char *start_dir, int depth, char *dir_to_find)
 {
-    int is_folder_found = 0;
     DIR *dp;
     struct dirent *entry;
-    struct stat statbuf;
+    struct stat statbuf;	
 	
 	//printf("searching depth = %d ; %s \n", depth, start_dir );
 	
@@ -86,25 +98,31 @@ int find_dir(char *start_dir, int depth, char *dir_to_find)
         while((entry = readdir(dp)) != NULL) {
             lstat(entry->d_name, &statbuf);
             if(S_ISDIR(statbuf.st_mode)) {
+				
                 /* ignore . and .. */
                 if(strcmp(".",entry->d_name) == 0 ||
                     strcmp("..",entry->d_name) == 0)
                     continue;
 
-                //printf("%*s%s/\n",depth,"",entry->d_name);
-				printf("%s/\n",entry->d_name);
                 if(strcmp(dir_to_find, entry->d_name) == 0) {
-					//printf("%*s%s/\n", depth,"", entry->d_name);
-					printf("found : %s/\n", entry->d_name);
-                    strncpy(base_path, entry->d_name, sizeof(entry->d_name));
-                    printf("power supply base path - %s/\n", base_path);
-                    is_folder_found = 1;
-                    break;
-                } //else {
 					
-				//}
+					if (getcwd(base_path, sizeof(base_path)) != NULL) {
+						//printf("Current working dir: %s\n", base_path);
+						char ch = '/';
+						strncat(base_path, &ch, sizeof(ch));
+						strncat(base_path, entry->d_name, sizeof(entry->d_name));
+
+						//printf("power supply base path - %s/\n", base_path);
+						is_folder_found = 1;
+					
+					} else {
+					   perror("getcwd() error");
+					}
+					
+                    break;
+                } //else printf("%*s%s\n",depth,"",entry->d_name);
 				
-				if(depth < 8) {
+				if(is_folder_found == 0 && depth >= 0) {
 					/* Recurse at a new indent level */
 					find_dir(entry->d_name, depth+4, dir_to_find);
 				}
@@ -114,9 +132,42 @@ int find_dir(char *start_dir, int depth, char *dir_to_find)
         ret = chdir("..");
     }
     closedir(dp);
-	printf("is_folder_found : %d\n", is_folder_found);
-    //return is_folder_found;
-	return 1;//forcing for debug.
+    return is_folder_found;
+}
+
+static int get_contents(char *start_dir, int* count, int only_folders, contents_array content_array)
+{
+    DIR *dp;
+    struct dirent *entry;
+    struct stat statbuf;
+	int n_count = 0;
+	
+    if((dp = opendir(start_dir)) == NULL) {
+        fprintf(stderr,"cannot open directory: %s\n", start_dir);
+        return -1;
+    }
+    
+    int ret = chdir(start_dir);
+    if(ret == 0 ) {
+        while((entry = readdir(dp)) != NULL) {
+            lstat(entry->d_name, &statbuf);
+            if(S_ISDIR(statbuf.st_mode)) {
+                /* ignore . and .. */
+                if(strcmp(".",entry->d_name) == 0 ||
+                    strcmp("..",entry->d_name) == 0)
+                    continue;
+            }
+			//printf ("count = %d, content = %s\n", n_count, entry->d_name);
+			strcpy(&((*content_array[n_count])), entry->d_name);
+			//printf ("content = %s\n", content_array[n_count]);
+			n_count = n_count + 1;
+        }
+        ret = chdir("..");
+    }
+    closedir(dp);
+	
+	*count = n_count;
+	return 0;
 }
 
 static int get_value(char *path, int *val)
@@ -139,103 +190,100 @@ static int get_value(char *path, int *val)
 	return ret;
 }
 
-static int get_value_str(char *path, int *val, char *str, int size)
-{
-	FILE *filep;
-	int data;
-	int ret;
+int PSS_init() {
 
-	filep = fopen (path, "r");
-	if (!filep)
-		return 1;
-
-	ret = fscanf (filep, "%d", &data);
-	if (ret == 1) {
-		*val = data;
-		ret = 0;
-		goto end;
-	}
-
-	ret = fread (str, 1, size, filep);
-	if (ret <= 0)
-		ret = 1;
-	else {
-		if (ret >= size)
-			ret = size - 1;
-		str[ret - 1] = '\0';
-		ret = 0;
-	}
-end:
-	fclose (filep);
-	return ret;
-}
-
-static int enumerate_supply_names () 
-{
-    int ret = find_dir(base_path, 0, "");
-    /*if supply name contains BAT then return 1 if [staus == charging or full]*/
-    /*if supply name contains AC then return 1 if [online == 1] */
-    /*if supply name contains ucsi or USBC then return 1 if [online == 1] */
-    return 1;
-    
-}
-
-int get_power_supply_online_status(int *ret_val)
-{
-	
-    //if ac_supply_name_path not empty then read online directly
-    //if empty then call enumerate_supply_names
-	char path[MAX_STR_LENGTH];
-    *ret_val = -1;
-    //ret_str[0] = '\0';
-    snprintf (path, sizeof(path), AC_POWER_SUPPLY_ONLINE_PATH);
-	
-	printf ("get_power_supply_online_status ");
-    return get_value (path, ret_val);
-}
-
-int init_power_supply_status() {
-	//printf ("init_power_supply_status ");
     if(is_initialized == 1) {
         return is_supported;
     }
-    //memset(base_path, '\0', sizeof(base_path));
-    //strcpy(base_path, POWER_SUPPLY_BASE_PATH);
-    //strncpy(base_path, entry->d_name, sizeof(entry->d_name));
-    //printf("power supply base path - %s/\n", base_path);
-    //printf ("finding power_supply dir in /sys folder ");
+	
+	is_supported = -1;
+	is_folder_found = 0;
+	memset(base_path, '\0', sizeof(base_path));
+	memset(interface_path, '\0', sizeof(interface_path));
+		
     is_supported = find_dir("/sys/", 0, "power_supply");
-    printf("power supply base path - %s/\n", base_path);
-
+		
     is_initialized = 1;
     return is_supported;
 }
 
-int is_available_power_supply_status() {
+void PSS_deinit() {
+    is_initialized = -1; //reset
+    return;
+}
+
+int PSS_is_available() {
+	
     if(is_initialized == 0) {
-        init_power_supply_status();
+		PSS_init();
     }
     return is_supported;
 }
 
-int deinit_power_supply_status() {
-    //nothing to free.
-    is_initialized = 0; //reset
-    return 0;
-}
-
 int is_ac_powered_power_supply_status() {
-    //printf ("is_ac_powered_power_supply_status ");
-    if(is_initialized == 0) {
-       init_power_supply_status();
-       if(is_supported == 1) {
-            int value = 0;
-            if(get_power_supply_online_status(&value) == 0) {
-				is_power_connected = value;
-			}
-       }
-    }
+    
+    if(is_initialized != 1) {
+       PSS_init();
+    }// else printf ("is_initialized = true \n");
+	
+	if(is_supported == 1 ) {
+		//printf("interface_path : %s \n", interface_path);
+		//printf("base_path : %s \n", base_path);
+		if(strcmp (interface_path, "") == 0) {
+			int value = 0;
+			int supply_names_count = 0;
+			int folder_names_only = 1, files_only = 0;
+			int is_powered = -1;
+			
+			//char out_supplies[PATH_MAX][PATH_MAX];
+			contents_array out_supplies;
+			get_contents(base_path, &supply_names_count, folder_names_only, out_supplies);
+			for (int i = 0; i < supply_names_count; i++) {
+				int content_count = 0;
+				char power_supply_base_path[PATH_MAX] = {0};
+				char* p_supply = out_supplies[i];
+				
+				strncpy(power_supply_base_path, base_path, sizeof(base_path));
+				strncat(power_supply_base_path, "/", sizeof("/"));	
+				strncat(power_supply_base_path, p_supply, sizeof(p_supply));
+				//printf("power_supply_base_path 1 = %s \n", power_supply_base_path);
 
-	printf ("is_power_connected %d " , is_power_connected);
-    return is_power_connected;//unknown
+				contents_array out_contents;
+				get_contents(power_supply_base_path, &content_count, files_only, out_contents);
+				for (int j = 0; j < content_count; j++) {
+					char* p_content = out_contents[j];
+					if(strcmp(p_content, "online") == 0) {
+						strncat(power_supply_base_path, "/", sizeof("/"));
+						strncat(power_supply_base_path, p_content, sizeof(p_content));
+						//printf("power_supply_base_path = %s \n", power_supply_base_path);
+						int value = -1;
+						int ret = get_value(power_supply_base_path, &value);
+						if(ret == 0 ) {
+							strncpy(interface_path, power_supply_base_path, sizeof(power_supply_base_path));
+							printf("interface : %s \n", interface_path);
+							is_power_connected = value;
+							is_powered = 0;
+							break;
+						}
+					}
+				}
+				
+				if(is_powered == 0) {
+					break;
+				}
+			}
+		}// else printf ("is_supported = true \n");
+		
+		if(strcmp(interface_path, "") != 0) {
+			int value = -1;
+			int ret = get_value(interface_path, &value);
+			if(ret == 0 ) {
+				is_power_connected = value;
+				printf ("is_power_connected %d \n" , is_power_connected);
+				return is_power_connected;
+			}
+		}
+	}
+	
+	return -1;//unknown if not available.
 }
