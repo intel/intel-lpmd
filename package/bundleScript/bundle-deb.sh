@@ -65,41 +65,15 @@ echo "Package: debkit-"$BASE >> $SOURCEFOLDER/DEBIAN/control
 echo "Version: "$VERSION >> $SOURCEFOLDER/DEBIAN/control
 echo "Maintainer: intel.com" >> $SOURCEFOLDER/DEBIAN/control
 echo "Architecture: amd64" >> $SOURCEFOLDER/DEBIAN/control
-echo "Depends: tuned" >> $SOURCEFOLDER/DEBIAN/control
+#echo "Depends: tuned" >> $SOURCEFOLDER/DEBIAN/control
 echo "Description: Package that dynamically changes the TuneD profile to optimize the device performance and battery life" >> $SOURCEFOLDER/DEBIAN/control
 
 #cat $SOURCEFOLDER/DEBIAN/control
 chmod 755 $SOURCEFOLDER/DEBIAN/*
 
-#Copy binaries
-mkdir -p $SOURCEFOLDER/usr/bin
-cp ../../intel_lpmd $SOURCEFOLDER/usr/bin/
-cp ../../tools/intel_lpmd_control $SOURCEFOLDER/usr/bin/
-
-# copy profiles
-mkdir -p $SOURCEFOLDER/etc/tuned
-cp -r ../tuned-profile/* $SOURCEFOLDER/etc/tuned/
-
-# copy man
-mkdir -p $SOURCEFOLDER/usr/local/share/man/man5
-cp ../../man/intel_lpmd_config.xml.5 $SOURCEFOLDER/usr/local/share/man/man5
-mkdir -p $SOURCEFOLDER/usr/local/share/man/man8
-cp ../../man/intel_lpmd.8 $SOURCEFOLDER/usr/local/share/man/man8
-
-#copy config
-mkdir -p $SOURCEFOLDER/etc/intel_lpmd
-cp ../data/platform_mtl.xml $SOURCEFOLDER/etc/intel_lpmd/intel_lpmd_config.xml
-
-mkdir -p $SOURCEFOLDER/etc/dbus-1/system.d
-cp ../../data/org.freedesktop.intel_lpmd.conf $SOURCEFOLDER/etc/dbus-1/system.d/
-
-#copy dbus service
-mkdir -p $SOURCEFOLDER/usr/local/share/dbus-1/system-services
-cp ../../data/org.freedesktop.intel_lpmd.service $SOURCEFOLDER/usr/local/share/dbus-1/system-services
-
-#copy service
-mkdir -p $SOURCEFOLDER/usr/lib/systemd/system
-cp ../../data/intel_lpmd.service $SOURCEFOLDER/usr/lib/systemd/system
+#Copy zip file, bundle-zip_tar.sh 
+mkdir -p $SOURCEFOLDER/usr/share/ia_pkg/hepo
+cp bundle/*.gz $SOURCEFOLDER/usr/share/ia_pkg/hepo/pkg.opt.hepo.x86_64.tar.gz
 
 #copy license, user guide
 
