@@ -977,7 +977,6 @@ static int detect_lp_state_actual(void)
 		}
 	}
 
-	printf("\nSupported Slider\n");
 	/*
 	 * XXX: if single auto mode is implemented (mapping to balance)
 	 * we can do away with this classic sliders and use it 

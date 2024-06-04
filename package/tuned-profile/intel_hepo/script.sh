@@ -8,7 +8,7 @@
 start() {
     
     #start lpmd application
-    sudo /usr/bin/intel_lpmd --loglevel=info --no-daemon --dbus-enable >/dev/null 2>&1 &
+    sudo /usr/bin/intel_lpmd --loglevel=info --no-daemon >/dev/null 2>&1 &
     
     #sleep 0.2
     
@@ -21,9 +21,9 @@ start() {
 stop() {
 
     #Terminate
-    sudo dbus-send --system --dest=org.freedesktop.intel_lpmd --print-reply /org/freedesktop/intel_lpmd org.freedesktop.intel_lpmd.Terminate
+    #sudo dbus-send --system --dest=org.freedesktop.intel_lpmd --print-reply /org/freedesktop/intel_lpmd org.freedesktop.intel_lpmd.Terminate
     
-    sleep 0.2
+    #sleep 0.2
         
     #stop lpmd application
     sudo pkill -f intel_lpmd >/dev/null 2>&1 &

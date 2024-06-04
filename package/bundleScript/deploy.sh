@@ -43,7 +43,7 @@ fi
 
 if [ $MTL = 9 ]; then
 	echo "*********Error: The platform is not supported and the installation process will be aborted*********"
-	exit 1
+	#exit 1
 elif [ $MTL = 0 ]; then
 	echo "*********Warning: The platform is not supported but the installation process will proceed*********"
 fi
@@ -58,19 +58,32 @@ fi
 
 activeprofile=""
 
-if test -f /usr/sbin/tuned-adm; then
-    output=$(echo $(tuned-adm active) | grep -o ":")
-    if [ ! -z "$output" ]; then 
-        activeprofile=$(echo $(tuned-adm active) | cut -d ":" -f 2)        
-        if echo $activeprofile | grep -q "intel-best"; then
-        	activeprofile=""
-        fi        
-    fi   
+ppdstatus=$(echo $(sudo systemctl status power-profiles-daemon | grep "active (running)"))
+if [ ! -z "$ppdstatus" ]; then 
+    if [[ $ppdstatus == *"active (running)"* ]]; then
+        installasservice=1
+    else
+        installasservice=0
+    fi
 else 
-	#tuned not installed, notify user
-	echo "Tuned is not detected, please install tuned and run the installation again"
-	exit 1	
-fi
+    installasservice=0
+fi 
+
+if [[ "$installasservice" -eq 0 ]]; then
+    if test -f /usr/sbin/tuned-adm; then
+        output=$(echo $(tuned-adm active) | grep -o ":")
+        if [ ! -z "$output" ]; then 
+            activeprofile=$(echo $(tuned-adm active) | cut -d ":" -f 2)        
+            if echo $activeprofile | grep -q "intel-best"; then
+            	activeprofile=""
+            fi        
+        fi   
+    else 
+	    #tuned not installed, notify user
+	    echo "Tuned is not detected, please install tuned and run the installation again"
+	    exit 1	
+    fi
+fi 
 
 echo "**************** executing tasks ***************************"
 BASEDIR="$( cd "$( dirname "$0" )" && pwd )"
@@ -116,39 +129,45 @@ cp intel_lpmd.service /usr/lib/systemd/system/
 #cp $BASEDIR/*.txt $BINDIR/
 #cp $BASEDIR/*.pdf $BINDIR/
 
-echo "**************** copy profiles ***************************"
-sudo chmod +x $BASEDIR/tuned-profile/intel*/*.sh
-sudo cp -r $BASEDIR/tuned-profile/intel* /etc/tuned/
-chown root:root /etc/tuned/intel*
-chown root:root /etc/tuned/intel*/*
+if [[ "$installasservice" -eq 0 ]]; then
+    echo "**************** copy profiles ***************************"
+    sudo chmod +x $BASEDIR/tuned-profile/intel*/*.sh
+    sudo cp -r $BASEDIR/tuned-profile/intel* /etc/tuned/
+    chown root:root /etc/tuned/intel*
+    chown root:root /etc/tuned/intel*/*
 
-echo "**************** PPD ***************************"
-sudo systemctl stop power-profiles-daemon
-sudo systemctl mask power-profiles-daemon
+    #echo "**************** PPD ***************************"
+    #sudo systemctl stop power-profiles-daemon
+    if test -f /usr/lib/systemd/system/power-profiles-daemon.service; then
+        sudo systemctl mask power-profiles-daemon
+    fi
 
-echo "**************** re-start daemon ***************************"
-sudo systemctl restart tuned
 
-#make tuned persistent across reboots.
-sudo systemctl enable --now tuned
+    echo "**************** re-start daemon ***************************"
+    sudo systemctl restart tuned
 
-echo "**************** activate profile ***************************"
-tuned-adm list | grep "intel*"
+    #make tuned persistent across reboots.
+    sudo systemctl enable --now tuned
 
-if [ ! -z "$activeprofile" ]; then
-	#if the activeprofile already contains the intel profile, set to intel-best_performance_mode
-	if echo "$activeprofile" | grep -q "intel"; then
-		tuned-adm profile intel_hepo
-	else #add to the active profiles
-		tuned-adm profile intel_hepo $activeprofile
-	fi
+    echo "**************** activate profile ***************************"
+    tuned-adm list | grep "intel*"
+
+    if [ ! -z "$activeprofile" ]; then
+	    #if the activeprofile already contains the intel profile, set to intel-best_performance_mode
+	    if echo "$activeprofile" | grep -q "intel"; then
+		    tuned-adm profile intel_hepo
+	    else #add to the active profiles
+		    tuned-adm profile intel_hepo $activeprofile
+	    fi
+    else 
+	    tuned-adm profile intel_hepo
+    fi 
+
+    #echo "**************** 4. verify ***************************"
+    tuned-adm active
 else 
-	tuned-adm profile intel_hepo
+    echo "**************** start lpmd service ***************************"
+    sudo systemctl start intel_lpmd.service    
 fi 
-
-#echo "**************** 4. verify ***************************"
-tuned-adm active
-
-sudo systemctl mask power-profiles-daemon
 
 echo "**************** done ***************************"

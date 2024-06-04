@@ -12,7 +12,9 @@ file="/usr/share/ia_pkg/EPPprofile/EPPprofile.install"
 cleanup()
 {
     #remove the profiles    
-    sudo rm -r /etc/tuned/intel*        
+	if [[ "$installasservice" -eq 0 ]]; then	
+		sudo rm -r /etc/tuned/intel*        
+	fi
 		
 	rm /usr/bin/intel_lpmd
     rm /usr/bin/intel_lpmd_control
@@ -28,16 +30,29 @@ cleanup()
     rm /usr/lib/systemd/system/intel_lpmd.service	
 }
 
+ppdstatus=$(echo $(sudo systemctl status power-profiles-daemon | grep "active (running)"))
+if [[ ! -z "$ppdstatus" ]]; then 
+    if [[ $ppdstatus == *"active (running)"* ]]; then
+        installasservice=1
+    else
+        installasservice=0
+    fi
+else 
+    installasservice=0
+fi 
        
-#turn off active profile 
-tuned-adm off                 
-sudo systemctl restart tuned            
-
+if [[ "$installasservice" -eq 0 ]]; then	   
+	#turn off active profile 
+	tuned-adm off                 
+	sudo systemctl restart tuned            
+    if test -f /usr/lib/systemd/system/power-profiles-daemon.service; then
+        sudo systemctl unmask power-profiles-daemon
+    fi
+else 
+	sudo systemctl stop intel_lpmd.service
+fi
+	
 cleanup 
-sudo systemctl daemon-reload
-sudo systemctl unmask power-profiles-daemon
-
-
-    
+sudo systemctl daemon-reload    
     
     
