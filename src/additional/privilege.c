@@ -27,13 +27,56 @@
 #include <sys/capability.h>
 #include <sys/prctl.h>
 
-int _set_capability(int capability);
-int _modify_capability(int capability, cap_flag_value_t setting);
-int _clear_capability(int capability);
+#include "additional_common.h"
 
-int _drop_privilege();
-int _raise_privilege();
+#include <sys/capability.h>
+cap_t cap_get_proc(void);
+int cap_set_proc(cap_t cap_p);
 
+#include <sys/types.h>
+cap_t cap_get_pid(pid_t pid);
+  
+#define MAP_MAX_SIZE 100
+
+static int initialized  = -1;
+static int map_size = 0;
+static char keys[MAP_MAX_SIZE][MAP_MAX_SIZE]; // Keys  
+static int values[MAP_MAX_SIZE]; // values 
+
+/** modify capability. returns 0 on sucess; -1 on error. */
+//int _modify_capability(int capability, cap_flag_value_t setting);
+  
+static int getIndex(char key[]) {
+    for (int i = 0; i < map_size; i++) {
+        if (strcmp(keys[i], key) == 0) { 
+            return i;
+        }
+    }
+    return -1;//unknown
+} 
+
+static int init() {
+
+	if (initialized == -1) {
+		
+	    int i = 0;	
+		
+		values[i] = CAP_AUDIT_CONTROL;
+		strncpy(keys[i++], "CAP_AUDIT_CONTROL", sizeof("CAP_AUDIT_CONTROL"));
+		
+		values[i] = CAP_AUDIT_READ;
+		strncpy(keys[i++], "CAP_AUDIT_READ", sizeof("CAP_AUDIT_READ"));
+		
+		values[i] = CAP_SETUID;
+		strncpy(keys[i++], "CAP_SETUID", sizeof("CAP_SETUID"));
+		
+		initialized = 1;
+	}
+
+	return 0;	
+}
+
+//char priv_cap_list [][]
 
 /**
 static std::map<std::string, int> priv_cap_list {
@@ -88,47 +131,47 @@ int _drop_privilege() {
     int ret = -1;
 
     if (!(caps = cap_get_proc())) {
-        //PROGRAM_DEBUG("drop privilege: couldn't get process caps");
+        printf("drop privilege: couldn't get process caps");
         return -1;
     }
 
     // keeps caps upon user switch
     if (prctl(PR_SET_KEEPCAPS, 1L)) {
-        //PROGRAM_DEBUG("drop privilege: error keeping caps");
+        printf("drop privilege: error keeping caps");
         goto error;
     }
 
     if (getresuid(&ruid, &euid, &suid) == -1 || getresgid(&rgid, &egid, &sgid) == -1) {
-        //PROGRAM_DEBUG("drop privilege: couldn't get User/Group IDs");
+        printf("drop privilege: couldn't get User/Group IDs");
         goto error;
     }
 
     // switch users (root --> user)
     if (setresgid(-1, rgid, -1) < 0 || setresuid(-1, ruid, -1) < 0) {
-        //PROGRAM_DEBUG("drop privilege: couldn't switch user");
+        printf("drop privilege: couldn't switch user");
         goto error;
     }
 
     // We should always check if changes are made
     if (getresuid(&ruid, &euid, &suid) == -1 || getresgid(&rgid, &egid, &sgid) == -1) {
-        //PROGRAM_DEBUG("drop privilege: couldn't get User/Group IDs!");
+        printf("drop privilege: couldn't get User/Group IDs!");
         goto error;
     } else {
         if (euid != ruid || egid != rgid) {
-            //PROGRAM_DEBUG("couldn't drop privilege");
+            printf("couldn't drop privilege");
             goto error;
         }
     }
 
     // clear root caps passed to user
     if (cap_clear_flag(caps, CAP_EFFECTIVE) == -1) {
-        //PROGRAM_DEBUG("drop privilege: couldn't clear caps");
+        printf("drop privilege: couldn't clear caps");
         goto error;
     }
 
     // pass root caps to user
     if (cap_set_proc(caps) == -1) {
-        //PROGRAM_DEBUG("drop privilege: couldn't set process caps");
+        printf("drop privilege: couldn't set process caps");
         goto error;
     }
     ret = 0;
@@ -136,7 +179,7 @@ int _drop_privilege() {
 
 error:
     if (cap_free(caps) == -1) {
-        //PROGRAM_DEBUG("drop privilege: couldn't free caps");
+        printf("drop privilege: couldn't free caps");
     } else {
         ret = 0;
     }
@@ -145,25 +188,27 @@ error:
 }
 
 int _raise_privilege() {
+	
     uid_t ruid = -1, euid = -1, suid = -1;
     gid_t rgid = -1, egid = -1, sgid = -1;
 
     if (getresuid(&ruid, &euid, &suid) == -1 || getresgid(&rgid, &egid, &sgid) == -1) {
-        //PROGRAM_DEBUG("raise privilege: couldn't get User/Group IDs");
+        printf("raise privilege: couldn't get User/Group IDs");
         return -1;
     }
 
     if (setresuid(-1, suid, -1) < 0 || setresgid(-1, sgid, -1) < 0) {
-        //PROGRAM_DEBUG("raise privilege: couldn't switch user");
+        printf("raise privilege: couldn't switch user");
         return -1;
     }
+	
     // We should always check if changes are made
     if (getresuid(&ruid, &euid, &suid) == -1 || getresgid(&rgid, &egid, &sgid) == -1) {
-        //PROGRAM_DEBUG("raise privilege: couldn't get User/Group IDs!");
+        printf("raise privilege: couldn't get User/Group IDs!");
         return -1;
     } else {
         if (euid != suid || egid != sgid) {
-            //PROGRAM_DEBUG("couldn't raise privilege");
+            printf("couldn't raise privilege");
             return -1;
         }
     }
@@ -176,35 +221,35 @@ int _modify_capability(int capability, cap_flag_value_t setting) {
     cap_value_t capList[1];
 
     if (!(caps = cap_get_proc())) {
-        //PROGRAM_DEBUG("couldn't get process capabilities");
+        printf("couldn't get process capabilities");
         return -1;
     }
 
     capList[0] = capability;
     if (cap_set_flag(caps, CAP_EFFECTIVE, 1, capList, setting) == -1) {
-        //PROGRAM_DEBUG("couldn't set capability");
+        printf("couldn't set capability");
         cap_free(caps);
         return -1;
     }
 
     if (cap_set_flag(caps, CAP_INHERITABLE, 1, capList, setting) == -1) {
-        //PROGRAM_DEBUG("couldn't set capability!");
+        printf("couldn't set capability!");
         cap_free(caps);
         return -1;
     }
 
     if (cap_set_proc(caps) == -1) {
-        //PROGRAM_DEBUG("couldn't set process capabilities");
+        printf("couldn't set process capabilities");
         cap_free(caps);
         return -1;
     }
 
     if (cap_set_ambient(capList[0], setting) < 0) {
-       //PROGRAM_DEBUG("couldn't set Capabilities");
+       printf("couldn't set Capabilities");
     }
 
     if (cap_free(caps) == -1) {
-        //PROGRAM_DEBUG("couldn't free capabilities");
+        printf("couldn't free capabilities");
         return -1;
     }
 
