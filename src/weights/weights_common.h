@@ -18,13 +18,13 @@
  */
  
  /** acquire resources. returns 0 if supported. */
- extern int init_power_supply_status();
+ extern int PSS_init();
  
  /** 0 if available. */
- extern int is_available_power_supply_status();
+ extern int PSS_is_available();
  
  /** free up resources */
- extern int deinit_power_supply_status();
+ extern void PSS_deinit();
  
  /** return 1 if ac powered; -1 unknown; 0 if not */
  extern int is_ac_powered_power_supply_status();
