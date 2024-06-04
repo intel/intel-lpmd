@@ -234,9 +234,9 @@ void wlt_proxy_action_loop(void) {
 
 	//action_loop(power_mw, tdp_mw);
 	if (proxy_initialized){
-		lpmd_log_info("\n\nwlt_proxy_action_loop, proxy initialzied\n");
+		lpmd_log_debug("\n\nwlt_proxy_action_loop, proxy initialzied\n");
 		state_machine_auto(get_cur_state());
-		lpmd_log_info("wlt_proxy_action_loop, handled states\n");		
+		lpmd_log_debug("wlt_proxy_action_loop, handled states\n");		
 	}
 }
 

@@ -862,7 +862,7 @@ static void* lpmd_core_main_loop(void *arg)
 		else if (interval == -1)
 			interval = 100;
 
-		lpmd_log_info("main loop polling interval is %d\n", interval);
+		lpmd_log_debug("main loop polling interval is %d\n", interval);
 		n = poll (poll_fds, poll_fd_cnt, interval);
 		if (n < 0) {
 			lpmd_log_warn ("Write to pipe failed \n");
