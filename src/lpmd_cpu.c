@@ -675,7 +675,7 @@ static int parse_cpu_topology(void)
 
 	reset_cpus (CPUMASK_ONLINE);
 	for (i = 0; i < topo_max_cpus; i++) {
-		unsigned int online;
+		unsigned int online = 0;
 
 		snprintf (path, sizeof(path), "/sys/devices/system/cpu/cpu%d/online", i);
 		filep = fopen (path, "r");
