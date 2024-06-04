@@ -1,9 +1,13 @@
+pkgdir="/usr/share/ia_pkg/hepo"
+pkgfile="/usr/share/ia_pkg/hepo/pkg.opt.hepo.x86_64.tar.gz"
 
-if test -f /usr/sbin/tuned-adm; then
-	tuned-adm off
-else 
-	sudo killall -9 eco_linux_x86_64 >/dev/null 2>&1 &	
-fi
+if [ -n "$(ls $pkgdir/pkg.OPT.HEPO*)" ]; then
+	cd $pkgdir/pkg.OPT.HEPO*
+	sudo ./rollback.sh 
+	sleep 1
+	rm -rf $pkgdir/pkg.OPT.HEPO*
+	rm -rf $pkgdir
+fi 
 
 
 
