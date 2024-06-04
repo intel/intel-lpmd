@@ -5,23 +5,27 @@
 
 int main() {
 
-   system("cat /etc/sudoers | head -n 1" );
+   //system("cat /etc/sudoers | head -n 1" );
 	
    printf("drop! \n");
-   _drop_privilege();
+   if(_drop_privilege()) {
+      printf("error - drop! \n");
+   }
    
    system("cat /etc/sudoers | head -n 1");
    
    printf("raise! \n");
-   _raise_privilege();
+   if(_raise_privilege()) {
+      printf("error - raise! \n");
+   }
    
    system("cat /etc/sudoers | head -n 1");
    
-   printf("drop! \n");
+   /*printf("drop! \n");
    _drop_privilege();  
    
    system("cat /etc/sudoers | head -n 1");
-   
+   */
    return 0;
    
 }

@@ -1,6 +1,8 @@
 #!/bin/bash
 #purpose: script to setup build environment
 
+#sed -i -e 's/\r$//' *.sh
+
 echo "executing setup_ubuntu script ..."
 
 #BASEDIR=$(dirname $0)
@@ -30,18 +32,19 @@ sudo apt install -y libsystemd-dev
 sudo apt install -y gtk-doc-tools
 
 #cmake build
-sudo apt-get install -y cmake
+sudo apt install -y cmake
 
 #build framework
-sudo apt-get install -y libcap-dev libssl-dev
+sudo apt install -y libcap-dev libssl-dev
 
 #build plugins
-#sudo apt-get install -y nlohmann-json3-dev
+#sudo apt install -y nlohmann-json3-dev
 
 #bundle as zip, tar
-sudo apt-get install -y zip tar
+sudo apt install -y zip tar
 
-sudo apt-get install -y dos2unix
+sudo apt install -y dos2unix
+
 sudo apt autoremove
 
 #cd $BASEDIR

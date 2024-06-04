@@ -125,6 +125,7 @@ static std::map<std::string, int> priv_cap_list {
 
 
 int _drop_privilege() {
+
     uid_t ruid = -1, euid = -1, suid = -1;
     gid_t rgid = -1, egid = -1, sgid = -1;
     cap_t caps;
@@ -133,45 +134,45 @@ int _drop_privilege() {
     if (!(caps = cap_get_proc())) {
         printf("drop privilege: couldn't get process caps");
         return -1;
-    }
+    } else { printf("drop privilege: get process caps"); }
 
     // keeps caps upon user switch
     if (prctl(PR_SET_KEEPCAPS, 1L)) {
-        printf("drop privilege: error keeping caps");
+        printf("drop privilege: error keeping caps \n");
         goto error;
     }
 
     if (getresuid(&ruid, &euid, &suid) == -1 || getresgid(&rgid, &egid, &sgid) == -1) {
-        printf("drop privilege: couldn't get User/Group IDs");
+        printf("drop privilege: couldn't get User/Group IDs \n");
         goto error;
     }
 
     // switch users (root --> user)
     if (setresgid(-1, rgid, -1) < 0 || setresuid(-1, ruid, -1) < 0) {
-        printf("drop privilege: couldn't switch user");
+        printf("drop privilege: couldn't switch user \n");
         goto error;
     }
 
     // We should always check if changes are made
     if (getresuid(&ruid, &euid, &suid) == -1 || getresgid(&rgid, &egid, &sgid) == -1) {
-        printf("drop privilege: couldn't get User/Group IDs!");
+        printf("drop privilege: couldn't get User/Group IDs!\n");
         goto error;
     } else {
         if (euid != ruid || egid != rgid) {
-            printf("couldn't drop privilege");
+            printf("couldn't drop privilege\n");
             goto error;
         }
     }
 
     // clear root caps passed to user
     if (cap_clear_flag(caps, CAP_EFFECTIVE) == -1) {
-        printf("drop privilege: couldn't clear caps");
+        printf("drop privilege: couldn't clear caps \n");
         goto error;
     }
 
     // pass root caps to user
     if (cap_set_proc(caps) == -1) {
-        printf("drop privilege: couldn't set process caps");
+        printf("drop privilege: couldn't set process caps \n");
         goto error;
     }
     ret = 0;
@@ -179,7 +180,7 @@ int _drop_privilege() {
 
 error:
     if (cap_free(caps) == -1) {
-        printf("drop privilege: couldn't free caps");
+        printf("drop privilege: couldn't free caps\n");
     } else {
         ret = 0;
     }

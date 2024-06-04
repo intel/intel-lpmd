@@ -17,6 +17,8 @@ sudo dnf install -y gtk-doc
 sudo dnf install -y clang cmake 
 #sudo dnf install llvm-toolset
 
+sudo dnf install -y dos2unix
+
 #sudo dnf install libcap-devel openssl-devel nlohmann-json3-devel
 sudo dnf install -y libcap-devel openssl-devel
 sudo dnf install -y json-devel

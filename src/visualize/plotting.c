@@ -27,6 +27,8 @@
 #include "../wlt_proxy/common.h"
 #include "../wlt_proxy/cpu_group.h"
 
+#include "visualize_common.h"
+
 FILE *gp;
 extern size_t size_cpumask;
 
