@@ -507,7 +507,6 @@ int periodic_util_update(lpmd_config_t *lpmd_config, int wlt_index)
 int util_init(lpmd_config_t *lpmd_config)
 {
 	lpmd_config_state_t *state;
-	lpmd_config_state_t *last_valid = NULL;
 	int nr_state = 0;
 	int i, ret;
 	size_t size;
@@ -517,8 +516,10 @@ int util_init(lpmd_config_t *lpmd_config)
 
 		if (state->active_cpus[0] != '\0') {
 			ret = parse_cpu_str(state->active_cpus, CPUMASK_UTIL);
-			if (ret <= 0)
+			if (ret <= 0) {
+				state->valid = 0;
 				continue;
+			}
 		}
 
 		if (!state->min_poll_interval)
@@ -528,13 +529,10 @@ int util_init(lpmd_config_t *lpmd_config)
 		if (!state->poll_interval_increment)
 			state->poll_interval_increment = -1;
 
-
 		state->entry_system_load_thres *= 100;
 		state->enter_cpu_load_thres *= 100;
 		state->exit_cpu_load_thres *= 100;
 
-		state->valid = 1;
-		last_valid = state;
 		nr_state++;
 	}
 
