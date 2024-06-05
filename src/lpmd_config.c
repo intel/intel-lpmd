@@ -148,6 +148,19 @@ static void lpmd_parse_state(xmlDoc *doc, xmlNode *a_node, lpmd_config_state_t *
 	}
 }
 
+static int validate_config_state(lpmd_config_t *lpmd_config, lpmd_config_state_t *state)
+{
+	if (lpmd_config->wlt_hint_enable) {
+		if (state->wlt_type >=0 && state->wlt_type <= 3)
+			state->valid = 1;
+	} else {
+		if ((state->enter_cpu_load_thres > 0 && state->enter_cpu_load_thres <= 100) ||
+		    (state->entry_system_load_thres > 0 && state->entry_system_load_thres <= 100))
+			state->valid = 1;
+	}
+	return 0;
+}
+
 static void lpmd_parse_states(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_config)
 {
 	xmlNode *cur_node = NULL;
@@ -195,7 +208,8 @@ static void lpmd_parse_states(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_
 				if (lpmd_config->config_state_count >= MAX_CONFIG_STATES)
 					break;
 				lpmd_parse_state (doc, cur_node->children, &lpmd_config->config_states[config_state_count]);
-				config_state_count++;
+				validate_config_state(lpmd_config, &lpmd_config->config_states[config_state_count]);
+				config_state_count += lpmd_config->config_states[config_state_count].valid;
 			}
 		}
 	}
