@@ -22,9 +22,17 @@
  */
 
 #include "lpmd.h"
-#include "wlt_proxy/common.h"
+#include "wlt_proxy/wlt_proxy.h"
+//#include "wlt_proxy/wlt_proxy_common.h"
+
 extern int next_proxy_poll; 
 static lpmd_config_t lpmd_config;
+
+/*extern void wlt_proxy_action_loop(void);
+extern int wlt_proxy_init(lpmd_config_t *_lpmd_config);
+extern void wlt_proxy_uninit(void);
+*/
+
 
 char *lpm_cmd_str[LPM_CMD_MAX] = {
 		[USER_ENTER] = "usr enter",

@@ -17,11 +17,13 @@
  * 
  */
  
+#ifndef _ADDITIONAL_COMMON_H_
+#define _ADDITIONAL_COMMON_H_
+
  //privilege interface
- 
- //#include <sys/capability.h>
- #include <stdio.h> 
- #include <string.h> 
+
+#include <stdio.h> 
+#include <string.h> 
  
  /** set capability. returns 0 on sucess; -1 on error. */
 int _set_capability(int capability);
@@ -34,3 +36,5 @@ int _drop_privilege();
 
 /** raise privilege. returns 0 on sucess; -1 on error. */
 int _raise_privilege();
+
+#endif /*_ADDITIONAL_COMMON_H_*/

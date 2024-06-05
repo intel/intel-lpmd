@@ -27,7 +27,7 @@
 #include <errno.h>
 #include <stdbool.h>
 
-#include "common.h"
+#include "wlt_proxy_common.h"
 //#include "cpu_group.h"
 //#include "perf_msr.h"
 

@@ -17,8 +17,13 @@
  * 
  */
  
+ 
+#ifndef _VISUALIZE_COMMON_H_
+#define _VISUALIZE_COMMON_H_
 
 /* plotting */
 extern int init_gnuplot(void);
 extern int exit_gnuplot(void);
 extern int update_plot(float R1, float R2, float R3, float max1, int mode);
+
+#endif /*_VISUALIZE_COMMON_H_*/

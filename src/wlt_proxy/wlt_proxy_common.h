@@ -13,8 +13,8 @@
  * Author: Noor ul Mubeen <noor.u.mubeen@intel.com>
  */
 
-#ifndef _COMMON_H_
-#define _COMMON_H_
+#ifndef _WLT_PROXY_COMMON_H_
+#define _WLT_PROXY_COMMON_H_
 
 #define _GNU_SOURCE
 #include <math.h>
@@ -165,8 +165,9 @@ enum elastic_poll {
 #define ACTIVATED	(2)
 #define PAUSE 		(3)
 
-/* main.c */
 
+//#ifdef _USE_ECO
+/* main.c */
 void eco_printf(int level, const char *format, ...);
 
 #define log_err(fmt, ...)			\
@@ -188,6 +189,8 @@ do {							\
 do {							\
 		eco_printf(3, fmt, ##__VA_ARGS__);	\
 } while (0)
+	
+//#endif
 
 #ifdef __GNUC__
 #define likely(x)       __builtin_expect(!!(x), 1)
@@ -280,25 +283,4 @@ int update_burst_count(int);
 int update_spike_rate_maxima();
 int clear_spike_rate_maxima();
 
-/* plotting */
-int init_gnuplot(void);
-int exit_gnuplot(void);
-int update_plot(float R1, float R2, float R3, float max1, int mode);
-
-/*wlt_proxy_def.c*/
-/* WLT hints parsing */
-typedef enum {
-	WLT_IDLE,
-	WLT_BATTERY_LIFE,
-	WLT_SUSTAINED,
-	WLT_BURSTY,
-    WLT_SUSTAINED_BAT,
-    WLT_BATTERY_LIFE_BAT,    
-	WLT_INVALID,
-} wlt_type_t;
-
-void set_workload_hint(int type); 
-
-/*help.c*/
-void close_all_fd(void);
-#endif				/* _COMMON_H_ */
+#endif				/* _WLT_PROXY_COMMON_H_ */
