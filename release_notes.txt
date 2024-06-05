@@ -1,3 +1,28 @@
+6/5/2024
+pkg.OPT.HEPO release notes
+package name: pkg.OPT.HEPO-0.05.240605-x86_64
+tag: pkg-hepo-0.05.240605
+ww: 23.3
+
+Support Ubuntu distro 22.04 and 24.04
+fix the app relaunching issue (failed to launch at the second or third time launching, see previous release notes)
+reduce the log
+AC/DC detection works and it shall show the battery workload type
+
+Installation changes:
+1) tuned is no longer a dependency in .deb installation
+2) .deb installation will copy the .tar.gz file to /usr/share/ia_pkg/hepo and untar there 
+3) .deb installation will run ./deploy.sh from /usr/share/ia_pkg/hepo/pkg.OPT.HEPO.xxx 
+4) .deb uninstallation will run ./rollback.sh from /usr/share/ia_pkg/hepo/pkg.OPT.HEPO.xxx 
+5) The installation will check the status of ppd (power-profiles-daemon):
+	If ppd is inactive, the installation will install tuned (if not installed) and start tuned profile to run intel_lpmd 
+	If ppd is active, the installation will only install intel_lpmd as a system service (sudo systemctl status intel_lpmd) and not touching ppd and tuned
+	
+
+
+
+****************************************************************************
+
 5/30/2024
 pkg.OPT.HEPO release notes
 package name: pkg.OPT.HEPO-0.04.240530-x86_64
