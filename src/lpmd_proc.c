@@ -733,6 +733,7 @@ int lpmd_main(void)
 	pthread_attr_init (&lpmd_attr);
 	pthread_attr_setdetachstate (&lpmd_attr, PTHREAD_CREATE_DETACHED);
 
+	connect_to_power_profile_daemon ();
 	/*
 	 * lpmd_core_main_loop: is the thread where all LPMD actions take place.
 	 * All other thread send message via pipe to trigger processing
@@ -741,7 +742,6 @@ int lpmd_main(void)
 	if (ret)
 		return LPMD_FATAL_ERROR;
 
-	connect_to_power_profile_daemon ();
 
 	lpmd_log_debug ("lpmd_init succeeds\n");
 
