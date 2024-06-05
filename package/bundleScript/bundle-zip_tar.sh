@@ -108,10 +108,14 @@ if [ -d "$BUNDLEDIR/bundle" ]; then
 	rm -rf $BUNDLEDIR/bundle
 fi
 mkdir -p $BUNDLEDIR/bundle
- 
-tar -czvf $FILENAME.tar.gz $SOURCEFOLDER
-sha512sum $FILENAME.tar.gz > $BUNDLEDIR/bundle/$FILENAME.tar.gz.sha512sum.txt
-mv $FILENAME.tar.gz $BUNDLEDIR/bundle/
+
+
+#tar -czvf $FILENAME.tar.gz $SOURCEFOLDER/
+cd $SOURCEFOLDER
+cd .. #go one level up
+tar -czvf $BUNDLEDIR/bundle/$FILENAME.tar.gz $FILENAME
+sha512sum $BUNDLEDIR/bundle/$FILENAME.tar.gz > $BUNDLEDIR/bundle/$FILENAME.tar.gz.sha512sum.txt
+#mv $BUNDLEDIR/bundle/$FILENAME.tar.gz $BUNDLEDIR/bundle/
 
 #sudo apt install -y zip
 #zip -vr $FILENAME.zip $SOURCEFOLDER/
