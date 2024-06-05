@@ -237,7 +237,7 @@ static int lpm_can_process(enum lpm_command cmd)
 			}
 			return 0;
 		case HFI_ENTER:
-			if (lpm_state & LPM_USER_OFF)
+			if (lpm_state & (LPM_USER_OFF | LPM_USER_ON))
 				return 0;
 
 			/* Ignore HFI LPM hints when in SUV mode */
