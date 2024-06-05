@@ -1020,8 +1020,10 @@ int lpmd_main(void)
 	}
 
 	if (lpmd_config.wlt_hint_enable) {
-		lpmd_config.util_enable = 0;
-		poll_for_wlt(1);
+		if (!lpmd_config.hfi_lpm_enable && !lpmd_config.hfi_suv_enable) {
+			lpmd_config.util_enable = 0;
+			poll_for_wlt(1);
+		}
 	}
 
 	pthread_attr_init (&lpmd_attr);
