@@ -104,7 +104,6 @@ cp $BUNDLEDIR/../license/*.pdf $SOURCEFOLDER/
 cp $BUNDLEDIR/../user-guide* $SOURCEFOLDER/
 
 #zip/tar folder
-sudo apt install -y tar
 if [ -d "$BUNDLEDIR/bundle" ]; then
 	rm -rf $BUNDLEDIR/bundle
 fi

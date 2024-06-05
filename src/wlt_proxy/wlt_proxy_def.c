@@ -23,7 +23,8 @@
 
 #include "lpmd.h"
 #include "cpu_group.h"
-#include "common.h"
+#include "wlt_proxy_common.h"
+#include "wlt_proxy.h"
 
 #define DEFAULT_ACTION_INTERVAL	1
 #define CPU_UTIL_SUSTAIN		50
@@ -38,6 +39,8 @@ static bool proxy_initialized = false;
 int action_interval = DEFAULT_ACTION_INTERVAL;
 
 static lpmd_config_t *lpmd_config;
+//lpmd_config_t *lpmd_config;
+extern int next_proxy_poll;
 
 struct _threshold {
 	int cpu_util_sustain; /* Above this utilization the workload will be identified as sustained */
@@ -258,7 +261,6 @@ static int get_tdp() {
 	return 0;
 }
 
-extern int next_proxy_poll; 
 /* Return non zero if the proxy is not present for a platform */
 int wlt_proxy_init(lpmd_config_t *_lpmd_config) {
 	int ret;

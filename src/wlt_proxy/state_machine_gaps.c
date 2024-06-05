@@ -14,7 +14,7 @@
  */
 #define _GNU_SOURCE
 #include <stdio.h>
-#include "common.h"
+#include "wlt_proxy_common.h"
 
 int get_last_poll(void)
 {

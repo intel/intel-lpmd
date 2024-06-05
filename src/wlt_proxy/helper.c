@@ -31,7 +31,43 @@
 #include <sys/time.h>
 #include <sys/un.h>
 
-#include "common.h"
+#include "wlt_proxy_common.h"
+
+static char output_file[MAX_STR_LENGTH];
+
+enum log_level {
+	LOG_ERR,
+	LOG_INFO,
+	LOG_DEBUG,
+	LOG_VERBOSE,
+};
+
+static int loglevel;
+
+void eco_printf(int level, const char *format, ...)
+{
+	va_list args;
+
+	if (level > loglevel)
+		return;
+
+	va_start(args, format);
+
+	if (output_file[0]) {
+		char buffer[MAX_STR_LENGTH];
+
+		vsprintf(buffer, format, args);
+		if (fs_write_str_append(output_file, buffer))
+			exit(-1);
+	}
+
+	if (level == LOG_ERR)
+		vfprintf(stderr, format, args);
+	else if (!output_file[0])
+		vprintf(format, args);
+
+	va_end(args);
+}
 
 struct _fd_cache {
 	int pkg0_rapl_fd;

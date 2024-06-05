@@ -25,9 +25,10 @@
 #include <limits.h>
 #include <time.h>
 
-#include "common.h"
+#include "wlt_proxy_common.h"
 #include "cpu_group.h"
 #include "lpmd.h"
+#include "weights/weights_common.h"
 
 extern int cpumask_to_hexstr(cpu_set_t *mask, char *str, int size);
 extern int cpumask_to_str(cpu_set_t *mask, char *buf, int length);
@@ -143,11 +144,13 @@ int get_mode_max(void)
 	return MAX_MODE;
 }
 
+//util
 bool is_state_disabled(enum lp_state_idx state)
 {
 	return lp_state[state].disabled;
 }
 
+//util
 enum lp_state_idx get_cur_state(void)
 {
 	return cur_state;
@@ -158,6 +161,7 @@ void set_cur_state(enum lp_state_idx state)
 	cur_state = state;
 }
 
+//util
 int is_state_valid(enum lp_state_idx state)
 {
 	return ((state >= INIT_MODE) && (state < MAX_MODE)
@@ -174,6 +178,7 @@ int get_state_epb(enum lp_state_idx state)
 	return lp_state[state].epb;
 }
 
+//util
 int state_support_freq_ctl(enum lp_state_idx state)
 {
 	return lp_state[state].freq_ctl;
@@ -184,6 +189,7 @@ int state_has_ppw(enum lp_state_idx state)
 	return lp_state[state].ppw_enabled;
 }
 
+//util
 int get_poll_ms(enum lp_state_idx state)
 {
 	return lp_state[state].poll;
@@ -285,6 +291,7 @@ int get_last_poll(void)
 	return lp_state[cur_state].last_poll;
 }
 
+//util
 int get_min_freq(int cpu)
 {
 	if (!is_cpu_online(cpu))
@@ -293,6 +300,7 @@ int get_min_freq(int cpu)
 	return common_min_freq;
 }
 
+//util
 int get_turbo_freq(int cpu)
 {
 	if (!is_cpu_online(cpu))
@@ -383,6 +391,7 @@ int apply_state_change(void)
 	}
 }*/
 
+//util
 int cpu_applicable(int cpu, enum lp_state_idx state)
 {
 	if (!lp_state[state].mask)

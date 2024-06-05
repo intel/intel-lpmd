@@ -4,12 +4,13 @@ Release:        1%{?dist}
 Summary:        HEPO application
 
 Group:          Utilities
-License:        GPL
-URL:            
-Source0:        
-BuildArch:      noarch
-BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
+License:        GPL v3
+    
+Source0:		pkg.OPT.HEPO-0.04.240604-x86_64.tar.gz
 
+Requires: 		bash
+
+BuildArch:      x86_64
 
 #BuildRequires: 
 #Requires:      
@@ -33,7 +34,6 @@ install *.tar.gz $RPM_BUILD_ROOT/o/usr/share/ia_pkg/tune
 
 %clean
 rm -rf $RPM_BUILD_ROOT
-
 
 %files
 %dir /usr/share/ia_pkg/tune

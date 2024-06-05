@@ -20,7 +20,7 @@
 #include <math.h>
 #include <stdint.h>
 #include <sched.h>
-#include "common.h"
+#include "wlt_proxy_common.h"
 
 #define MAX_CPUS_NUM		1024
 #define MAX_CPUMASK_SIZE	MAX_CPUS_NUM / 8

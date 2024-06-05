@@ -33,29 +33,30 @@ BUILD_DATE=$(date +'%y%m%d')
 #VERSION=$MAJOR.$MINOR.$BUILD_DATE-$DISTRO_CODENAME
 VERSION=$MAJOR.$MINOR.$BUILD_DATE
 FILENAME="$BASE-$VERSION-$ARCH"
-PKG_BUILD_DIR=../buildScript/build
+#PKG_BUILD_DIR=../buildScript/build
 
-if [ $(uname -r | sed -n 's/.*\( *Microsoft *\).*/\1/ip') ];
-then
+#if [ $(uname -r | sed -n 's/.*\( *Microsoft *\).*/\1/ip') ];
+#then
     #WSL VM
-    SOURCEFOLDER=/home/$USER/$FILENAME
-else
+#    SOURCEFOLDER=/home/$USER/$FILENAME
+#else
 	#native linux 
-    SOURCEFOLDER=$FILENAME
-fi
+    SOURCEFOLDER=$BUNDLEDIR/$FILENAME
+#fi
 echo "Target folder: $SOURCEFOLDER"
 
 #create directory
-#rpmdev-setuptree
+mkdir -p $SOURCEFOLDER
+cd $SOURCEFOLDER
+
+#rpmdev-setuptree //creates folder but dont do it.
 mkdir -p rpmbuild/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
 
-#cd
-cd rpmbuild
-
 #copy files
-cp hepo.spec SPECS/
-cp $BUNDLEDIR/bundle/*.tar.gz SOURCES/
+cp $BUNDLEDIR/hepo.spec rpmbuild/SPECS/
+cp $BUNDLEDIR/bundle/pkg.OPT.HEPO-0.04.240604-x86_64.tar.gz rpmbuild/SOURCES/
 
+cd rpmbuild
 rpmbuild -bb -v SPECS/hepo.spec
 ls RPMS/noarch/*
 

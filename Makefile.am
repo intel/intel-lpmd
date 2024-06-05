@@ -56,7 +56,6 @@ intel_lpmd_SOURCES = \
 	src/lpmd_socket.c \
 	src/lpmd_util.c	\
     src/wlt_proxy/helper.c \
-    src/wlt_proxy/helper_gaps.c \
 	src/wlt_proxy/wlt_proxy_def.c \
     src/wlt_proxy/spike_mgmt.c \    
     src/wlt_proxy/state_machine.c \
@@ -67,6 +66,7 @@ intel_lpmd_SOURCES = \
 	src/weights/power-supply-status.c \
     src/additional/privilege.c \
     #src/visualize/plotting.c \
+	#src/wlt_proxy/helper_gaps.c \
 	lpmd-resource.c
 
 man8_MANS = man/intel_lpmd.8
