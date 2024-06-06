@@ -804,7 +804,7 @@ static int detect_lpm_cpus_cmd(char *cmd)
  */
 static int is_cpu_atom(int cpu)
 {
-	unsigned int eax, ebx, ecx, edx;
+	unsigned int eax, ebx, ecx, edx, subleaf;
 	unsigned int type;
 
 	if (cpu_migrate(cpu) < 0) {
@@ -906,6 +906,7 @@ static int detect_cpu_l3(int cpu)
  */
 static int detect_lpm_cpus_l3(void)
 {
+	char path[MAX_STR_LENGTH];
 	int i;
 
 	for (i = 0; i < topo_max_cpus; i++) {
