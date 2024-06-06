@@ -131,6 +131,7 @@ cp intel_lpmd.service /usr/lib/systemd/system/
 
 if [[ "$installasservice" -eq 0 ]]; then
     echo "**************** copy profiles ***************************"
+	tar -zxvf tuned-profile.tar.gz -C $BASEDIR
     sudo chmod +x $BASEDIR/tuned-profile/intel*/*.sh
     sudo cp -r $BASEDIR/tuned-profile/intel* /etc/tuned/
     chown root:root /etc/tuned/intel*

@@ -73,7 +73,18 @@ chmod 755 $SOURCEFOLDER/DEBIAN/*
 
 #Copy zip file, bundle-zip_tar.sh 
 mkdir -p $SOURCEFOLDER/usr/share/ia_pkg/hepo
-cp bundle/*.gz $SOURCEFOLDER/usr/share/ia_pkg/hepo/pkg.opt.hepo.x86_64.tar.gz
+
+TAR_FILE=$(find $BASEDIR/bundle -type f -iname *.tar.gz)
+echo "tar file = $TAR_FILE"
+
+#rm -fr $BASEDIR/tmp/
+#mkdir -p $BASEDIR/tmp/
+#cd $BASEDIR/tmp/
+
+#tar -xvf $TAR_FILE
+cp -r ./pkg*/* $SOURCEFOLDER/rpmbuild/BUILD/
+cp -r $TAR_FILE $SOURCEFOLDER/usr/share/ia_pkg/hepo/
+#cp bundle/*.gz $SOURCEFOLDER/usr/share/ia_pkg/hepo/pkg.opt.hepo.x86_64.tar.gz
 
 #copy license, user guide
 

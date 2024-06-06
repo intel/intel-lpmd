@@ -52,7 +52,7 @@ if [ -d "$BUILDSCRIPT_PATH" ]; then
 
 	pushd $BUILDSCRIPT_PATH
     chmod +x build.sh
-    sed -i -e 's/\r$//' build.sh
+    dos2unix *.sh
     source build.sh || print_error
 	popd 
 	
@@ -68,11 +68,19 @@ echo $BUNDLEDIR
 echo "Create..."
 # make required directories
 rm -fr $SOURCEFOLDER
-mkdir -p $SOURCEFOLDER/tuned-profile
+mkdir -p $SOURCEFOLDER
 
 # copy tuned-profile
-cp -r $BUNDLEDIR/../tuned-profile/intel* $SOURCEFOLDER/tuned-profile
-chmod +x $SOURCEFOLDER/tuned-profile/intel*/*.sh
+
+#mkdir -p $SOURCEFOLDER/tuned-profile
+cd $BUNDLEDIR/..
+#tar -czvf $BUNDLEDIR/bundle/tuned-profile.tar.gz tuned-profile
+tar -czvf $SOURCEFOLDER/tuned-profile.tar.gz tuned-profile
+#tar -czvf tuned-profile.tar,gz tuned-profile
+
+#mv $BUNDLEDIR/bundle/tuned-profile.tar.gz $SOURCEFOLDER/
+#cp -r $BUNDLEDIR/../tuned-profile/intel* $SOURCEFOLDER/tuned-profile
+#chmod +x $SOURCEFOLDER/tuned-profile/intel*/*.sh
 
 #Copy binaries
 cp $BUNDLEDIR/../../intel_lpmd $SOURCEFOLDER/
