@@ -25,11 +25,9 @@ echo "Prepare..."
 if [ $(uname -r | sed -n 's/.*\( *Microsoft *\).*/\1/ip') ];
 then
     #WSL VM
-    #SOURCEFOLDER=/home/$USER/$FILENAME
 	SOURCEFOLDER=/home/$USER
 else
 	#native linux 
-    #SOURCEFOLDER=$BUNDLEDIR/$FILENAME
 	SOURCEFOLDER=$BUNDLEDIR
 fi
 echo "Target folder: $SOURCEFOLDER"
@@ -43,20 +41,14 @@ rpmdev-setuptree #creates folder
 #mkdir -p $SOURCEFOLDER/rpmbuild/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
 
 dos2unix $BUNDLEDIR/*.spec
-rpmlint $BUNDLEDIR/hepo.spec
-#rpmlint $BUNDLEDIR/hello-world.spec
+rpmlint $BUNDLEDIR/hello-world.spec
 
 echo "copy files...."
-#cp $BUNDLEDIR/hepo.spec $SOURCEFOLDER/rpmbuild/SPECS/
 cp $BUNDLEDIR/hello-world.spec $SOURCEFOLDER/rpmbuild/SPECS/
-#cp $BUNDLEDIR/bundle/pkg.OPT.HEPO-0.05.240605-x86_64.tar.gz $SOURCEFOLDER/rpmbuild/SOURCES/
 
 cd $SOURCEFOLDER/rpmbuild
-#echo "pwd....$PWD"
 
-
-#rpmbuild -bb -v --target=noarch SPECS/hepo.spec
-rpmbuild -bb -v --target=noarch SPECS/hello-world.spec
+rpmbuild -bb -v --target=noarch $SOURCEFOLDER/rpmbuild/SPECS/hello-world.spec
 ls -l $SOURCEFOLDER/rpmbuild/RPMS/noarch
 cp $SOURCEFOLDER/rpmbuild/RPMS/noarch/*.rpm $BUNDLEDIR/bundle/
 

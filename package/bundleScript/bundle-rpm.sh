@@ -22,27 +22,13 @@ echo $BUNDLEDIR
 
 echo "Prepare..."
 
-PKG_CATEGORY="OPT"
-PKG_FOLDERNAME="HEPO"
-BASE=pkg.$PKG_CATEGORY.$PKG_FOLDERNAME
-MAJOR="0"
-MINOR="05"
-ARCH="x86_64"
-BUILD_DATE=$(date +'%y%m%d')
-#DISTRO_CODENAME=$(cat /etc/lsb-release |grep DISTRIB_CODENAME|cut -d"=" -f2)
-#VERSION=$MAJOR.$MINOR.$BUILD_DATE-$DISTRO_CODENAME
-VERSION=$MAJOR.$MINOR.$BUILD_DATE
-FILENAME="$BASE-$VERSION-$ARCH"
-#PKG_BUILD_DIR=../buildScript/build
-
 if [ $(uname -r | sed -n 's/.*\( *Microsoft *\).*/\1/ip') ];
 then
     #WSL VM
-    #SOURCEFOLDER=/home/$USER/$FILENAME
 	SOURCEFOLDER=/home/$USER
 else
 	#native linux 
-    SOURCEFOLDER=$BUNDLEDIR/$FILENAME
+    SOURCEFOLDER=$BUNDLEDIR
 fi
 echo "Target folder: $SOURCEFOLDER"
 
@@ -56,23 +42,33 @@ rpmdev-setuptree #creates folder
 
 dos2unix $BUNDLEDIR/*.spec
 rpmlint $BUNDLEDIR/hepo.spec
-#rpmlint $BUNDLEDIR/hello-world.spec
 
 echo "copy files...."
 cp $BUNDLEDIR/hepo.spec $SOURCEFOLDER/rpmbuild/SPECS/
-#cp $BUNDLEDIR/hello-world.spec $SOURCEFOLDER/rpmbuild/SPECS/
-cp $BUNDLEDIR/bundle/pkg.OPT.HEPO-0.05.240605-x86_64.tar.gz $SOURCEFOLDER/rpmbuild/SOURCES/
+#cp $BUNDLEDIR/bundle/pkg.OPT.HEPO-0.05.240605-x86_64.tar.gz $SOURCEFOLDER/rpmbuild/SOURCES/
+#cd $SOURCEFOLDER/rpmbuild/SOURCES/
+
+TAR_FILE=$(find $BUNDLEDIR/bundle -type f -iname *.tar.gz)
+echo "tar file = $TAR_FILE"
+
+rm -fr $BUNDLEDIR/tmp/
+mkdir -p $BUNDLEDIR/tmp/
+cd $BUNDLEDIR/tmp/
+
+tar -xvf $TAR_FILE
+cp -r ./pkg*/* $SOURCEFOLDER/rpmbuild/BUILD/
+chmod +x $SOURCEFOLDER/rpmbuild/BUILD/*.sh
+dos2unix $SOURCEFOLDER/rpmbuild/BUILD/*.sh
+#ls $SOURCEFOLDER/rpmbuild/BUILD/
 
 cd $SOURCEFOLDER/rpmbuild
-echo "pwd....$PWD"
-
-
-rpmbuild -bb -v --target=noarch SPECS/hepo.spec
-#rpmbuild -bb -v --target=noarch SPECS/hello-world.spec
-cp $SOURCEFOLDER/rpmbuild/RPMS/noarch/* .
+rpmbuild -bb -v --target=noarch $SOURCEFOLDER/rpmbuild/SPECS/hepo.spec
+ls -l $SOURCEFOLDER/rpmbuild/RPMS/noarch
+cp $SOURCEFOLDER/rpmbuild/RPMS/noarch/*.rpm $BUNDLEDIR/bundle/
 
 echo "cleanup..."
 rm -fr $SOURCEFOLDER/rpmbuild
+rm -fr $BUNDLEDIR/tmp/
 
 echo "done"
 
