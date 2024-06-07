@@ -41,7 +41,7 @@ then
     SOURCEFOLDER=/home/$USER/$FILENAME
 else
 	#native linux 
-    SOURCEFOLDER=$FILENAME
+    SOURCEFOLDER=$BASEDIR/$	FILENAME
 fi
 
 # make required directories
@@ -71,27 +71,20 @@ echo "Description: Package that dynamically changes the TuneD profile to optimiz
 #cat $SOURCEFOLDER/DEBIAN/control
 chmod 755 $SOURCEFOLDER/DEBIAN/*
 
-#Copy zip file, bundle-zip_tar.sh 
-mkdir -p $SOURCEFOLDER/usr/share/ia_pkg/hepo
+#Copy tar file, bundle-zip_tar.sh
+if [ -d "$BASEDIR/bundle" ]; then 
+	TAR_FILE=$(find $BASEDIR/bundle -type f -iname *.tar.gz)
+	echo "tar file = $TAR_FILE"
+	mkdir -p $SOURCEFOLDER/usr/share/ia_pkg/hepo
+	cp $TAR_FILE $SOURCEFOLDER/usr/share/ia_pkg/hepo/
+	#cp bundle/*.gz $SOURCEFOLDER/usr/share/ia_pkg/hepo/pkg.opt.hepo.x86_64.tar.gz
+fi
 
-TAR_FILE=$(find $BASEDIR/bundle -type f -iname *.tar.gz)
-echo "tar file = $TAR_FILE"
-
-#rm -fr $BASEDIR/tmp/
-#mkdir -p $BASEDIR/tmp/
-#cd $BASEDIR/tmp/
-
-#tar -xvf $TAR_FILE
-cp -r ./pkg*/* $SOURCEFOLDER/rpmbuild/BUILD/
-cp -r $TAR_FILE $SOURCEFOLDER/usr/share/ia_pkg/hepo/
-#cp bundle/*.gz $SOURCEFOLDER/usr/share/ia_pkg/hepo/pkg.opt.hepo.x86_64.tar.gz
-
-#copy license, user guide
-
-mkdir -p $BASEDIR/bundle/
+#build deb
+#mkdir -p $BASEDIR/bundle/
 dpkg-deb --build $SOURCEFOLDER/
 sha512sum $SOURCEFOLDER.deb > $BASEDIR/bundle/$FILENAME.deb.sha512sum.txt
 mv $SOURCEFOLDER.deb $BASEDIR/bundle/
 
+#clean
 rm -fr $SOURCEFOLDER
-
