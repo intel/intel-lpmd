@@ -75,8 +75,14 @@ chmod 755 $SOURCEFOLDER/DEBIAN/*
 if [ -d "$BASEDIR/bundle" ]; then 
 	TAR_FILE=$(find $BASEDIR/bundle -type f -iname *.tar.gz)
 	echo "tar file = $TAR_FILE"
+	#to avoid multiple .gz file exist in the installation directory, copy to a unified name 
+	cp $TAR_FILE $BASEDIR/bundle/pkg.opt.hepo.x86_64.tar.gz
+	
 	mkdir -p $SOURCEFOLDER/usr/share/ia_pkg/hepo
-	cp $TAR_FILE $SOURCEFOLDER/usr/share/ia_pkg/hepo/
+	#cp $TAR_FILE $SOURCEFOLDER/usr/share/ia_pkg/hepo/
+	cp $BASEDIR/bundle/pkg.opt.hepo.x86_64.tar.gz $SOURCEFOLDER/usr/share/ia_pkg/hepo/
+	#remove the copied one so not impacting the tar file 
+	rm $BASEDIR/bundle/pkg.opt.hepo.x86_64.tar.gz	
 	#cp bundle/*.gz $SOURCEFOLDER/usr/share/ia_pkg/hepo/pkg.opt.hepo.x86_64.tar.gz
 fi
 
