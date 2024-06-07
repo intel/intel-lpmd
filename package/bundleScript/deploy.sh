@@ -43,7 +43,7 @@ fi
 
 if [ $MTL = 9 ]; then
 	echo "*********Error: The platform is not supported and the installation process will be aborted*********"
-	#exit 1
+	exit 1
 elif [ $MTL = 0 ]; then
 	echo "*********Warning: The platform is not supported but the installation process will proceed*********"
 fi
@@ -51,9 +51,10 @@ fi
 
 OS=""
 if [ -f /etc/os-release ]; then
-	. /etc/os-release
-	OS=$NAME
-	#echo $OS
+	OS_STR=$(echo $(cat /etc/*-release | grep "PRETTY_NAME" | sed 's/PRETTY_NAME=//g' | sed 's/"//g'))
+	if [[ $OS_STR == *"Ubuntu"* ]]; then
+		OS="ubuntu"
+	fi
 fi
 
 activeprofile=""
@@ -80,8 +81,13 @@ if [[ "$installasservice" -eq 0 ]]; then
         fi   
     else 
 	    #tuned not installed, notify user
-	    echo "Tuned is not detected, please install tuned and run the installation again"
-	    exit 1	
+	    #echo "Tuned is not detected, please install tuned and run the installation again"
+	    #exit 1	
+		if [[ $OS == "ubuntu" ]] then
+			sudo apt install tuned -y
+		else
+			sudo yum install tuned -y
+		fi 
     fi
 fi 
 

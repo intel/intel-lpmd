@@ -38,6 +38,25 @@ elif [ $MTL = 0 ]; then
 fi
 
 
+ppdstatus=$(echo $(sudo systemctl status power-profiles-daemon | grep "active (running)"))
+if [ ! -z "$ppdstatus" ]; then 
+    if [[ $ppdstatus == *"active (running)"* ]]; then
+        installasservice=1
+    else
+        installasservice=0
+    fi
+else 
+    installasservice=0
+fi 
+
+if [[ "$installasservice" -eq 0 ]]; then
+    if ! test -f /usr/sbin/tuned-adm; then
+	    #tuned not installed, notify user
+	    echo "Tuned is not detected, please install tuned and run the installation again"
+	    exit 1	
+    fi
+fi
+
 
 
 

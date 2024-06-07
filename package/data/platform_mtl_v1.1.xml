@@ -59,7 +59,7 @@ version:
 		0 : No
 		1 : Yes
 	-->
-	<HfiLpmEnable>0</HfiLpmEnable>
+	<HfiLpmEnable>1</HfiLpmEnable>
 
 	<!--
 		Use WLT hints
