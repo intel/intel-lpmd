@@ -41,7 +41,7 @@ then
     SOURCEFOLDER=/home/$USER/$FILENAME
 else
 	#native linux 
-    SOURCEFOLDER=$BASEDIR/$	FILENAME
+    SOURCEFOLDER=$BASEDIR/$FILENAME
 fi
 
 # make required directories
