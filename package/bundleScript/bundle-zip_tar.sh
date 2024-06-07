@@ -15,7 +15,6 @@ print_error() {
 
 trap '[ $? -eq 0 ] && exit 0 || print_error' EXIT
 
-
 #BUNDLEDIR=$(dirname $0)
 BUNDLEDIR="$( cd "$( dirname "$0" )" && pwd )"
 echo $BUNDLEDIR
@@ -33,7 +32,7 @@ BUILD_DATE=$(date +'%y%m%d')
 #VERSION=$MAJOR.$MINOR.$BUILD_DATE-$DISTRO_CODENAME
 VERSION=$MAJOR.$MINOR.$BUILD_DATE
 FILENAME="$BASE-$VERSION-$ARCH"
-PKG_BUILD_DIR=../buildScript/build
+#PKG_BUILD_DIR=../buildScript/build
 
 if [ $(uname -r | sed -n 's/.*\( *Microsoft *\).*/\1/ip') ];
 then
@@ -41,7 +40,7 @@ then
     SOURCEFOLDER=/home/$USER/$FILENAME
 else
 	#native linux 
-    SOURCEFOLDER=$FILENAME
+    SOURCEFOLDER=$BUNDLEDIR/$FILENAME
 fi
 echo "Target folder: $SOURCEFOLDER"
 
@@ -73,10 +72,12 @@ mkdir -p $SOURCEFOLDER
 # copy tuned-profile
 
 #mkdir -p $SOURCEFOLDER/tuned-profile
-cd $BUNDLEDIR/..
+#cd $BUNDLEDIR/..
+pushd $BUNDLEDIR/..
 #tar -czvf $BUNDLEDIR/bundle/tuned-profile.tar.gz tuned-profile
 tar -czvf $SOURCEFOLDER/tuned-profile.tar.gz tuned-profile
 #tar -czvf tuned-profile.tar,gz tuned-profile
+popd
 
 #mv $BUNDLEDIR/bundle/tuned-profile.tar.gz $SOURCEFOLDER/
 #cp -r $BUNDLEDIR/../tuned-profile/intel* $SOURCEFOLDER/tuned-profile
@@ -103,6 +104,8 @@ cp $BUNDLEDIR/../../data/intel_lpmd.service $SOURCEFOLDER/
 #copy deploy and rollback script.
 cp $BUNDLEDIR/deploy.sh $SOURCEFOLDER/
 cp $BUNDLEDIR/rollback.sh $SOURCEFOLDER/
+
+dos2unix $SOURCEFOLDER/*.sh
 chmod +x $SOURCEFOLDER/*.sh
 
 #copy license, user guide
@@ -117,12 +120,11 @@ if [ -d "$BUNDLEDIR/bundle" ]; then
 fi
 mkdir -p $BUNDLEDIR/bundle
 
-
 #tar -czvf $FILENAME.tar.gz $SOURCEFOLDER/
-cd $SOURCEFOLDER
-cd .. #go one level up
+pushd $SOURCEFOLDER/..
 tar -czvf $BUNDLEDIR/bundle/$FILENAME.tar.gz $FILENAME
 sha512sum $BUNDLEDIR/bundle/$FILENAME.tar.gz > $BUNDLEDIR/bundle/$FILENAME.tar.gz.sha512sum.txt
+popd
 #mv $BUNDLEDIR/bundle/$FILENAME.tar.gz $BUNDLEDIR/bundle/
 
 #sudo apt install -y zip
