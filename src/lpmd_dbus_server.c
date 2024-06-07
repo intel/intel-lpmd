@@ -56,7 +56,6 @@ dbus_interface_s_uv__mo_de__en_te_r(PrefObject *obj, GError **error);
 static gboolean
 dbus_interface_s_uv__mo_de__ex_it(PrefObject *obj, GError **error);
 
-#include "intel_lpmd_dbus_interface.h"
 
 static gboolean
 (*intel_lpmd_dbus_exit_callback)(void);
@@ -71,8 +70,6 @@ static void pref_object_init(PrefObject *obj)
 static void pref_object_class_init(PrefObjectClass *_class)
 {
 	g_assert (_class != NULL);
-
-	dbus_g_object_type_install_info ( PREF_TYPE_OBJECT, &dbus_glib_dbus_interface_object_info);
 }
 
 static gboolean dbus_interface_terminate(PrefObject *obj, GError **error)
@@ -130,7 +127,6 @@ static gboolean dbus_interface_s_uv__mo_de__ex_it(PrefObject *obj, GError **erro
 	return TRUE;
 }
 
-#ifdef GDBUS
 #pragma GCC diagnostic push
 
 static GDBusInterfaceVTable interface_vtable;
@@ -318,53 +314,3 @@ int intel_dbus_server_init(gboolean (*exit_handler)(void)) {
 	return LPMD_SUCCESS;
 }
 #pragma GCC diagnostic pop
-#else
-int intel_dbus_server_init(gboolean (*exit_handler)(void))
-{
-	DBusGConnection *bus;
-	DBusGProxy *bus_proxy;
-	GError *error = NULL;
-	guint result;
-	PrefObject *value_obj;
-
-	intel_lpmd_dbus_exit_callback = exit_handler;
-
-	bus = dbus_g_bus_get (DBUS_BUS_SYSTEM, &error);
-	if (error != NULL) {
-		lpmd_log_error ("Couldn't connect to session bus: %s:\n", error->message);
-		return LPMD_FATAL_ERROR;
-	}
-
-	// Get a bus proxy instance
-	bus_proxy = dbus_g_proxy_new_for_name (bus, DBUS_SERVICE_DBUS, DBUS_PATH_DBUS,
-											DBUS_INTERFACE_DBUS);
-	if (bus_proxy == NULL) {
-		lpmd_log_error ("Failed to get a proxy for D-Bus:\n");
-		return LPMD_FATAL_ERROR;
-	}
-
-	lpmd_log_debug ("Registering the well-known name (%s)\n", INTEL_LPMD_SERVICE_NAME);
-	// register the well-known name
-	if (!dbus_g_proxy_call (bus_proxy, "RequestName", &error, G_TYPE_STRING,
-							INTEL_LPMD_SERVICE_NAME, G_TYPE_UINT, 0, G_TYPE_INVALID, G_TYPE_UINT,
-							&result, G_TYPE_INVALID)) {
-		lpmd_log_error ("D-Bus.RequestName RPC failed: %s\n", error->message);
-		return LPMD_FATAL_ERROR;
-	}
-	lpmd_log_debug ("RequestName returned %d.\n", result);
-	if (result != DBUS_REQUEST_NAME_REPLY_PRIMARY_OWNER) {
-		lpmd_log_error ("Failed to get the primary well-known name:\n");
-		return LPMD_FATAL_ERROR;
-	}
-	value_obj = (PrefObject*) g_object_new (PREF_TYPE_OBJECT, NULL);
-	if (value_obj == NULL) {
-		lpmd_log_error ("Failed to create one Value instance:\n");
-		return LPMD_FATAL_ERROR;
-	}
-
-	lpmd_log_debug ("Registering it on the D-Bus.\n");
-	dbus_g_connection_register_g_object (bus, INTEL_LPMD_SERVICE_OBJECT_PATH, G_OBJECT (value_obj));
-
-	return LPMD_SUCCESS;
-}
-#endif
