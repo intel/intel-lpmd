@@ -44,7 +44,11 @@
 
 #include "lpmd.h"
 
+char *lp_mode_irq_str;
+
 static char irq_socket_name[64];
+
+static int irqbalance_pid = -1;
 
 #define MAX_IRQS		128
 
@@ -61,6 +65,32 @@ struct info_irqs {
 
 struct info_irqs info_irqs;
 struct info_irqs *info = &info_irqs;
+
+static char irq_str[MAX_STR_LENGTH];
+
+static int lp_mode_irq;
+int set_lpm_irq(cpu_set_t *cpumask, int action)
+{
+	lp_mode_irq = action;
+
+	if (lp_mode_irq == SETTING_IGNORE)
+		return 0;
+
+	if (irqbalance_pid > 0) {
+		if (lp_mode_irq == SETTING_RESTORE)
+			snprintf(irq_str, sizeof("NULL"), "NULL");
+		else {
+			cpumask_to_str_reverse(cpumask, irq_str, MAX_STR_LENGTH);
+			if (irq_str[0] == '\0')
+				snprintf(irq_str, sizeof("NULL"), "NULL");
+		}
+	} else {
+		if (lp_mode_irq != SETTING_RESTORE)
+			cpumask_to_hexstr(cpumask, irq_str, MAX_STR_LENGTH);
+	}
+
+	return 0;
+}
 
 static int dump_smp_affinity(void)
 {
@@ -98,8 +128,6 @@ static int dump_smp_affinity(void)
 #define SOCKET_PATH "irqbalance"
 #define SOCKET_TMPFS "/run/irqbalance"
 
-static int irqbalance_pid = -1;
-
 static int irqbalance_ban_cpus(int enter)
 {
 	char socket_cmd[MAX_STR_LENGTH];
@@ -108,42 +136,20 @@ static int irqbalance_ban_cpus(int enter)
 	int offset;
 	int first = 1;
 
-	dump_smp_affinity();
-
-	if (enter)
-		lpmd_log_info ("\tUpdate IRQ affinity (irqbalance)\n");
+	if (lp_mode_irq == SETTING_RESTORE)
+		lpmd_log_debug ("\tRestore IRQ affinity (irqbalance)\n");
 	else
-		lpmd_log_info ("\tRestore IRQ affinity (irqbalance)\n");
+		lpmd_log_debug ("\tUpdate IRQ affinity (irqbalance)\n");
 
-	offset = snprintf (socket_cmd, sizeof("settings cpus "), "settings cpus ");
-	if (!enter) {
-		offset += snprintf (socket_cmd + offset, sizeof("NULL"), "NULL");
-		goto end;
-	}
-
-	for (cpu = 0; cpu < get_max_cpus (); cpu++) {
-		if (!is_cpu_online (cpu))
-			continue;
-
-		if (!is_cpu_for_lpm (cpu)) {
-			if (MAX_STR_LENGTH <= offset) {
-				lpmd_log_error ("Too many CPUs for socket message\n");
-				return -1;
-			}
-			if (first)
-				offset += snprintf (socket_cmd + offset, MAX_STR_LENGTH - offset, "%d", cpu);
-			else
-				offset += snprintf (socket_cmd + offset, MAX_STR_LENGTH - offset, ",%d", cpu);
-			first = 0;
-		}
-	}
-
-end: socket_cmd[offset] = '\0';
+	offset = snprintf (socket_cmd, MAX_STR_LENGTH, "settings cpus %s", irq_str);
+	if (offset >= MAX_STR_LENGTH)
+		offset = MAX_STR_LENGTH - 1;
+	socket_cmd[offset] = '\0';
 
 	clock_gettime (CLOCK_MONOTONIC, &tp1);
 	socket_send_cmd (irq_socket_name, socket_cmd);
 	clock_gettime (CLOCK_MONOTONIC, &tp2);
-	lpmd_log_info ("\tSend socket command %s (%lu ns)\n", socket_cmd,
+	lpmd_log_debug ("\tSend socket command %s (%lu ns)\n", socket_cmd,
 		1000000000UL * (tp2.tv_sec - tp1.tv_sec) + tp2.tv_nsec - tp1.tv_nsec);
 	return 0;
 }
@@ -153,7 +159,7 @@ static int native_restore_irqs(void)
 	char path[MAX_STR_LENGTH];
 	int i;
 
-	lpmd_log_info ("\tRestore IRQ affinity (native)\n");
+	lpmd_log_debug ("\tRestore IRQ affinity (native)\n");
 
 	for (i = 0; i < info->nr_irqs; i++) {
 		char *str = info->irq[i].affinity;
@@ -165,6 +171,8 @@ static int native_restore_irqs(void)
 	memset (info, 0, sizeof(*info));
 	return 0;
 }
+
+static int irq_updated;
 
 static int update_one_irq(int irq)
 {
@@ -178,37 +186,36 @@ static int update_one_irq(int irq)
 		return -1;
 	}
 
-	info->irq[info->nr_irqs].irq = irq;
 
 	snprintf (path, MAX_STR_LENGTH, "/proc/irq/%i/smp_affinity", irq);
 
-	filep = fopen (path, "r");
-	if (!filep)
-		return -1;
+	if (!irq_updated) {
+		info->irq[info->nr_irqs].irq = irq;
+		filep = fopen (path, "r");
+		if (!filep)
+			return -1;
 
-	if (getline (&str, &size, filep) <= 0) {
-		lpmd_log_error ("Failed to get IRQ%d smp_affinity\n", irq);
-		free (str);
+		if (getline (&str, &size, filep) <= 0) {
+			lpmd_log_error ("Failed to get IRQ%d smp_affinity\n", irq);
+			free (str);
+			fclose (filep);
+			return -1;
+		}
+
 		fclose (filep);
-		return -1;
+
+		snprintf (info->irq[info->nr_irqs].affinity, MAX_STR_LENGTH, "%s", str);
+
+		free (str);
+
+		/* Remove the Newline */
+		size = strnlen (info->irq[info->nr_irqs].affinity, MAX_STR_LENGTH);
+		info->irq[info->nr_irqs].affinity[size - 1] = '\0';
+
+		info->nr_irqs++;
 	}
 
-	fclose (filep);
-
-	snprintf (info->irq[info->nr_irqs].affinity, MAX_STR_LENGTH, "%s", str);
-
-	free (str);
-
-	/* Remove the Newline */
-	size = strnlen (info->irq[info->nr_irqs].affinity, MAX_STR_LENGTH);
-	info->irq[info->nr_irqs].affinity[size - 1] = '\0';
-
-	if (lpmd_write_str (path, get_lpm_cpus_hexstr (), LPMD_LOG_DEBUG))
-		return 1;
-
-	info->nr_irqs++;
-
-	return 0;
+	return lpmd_write_str (path, irq_str, LPMD_LOG_DEBUG);
 }
 
 static int native_update_irqs(void)
@@ -217,7 +224,7 @@ static int native_update_irqs(void)
 	char *line = NULL;
 	size_t size = 0;
 
-	lpmd_log_info ("\tUpdate IRQ affinity (native)\n");
+	lpmd_log_debug ("\tUpdate IRQ affinity (native)\n");
 
 	filep = fopen ("/proc/interrupts", "r");
 	if (!filep) {
@@ -270,17 +277,16 @@ static int native_update_irqs(void)
 
 	fclose (filep);
 
+	irq_updated = 1;
 	return 0;
 }
 
 static int native_process_irqs(int enter)
 {
-	dump_smp_affinity();
-
-	if (enter)
-		return native_update_irqs ();
-	else
+	if (lp_mode_irq == SETTING_RESTORE)
 		return native_restore_irqs ();
+	else
+		return native_update_irqs ();
 }
 
 int process_irqs(int enter, enum lpm_cpu_process_mode mode)
@@ -288,6 +294,12 @@ int process_irqs(int enter, enum lpm_cpu_process_mode mode)
 	/* No need to handle IRQs in offline mode */
 	if (mode == LPM_CPU_OFFLINE)
 		return 0;
+
+	if (lp_mode_irq == SETTING_IGNORE) {
+		lpmd_log_info ("Ignore IRQ migration\n");
+		return 0;
+	}
+
 	lpmd_log_info ("Process IRQs ...\n");
 	if (irqbalance_pid == -1)
 		return native_process_irqs (enter);

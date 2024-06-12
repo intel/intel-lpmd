@@ -117,13 +117,56 @@ for Intel Low Power Mode daemon
 	<IgnoreITMT>0</IgnoreITMT>
 
 	<!--
+		Example WorkLoad Type hints based config states applied to
+		12Pcore-8Ecore-2Lcore 28W TDP Meteor Lake platform.
+		Need to set WLTHintEnable to make it work.
+	-->
+	<States>
+		<CPUFamily> 6 </CPUFamily>
+		<CPUModel> 170 </CPUModel>
+		<CPUConfig> 12P8E2L-28W </CPUConfig>
+		<State>
+			<ID> 1 </ID>
+			<Name> WLT_IDLE </Name>
+			<WLTType> 0 </WLTType>
+			<EPP> 255 </EPP>
+			<ITMTState> -1 </ITMTState>
+			<IRQMigrate> -1 </IRQMigrate>
+		</State>
+		<State>
+			<ID> 2 </ID>
+			<Name> WLT_BATTERY_LIFE </Name>
+			<WLTType> 1 </WLTType>
+			<EPP> 192 </EPP>
+			<ITMTState> -1 </ITMTState>
+			<IRQMigrate> -1 </IRQMigrate>
+		</State>
+		<State>
+			<ID> 3 </ID>
+			<Name> WLT_SUSTAINED </Name>
+			<WLTType> 2 </WLTType>
+			<EPP> 64 </EPP>
+			<ITMTState> -1 </ITMTState>
+			<IRQMigrate> -1 </IRQMigrate>
+		</State>
+		<State>
+			<ID> 4 </ID>
+			<Name> WLT_BURSTY </Name>
+			<WLTType> 3 </WLTType>
+			<EPP> 64 </EPP>
+			<ITMTState> -1 </ITMTState>
+			<IRQMigrate> -1 </IRQMigrate>
+		</State>
+	</States>
+
+	<!--
 		Example Utilization based config states applied to
 		4Pcore-8Ecore-2Lcore 15W TDP Meteor Lake platform.
 	-->
 	<States>
 		<CPUFamily> 6 </CPUFamily>
-		<CPUModel> 186 </CPUModel>
-		<CPUConfig> 8P8E0L-28W </CPUConfig>
+		<CPUModel> 170 </CPUModel>
+		<CPUConfig> 4P8E2L-15W </CPUConfig>
 		<State>
 			<ID> 1 </ID>
 			<Name> LPM_DEEP </Name>
@@ -132,8 +175,8 @@ for Intel Low Power Mode daemon
 			<EPP> -1 </EPP>
 			<EPB> -1 </EPB>
 			<ITMTState> -1 </ITMTState>
-			<IRQMigrate> 1 </IRQMigrate>
-			<ActiveCPUs>14,15</ActiveCPUs>
+			<IRQMigrate> -1 </IRQMigrate>
+			<ActiveCPUs>16,17</ActiveCPUs>
 			<MinPollInterval> 500 </MinPollInterval>
 			<PollIntervalIncrement> 500 </PollIntervalIncrement>
 			<MaxPollInterval> 2000 </MaxPollInterval>
@@ -146,8 +189,8 @@ for Intel Low Power Mode daemon
 			<EPP> -1 </EPP>
 			<EPB> -1 </EPB>
 			<ITMTState> -1 </ITMTState>
-			<IRQMigrate> 1 </IRQMigrate>
-			<ActiveCPUs>10,11,12,13</ActiveCPUs>
+			<IRQMigrate> -1 </IRQMigrate>
+			<ActiveCPUs>12,13,14,15</ActiveCPUs>
 			<MinPollInterval> 1000 </MinPollInterval>
 			<PollIntervalIncrement> 1000 </PollIntervalIncrement>
 			<MaxPollInterval> 3000 </MaxPollInterval>
@@ -160,12 +203,11 @@ for Intel Low Power Mode daemon
 			<EPP> -1 </EPP>
 			<EPB> -1 </EPB>
 			<ITMTState> -1 </ITMTState>
-			<IRQMigrate> 1 </IRQMigrate>
-			<ActiveCPUs>0-15</ActiveCPUs>
+			<IRQMigrate> -1 </IRQMigrate>
+			<ActiveCPUs>0-17</ActiveCPUs>
 			<MinPollInterval> 500 </MinPollInterval>
 			<PollIntervalIncrement> -1 </PollIntervalIncrement>
 			<MaxPollInterval> 2000 </MaxPollInterval>
 		</State>
 	</States>
 </Configuration>
-
