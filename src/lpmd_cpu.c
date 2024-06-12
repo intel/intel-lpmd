@@ -564,7 +564,6 @@ end:
 int set_epp(char *path, int val, char *str)
 {
 	FILE *filep;
-	int epp;
 	int ret;
 
 	filep = fopen (path, "r+");

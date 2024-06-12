@@ -132,9 +132,7 @@ static int irqbalance_ban_cpus(int enter)
 {
 	char socket_cmd[MAX_STR_LENGTH];
 	struct timespec tp1, tp2;
-	int cpu;
 	int offset;
-	int first = 1;
 
 	if (lp_mode_irq == SETTING_RESTORE)
 		lpmd_log_debug ("\tRestore IRQ affinity (irqbalance)\n");
