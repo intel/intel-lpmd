@@ -848,7 +848,7 @@ static void* lpmd_core_main_loop(void *arg)
 			break;
 
 //		 Opportunistic LPM is disabled in below cases
-		if (lpm_state & (LPM_USER_ON | LPM_USER_OFF | LPM_SUV_ON) | has_hfi_lpm_monitor ())
+		if ((lpm_state & (LPM_USER_ON | LPM_USER_OFF | LPM_SUV_ON)) | has_hfi_lpm_monitor ())
 			interval = -1;
 		else if (interval == -1)
 			interval = 100;

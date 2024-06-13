@@ -23,7 +23,7 @@
 #include <libxml/tree.h>
 
 #define CONFIG_FILE_NAME "intel_lpmd_config.xml"
-#define MAX_FILE_NAME_PATH	64
+#define MAX_FILE_NAME_PATH	128
 
 static void lpmd_dump_config(lpmd_config_t *lpmd_config)
 {

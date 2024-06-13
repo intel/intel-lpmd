@@ -98,7 +98,6 @@ static int parse_proc_stat(void)
 	FILE *filep;
 	int i;
 	int val;
-	int pos = 0;
 	int count = get_max_online_cpu() + 1;
 	int sys_idx = count - 1;
 	int size = sizeof(struct proc_stat_info) * count;
@@ -509,7 +508,6 @@ int util_init(lpmd_config_t *lpmd_config)
 	lpmd_config_state_t *state;
 	int nr_state = 0;
 	int i, ret;
-	size_t size;
 
 	for (i = 0; i < lpmd_config->config_state_count; i++) {
 		state = &lpmd_config->config_states[i];
