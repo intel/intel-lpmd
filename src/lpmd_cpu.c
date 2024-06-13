@@ -1755,7 +1755,7 @@ static int get_tdp(void)
 	DIR *dir;
 	struct dirent *entry;
 	int ret;
-	char path[MAX_STR_LENGTH];
+	char path[MAX_STR_LENGTH * 2];
 	char str[MAX_STR_LENGTH];
 	char *pos;
 	int tdp = 0;
@@ -1773,7 +1773,7 @@ static int get_tdp(void)
 		if (strncmp(entry->d_name, "intel-rapl", strlen("intel-rapl")))
 			continue;
 
-		snprintf (path, MAX_STR_LENGTH, "%s/%s/name", PATH_RAPL, entry->d_name);
+		snprintf (path, MAX_STR_LENGTH * 2, "%s/%s/name", PATH_RAPL, entry->d_name);
 		filep = fopen (path, "r");
 		if (!filep)
 			continue;
@@ -1787,7 +1787,7 @@ static int get_tdp(void)
 		if (strncmp(str, "package", strlen("package")))
 			continue;
 
-		snprintf (path, MAX_STR_LENGTH, "%s/%s/constraint_0_max_power_uw", PATH_RAPL, entry->d_name);
+		snprintf (path, MAX_STR_LENGTH * 2, "%s/%s/constraint_0_max_power_uw", PATH_RAPL, entry->d_name);
 		filep = fopen (path, "r");
 		if (!filep)
 			continue;
