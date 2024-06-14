@@ -12,13 +12,6 @@ for Intel Low Power Mode daemon
 	<lp_mode_cpus></lp_mode_cpus>
 
 	<!--
-		EPP to use in Low Power Mode
-		0-255: Valid EPP value to use in Low Power Mode
-		   -1: Don't change EPP in Low Power Mode
-	-->
-	<lp_mode_epp>-1</lp_mode_epp>
-
-	<!--
 		Mode values
 		0: Cgroup v2
 		1: Cgroup v2 isolate
@@ -56,13 +49,6 @@ for Intel Low Power Mode daemon
 		1 : Yes
 	-->
 	<HfiLpmEnable>0</HfiLpmEnable>
-
-	<!--
-		Use WLT hints
-		0 : No
-		1 : Yes
-	-->
-	<WLTHintEnable>0</WLTHintEnable>
 
 	<!--
 		Use HFI SUV hints
@@ -116,56 +102,5 @@ for Intel Low Power Mode daemon
 	-->
 	<IgnoreITMT>0</IgnoreITMT>
 
-	<!--
-		Example Utilization based config states applied to
-		4Pcore-8Ecore-2Lcore 15W TDP Meteor Lake platform.
-	-->
-	<States>
-		<CPUFamily> 6 </CPUFamily>
-		<CPUModel> 186 </CPUModel>
-		<CPUConfig> 8P8E0L-28W </CPUConfig>
-		<State>
-			<ID> 1 </ID>
-			<Name> LPM_DEEP </Name>
-			<EntrySystemLoadThres> 2 </EntrySystemLoadThres>
-			<EnterCPULoadThres> 50 </EnterCPULoadThres>
-			<EPP> -1 </EPP>
-			<EPB> -1 </EPB>
-			<ITMTState> -1 </ITMTState>
-			<IRQMigrate> 1 </IRQMigrate>
-			<ActiveCPUs>14,15</ActiveCPUs>
-			<MinPollInterval> 500 </MinPollInterval>
-			<PollIntervalIncrement> 500 </PollIntervalIncrement>
-			<MaxPollInterval> 2000 </MaxPollInterval>
-		</State>
-		<State>
-			<ID> 2 </ID>
-			<Name> LPM_LOW </Name>
-			<EntrySystemLoadThres> 10 </EntrySystemLoadThres>
-			<ExitSystemLoadhysteresis> 3 </ExitSystemLoadhysteresis>
-			<EPP> -1 </EPP>
-			<EPB> -1 </EPB>
-			<ITMTState> -1 </ITMTState>
-			<IRQMigrate> 1 </IRQMigrate>
-			<ActiveCPUs>10,11,12,13</ActiveCPUs>
-			<MinPollInterval> 1000 </MinPollInterval>
-			<PollIntervalIncrement> 1000 </PollIntervalIncrement>
-			<MaxPollInterval> 3000 </MaxPollInterval>
-		</State>
-		<State>
-			<ID> 3 </ID>
-			<Name> FULL_POWER </Name>
-			<EntrySystemLoadThres></EntrySystemLoadThres>
-			<EnterCPULoadThres></EnterCPULoadThres>
-			<EPP> -1 </EPP>
-			<EPB> -1 </EPB>
-			<ITMTState> -1 </ITMTState>
-			<IRQMigrate> 1 </IRQMigrate>
-			<ActiveCPUs>0-15</ActiveCPUs>
-			<MinPollInterval> 500 </MinPollInterval>
-			<PollIntervalIncrement> -1 </PollIntervalIncrement>
-			<MaxPollInterval> 2000 </MaxPollInterval>
-		</State>
-	</States>
 </Configuration>
 
