@@ -1,0 +1,44 @@
+{
+    "IngredientName": "DTP",
+    "Description": "IDF ABI Project Config File for DTP Ingredient",
+    "OutputConfiguration": "IDF/PackageGen.json",
+    "OutputRoot": "OWRBin",
+    "OutputDir": "OWRBuild",
+    "PackageRoot": "OWRPackage",
+    "PackageMetadataTemplate": "IDF/PackageMetadataTemplate.json",
+    "DeployCustomServer":"https://ubit-artifactory-ba.intel.com",
+    "DeployCustomPath":"deltapkg-ba-local/pkg-tune",
+    "BuildInfo": {
+        "Name":"",
+        "FullName":"",
+        "SDL": [
+            {
+                "ID": "",
+                "URL": "",
+                "Submitter": "sys_idfsec"
+            }
+        ]
+    },
+    "Coverity": {
+        "ServerURL": "https://coverityent.devtools.intel.com/prod1/"  
+    },
+    "BinaryScan": {
+        "ServerURL": "https://bdba001.icloud.intel.com",
+        "ServerGroup": "6"
+    },
+    "SubComponents": [
+        {
+            "Name": "DTP",
+            "Description": "DTP Build",
+            "ProjectFile": "buildDTP.sh",
+            "ProjectType": "Script",
+            "WorkingDirectory": "IDF",
+            "Coverity":{
+                "Stream": "ENV:CoverityStream",
+                "CompilerTemplates":["cs","msvc"],
+                "SkipCoverityScan": false
+             }
+        }
+    ],
+    "SchemaVersion": "1.0"
+}
