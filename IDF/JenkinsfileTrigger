@@ -47,7 +47,6 @@ pipeline {
         choice(choices: ['all', 'ubuntu22.04.03'/*, 'ubuntu24.04', 'fedora40'*/], name: 'TriggerPipeline', description: 'Please Select the Choice to Trigger All or Specific Pipelines')
         booleanParam(name: 'ReleaseBuild', defaultValue: false, description: 'Enable for Release Build trigger')
         booleanParam(name: 'SecureCoverityScan', defaultValue: false, description: 'Enable to run Secure Coverity Scan')
-        booleanParam(name: 'IpScan', defaultValue: false, description: 'Enable to run IP Scan')
         booleanParam(name: 'BinaryScan', defaultValue: false, description: 'Enable to run BDBA and SSCB Scans')
         booleanParam(name: 'VirusScan', defaultValue: false, description: 'Enable to run Virus Scan')
         booleanParam(name: 'ArtifactsDeploy', defaultValue: true, description: 'Enable to Deploy to Artifactory')
@@ -98,7 +97,7 @@ pipeline {
                         CoverityStream = "hepo_pkg_22_04"
                         BuildConfig = "IDF/BuildConfig.json"
                         MetadataFile = "IDF/PackageGen.json"
-                        ArtifactPkgName = "DTP-ubuntu22.04.03-${env.BuildVersion}-${env.BUILD_ID}"
+                        ArtifactPkgName = "HEPO_DTP-ubuntu22.04.03-${env.BuildVersion}-${env.BUILD_ID}"
                         AppPath = "*.*"
                     }
                     steps {
@@ -124,7 +123,7 @@ pipeline {
                         CoverityStream = "hepo_pkg_24_04"
                         BuildConfig = "IDF/BuildConfig.json"
                         MetadataFile = "IDF/PackageGen.json"
-                        ArtifactPkgName = "DTP-ubuntu24.04-${env.BuildVersion}-${env.BUILD_ID}"
+                        ArtifactPkgName = "HEPO_DTP-ubuntu24.04-${env.BuildVersion}-${env.BUILD_ID}"
                         AppPath = "*.*"
                     }
                     steps {

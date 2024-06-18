@@ -14,7 +14,6 @@ DefaultMainBranch = "IDF_Enabling"
 PodCloud = "idoc"
 ContainerName = "build-environment"
 ContainerType = "linux"
-ContainerImage = "amr-registry.caas.intel.com/owr/idf2/abi/lnx/ingredient/ubuntu22.04.03/dtp:test"
 AgentWorkspace = "workspace/DTPWS"
 // Ingredient Feature Variables
 
@@ -34,7 +33,6 @@ pipeline {
         string(name: 'VersionNumber', defaultValue: '', description: 'Use this version number for build (if empty the number will be derived from the Build Version Prefix in the Jenkinsfile)') 
         booleanParam(name: 'ReleaseBuild', defaultValue: false, description: 'Enable for Release Build trigger')
         booleanParam(name: 'SecureCoverityScan', defaultValue: false, description: 'Enable to run Secure Coverity Scan')
-        booleanParam(name: 'IpScan', defaultValue: false, description: 'Enable to run IP Scan')
         booleanParam(name: 'BinaryScan', defaultValue: false, description: 'Enable to run BDBA and SSCB Scans')
         booleanParam(name: 'VirusScan', defaultValue: false, description: 'Enable to run Virus Scan')
         booleanParam(name: 'ArtifactsDeploy', defaultValue: true, description: 'Enable to Deploy to Artifactory')
