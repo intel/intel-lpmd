@@ -1,0 +1,49 @@
+{
+    "isEngineering": false,
+    "metaDataComponents": [
+        {
+            "files": [
+                "${AppPath}"
+            ],
+            "type": "apps"
+        },
+        {
+            "mainFile": "${coverityScanReport}",
+            "files": [
+                "${coverityScanDaReport}"
+            ],
+            "type": "staticAnalysisReport"
+        },
+        {
+            "mainFile": "${virusScanReport}",
+            "files": [
+                "${virusScanDaReport}"
+            ],
+            "type": "virusScanReport"
+        },
+        {
+            "mainFile": "${binaryScanReport}",
+            "files": [
+                "${binaryScanDaReport}"
+            ],
+            "type": "binaryScanReport"
+        },
+        {
+            "mainFile" : "${sscbScanReport}",
+            "files" : [ 
+                "${sscbScanDaReport}" 
+            ],
+            "type" : "sscbScanReport"
+        },
+        {
+            "urls": [
+                "${sdleLink}"
+            ],
+            "type": "sdleLink"
+        }
+    ],
+    "metaDataSchemaVersion": "1.0",
+    "name": "${IngredientName}",
+    "packageRevision": 0,
+    "version": "${IngredientVersion}"
+}
