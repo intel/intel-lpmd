@@ -166,7 +166,7 @@ pipeline {
                     }
                     steps {
                         script {  
-                            env.CoverityStream = determineCoverityStream(env.IngredientPlatformTarget, params.PkgComponent)
+                            //env.CoverityStream = determineCoverityStream(env.IngredientPlatformTarget, params.PkgComponent)
                             CoverityScan()
                         }
                     }
