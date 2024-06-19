@@ -44,7 +44,7 @@ pipeline {
     // Parameters take +1 cycle to adopt the change. ie If you change a defaultValue below and push, the first run the defaultValue will be the old value.
     // All subsequent runs will have the new default value.
     parameters {
-        choice(choices: ['all', 'ubuntu22.04.03'/*, 'ubuntu24.04', 'fedora40'*/], name: 'TriggerPipeline', description: 'Please Select the Choice to Trigger All or Specific Pipelines')
+        choice(choices: ['all', 'ubuntu22.04.03', 'ubuntu24.04'/*, 'fedora40'*/], name: 'TriggerPipeline', description: 'Please Select the Choice to Trigger All or Specific Pipelines')
         booleanParam(name: 'ReleaseBuild', defaultValue: false, description: 'Enable for Release Build trigger')
         booleanParam(name: 'SecureCoverityScan', defaultValue: false, description: 'Enable to run Secure Coverity Scan')
         booleanParam(name: 'BinaryScan', defaultValue: false, description: 'Enable to run BDBA and SSCB Scans')
