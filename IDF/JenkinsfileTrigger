@@ -13,7 +13,7 @@ DefaultMainBranch = "main"
 // Container Variables
 PodCloud = "idoc"
 ContainerName = "build-environment"
-ContainerImage = "amr-registry.caas.intel.com/owr/idf2/abi/lnx/ingredient/ubuntu22.04.03/dtp:test"
+ContainerImage = "amr-registry.caas.intel.com/owr/idf2/abi/lnx/ingredient/ubuntu22.04.03/dtp:latest"
 ContainerType = "linux"
 AgentWorkspace = "workspace/DTPWS"
 // Ingredient Feature Variables
@@ -91,7 +91,7 @@ pipeline {
                         }
                     }
                     environment {
-                        ContainerImage = "amr-registry.caas.intel.com/owr/idf2/abi/lnx/ingredient/ubuntu22.04.03/dtp:test"
+                        ContainerImage = "amr-registry.caas.intel.com/owr/idf2/abi/lnx/ingredient/ubuntu22.04.03/dtp:latest"
                         ContainerType = "linux"
                         IngredientPlatformTarget = "DTP-Ubuntu22.04.03"
                         CoverityStream = "hepo_pkg_22_04"
