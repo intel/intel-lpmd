@@ -9,7 +9,7 @@ TimerEvent = false
 UserEvent = false
 PushEvent = false
 // Agent Variables
-DefaultMainBranch = "IDF_Enabling"
+DefaultMainBranch = "IDF_Ubuntu24"
 // Container Variables
 PodCloud = "idoc"
 ContainerName = "build-environment"
@@ -35,8 +35,6 @@ pipeline {
         booleanParam(name: 'SecureCoverityScan', defaultValue: false, description: 'Enable to run Secure Coverity Scan')
         booleanParam(name: 'BinaryScan', defaultValue: false, description: 'Enable to run BDBA and SSCB Scans')
         booleanParam(name: 'VirusScan', defaultValue: false, description: 'Enable to run Virus Scan')
-        booleanParam(name: 'BinaryScan', defaultValue: false, description: 'Enable to run BDBA Scan for project')
-        booleanParam(name: 'SSCBScan', defaultValue: false, description: 'Enable to run SSCB Scan for project')
         booleanParam(name: 'ArtifactsDeploy', defaultValue: true, description: 'Enable to Deploy to Artifactory')
         booleanParam(name: 'SdleAutomation', defaultValue: false, description: 'Enable SDLe Automation')
         booleanParam(name: 'SdleAutomationDryRun', defaultValue: false, description: 'Enable SDLe Automation in DryRun Mode')
@@ -228,7 +226,7 @@ pipeline {
                         beforeAgent true
                         anyOf {
                             expression{(env.BRANCH_NAME == "${DefaultMainBranch}" && params.ReleaseBuild == true)}
-                            expression{(params.SSCBScan == true)}
+                            expression{(params.BinaryScan == true)}
                             expression{env.BRANCH_NAME == "${DefaultMainBranch}" && TimerEvent == true}
                         }
                     } 
