@@ -186,11 +186,11 @@ pipeline {
                     } 
                     agent {
                         kubernetes {
-                            cloud podCloud
+                            cloud PodCloud
                             defaultContainer ContainerName
                             label "${env.STAGE_NAME}-${UUID.randomUUID().toString()}"
-                            customWorkspace agentWorkspace
-                            yaml GetPodDefinitionYaml(ContainerType: ContainerType, ContainerImage: ContainerImage, ContainerName: ContainerName)
+                            customWorkspace AgentWorkspace
+                            yaml GetSecurePodDefinitionYaml(ContainerType: ContainerType, ContainerImage: ContainerImage, ContainerName: ContainerName)
                         }
                     }
                     steps {
@@ -210,11 +210,11 @@ pipeline {
                     } 
                     agent {
                         kubernetes {
-                            cloud podCloud
+                            cloud PodCloud
                             defaultContainer ContainerName
                             label "${env.STAGE_NAME}-${UUID.randomUUID().toString()}"
-                            customWorkspace agentWorkspace
-                            yaml GetPodDefinitionYaml(ContainerType: ContainerType, ContainerImage: ContainerImage, ContainerName: ContainerName)
+                            customWorkspace AgentWorkspace
+                            yaml GetSecurePodDefinitionYaml(ContainerType: ContainerType, ContainerImage: ContainerImage, ContainerName: ContainerName)
                         }
                     }
                     steps {
@@ -234,11 +234,11 @@ pipeline {
                     } 
                     agent {
                         kubernetes {
-                            cloud podCloud
+                            cloud PodCloud
                             defaultContainer ContainerName
                             label "${env.STAGE_NAME}-${UUID.randomUUID().toString()}"
-                            customWorkspace agentWorkspace
-                            yaml GetPodDefinitionYaml(ContainerType: ContainerType, ContainerImage: ContainerImage, ContainerName: ContainerName)
+                            customWorkspace AgentWorkspace
+                            yaml GetSecurePodDefinitionYaml(ContainerType: ContainerType, ContainerImage: ContainerImage, ContainerName: ContainerName)
                         }
                     }
                     steps {
