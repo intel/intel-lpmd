@@ -8,7 +8,6 @@ bin_PROGRAMS = \
 	intel_lpmd_control
 
 intel_lpmd_CPPFLAGS = \
-	$(DBUS_CFLAGS) \
 	$(GLIB_CFLAGS) \
 	$(LIBDL) \
 	$(LIBM) \
@@ -27,7 +26,6 @@ intel_lpmd_CFLAGS = \
 	-I$(top_srcdir)/src
 
 intel_lpmd_LDADD = \
-	$(DBUS_LIBS) \
 	$(GLIB_LIBS) \
 	$(LIBNL_LIBS) \
 	$(LIBM) \
@@ -37,16 +35,15 @@ intel_lpmd_LDADD = \
 	$(SYSTEMD_LIBS)
 
 intel_lpmd_control_CFLAGS = \
-	$(DBUS_GLIB_CFLAGS)
+	$(GLIB_CFLAGS)
 
 intel_lpmd_control_LDADD = \
-	$(DBUS_GLIB_LIBS)
+	$(GLIB_LIBS)
 
 intel_lpmd_control_SOURCES = \
 	tools/intel_lpmd_control.c
 
 BUILT_SOURCES = \
-	intel_lpmd_dbus_interface.h \
 	lpmd-resource.c
 
 intel_lpmd_SOURCES = \
@@ -65,9 +62,6 @@ intel_lpmd_SOURCES = \
 man_MANS = \
 	man/intel_lpmd.8 \
 	man/intel_lpmd_config.xml.5
-
-intel_lpmd_dbus_interface.h: $(top_srcdir)/src/intel_lpmd_dbus_interface.xml
-	$(AM_V_GEN) dbus-binding-tool --prefix=dbus_interface --mode=glib-server --output=$@ $<
 
 lpmd-resource.c: $(top_srcdir)/lpmd-resource.gresource.xml
 	$(AM_V_GEN) glib-compile-resources --generate-source lpmd-resource.gresource.xml
