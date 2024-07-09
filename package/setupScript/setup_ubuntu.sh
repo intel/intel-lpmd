@@ -17,25 +17,25 @@ sudo apt install -y autoconf
 sudo apt install -y gcc
 
 #dbus communiation dbus-1 dbus-glib-1
-sudo apt install -y libglib2.0-dev libdbus-1-dev libdbus-glib-1-dev
+sudo apt -y -- install libglib2.0-dev libdbus-1-dev libdbus-glib-1-dev
 
 #xml parsing
-sudo apt install -y libxml2-dev
+sudo apt -y -- install libxml2-dev
 
 #netlink protocol based Linux kernel interfaces
-sudo apt install -y libnl-3-dev libnl-genl-3-dev
+sudo apt -y -- install libnl-3-dev libnl-genl-3-dev
 
 #systemd interface
-sudo apt install -y libsystemd-dev
+sudo apt -y -- install libsystemd-dev
 
 #docs
-sudo apt install -y gtk-doc-tools
+sudo apt -y -- install gtk-doc-tools
 
 #cmake build
 sudo apt install -y cmake
 
 #build framework
-sudo apt install -y libcap-dev libssl-dev
+sudo apt -y -- install libcap-dev libssl-dev
 
 #build plugins
 #sudo apt install -y nlohmann-json3-dev
