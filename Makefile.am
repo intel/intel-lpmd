@@ -6,7 +6,7 @@ ACLOCAL_AMFLAGS =
 
 # Global C Flags
 AM_CFLAGS = \
-	${DBUS_CFLAGS} \
+	${GLIB_CFLAGS} \
 	$(XML_CFLAGS) \
 	-DTDRUNDIR=\"$(lpmd_rundir)\" \
 	-DTDCONFDIR=\"$(lpmd_confdir)\" \
@@ -29,7 +29,6 @@ intel_lpmd_CPPFLAGS = \
 
 intel_lpmd_includedir = @top_srcdir@
 intel_lpmd_LDADD = \
-	$(DBUS_LIBS) \
 	$(GLIB_LIBS) \
 	$(LIBNL_LIBS) \
 	$(LIBM) \
@@ -39,7 +38,6 @@ intel_lpmd_LDADD = \
 	$(SYSTEMD_LIBS)
 
 BUILT_SOURCES = \
-	intel_lpmd_dbus_interface.h	\
 	lpmd-resource.c
 
 intel_lpmd_SOURCES = \
@@ -57,9 +55,6 @@ intel_lpmd_SOURCES = \
 
 man8_MANS = man/intel_lpmd.8
 man5_MANS = man/intel_lpmd_config.xml.5
-
-intel_lpmd_dbus_interface.h: $(top_srcdir)/src/intel_lpmd_dbus_interface.xml
-	$(AM_V_GEN) dbus-binding-tool --prefix=dbus_interface --mode=glib-server --output=$@ $<
 
 lpmd-resource.c: $(top_srcdir)/lpmd-resource.gresource.xml
 	$(AM_V_GEN) glib-compile-resources --generate-source lpmd-resource.gresource.xml
