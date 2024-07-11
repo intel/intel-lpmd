@@ -288,5 +288,6 @@ void wlt_proxy_uninit(void){
     if (lpmd_config->wlt_proxy_enable){
         close_all_fd();
         perf_stat_uninit(); 
+		uninit_delta_vars();
     }
 }

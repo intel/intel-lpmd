@@ -30,7 +30,7 @@
 #include <stdbool.h>
 #include <linux/perf_event.h>
 #include <asm/unistd.h>
-
+#include "lpmd.h"
 #include "wlt_proxy_common.h"
 #include "wlt_proxy.h"
 #include "cpu_group.h"
