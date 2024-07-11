@@ -234,6 +234,9 @@ int grp_c0_breach_fast(void);
 int staytime_to_staycount(enum lp_state_idx);
 void perf_stat_uninit(); 
 
+/* perf_msr.c*/
+void uninit_delta_vars(); 
+
 /* helper */
 int fs_write_str(const char *name, char *str);
 int fs_write_str_append(const char *name, char *str);

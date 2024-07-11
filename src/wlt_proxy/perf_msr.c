@@ -103,6 +103,17 @@ int init_delta_vars(int n)
 	return 1;
 }
 
+void uninit_delta_vars(){
+	if (last_aperf) 
+		free(last_aperf);
+	if (last_mperf)
+		free(last_mperf);
+	if (last_pperf)
+		free(last_pperf);
+	if (last_tsc)
+		free(last_tsc); 	
+}
+
 /*
  * Intel Alderlake hardware errata #ADL026: pperf bits 31:64 could be incorrect.
  * https://edc.intel.com/content/www/us/en/design/ipla/software-development-plat
