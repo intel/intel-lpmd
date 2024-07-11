@@ -232,6 +232,7 @@ int breach_per_sec(int);
 int state_toggle_per_sec(int);
 int grp_c0_breach_fast(void);
 int staytime_to_staycount(enum lp_state_idx);
+void perf_stat_uninit(); 
 
 /* helper */
 int fs_write_str(const char *name, char *str);

@@ -32,6 +32,9 @@
 typedef struct {
 	int cpu;
 	int dev_msr_fd;
+	int aperf_fd;
+	int mperf_fd;
+	int pperf_fd; 
 	uint64_t orig_epp;
 	uint64_t orig_epb;
 	uint64_t orig_perf_ctl;
