@@ -141,7 +141,7 @@ pipeline {
                     steps {
                         script {
                             echo "Build ${params.IngredientPlatformTarget}"
-                            BuildIngredient(MetadataFile: MetadataFile)
+                            BuildIngredient(SubComponents: "DTPbuild,DTPbundle", MetadataFile: MetadataFile)
                            // abi.shell("${AgentWorkspace}\\src\\IDF\\Buildpkg.sh")
                         }
                     }

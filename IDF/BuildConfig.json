@@ -28,16 +28,24 @@
     },
     "SubComponents": [
         {
-            "Name": "DTP",
+            "Name": "DTPbuild",
             "Description": "DTP Build",
-            "ProjectFile": "buildDTP.sh",
+            "ProjectFile": "build.sh",
             "ProjectType": "Script",
-            "WorkingDirectory": "IDF",
+            "WorkingDirectory": "package/buildScript",
             "Coverity":{
                 "Stream": "ENV:CoverityStream",
                 "CompilerTemplates":["cs","msvc"],
                 "SkipCoverityScan": false
              }
+        },
+        {
+            "Name": "DTPbundle",
+            "Description": "DTP Bundle Build",
+            "ProjectFile": "bundle.sh",
+            "ProjectType": "Script",
+            "WorkingDirectory": "package/bundleScript"
+            
         }
     ],
     "SchemaVersion": "1.0"

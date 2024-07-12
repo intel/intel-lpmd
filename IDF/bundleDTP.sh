@@ -11,20 +11,23 @@ function execute_cmd {
 }
 
 echo "Printing the current directory"
-cd ../package/buildScript
 
 echo ================================
+cd ../bundleScript
+echo ================================
+
 CURRENTDIR="$( cd "$( dirname "$0" )" && pwd )"
 echo $CURRENTDIR
 echo ================================
-
-echo "Building the DTP Ingredient"
-
+echo "Calling the bundleScript"
 echo ================================
-execute_cmd "chmod +x build.sh"
-execute_cmd "./build.sh"
 
+execute_cmd "chmod +x bundle.sh"
+execute_cmd "./bundle.sh"
+
+echo "Completed....Building the pkgComponents"
 echo ================================
+
 CURRENTFILE="$( cd "$( dirname "$0" )" && pwd )"
 echo $CURRENTFILE
 execute_cmd "ls -lrt"
