@@ -145,6 +145,7 @@ static void lpmd_parse_state(xmlDoc *doc, xmlNode *a_node, lpmd_config_state_t *
 					else
 						snprintf (state->active_cpus, sizeof(state->active_cpus), "%s", tmp_value);
 				}
+				xmlFree(tmp_value);
 			}
 		}
 	}
@@ -184,6 +185,9 @@ static void lpmd_parse_states(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_
 					snprintf (cpu_config, MAX_CONFIG_LEN - 1, "%s", tmp_value);
 					cpu_config[MAX_CONFIG_LEN - 1] = '\0';
 				}
+				
+				if (tmp_value)
+			        xmlFree (tmp_value);
 
 				if (strncmp ((const char*) cur_node->name, "State", strlen ("State")))
 					continue;

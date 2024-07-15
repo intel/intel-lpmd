@@ -193,7 +193,7 @@ void open_amperf_fd(int cpu)
 	perf_stats[cpu].pperf_fd = open_perf_counter(cpu, msr_type, pperf_config, perf_stats[cpu].aperf_fd, PERF_FORMAT_GROUP);	
 }
 
-static int get_amperf_fd(int cpu)
+int get_amperf_fd(int cpu)
 {
 	if (perf_stats[cpu].aperf_fd)
 		return perf_stats[cpu].aperf_fd;
@@ -204,7 +204,7 @@ static int get_amperf_fd(int cpu)
 }
 
 
-static unsigned long long rdtsc(void)
+unsigned long long rdtsc(void)
 {
 	unsigned int low, high;
 
@@ -215,7 +215,7 @@ static unsigned long long rdtsc(void)
 
 
 /* Read APERF, MPERF and TSC using the perf API. */
-static int read_aperf_mperf_tsc_perf(struct thread_data *t, int cpu)
+int read_aperf_mperf_tsc_perf(struct thread_data *t, int cpu)
 {
 	union {
 		struct {
@@ -951,9 +951,15 @@ void update_state_epb(enum lp_state_idx state)
 int perf_stat_init(void)
 {
 	int max_cpus = get_max_cpus();
+	perf_stats = NULL; 
 	perf_stats = malloc(sizeof(perf_stats_t) * max_cpus);
+    if ( !perf_stats ) {
+        return 0;
+    }
 
 	for (int t = 0; t < max_cpus; t++) {
+        memset( &perf_stats[t], 0, sizeof(perf_stats_t));
+
 		if (!is_cpu_online(t))
 			continue;
 		perf_stats[t].cpu = t;
@@ -968,8 +974,13 @@ int perf_stat_init(void)
 }
 
 void perf_stat_uninit(){
-	if (perf_stats)
-	    free(perf_stats); 
+    int max_cpus = get_max_cpus();
+	if (perf_stats) {
+	    for (size_t i = 0; i < max_cpus; ++i) {
+            memset( &perf_stats[i], 0, sizeof(perf_stats_t));	        	    
+    	}
+    	free(perf_stats); 
+	}
 
 }
 

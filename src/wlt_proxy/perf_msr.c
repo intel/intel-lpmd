@@ -16,12 +16,13 @@
  */
 
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-
+#include "wlt_proxy_common.h"
 #include "perf_msr.h"
 
 int cpu_hfm_mhz;
@@ -100,6 +101,13 @@ int init_delta_vars(int n)
 		printf("malloc failure perf vars\n");
 		return 0;
 	}
+	
+    for (size_t i = 0; i < n; ++i) {
+        memset( &last_aperf[i], 0, sizeof(uint64_t));
+        memset( &last_mperf[i], 0, sizeof(uint64_t));
+        memset( &last_pperf[i], 0, sizeof(uint64_t));
+        memset( &last_tsc[i], 0, sizeof(uint64_t));                        
+    }		
 	return 1;
 }
 

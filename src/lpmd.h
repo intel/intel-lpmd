@@ -284,6 +284,7 @@ int check_cpu_capability(lpmd_config_t *lpmd_config);
 int init_cpu(char *cmd_cpus, enum lpm_cpu_process_mode mode, int lp_mode_epp);
 int process_cpus(int enter, enum lpm_cpu_process_mode mode);
 int parse_cpu_str(char *buf, enum cpumask_idx idx);
+void uninit_cpu(); 
 
 /* cpu.c: helpers */
 int is_cpu_online(int cpu);

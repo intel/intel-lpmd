@@ -50,7 +50,7 @@
 #include <systemd/sd-bus.h>
 
 #include "lpmd.h"
-
+#define valgrind_build 1
 static int topo_max_cpus;
 static int max_online_cpu;
 static size_t size_cpumask;
@@ -609,6 +609,7 @@ int init_epp_epb(void)
 	saved_cpu_info = malloc (sizeof(struct cpu_info) * max_cpus);
 
 	for (c = 0; c < max_cpus; c++) {
+    	memset( &saved_cpu_info[c], 0, sizeof(struct cpu_info));
 		saved_cpu_info[c].epp_str[0] = '\0';
 		saved_cpu_info[c].epp = -1;
 
@@ -875,7 +876,11 @@ static int detect_supported_cpu(lpmd_config_t *lpmd_config)
 	/* Unsupported model */
         if (!id_table[val].family || max_level < 0x1a) {
 		lpmd_log_info("Unsupported platform\n");
+#ifdef valgrind_build
+		lpmd_log_info("valgrind build only, continue\n");
+#else		
 		return -1;
+#endif		
         }
 
 	lpmd_config->cpu_family = family;
@@ -1811,7 +1816,11 @@ int check_cpu_capability(lpmd_config_t *lpmd_config)
 	ret = detect_supported_cpu(lpmd_config);
 	if (ret) {
 		lpmd_log_info("Unsupported CPU type\n");
+#ifdef valgrind_build			
+		lpmd_log_info("valgrind build only, continue\n");
+#else
 		return ret;
+#endif		
 	}
 
 	ret = set_max_cpu_num ();
@@ -1855,6 +1864,16 @@ int check_cpu_capability(lpmd_config_t *lpmd_config)
 	lpmd_config->cpu_config[ret] = '\0';
 
 	return 0;
+}
+
+void uninit_cpu(){
+    int max_cpus = get_max_cpus ();
+    if (saved_cpu_info){
+    	for (int c = 0; c < max_cpus; c++) {
+            memset( &saved_cpu_info[c], 0, sizeof(struct cpu_info));
+        }
+        free(saved_cpu_info); 
+    }        
 }
 
 int init_cpu(char *cmd_cpus, enum lpm_cpu_process_mode mode, int epp)

@@ -144,7 +144,8 @@ static gboolean sig_int_handler(void)
 {
 //	 Call terminate function
 	lpmd_terminate ();
-
+	wlt_proxy_uninit();
+	
 	sleep (1);
 
 	if (g_main_loop)
@@ -152,9 +153,7 @@ static gboolean sig_int_handler(void)
 
 //	 Clean up if any
 	clean_up_lockfile ();
-	wlt_proxy_uninit(); 
-
-	exit (EXIT_SUCCESS);
+ 	exit (EXIT_SUCCESS);
 
 	return FALSE;
 }
@@ -210,11 +209,13 @@ int main(int argc, char *argv[])
 				"This work is licensed under GPL v2.\n\n"
 				"Use \"man intel_lpmd\" to get more details.");
 
-	success = g_option_context_parse (opt_ctx, &argc, &argv, NULL);
+    GError *error = NULL;
+	success = g_option_context_parse (opt_ctx, &argc, &argv, &error);
 	g_option_context_free (opt_ctx);
 
 	if (!success) {
 		fprintf (stderr, "Invalid option.  Please use --help to see a list of valid options.\n");
+		g_error_free (error);
 		exit (EXIT_FAILURE);
 	}
 

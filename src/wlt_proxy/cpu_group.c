@@ -661,7 +661,8 @@ static int add_cpu_proxy(int cpu, enum lp_state_idx idx)
 static void reset_cpus_proxy(enum lp_state_idx idx)
 {
 	if (lp_state[idx].mask)
-		CPU_ZERO_S(size_cpumask, lp_state[idx].mask);
+		//CPU_ZERO_S(size_cpumask, lp_state[idx].mask);
+		CPU_FREE(lp_state[idx].mask);
 	free(lp_state[idx].str);
 	free(lp_state[idx].str_reverse);
 	free(lp_state[idx].hexstr);
@@ -710,9 +711,9 @@ static int set_max_cpu_num(void)
 
 int parse_cpu_topology(void)
 {
-	FILE *filep;
+	FILE *filep = NULL;
 	int i,ret;
-	char path[MAX_STR_LENGTH];
+	char path[MAX_STR_LENGTH] = "";
 
 	reset_cpus_proxy(INIT_MODE);
 	/* kenrel 6.5 cpu0 is considered always online */
@@ -720,7 +721,7 @@ int parse_cpu_topology(void)
 	max_online_cpu++;
 
 	for (i = 1; i < topo_max_cpus; i++) {
-		char online[8];
+		char online[8]= "";
 
 		snprintf(path, sizeof(path),
 			 "/sys/devices/system/cpu/cpu%d/online", i);
@@ -730,6 +731,7 @@ int parse_cpu_topology(void)
             if (!ret) {
                 log_err("read failure\n");            
             }
+            fclose(filep);
 		} else
 			break;
 
@@ -1247,4 +1249,11 @@ int init_cpu_proxy(void)
 		return ret;
 
 	return 0;
+}
+
+
+void uninit_cpu_proxy(){
+	for (int idx = INIT_MODE + 1; idx < MAX_MODE; idx++) {
+        reset_cpus_proxy(idx);
+	}
 }
