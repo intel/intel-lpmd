@@ -30,7 +30,6 @@
 #include <sys/mount.h>
 #include <sys/time.h>
 #include <sys/un.h>
-
 #include "wlt_proxy_common.h"
 
 static char output_file[MAX_STR_LENGTH];
@@ -390,7 +389,7 @@ int init_cgroup_fd(void)
 	if (!dir) {
 		ret = mkdir("/sys/fs/cgroup/eco", 0744);
 		if (ret) {
-			printf("Can't create dir:%s errno:%d\n",
+			log_debug("Can't create dir:%s errno:%d\n",
 			       "/sys/fs/cgroup/eco", errno);
 			return ret;
 		}

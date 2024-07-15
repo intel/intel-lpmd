@@ -374,7 +374,6 @@ int update_perf_diffs(float *sum_norm_perf, int stat_init_only)
 		    (float)perf_stats[maxed_cpu].aperf_diff * 0.01 /
 		    perf_stats[maxed_cpu].mperf_diff * cpu_hfm_mhz;
 	grp.worst_stall = min_s0;
-//printf("test, grp.worst_stall %.2f\n", grp.worst_stall);
 	grp.worst_stall_cpu = min_s0_cpu;
 
 	grp.c0_max = max_load;
@@ -424,15 +423,6 @@ int do_sum(int *sam, int len)
 	return sum;
 }
 
-void print_sma(void)
-{
-	for (int i = 0; i < SMA_CPU_COUNT; i++) {
-		for (int j = 0; j < SMA_LENGTH; j++)
-			printf(" %d ", sample[i][j]);
-		printf("\n");
-	}
-	printf("\n");
-}
 
 #define SCALE_DECIMAL (100)
 int state_max_avg()
@@ -548,7 +538,7 @@ int prep_state_change(enum lp_state_idx from_state, enum lp_state_idx to_state,
     //switch(to_state)
     //do to_state to WLT mapping
     int type = get_state_mapping((int)to_state); 
-    printf("proxy WLT hint :%d\n", type);
+    lpmd_log_info("proxy WLT state value :%d\n", type);
 	set_workload_hint(type);
 
 	set_cur_state(to_state);
@@ -924,7 +914,7 @@ void *state_handler(void)
 				  util_max, next_state, next_poll);
 			usleep(next_poll * 1000);
 		} else {
-			printf("unknown state %d", next_state);
+			lpmd_log_info("unknown state %d", next_state);
 			break;
 		}
 	}
@@ -933,7 +923,6 @@ void *state_handler(void)
 
 void update_state_epp(enum lp_state_idx state)
 {
-//printf("test: update epp of state %d\n", state);
 	for (int t = 0; t < get_max_online_cpu(); t++) {
 		update_epp(perf_stats[t].dev_msr_fd,
 			   (uint64_t) get_state_epp(state));
@@ -1008,7 +997,6 @@ int revert_orig_epb(void)
 /* EP Preference. XXX switch to sysfs */
 uint32_t update_epp(int fd, uint64_t new_value)
 {
-//printf("test: update epp to %ld\n", new_value);
 	uint64_t orig_value;
 	read_msr(fd, (uint32_t) MSR_HWP, &orig_value);
 	new_value = (((orig_value << 40) >> 40) | (new_value << 24));
