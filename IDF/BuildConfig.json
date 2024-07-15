@@ -35,7 +35,6 @@
             "WorkingDirectory": "package/buildScript",
             "Coverity":{
                 "Stream": "ENV:CoverityStream",
-                "CompilerTemplates":["cs","msvc"],
                 "SkipCoverityScan": false
              }
         },
