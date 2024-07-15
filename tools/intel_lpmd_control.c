@@ -21,24 +21,31 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <sys/types.h>
-#include <dbus/dbus-glib.h>
+
+#include <glib.h>
+#include <glib/gprintf.h>
+
+#include <gio/gio.h>
+#include <gio/gdbusmessage.h>
 
 #define INTEL_LPMD_SERVICE_NAME         "org.freedesktop.intel_lpmd"
 #define INTEL_LPMD_SERVICE_OBJECT_PATH  "/org/freedesktop/intel_lpmd"
 #define INTEL_LPMD_SERVICE_INTERFACE    "org.freedesktop.intel_lpmd"
 
-int main(int argc, char **argv)
+int
+main(int argc, char **argv)
 {
+	g_autoptr(GDBusConnection) connection = NULL;
+	g_autoptr (GString) command = NULL;
 	GError *error = NULL;
-	DBusGConnection *bus;
-	DBusGProxy *proxy;
-	char command[20];
 
 	if (geteuid () != 0) {
-		fprintf (stderr, "Must run as root\n");
-		exit (0);
+		g_warning ("Must run as root");
+		exit (1);
 	}
 
 	if (argc < 2) {
@@ -49,28 +56,36 @@ int main(int argc, char **argv)
 	}
 
 	if (!strncmp (argv[1], "ON", 2))
-		strcpy (command, "LPM_FORCE_ON");
+		command = g_string_new ("LPM_FORCE_ON");
 	else if (!strncmp (argv[1], "OFF", 3))
-		strcpy (command, "LPM_FORCE_OFF");
+		command = g_string_new ("LPM_FORCE_OFF");
 	else if (!strncmp (argv[1], "AUTO", 4))
-		strcpy (command, "LPM_AUTO");
+		command = g_string_new ("LPM_AUTO");
 	else {
-		fprintf (stderr, "intel_lpmd_control: Invalid command\n");
-		exit (0);
+		g_warning ("intel_lpmd_control: Invalid command");
+		exit (1);
 	}
 
-	bus = dbus_g_bus_get (DBUS_BUS_SYSTEM, &error);
-	if (!bus) {
-		g_warning ("Unable to connect to system bus: %s", error->message);
-		g_error_free (error);
+	connection = g_bus_get_sync(G_BUS_TYPE_SYSTEM, NULL, &error);
+	if (connection == NULL)
+		return FALSE;
+
+	g_dbus_connection_call_sync (connection,
+				     INTEL_LPMD_SERVICE_NAME,
+				     INTEL_LPMD_SERVICE_OBJECT_PATH,
+				     INTEL_LPMD_SERVICE_INTERFACE,
+				     command->str,
+				     NULL,
+				     NULL,
+				     G_DBUS_CALL_FLAGS_NONE,
+				     -1,
+				     NULL,
+				     &error);
+
+	if (error != NULL) {
+		g_warning ("Fail on connecting lpmd: %s", error->message);
+		exit (1);
 	}
 
-	proxy = dbus_g_proxy_new_for_name (bus, INTEL_LPMD_SERVICE_NAME,
-									   INTEL_LPMD_SERVICE_OBJECT_PATH,
-									   INTEL_LPMD_SERVICE_INTERFACE);
-
-	if (!dbus_g_proxy_call (proxy, command, &error, G_TYPE_INVALID, G_TYPE_INVALID)) {
-		g_warning ("Failed to send message: %s", error->message);
-		g_error_free (error);
-	}
+	return 0;
 }
