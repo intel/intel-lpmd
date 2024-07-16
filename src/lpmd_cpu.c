@@ -861,11 +861,12 @@ static int detect_supported_cpu(lpmd_config_t *lpmd_config)
 	cpuid(0, eax, ebx, ecx, edx);
 
 	/* Unsupported vendor */
-        if (ebx != 0x756e6547 || edx != 0x49656e69 || ecx != 0x6c65746e)
+        if (ebx != 0x756e6547 || edx != 0x49656e69 || ecx != 0x6c65746e) {
+		lpmd_log_info("Unsupported vendor\n");
 		return -1;
+	}
 
 	max_level = eax;
-
 	cpuid(1, eax, ebx, ecx, edx);
 	family = (eax >> 8) & 0xf;
 	model = (eax >> 4) & 0xf;
@@ -877,6 +878,32 @@ static int detect_supported_cpu(lpmd_config_t *lpmd_config)
 	lpmd_log_info("%u CPUID levels; family:model:stepping 0x%x:%x:%x (%u:%u:%u)\n",
 			max_level, family, model, stepping, family, model, stepping);
 
+	/* Need CPUID.1A to detect CPU core type */
+        if (max_level < 0x1a) {
+		lpmd_log_info("CPUID leaf 0x1a not supported, unable to detect CPU type\n");
+		return -1;
+        }
+
+	cpuid_count(7, 0, eax, ebx, ecx, edx);
+
+	/* Run on Hybrid platforms only */
+	if (!(edx & CPUFEATURE_HYBRID)) {
+		lpmd_log_info("Non-Hybrid platform detected\n");
+		return -1;
+	}
+
+	/* /sys/firmware/acpi/pm_profile is mandatory */
+	if (lpmd_read_int(PATH_PM_PROFILE, &val, -1)) {
+		lpmd_log_info("Failed to read PM profile %s\n", PATH_PM_PROFILE);
+		return -1;
+	}
+
+	if (val != 2) {
+		lpmd_log_info("Non-Mobile PM profile detected. %s returns %d\n", PATH_PM_PROFILE, val);
+		return -1;
+	}
+
+	/* Platform meets all the criterias for lpmd to run, check the allow list */
 	val = 0;
 	while (id_table[val].family) {
 		if (id_table[val].family == family && id_table[val].model == model)
@@ -885,32 +912,19 @@ static int detect_supported_cpu(lpmd_config_t *lpmd_config)
         }
 
 	/* Unsupported model */
-        if (!id_table[val].family || max_level < 0x1a) {
-		lpmd_log_info("Unsupported platform\n");
+	if (!id_table[val].family) {
+		lpmd_log_info("Platform not supported yet.\n");
+		lpmd_log_debug("Supported platforms:\n");
+		val = 0;
+		while (id_table[val].family) {
+			lpmd_log_debug("\tfamily %d model %d\n", id_table[val].family, id_table[val].model);
+			val++;
+		}
 		return -1;
-        }
+	}
 
 	lpmd_config->cpu_family = family;
 	lpmd_config->cpu_model = model;
-
-	cpuid_count(7, 0, eax, ebx, ecx, edx);
-
-	/* Run on Hybrid platforms only */
-	if (!(edx & CPUFEATURE_HYBRID)) {
-		lpmd_log_debug("Non-Hybrid platform detected\n");
-		return -1;
-	}
-
-	/* /sys/firmware/acpi/pm_profile is mandatory */
-	if (lpmd_read_int(PATH_PM_PROFILE, &val, -1)) {
-		lpmd_log_debug("Failed to read %s\n", PATH_PM_PROFILE);
-		return -1;
-	}
-
-	if (val != 2) {
-		lpmd_log_debug("Non Mobile platform detected\n");
-		return -1;
-	}
 
 	return 0;
 }
