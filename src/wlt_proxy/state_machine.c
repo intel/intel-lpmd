@@ -126,6 +126,7 @@ int state_machine_auto(int present_state)
 			break;
 		}		
 		// Stay -- all else
+		lpmd_log_info("stay in PERF_MODE\n");
 		break;
 
 	case RESP_MODE:
@@ -188,7 +189,7 @@ int state_machine_auto(int present_state)
 		if (A_GTE_B(grp.sma_avg1, SUS_LOW_RANGE_END) &&
 		    A_GTE_B(grp.sma_avg2, (SUS_LOW_RANGE_END - 5))) {
 			prep_state_change(MDRT3E_MODE, MDRT4E_MODE, 0);
-            lpmd_log_info("MDRT3E_MODE to PERF_MODE %d < %d\n", grp.sma_avg1, SUS_LOW_RANGE_END);				
+            lpmd_log_info("MDRT3E_MODE to MDRT4E_MODE %d < %d\n", grp.sma_avg1, SUS_LOW_RANGE_END);				
 			break;
 		}
 		// promote
