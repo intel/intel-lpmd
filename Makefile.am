@@ -60,7 +60,6 @@ intel_lpmd_SOURCES = \
     src/wlt_proxy/spike_mgmt.c \    
     src/wlt_proxy/state_machine.c \
     src/wlt_proxy/util.c \
-    src/wlt_proxy/irq.c \
     src/wlt_proxy/perf_msr.c \
     src/wlt_proxy/cpu_group.c \
 	src/weights/power-supply-status.c \
