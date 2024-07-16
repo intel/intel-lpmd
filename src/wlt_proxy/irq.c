@@ -18,7 +18,8 @@
 #include <string.h>
 #include <ctype.h>
 
-#include "common.h"
+#include "wlt_proxy_common.h"
+//#include "wlt_proxy.h"
 #include "cpu_group.h"
 
 /* 
