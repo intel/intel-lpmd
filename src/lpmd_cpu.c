@@ -402,10 +402,14 @@ int add_cpu(int cpu, enum cpumask_idx idx)
 	if (idx & (CPUMASK_HFI | CPUMASK_HFI_SUV | CPUMASK_HFI_BANNED))
 		return 0;
 
-	if (idx == CPUMASK_LPM_DEFAULT)
+	if (idx == CPUMASK_LPM_DEFAULT) {
 		lpmd_log_info ("\tDetected %s CPU%d\n", cpumasks[idx].name, cpu);
-	else
-		lpmd_log_debug ("\tDetected %s CPU%d\n", cpumasks[idx].name, cpu);
+	} else {
+		if (idx < CPUMASK_MAX)
+			lpmd_log_debug ("\tDetected %s CPU%d\n", cpumasks[idx].name, cpu);
+		else
+			lpmd_log_debug ("\tIncorrect CPU ID for CPU%d\n", cpu);
+	}
 
 	return 0;
 }
