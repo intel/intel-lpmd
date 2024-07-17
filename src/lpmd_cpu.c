@@ -50,7 +50,7 @@
 #include <systemd/sd-bus.h>
 
 #include "lpmd.h"
-#define valgrind_build 1
+#define valgrind_build 0
 static int topo_max_cpus;
 static int max_online_cpu;
 static size_t size_cpumask;
