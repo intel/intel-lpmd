@@ -679,7 +679,7 @@ static void reset_cpus_proxy(enum lp_state_idx idx)
 #define BITMASK_SIZE 32
 static int set_max_cpu_num(void)
 {
-	FILE *filep;
+	FILE *filep=NULL;
 	unsigned long dummy;
 	int i;
 
@@ -729,7 +729,7 @@ int parse_cpu_topology(void)
 		if (filep) {
 			ret = fread(&online, sizeof(online), 1, filep);
             if (!ret) {
-                log_err("read failure\n");            
+                lpmd_log_debug("unable to read cpu %d online status\n", i);            
             }
             fclose(filep);
 		} else
