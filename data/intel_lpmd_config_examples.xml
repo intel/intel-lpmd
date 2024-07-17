@@ -1,0 +1,213 @@
+<?xml version="1.0"?>
+
+<!--
+Specifies the configuration data
+for Intel Low Power Mode daemon
+-->
+
+<Configuration>
+	<!--
+		CPU format example: 1,2,4..6,8-10
+	-->
+	<lp_mode_cpus></lp_mode_cpus>
+
+	<!--
+		EPP to use in Low Power Mode
+		0-255: Valid EPP value to use in Low Power Mode
+		   -1: Don't change EPP in Low Power Mode
+	-->
+	<lp_mode_epp>-1</lp_mode_epp>
+
+	<!--
+		Mode values
+		0: Cgroup v2
+		1: Cgroup v2 isolate
+		2: CPU idle injection
+	-->
+	<Mode>0</Mode>
+
+	<!--
+		Default behavior when Performance power setting is used
+		-1: force off. (Never enter Low Power Mode)
+		 1: force on. (Always stay in Low Power Mode)
+		 0: auto. (opportunistic Low Power Mode enter/exit)
+	-->
+	<PerformanceDef>-1</PerformanceDef>
+
+	<!--
+		Default behavior when Balanced power setting is used
+		-1: force off. (Never enter Low Power Mode)
+		 1: force on. (Always stay in Low Power Mode)
+		 0: auto. (opportunistic Low Power Mode enter/exit)
+	-->
+	<BalancedDef>-1</BalancedDef>
+
+	<!--
+		Default behavior when Power saver setting is used
+		-1: force off. (Never enter Low Power Mode)
+		 1: force on. (Always stay in Low Power Mode)
+		 0: auto. (opportunistic Low Power Mode enter/exit)
+	-->
+	<PowersaverDef>-1</PowersaverDef>
+
+	<!--
+		Use HFI LPM hints
+		0 : No
+		1 : Yes
+	-->
+	<HfiLpmEnable>0</HfiLpmEnable>
+
+	<!--
+		Use WLT hints
+		0 : No
+		1 : Yes
+	-->
+	<WLTHintEnable>0</WLTHintEnable>
+
+	<!--
+		Use HFI SUV hints
+		0 : No
+		1 : Yes
+	-->
+	<HfiSuvEnable>0</HfiSuvEnable>
+
+	<!--
+		System utilization threshold to enter LP mode
+		from 0 - 100
+		clear both util_entry_threshold and util_exit_threshold to disable util monitor
+	-->
+	<util_entry_threshold>10</util_entry_threshold>
+
+	<!--
+		System utilization threshold to exit LP mode
+		from 0 - 100
+		clear both util_entry_threshold and util_exit_threshold to disable util monitor
+	-->
+	<util_exit_threshold>95</util_exit_threshold>
+
+	<!--
+		Entry delay. Minimum delay in non Low Power mode to
+		enter LPM mode.
+	-->
+	<EntryDelayMS>0</EntryDelayMS>
+
+	<!--
+		Exit delay. Minimum delay in Low Power mode to
+		exit LPM mode.
+	-->
+	<ExitDelayMS>0</ExitDelayMS>
+
+	<!--
+		Lowest hysteresis average in-LP-mode time in msec to enter LP mode
+		0: to disable hysteresis support
+	-->
+	<EntryHystMS>0</EntryHystMS>
+
+	<!--
+		Lowest hysteresis average out-of-LP-mode time in msec to exit LP mode
+		0: to disable hysteresis support
+	-->
+	<ExitHystMS>0</ExitHystMS>
+
+	<!--
+		Ignore ITMT setting during LP-mode enter/exit
+		0: disable ITMT upon LP-mode enter and re-enable ITMT upon LP-mode exit
+		1: do not touch ITMT setting during LP-mode enter/exit
+	-->
+	<IgnoreITMT>0</IgnoreITMT>
+
+	<!--
+		Example WorkLoad Type hints based config states applied to
+		12Pcore-8Ecore-2Lcore 28W TDP Meteor Lake platform.
+		Need to set WLTHintEnable to make it work.
+	-->
+	<States>
+		<CPUFamily> 6 </CPUFamily>
+		<CPUModel> 170 </CPUModel>
+		<CPUConfig> 12P8E2L-28W </CPUConfig>
+		<State>
+			<ID> 1 </ID>
+			<Name> WLT_IDLE </Name>
+			<WLTType> 0 </WLTType>
+			<EPP> 255 </EPP>
+			<ITMTState> -1 </ITMTState>
+			<IRQMigrate> -1 </IRQMigrate>
+		</State>
+		<State>
+			<ID> 2 </ID>
+			<Name> WLT_BATTERY_LIFE </Name>
+			<WLTType> 1 </WLTType>
+			<EPP> 192 </EPP>
+			<ITMTState> -1 </ITMTState>
+			<IRQMigrate> -1 </IRQMigrate>
+		</State>
+		<State>
+			<ID> 3 </ID>
+			<Name> WLT_SUSTAINED </Name>
+			<WLTType> 2 </WLTType>
+			<EPP> 64 </EPP>
+			<ITMTState> -1 </ITMTState>
+			<IRQMigrate> -1 </IRQMigrate>
+		</State>
+		<State>
+			<ID> 4 </ID>
+			<Name> WLT_BURSTY </Name>
+			<WLTType> 3 </WLTType>
+			<EPP> 64 </EPP>
+			<ITMTState> -1 </ITMTState>
+			<IRQMigrate> -1 </IRQMigrate>
+		</State>
+	</States>
+
+	<!--
+		Example Utilization based config states applied to
+		4Pcore-8Ecore-2Lcore 15W TDP Meteor Lake platform.
+	-->
+	<States>
+		<CPUFamily> 6 </CPUFamily>
+		<CPUModel> 170 </CPUModel>
+		<CPUConfig> 4P8E2L-15W </CPUConfig>
+		<State>
+			<ID> 1 </ID>
+			<Name> LPM_DEEP </Name>
+			<EntrySystemLoadThres> 2 </EntrySystemLoadThres>
+			<EnterCPULoadThres> 50 </EnterCPULoadThres>
+			<EPP> -1 </EPP>
+			<EPB> -1 </EPB>
+			<ITMTState> -1 </ITMTState>
+			<IRQMigrate> -1 </IRQMigrate>
+			<ActiveCPUs>16,17</ActiveCPUs>
+			<MinPollInterval> 500 </MinPollInterval>
+			<PollIntervalIncrement> 500 </PollIntervalIncrement>
+			<MaxPollInterval> 2000 </MaxPollInterval>
+		</State>
+		<State>
+			<ID> 2 </ID>
+			<Name> LPM_LOW </Name>
+			<EntrySystemLoadThres> 10 </EntrySystemLoadThres>
+			<ExitSystemLoadhysteresis> 3 </ExitSystemLoadhysteresis>
+			<EPP> -1 </EPP>
+			<EPB> -1 </EPB>
+			<ITMTState> -1 </ITMTState>
+			<IRQMigrate> -1 </IRQMigrate>
+			<ActiveCPUs>12,13,14,15</ActiveCPUs>
+			<MinPollInterval> 1000 </MinPollInterval>
+			<PollIntervalIncrement> 1000 </PollIntervalIncrement>
+			<MaxPollInterval> 3000 </MaxPollInterval>
+		</State>
+		<State>
+			<ID> 3 </ID>
+			<Name> FULL_POWER </Name>
+			<EntrySystemLoadThres></EntrySystemLoadThres>
+			<EnterCPULoadThres></EnterCPULoadThres>
+			<EPP> -1 </EPP>
+			<EPB> -1 </EPB>
+			<ITMTState> -1 </ITMTState>
+			<IRQMigrate> -1 </IRQMigrate>
+			<ActiveCPUs>0-17</ActiveCPUs>
+			<MinPollInterval> 500 </MinPollInterval>
+			<PollIntervalIncrement> -1 </PollIntervalIncrement>
+			<MaxPollInterval> 2000 </MaxPollInterval>
+		</State>
+	</States>
+</Configuration>

@@ -183,57 +183,95 @@ static int suv_bit_set(void)
 	return 0;
 }
 
-static void update_one_cpu(struct perf_cap *perf_cap)
+/*
+ * Detect differernt kinds of CPU HFI hint
+ * "LPM". EFF == 255
+ * "SUV". PERF == EFF == 0, suv bit set.
+ * "BAN". PERF == EFF == 0, suv bit not set.
+ * "NOR".
+ */
+static char *update_one_cpu(struct perf_cap *perf_cap)
 {
 	if (perf_cap->cpu < 0)
-		return;
+		return NULL;
 
-	if (perf_cap->eff == 255 * 4 && has_hfi_lpm_monitor ())
+	if (!perf_cap->cpu) {
+		reset_cpus (CPUMASK_HFI);
+		reset_cpus (CPUMASK_HFI_BANNED);
+	}
+
+	if (perf_cap->eff == 255 * 4 && has_hfi_lpm_monitor ()) {
 		add_cpu (perf_cap->cpu, CPUMASK_HFI);
-	if (!perf_cap->perf && !perf_cap->eff && has_hfi_suv_monitor () && suv_bit_set ())
+		return "LPM";
+	}
+	if (!perf_cap->perf && !perf_cap->eff && has_hfi_suv_monitor () && suv_bit_set ()) {
 		add_cpu (perf_cap->cpu, CPUMASK_HFI_SUV);
+		return "SUV";
+	}
+	if (!perf_cap->perf && !perf_cap->eff) {
+		add_cpu (perf_cap->cpu, CPUMASK_HFI_BANNED);
+		return "BAN";
+	}
+	return "NOR";
 }
 
 static void process_one_event(int first, int last, int nr)
 {
-	static int in_lpm = 0;
+	/* Need to update more CPUs */
+	if (nr == 16 && last != get_max_online_cpu ())
+		return;
 
-	if (nr < 16 || last >= get_max_online_cpu () - 1) {
-		if (has_cpus (CPUMASK_HFI)) {
-			if (in_lpm) {
-				lpmd_log_debug ("\tRedundant HFI LPM event ignored\n\n");
-			}
-			else {
-				lpmd_log_debug ("\tHFI LPM hints detected\n");
-				process_lpm (HFI_ENTER);
-				in_lpm = 1;
-			}
-			reset_cpus (CPUMASK_HFI);
-		}
-		else if (has_cpus (CPUMASK_HFI_SUV)) {
-			if (in_hfi_suv_mode ()) {
-				lpmd_log_debug ("\tRedundant HFI SUV event ignored\n\n");
-			}
-			else {
-				lpmd_log_debug ("\tHFI SUV hints detected\n");
-				process_suv_mode (HFI_SUV_ENTER);
-			}
-			reset_cpus (CPUMASK_HFI_SUV);
-		}
-		else if (in_lpm) {
-			lpmd_log_debug ("\tHFI LPM recover\n");
-//			 Don't override the DETECT_LPM_CPU_DEFAULT so it is auto recovered
-			process_lpm (HFI_EXIT);
-			in_lpm = 0;
-		}
-		else if (in_hfi_suv_mode ()) {
-			lpmd_log_debug ("\tHFI SUV recover\n");
-//			 Don't override the DETECT_LPM_CPU_DEFAULT so it is auto recovered
-			process_suv_mode (HFI_SUV_EXIT);
+	if (has_cpus (CPUMASK_HFI)) {
+		/* Ignore duplicate event */
+		if (is_equal (CPUMASK_HFI_LAST, CPUMASK_HFI ))
+			return;
+		if (in_hfi_lpm ()) {
+			lpmd_log_debug ("\tUpdate HFI LPM event\n\n");
 		}
 		else {
-			lpmd_log_info ("\t\t\tUnsupported HFI event ignored\n");
+			lpmd_log_debug ("\tDetect HFI LPM event\n");
 		}
+		process_lpm (HFI_ENTER);
+		reset_cpus (CPUMASK_HFI_LAST);
+		copy_cpu_mask(CPUMASK_HFI, CPUMASK_HFI_LAST);
+	}
+	else if (has_cpus (CPUMASK_HFI_SUV)) {
+		if (in_suv_lpm ()) {
+			lpmd_log_debug ("\tUpdate HFI SUV event\n\n");
+		}
+		else {
+			lpmd_log_debug ("\tDetect HFI SUV event\n");
+		}
+//		 TODO: SUV re-enter is not supported for now
+		process_suv_mode (HFI_SUV_ENTER);
+	}
+	else if (has_cpus (CPUMASK_HFI_BANNED)) {
+		copy_cpu_mask_exclude(CPUMASK_ONLINE, CPUMASK_HFI, CPUMASK_HFI_BANNED);
+		/* Ignore duplicate event */
+		if (is_equal (CPUMASK_HFI_LAST, CPUMASK_HFI ))
+			return;
+		if (in_hfi_lpm ()) {
+			lpmd_log_debug ("\tUpdate HFI LPM event with banned CPUs\n\n");
+		}
+		else {
+			lpmd_log_debug ("\tDetect HFI LPM event with banned CPUs\n");
+		}
+		process_lpm (HFI_ENTER);
+		reset_cpus (CPUMASK_HFI_LAST);
+		copy_cpu_mask(CPUMASK_HFI, CPUMASK_HFI_LAST);
+	}
+	else if (in_hfi_lpm ()) {
+		lpmd_log_debug ("\tHFI LPM recover\n");
+//		 Don't override the DETECT_LPM_CPU_DEFAULT so it is auto recovered
+		process_lpm (HFI_EXIT);
+	}
+	else if (in_suv_lpm ()) {
+		lpmd_log_debug ("\tHFI SUV recover\n");
+//		 Don't override the DETECT_LPM_CPU_DEFAULT so it is auto recovered
+		process_suv_mode (HFI_SUV_EXIT);
+	}
+	else {
+		lpmd_log_info ("\t\t\tUnsupported HFI event ignored\n");
 	}
 }
 
@@ -242,56 +280,59 @@ static int handle_event(struct nl_msg *n, void *arg)
 	struct nlmsghdr *nlh = nlmsg_hdr (n);
 	struct genlmsghdr *genlhdr = genlmsg_hdr (nlh);
 	struct nlattr *attrs[THERMAL_GENL_ATTR_MAX + 1];
-	int first_cpu = -1, last_cpu = -1, nr_cpus = 0;
+	struct nlattr *cap;
 	struct perf_cap perf_cap;
-	int ret;
+	int first_cpu = -1, last_cpu = -1, nr_cpus = 0;
+	int j, index = 0, offset = 0;
+	char buf[MAX_STR_LENGTH];
 
-	ret = genlmsg_parse (nlh, 0, attrs, THERMAL_GENL_ATTR_MAX, NULL);
-	if (ret)
+	if (genlhdr->cmd != THERMAL_GENL_EVENT_CAPACITY_CHANGE)
+		return 0;
+
+	if (genlmsg_parse (nlh, 0, attrs, THERMAL_GENL_ATTR_MAX, NULL))
 		return -1;
 
 	perf_cap.cpu = perf_cap.perf = perf_cap.eff = -1;
 
-	if (genlhdr->cmd == THERMAL_GENL_EVENT_CAPACITY_CHANGE) {
-		struct nlattr *cap;
-		int j, index = 0, offset = 0;
-		char buf[MAX_STR_LENGTH];
+	nla_for_each_nested (cap, attrs[THERMAL_GENL_ATTR_CAPACITY], j)
+	{
 
-		nla_for_each_nested (cap, attrs[THERMAL_GENL_ATTR_CAPACITY], j)
-		{
+		switch (index) {
+			case 0:
+				offset += snprintf (buf + offset, MAX_STR_LENGTH - offset, "\tCPU %3d: ",
+									nla_get_u32 (cap));
+				perf_cap.cpu = nla_get_u32 (cap);
+				break;
+			case 1:
+				offset += snprintf (buf + offset, MAX_STR_LENGTH - offset, " PERF [%4d] ",
+									nla_get_u32 (cap));
+				perf_cap.perf = nla_get_u32 (cap);
+				break;
+			case 2:
+				offset += snprintf (buf + offset, MAX_STR_LENGTH - offset, " EFF [%4d] ",
+									nla_get_u32 (cap));
+				perf_cap.eff = nla_get_u32 (cap);
+				break;
+			default:
+				break;
+		}
+		index++;
 
-			switch (index) {
-				case 0:
-					offset += snprintf (buf + offset, MAX_STR_LENGTH - offset, "\tCPU %3d: ",
-										nla_get_u32 (cap));
-					perf_cap.cpu = nla_get_u32 (cap);
-					break;
-				case 1:
-					offset += snprintf (buf + offset, MAX_STR_LENGTH - offset, " PERF %4d: ",
-										nla_get_u32 (cap));
-					perf_cap.perf = nla_get_u32 (cap);
-					break;
-				case 2:
-					offset += snprintf (buf + offset, MAX_STR_LENGTH - offset, " PERF %4d ",
-										nla_get_u32 (cap));
-					perf_cap.eff = nla_get_u32 (cap);
-					break;
-				default:
-					break;
-			}
-			index++;
+		if (index == 3) {
+			char *str;
 
-			if (index == 3) {
-				index = 0;
-				offset = 0;
-				buf[MAX_STR_LENGTH - 1] = '\0';
-				lpmd_log_debug ("\t\t\t%s\n", buf);
-				update_one_cpu (&perf_cap);
-				if (first_cpu == -1)
-					first_cpu = perf_cap.cpu;
-				last_cpu = perf_cap.cpu;
-				nr_cpus++;
-			}
+			str = update_one_cpu (&perf_cap);
+			offset += snprintf (buf + offset, MAX_STR_LENGTH - offset, " TYPE [%s]", str);
+			buf[MAX_STR_LENGTH - 1] = '\0';
+			lpmd_log_debug ("\t\t\t%s\n", buf);
+
+			index = 0;
+			offset = 0;
+
+			if (first_cpu == -1)
+				first_cpu = perf_cap.cpu;
+			last_cpu = perf_cap.cpu;
+			nr_cpus++;
 		}
 	}
 	process_one_event (first_cpu, last_cpu, nr_cpus);
@@ -321,6 +362,8 @@ int hfi_init(void)
 	struct nl_sock *sock;
 	struct nl_cb *cb;
 	int mcast_id;
+
+	reset_cpus (CPUMASK_HFI_LAST);
 
 	signal (SIGPIPE, SIG_IGN);
 

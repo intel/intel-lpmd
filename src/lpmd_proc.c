@@ -80,6 +80,18 @@ int get_cpu_mode(void)
 	return lpmd_config.mode;
 }
 
+static int has_hfi_capability(void)
+{
+	unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
+
+	cpuid(6, eax, ebx, ecx, edx);
+	if (eax & (1 << 19)) {
+		lpmd_log_info("HFI capability detected\n");
+		return 1;
+	}
+	return 0;
+}
+
 int has_hfi_lpm_monitor(void)
 {
 	return !!lpmd_config.hfi_lpm_enable;
@@ -128,14 +140,45 @@ int get_util_exit_hyst(void)
 /* ITMT Management */
 #define PATH_ITMT_CONTROL "/proc/sys/kernel/sched_itmt_enabled"
 
-static int process_itmt(int enter)
+static int saved_itmt = SETTING_IGNORE;
+static int lp_mode_itmt = SETTING_IGNORE;
+
+int get_lpm_itmt(void)
 {
-	if (lpmd_config.ignore_itmt)
+	return lp_mode_itmt;
+}
+
+void set_lpm_itmt(int val)
+{
+	lp_mode_itmt = val;
+}
+
+int get_itmt(void)
+{
+	int val;
+
+	lpmd_read_int(PATH_ITMT_CONTROL, &val, -1);
+	return val;
+}
+
+static int init_itmt(void)
+{
+	return lpmd_read_int(PATH_ITMT_CONTROL, &saved_itmt, -1);
+}
+
+static int process_itmt(void)
+{
+	if (lp_mode_itmt == SETTING_RESTORE)
+		lp_mode_itmt = saved_itmt;
+
+	if (lp_mode_itmt == SETTING_IGNORE) {
+		lpmd_log_debug("Ignore ITMT\n");
 		return 0;
+	}
 
-	lpmd_log_info ("Process ITMT ...\n");
+	lpmd_log_debug ("%s ITMT\n", lp_mode_itmt ? "Enable" : "Disable");
 
-	return lpmd_write_int (PATH_ITMT_CONTROL, enter > 0 ? 0 : 1, LPMD_LOG_INFO);
+	return lpmd_write_int(PATH_ITMT_CONTROL, lp_mode_itmt, -1);
 }
 
 /* Main functions */
@@ -150,6 +193,16 @@ enum lpm_state {
 
 /* Force off by default */
 int lpm_state = LPM_USER_OFF;
+
+int in_hfi_lpm(void)
+{
+	return lpm_state & LPM_HFI_ON;
+}
+
+int in_suv_lpm(void)
+{
+	return lpm_state & LPM_SUV_ON;
+}
 
 /*
  * 1: request valid and already satisfied. 0: respond valid and need to continue to process. -1: request invalid
@@ -177,10 +230,14 @@ static int lpm_can_process(enum lpm_command cmd)
 		case USER_AUTO:
 			lpm_state &= ~LPM_USER_ON;
 			lpm_state &= ~LPM_USER_OFF;
-			/* Do nothing but just clear the flag */
+			/* Assume the system is already in HFI_LPM so that we can handle next HFI update whatever it is */
+			if (has_hfi_lpm_monitor()) {
+				lpmd_log_info("Use HFI \n");
+				lpm_state |= LPM_HFI_ON;
+			}
 			return 0;
 		case HFI_ENTER:
-			if (lpm_state & LPM_USER_OFF)
+			if (lpm_state & (LPM_USER_OFF | LPM_USER_ON))
 				return 0;
 
 			/* Ignore HFI LPM hints when in SUV mode */
@@ -255,28 +312,16 @@ int enter_lpm(enum lpm_command cmd)
 		return 1;
 	}
 
-	if (in_low_power_mode) {
+	if (in_low_power_mode && cmd != HFI_ENTER && cmd != UTIL_ENTER) {
 		lpmd_log_debug ("Request skipped because the system is already in Low Power Mode ---\n");
 		return 0;
 	}
 
 	time_start ();
 
-	switch (cmd) {
-		case USER_ENTER:
-		case UTIL_ENTER:
-			set_lpm_cpus (CPUMASK_LPM_DEFAULT);
-			break;
-		case HFI_ENTER:
-			set_lpm_cpus (CPUMASK_HFI);
-			break;
-		default:
+	if (cmd != USER_ENTER && cmd != UTIL_ENTER && cmd != HFI_ENTER) {
 			lpmd_log_info ("Unsupported LPM reason %d\n", cmd);
 			return 1;
-	}
-	if (!has_lpm_cpus ()) {
-		lpmd_log_error ("No LPM CPUs available\n");
-		return 1;
 	}
 
 	lpmd_log_msg ("------ Enter Low Power Mode (%10s) --- %s", lpm_cmd_str[cmd], get_time ());
@@ -286,8 +331,9 @@ int enter_lpm(enum lpm_command cmd)
 		goto end;
 	}
 
-	process_itmt (1);
+	process_itmt ();
 	process_irqs (1, get_cpu_mode ());
+
 	process_cpus (1, get_cpu_mode ());
 
 end:
@@ -323,8 +369,9 @@ int exit_lpm(enum lpm_command cmd)
 	}
 
 	process_cpus (0, get_cpu_mode ());
+
 	process_irqs (0, get_cpu_mode ());
-	process_itmt (0);
+	process_itmt ();
 
 end:
 	lpmd_log_info ("----- Done (%s) ---\n", time_delta ());
@@ -346,19 +393,66 @@ int process_lpm_unlock(enum lpm_command cmd)
 	}
 
 	switch (cmd) {
-		case USER_ENTER:
-		case HFI_ENTER:
 		case UTIL_ENTER:
-		case USER_AUTO:
-		case HFI_SUV_EXIT:
-		case DBUS_SUV_EXIT:
+			if (!use_config_states()) {
+				set_lpm_epp (lpmd_config.lp_mode_epp);
+				set_lpm_epb (SETTING_IGNORE);
+				set_lpm_itmt (lpmd_config.ignore_itmt ? SETTING_IGNORE : 0); /* Disable ITMT */
+				set_lpm_irq(get_cpumask(CPUMASK_LPM_DEFAULT), 1);
+				set_lpm_cpus (CPUMASK_LPM_DEFAULT);
+			}
 			ret = enter_lpm (cmd);
 			break;
+		case USER_ENTER:
+		case USER_AUTO:
+			reset_config_state();
+			set_lpm_epp (lpmd_config.lp_mode_epp);
+			set_lpm_epb (SETTING_IGNORE);
+			set_lpm_itmt (lpmd_config.ignore_itmt ? SETTING_IGNORE : 0); /* Disable ITMT */
+			set_lpm_irq(get_cpumask(CPUMASK_LPM_DEFAULT), 1);
+			set_lpm_cpus (CPUMASK_LPM_DEFAULT);
+			ret = enter_lpm (cmd);
+			break;
+		case HFI_SUV_EXIT:
+		case DBUS_SUV_EXIT:
+			set_lpm_epp (SETTING_IGNORE);
+			set_lpm_epb (SETTING_IGNORE);
+			set_lpm_itmt (SETTING_IGNORE);
+			set_lpm_irq(NULL, SETTING_IGNORE);	/* SUV ignores IRQ */
+			set_lpm_cpus (CPUMASK_HFI_SUV);
+			ret = enter_lpm (cmd);
+			break;
+		case HFI_ENTER:
+			set_lpm_epp (lpmd_config.lp_mode_epp);
+			set_lpm_epb (SETTING_IGNORE);
+			set_lpm_itmt (0);	/* HFI always disables ITMT */
+			set_lpm_irq(NULL, SETTING_IGNORE);	/* HFI ignores IRQ */
+			set_lpm_cpus (CPUMASK_HFI);
+			ret = enter_lpm (cmd);
+			break;
+		/* exit_lpm does not require to invoke set_lpm_cpus() */
 		case USER_EXIT:
-		case HFI_EXIT:
 		case UTIL_EXIT:
+			reset_config_state();
+			set_lpm_epp (SETTING_RESTORE);
+			set_lpm_epb (SETTING_RESTORE);
+			set_lpm_itmt (SETTING_RESTORE);
+			set_lpm_irq(NULL, SETTING_RESTORE);
+			ret = exit_lpm (cmd);
+			break;
 		case HFI_SUV_ENTER:
 		case DBUS_SUV_ENTER:
+			set_lpm_epp (SETTING_IGNORE);
+			set_lpm_epb (SETTING_IGNORE);
+			set_lpm_itmt (SETTING_IGNORE);
+			set_lpm_irq(NULL, SETTING_IGNORE);
+			ret = exit_lpm (cmd);
+			break;
+		case HFI_EXIT:
+			set_lpm_epp (lpmd_config.lp_mode_epp == SETTING_IGNORE ? SETTING_IGNORE : SETTING_RESTORE);
+			set_lpm_epb (SETTING_IGNORE);
+			set_lpm_itmt (SETTING_RESTORE); /* Restore ITMT */
+			set_lpm_irq(NULL, SETTING_IGNORE);	/* HFI ignores IRQ */
 			ret = exit_lpm (cmd);
 			break;
 		default:
@@ -491,7 +585,7 @@ void lpmd_notify_hfi_event(void)
 	sleep (1);
 }
 
-#define LPMD_NUM_OF_POLL_FDS	4
+#define LPMD_NUM_OF_POLL_FDS	5
 
 static pthread_t lpmd_core_main;
 static pthread_attr_t lpmd_attr;
@@ -502,6 +596,143 @@ static int poll_fd_cnt;
 static int idx_pipe_fd = -1;
 static int idx_uevent_fd = -1;
 static int idx_hfi_fd = -1;
+
+static int wlt_fd;
+static int idx_wlt_fd = -1;
+
+/* WLT hints parsing */
+typedef enum {
+	WLT_IDLE,
+	WLT_BATTERY_LIFE,
+	WLT_SUSTAINED,
+	WLT_BURSTY,
+	WLT_INVALID,
+} wlt_type_t;
+
+// Workload type classification
+#define WORKLOAD_NOTIFICATION_DELAY_ATTRIBUTE "/sys/bus/pci/devices/0000:00:04.0/workload_hint/notification_delay_ms"
+#define WORKLOAD_ENABLE_ATTRIBUTE "/sys/bus/pci/devices/0000:00:04.0/workload_hint/workload_hint_enable"
+#define WORKLOAD_TYPE_INDEX_ATTRIBUTE  "/sys/bus/pci/devices/0000:00:04.0/workload_hint/workload_type_index"
+
+#define NOTIFICATION_DELAY	100
+
+// Clear workload type notifications
+static void exit_wlt()
+{
+	int fd;
+
+	/* Disable feature via sysfs knob */
+	fd = open(WORKLOAD_ENABLE_ATTRIBUTE, O_RDWR);
+	if (fd < 0)
+		return;
+
+	// Disable WLT notification
+	if (write(fd, "0\n", 2) < 0) {
+		close (fd);
+		return;
+	}
+
+	close(fd);
+}
+
+// Initialize Workload type notifications
+static int init_wlt()
+{
+	char delay_str[64];
+	int fd;
+
+	lpmd_log_debug ("init_wlt begin\n");
+
+	// Set notification delay
+	fd = open(WORKLOAD_NOTIFICATION_DELAY_ATTRIBUTE, O_RDWR);
+	if (fd < 0)
+		return fd;
+
+	sprintf(delay_str, "%d\n", NOTIFICATION_DELAY);
+
+	if (write(fd, delay_str, strlen(delay_str)) < 0) {
+		close(fd);
+		return -1;
+	}
+
+	close(fd);
+
+	// Enable WLT notification
+	fd = open(WORKLOAD_ENABLE_ATTRIBUTE, O_RDWR);
+	if (fd < 0)
+		return fd;
+
+	if (write(fd, "1\n", 2) < 0) {
+		close(fd);
+		return -1;
+	}
+
+	close(fd);
+
+	// Open FD for workload type attribute
+	fd = open(WORKLOAD_TYPE_INDEX_ATTRIBUTE, O_RDONLY);
+	if (fd < 0) {
+		exit_wlt();
+		return fd;
+	}
+
+	lpmd_log_debug ("init_wlt end wlt fd:%d\n", fd);
+
+	return fd;
+}
+
+// Read current Workload type
+static int read_wlt(int fd)
+{
+	char index_str[4];
+	int index, ret;
+
+	if (fd < 0)
+		return WLT_INVALID;
+
+	if ((lseek(fd, 0L, SEEK_SET)) < 0)
+		return WLT_INVALID;
+
+	ret = read(fd, index_str, sizeof(index_str));
+	if (ret <= 0)
+		return WLT_INVALID;
+
+	 ret = sscanf(index_str, "%d", &index);
+	 if (ret < 0)
+		return WLT_INVALID;
+
+	lpmd_log_debug("wlt:%d\n", index);
+
+	return index;
+}
+
+static void poll_for_wlt(int enable)
+{
+	static int wlt_enabled_once = 0;
+
+	if (wlt_fd <= 0) {
+		if (enable) {
+			wlt_fd = init_wlt();
+			if (wlt_fd < 0)
+				return;
+		} else {
+			return;
+		}
+	}
+
+	if (enable) {
+		idx_wlt_fd = poll_fd_cnt;
+		poll_fds[idx_wlt_fd].fd = wlt_fd;
+		poll_fds[idx_wlt_fd].events = POLLPRI;
+		poll_fds[idx_wlt_fd].revents = 0;
+		if (!wlt_enabled_once)
+			poll_fd_cnt++;
+		wlt_enabled_once = 1;
+	} else if (idx_wlt_fd >= 0) {
+		poll_fds[idx_wlt_fd].fd = -1;
+		idx_wlt_fd = -1;
+	}
+}
 
 #include <gio/gio.h>
 
@@ -609,30 +840,28 @@ static int proc_message(message_capsul_t *msg)
 // LPMD processing thread. This is callback to pthread lpmd_core_main
 static void* lpmd_core_main_loop(void *arg)
 {
-	int interval, n;
-	static int first_try = 1;
+	int interval = -1, n;
 
 	for (;;) {
 
 		if (main_loop_terminate)
 			break;
 
-		if (first_try) {
+//		 Opportunistic LPM is disabled in below cases
+		if ((lpm_state & (LPM_USER_ON | LPM_USER_OFF | LPM_SUV_ON)) | has_hfi_lpm_monitor ())
+			interval = -1;
+		else if (interval == -1)
 			interval = 100;
-			first_try = 0;
-		} else {
-//			 Opportunistic LPM is disabled in below cases
-			if (lpm_state & (LPM_USER_ON | LPM_USER_OFF | LPM_SUV_ON))
-				interval = -1;
-			else
-				interval = periodic_util_update ();
-		}
 
 		n = poll (poll_fds, poll_fd_cnt, interval);
 		if (n < 0) {
 			lpmd_log_warn ("Write to pipe failed \n");
 			continue;
 		}
+
+		/* Time out, need to choose next util state and interval */
+		if (n == 0 && interval > 0)
+			interval = periodic_util_update (&lpmd_config, -1);
 
 		if (idx_pipe_fd >= 0 && (poll_fds[idx_pipe_fd].revents & POLLIN)) {
 //			 process message written on pipe here
@@ -658,9 +887,58 @@ static void* lpmd_core_main_loop(void *arg)
 			hfi_receive ();
 		}
 
+		if (idx_wlt_fd >= 0 && (poll_fds[idx_wlt_fd].revents & POLLPRI)) {
+			int wlt_index;
+
+			wlt_index = read_wlt(poll_fds[idx_wlt_fd].fd);
+			interval = periodic_util_update (&lpmd_config, wlt_index);
+		}
+
+
 	}
 
 	return NULL;
+}
+
+static void build_default_config_state(void)
+{
+	lpmd_config_state_t *state;
+
+	if (lpmd_config.config_state_count)
+		return;
+
+	state = &lpmd_config.config_states[0];
+	state->id = 1;
+	snprintf(state->name, MAX_STATE_NAME, "LPM_DEEP");
+	state->entry_system_load_thres = lpmd_config.util_entry_threshold;
+	state->enter_cpu_load_thres = lpmd_config.util_exit_threshold;
+	state->itmt_state = lpmd_config.ignore_itmt ? SETTING_IGNORE : 0;
+	state->irq_migrate = 1;
+	state->min_poll_interval = 100;
+	state->max_poll_interval = 1000;
+	state->poll_interval_increment = -1;
+	state->epp = lpmd_config.lp_mode_epp;
+	state->epb = SETTING_IGNORE;
+	state->valid = 1;
+	state->wlt_type = -1;
+	snprintf(state->active_cpus, MAX_STR_LENGTH, "%s", get_cpus_str(CPUMASK_LPM_DEFAULT));
+
+	state = &lpmd_config.config_states[1];
+	state->id = 2;
+	snprintf(state->name, MAX_STATE_NAME, "FULL_POWER");
+	state->entry_system_load_thres = 100;
+	state->enter_cpu_load_thres = 100;
+	state->itmt_state = lpmd_config.ignore_itmt ? SETTING_IGNORE : SETTING_RESTORE;
+	state->irq_migrate = 1;
+	state->min_poll_interval = 1000;
+	state->max_poll_interval = 1000;
+	state->epp = lpmd_config.lp_mode_epp == SETTING_IGNORE ? SETTING_IGNORE : SETTING_RESTORE;
+	state->epb = SETTING_IGNORE;
+	state->valid = 1;
+	state->wlt_type = -1;
+	snprintf(state->active_cpus, MAX_STR_LENGTH, "%s", get_cpus_str(CPUMASK_ONLINE));
+
+	lpmd_config.config_state_count = 2;
 }
 
 int lpmd_main(void)
@@ -670,6 +948,10 @@ int lpmd_main(void)
 
 	lpmd_log_debug ("lpmd_main begin\n");
 
+	ret = check_cpu_capability(&lpmd_config);
+	if (ret)
+		return ret;
+
 //	 Call all lpmd related functions here
 	ret = lpmd_get_config (&lpmd_config);
 	if (ret)
@@ -677,12 +959,22 @@ int lpmd_main(void)
 
 	pthread_mutex_init (&lpmd_mutex, NULL);
 
-	ret = init_cpu (lpmd_config.lp_mode_cpus, lpmd_config.mode);
+	ret = init_cpu (lpmd_config.lp_mode_cpus, lpmd_config.mode, lpmd_config.lp_mode_epp);
 	if (ret)
 		return ret;
 
+	init_itmt();
+
 	if (!has_suv_support () && lpmd_config.hfi_suv_enable)
 		lpmd_config.hfi_suv_enable = 0;
+
+	if (!has_hfi_capability ())
+		lpmd_config.hfi_lpm_enable = 0;
+
+	/* Must done after init_cpu() */
+	build_default_config_state();
+
+	util_init(&lpmd_config);
 
 	ret = init_irq ();
 	if (ret)
@@ -730,9 +1022,17 @@ int lpmd_main(void)
 		}
 	}
 
+	if (lpmd_config.wlt_hint_enable) {
+		if (!lpmd_config.hfi_lpm_enable && !lpmd_config.hfi_suv_enable) {
+			lpmd_config.util_enable = 0;
+			poll_for_wlt(1);
+		}
+	}
+
 	pthread_attr_init (&lpmd_attr);
 	pthread_attr_setdetachstate (&lpmd_attr, PTHREAD_CREATE_DETACHED);
 
+	connect_to_power_profile_daemon ();
 	/*
 	 * lpmd_core_main_loop: is the thread where all LPMD actions take place.
 	 * All other thread send message via pipe to trigger processing
@@ -741,7 +1041,6 @@ int lpmd_main(void)
 	if (ret)
 		return LPMD_FATAL_ERROR;
 
-	connect_to_power_profile_daemon ();
 
 	lpmd_log_debug ("lpmd_init succeeds\n");
 

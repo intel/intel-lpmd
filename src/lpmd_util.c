@@ -41,6 +41,13 @@
 /* System should quit Low Power Mode when it is overloaded */
 #define PATH_PROC_STAT "/proc/stat"
 
+static lpmd_config_state_t *current_state;
+
+void reset_config_state(void)
+{
+	current_state = NULL;
+}
+
 enum type_stat {
 	STAT_CPU,
 	STAT_USER,
@@ -54,27 +61,30 @@ enum type_stat {
 	STAT_GUEST,
 	STAT_GUEST_NICE,
 	STAT_MAX,
-	STAT_VALID = STAT_MAX,
-	STAT_EXT_MAX,
 };
 
-// One for system utilization, MAX_LPM_CPUS for LPM cpu utilization
-unsigned long long proc_stat_prev[MAX_LPM_CPUS + 1][STAT_EXT_MAX];
-unsigned long long proc_stat_cur[MAX_LPM_CPUS + 1][STAT_EXT_MAX];
+struct proc_stat_info {
+	int cpu;
+	int valid;
+	unsigned long long stat[STAT_MAX];
+};
+
+struct proc_stat_info *proc_stat_prev;
+struct proc_stat_info *proc_stat_cur;
 
 static int busy_sys = -1;
 static int busy_cpu = -1;
 
-static int calculate_busypct(unsigned long long *cur, unsigned long long *prev)
+static int calculate_busypct(struct proc_stat_info *cur, struct proc_stat_info *prev)
 {
 	int idx;
 	unsigned long long busy = 0, total = 0;
 
 	for (idx = STAT_USER; idx < STAT_MAX; idx++) {
-		total += (cur[idx] - prev[idx]);
+		total += (cur->stat[idx] - prev->stat[idx]);
 //		 Align with the "top" utility logic
 		if (idx != STAT_IDLE && idx != STAT_IOWAIT)
-			busy += (cur[idx] - prev[idx]);
+			busy += (cur->stat[idx] - prev->stat[idx]);
 	}
 
 	if (total)
@@ -88,12 +98,18 @@ static int parse_proc_stat(void)
 	FILE *filep;
 	int i;
 	int val;
-	int pos = 0;
-	int size = sizeof(unsigned long long) * (MAX_LPM_CPUS + 1) * STAT_MAX;
+	int count = get_max_online_cpu() + 1;
+	int sys_idx = count - 1;
+	int size = sizeof(struct proc_stat_info) * count;
 
 	filep = fopen (PATH_PROC_STAT, "r");
 	if (!filep)
 		return 1;
+
+	if (!proc_stat_prev)
+		proc_stat_prev = calloc(sizeof(struct proc_stat_info), count);
+	if (!proc_stat_cur)
+		proc_stat_cur = calloc(sizeof(struct proc_stat_info), count);
 
 	memcpy (proc_stat_prev, proc_stat_cur, size);
 	memset (proc_stat_cur, 0, size);
@@ -101,6 +117,7 @@ static int parse_proc_stat(void)
 	while (!feof (filep)) {
 		int idx;
 		char *tmpline = NULL;
+		struct proc_stat_info *info;
 		size_t size = 0;
 		char *line;
 		int cpu;
@@ -127,26 +144,11 @@ static int parse_proc_stat(void)
 
 		ret = sscanf (p, "cpu%d", &cpu);
 		if (ret == -1 && !(strncmp (p, "cpu", 3))) {
-			proc_stat_cur[pos][STAT_VALID] = 1;
-			proc_stat_cur[pos++][STAT_CPU] = -1;
+			/* Read system line */
+			info = &proc_stat_cur[sys_idx];
 		}
 		else if (ret == 1) {
-			if (!is_cpu_for_lpm (cpu)) {
-				free (tmpline);
-				free (line);
-				continue;
-			}
-
-//			 array 0 is always for system utilization
-			if (!pos)
-				pos = 1;
-			if (pos > MAX_LPM_CPUS) {
-				free (tmpline);
-				free (line);
-				break;;
-			}
-			proc_stat_cur[pos][STAT_VALID] = 1;
-			proc_stat_cur[pos++][STAT_CPU] = cpu;
+			info = &proc_stat_cur[cpu];
 		}
 		else {
 			free (tmpline);
@@ -154,6 +156,7 @@ static int parse_proc_stat(void)
 			continue;
 		}
 
+		info->valid = 1;
 		idx = STAT_CPU;
 
 		while (p != NULL) {
@@ -166,7 +169,7 @@ static int parse_proc_stat(void)
 				continue;
 			}
 
-			sscanf (p, "%llu", &proc_stat_cur[pos - 1][idx]);
+			sscanf (p, "%llu", &info->stat[idx]);
 			p = strtok (NULL, " ");
 			idx++;
 		}
@@ -176,14 +179,14 @@ static int parse_proc_stat(void)
 	}
 
 	fclose (filep);
-	busy_sys = calculate_busypct (proc_stat_cur[0], proc_stat_prev[0]);
+	busy_sys = calculate_busypct (&proc_stat_cur[sys_idx], &proc_stat_prev[sys_idx]);
 
 	busy_cpu = 0;
-	for (i = 1; i < MAX_LPM_CPUS + 1; i++) {
-		if (!proc_stat_cur[i][STAT_VALID])
+	for (i = 1; i <= get_max_online_cpu(); i++) {
+		if (!proc_stat_cur[i].valid)
 			continue;
 
-		val = calculate_busypct (proc_stat_cur[i], proc_stat_prev[i]);
+		val = calculate_busypct (&proc_stat_cur[i], &proc_stat_prev[i]);
 		if (busy_cpu < val)
 			busy_cpu = val;
 	}
@@ -301,10 +304,152 @@ static int get_util_interval(void)
 	return interval;
 }
 
-int periodic_util_update(void)
+static int state_match(lpmd_config_state_t *state, int bsys, int bcpu, int wlt_index)
+{
+	if (!state->valid)
+		return 0;
+
+	if (state->wlt_type != -1) {
+		if (state->wlt_type == wlt_index) {
+			lpmd_log_debug("Match  %12s: WLT index:%d\n", state->name, wlt_index);
+			return 1;
+		}
+		return 0;
+	}
+
+	if (state->enter_cpu_load_thres) {
+		if (bcpu > state->enter_cpu_load_thres)
+			goto unmatch;
+	}
+
+	if (state->entry_system_load_thres) {
+		if (bsys > state->entry_system_load_thres) {
+			if (!state->exit_system_load_hyst || state != current_state)
+				goto unmatch;
+
+			if (bsys > state->entry_load_sys + state->exit_system_load_hyst ||
+			    bsys > state->entry_system_load_thres + state->exit_system_load_hyst)
+				goto unmatch;
+		}
+	}
+
+	lpmd_log_debug("Match  %12s: sys_thres %3d cpu_thres %3d hyst %3d\n", state->name, state->entry_system_load_thres, state->enter_cpu_load_thres, state->exit_system_load_hyst);
+	return 1;
+unmatch:
+	lpmd_log_debug("Ignore %12s: sys_thres %3d cpu_thres %3d hyst %3d\n", state->name, state->entry_system_load_thres, state->enter_cpu_load_thres, state->exit_system_load_hyst);
+	return 0;
+}
+
+#define DEFAULT_POLL_RATE_MS	1000
+
+static int enter_state(lpmd_config_state_t *state, int bsys, int bcpu)
+{
+	static int interval = DEFAULT_POLL_RATE_MS;
+
+	state->entry_load_sys = bsys;
+	state->entry_load_cpu = bcpu;
+
+	/* Adjust polling interval only */
+	if (state == current_state) {
+		if (state->poll_interval_increment > 0) {
+			interval += state->poll_interval_increment;
+		}
+		/* Adaptive polling interval based on cpu utilization */
+		if (state->poll_interval_increment == -1) {
+			interval = state->max_poll_interval * (10000 - bcpu) / 10000;
+			interval /= 100;
+			interval *= 100;
+		}
+		if (state->min_poll_interval && interval < state->min_poll_interval)
+			interval = state->min_poll_interval;
+		if (state->max_poll_interval && interval > state->max_poll_interval)
+			interval = state->max_poll_interval;
+		return interval;
+	}
+
+	set_lpm_epp(state->epp);
+	set_lpm_epb(state->epb);
+	set_lpm_itmt(state->itmt_state);
+
+	if (state->active_cpus[0] != '\0') {
+		reset_cpus(CPUMASK_UTIL);
+		parse_cpu_str(state->active_cpus, CPUMASK_UTIL);
+		if (state->irq_migrate != SETTING_IGNORE)
+			set_lpm_irq(get_cpumask(CPUMASK_UTIL), 1);
+		else
+			set_lpm_irq(NULL, SETTING_IGNORE);
+		set_lpm_cpus(CPUMASK_UTIL);
+	} else {
+		set_lpm_irq(NULL, SETTING_IGNORE);
+		set_lpm_cpus(CPUMASK_MAX); /* Ignore Task migration */
+	}
+
+	process_lpm(UTIL_ENTER);
+
+	if (state->min_poll_interval)
+		interval = state->min_poll_interval;
+	else
+		interval = DEFAULT_POLL_RATE_MS;
+
+	current_state = state;
+
+	return interval;
+}
+
+static int process_next_config_state(lpmd_config_t *config, int wlt_index)
+{
+	lpmd_config_state_t *state;
+	int i;
+	int interval = -1;
+	int epp, epb;
+	char epp_str[32];
+
+	// Check for new state
+	for (i = 0; i < config->config_state_count; ++i) {
+		state = &config->config_states[i];
+		if (state_match(state, busy_sys, busy_cpu, wlt_index)) {
+			interval = enter_state(state, busy_sys, busy_cpu);
+			break;
+		}
+	}
+
+	if (!current_state)
+		return interval;
+
+	get_epp_epb(&epp, epp_str, 32, &epb);
+	if (epp >= 0)
+		lpmd_log_info(
+				"[%d/%d] %12s: bsys: %3d.%02d, bcpu: %3d.%02d, epp %20d, epb %3d, itmt %2d, interval %4d\n",
+				current_state->id, config->config_state_count,
+				current_state->name, busy_sys / 100, busy_sys % 100,
+				busy_cpu / 100, busy_cpu % 100, epp, epb, get_itmt(), interval);
+	else
+		lpmd_log_info(
+				"[%d/%d] %12s: bsys: %3d.%02d, bcpu: %3d.%02d, epp %20s, epb %3d, itmt %2d, interval %4d\n",
+				current_state->id, config->config_state_count,
+				current_state->name, busy_sys / 100, busy_sys % 100,
+				busy_cpu / 100, busy_cpu % 100, epp_str, epb, get_itmt(),
+				interval);
+
+	return interval;
+}
+
+static int use_config_state = 1;
+
+int use_config_states(void)
+{
+	return use_config_state;
+}
+
+int periodic_util_update(lpmd_config_t *lpmd_config, int wlt_index)
 {
 	int interval;
 	static int initialized;
+
+	if (wlt_index >= 0) {
+		process_next_config_state(lpmd_config, wlt_index);
+		return -1;
+	}
 
 //	 poll() timeout should be -1 when util monitor not enabled
 	if (!has_util_monitor ())
@@ -321,34 +466,79 @@ int periodic_util_update(void)
 	}
 
 	parse_proc_stat ();
-	sys_stat = get_sys_stat ();
-	interval = get_util_interval ();
 
-	lpmd_log_info (
+	if (!lpmd_config->config_state_count || !use_config_state) {
+		sys_stat = get_sys_stat ();
+		interval = get_util_interval ();
+
+		lpmd_log_info (
 			"\t\tSYS util %3d.%02d (Entry threshold : %3d ),"
 			" CPU util %3d.%02d ( Exit threshold : %3d ), resample after"
 			" %4d ms\n", busy_sys / 100, busy_sys % 100, get_util_entry_threshold (),
 			busy_cpu / 100, busy_cpu % 100, get_util_exit_threshold (), interval);
 
-	first_run = 0;
+		first_run = 0;
 
-	if (!util_should_proceed (sys_stat))
-		return interval;
+		if (!util_should_proceed (sys_stat))
+			return interval;
 
-	switch (sys_stat) {
-		case SYS_IDLE:
-			process_lpm (UTIL_ENTER);
-			first_run = 1;
-			clock_gettime (CLOCK_MONOTONIC, &tp_last_in);
-			interval = 1000;
-			break;
-		case SYS_OVERLOAD:
-			process_lpm (UTIL_EXIT);
-			first_run = 1;
-			clock_gettime (CLOCK_MONOTONIC, &tp_last_out);
-			break;
-		default:
-			break;
-	}
+		switch (sys_stat) {
+			case SYS_IDLE:
+				process_lpm (UTIL_ENTER);
+				first_run = 1;
+				clock_gettime (CLOCK_MONOTONIC, &tp_last_in);
+				interval = 1000;
+				break;
+			case SYS_OVERLOAD:
+				process_lpm (UTIL_EXIT);
+				first_run = 1;
+				clock_gettime (CLOCK_MONOTONIC, &tp_last_out);
+				break;
+			default:
+				break;
+		}
+	} else
+		interval = process_next_config_state(lpmd_config, wlt_index);
+
 	return interval;
+}
+
+int util_init(lpmd_config_t *lpmd_config)
+{
+	lpmd_config_state_t *state;
+	int nr_state = 0;
+	int i, ret;
+
+	for (i = 0; i < lpmd_config->config_state_count; i++) {
+		state = &lpmd_config->config_states[i];
+
+		if (state->active_cpus[0] != '\0') {
+			ret = parse_cpu_str(state->active_cpus, CPUMASK_UTIL);
+			if (ret <= 0) {
+				state->valid = 0;
+				continue;
+			}
+		}
+
+		if (!state->min_poll_interval)
+			state->min_poll_interval = state->max_poll_interval > DEFAULT_POLL_RATE_MS ? DEFAULT_POLL_RATE_MS : state->max_poll_interval;
+		if (!state->max_poll_interval)
+			state->max_poll_interval = state->min_poll_interval > DEFAULT_POLL_RATE_MS ? state->min_poll_interval : DEFAULT_POLL_RATE_MS;
+		if (!state->poll_interval_increment)
+			state->poll_interval_increment = -1;
+
+		state->entry_system_load_thres *= 100;
+		state->enter_cpu_load_thres *= 100;
+		state->exit_cpu_load_thres *= 100;
+
+		nr_state++;
+	}
+
+	if (nr_state < 2) {
+		lpmd_log_info("%d valid config states found\n", nr_state);
+		use_config_state = 0;
+		return 1;
+	}
+
+	return 0;
 }
