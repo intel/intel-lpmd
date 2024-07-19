@@ -10,6 +10,12 @@
 #Parameters
 
 echo on
+param=$1
+#deb installation will pass "debinstall" as the param, to avoid empty value
+#treat other cases as "scriptinstall"
+if [ -z "$param" ]; then
+	param="scriptinstall"
+fi	
 
 #check the platform, only MTL is supported
 MTL=0
@@ -80,13 +86,18 @@ if [[ "$installasservice" -eq 0 ]]; then
             fi        
         fi   
     else 
-	    #tuned not installed, notify user
-	    #echo "Tuned is not detected, please install tuned and run the installation again"
-	    #exit 1	
-		if [[ $OS == "ubuntu" ]] then
-			sudo apt install tuned -y
-		else
-			sudo yum install tuned -y
+	    #tuned not installed, if a deb install notify user and exit 
+		#if it's a zip installation, we can install for the user
+		if [[ $param == "debinstall" ]]; then
+			echo "Tuned is not detected, please install tuned and run the installation again"
+			exit 1	
+		else 
+			echo "Tuned is not detected, installing..."
+			if [[ $OS == "ubuntu" ]]; then
+				sudo apt install tuned -y
+			else
+				sudo yum install tuned -y
+			fi 
 		fi 
     fi
 fi 
@@ -160,7 +171,7 @@ if [[ "$installasservice" -eq 0 ]]; then
     tuned-adm list | grep "intel*"
 
     if [ ! -z "$activeprofile" ]; then
-	    #if the activeprofile already contains the intel profile, set to intel-best_performance_mode
+	    #if the activeprofile already contains the intel profile, set to intel-hepo
 	    if echo "$activeprofile" | grep -q "intel"; then
 		    tuned-adm profile intel_hepo
 	    else #add to the active profiles
