@@ -91,12 +91,12 @@ int set_lpm_irq(cpu_set_t *cpumask, int action)
 
 static int dump_smp_affinity(void)
 {
-	FILE *filep;
-	DIR *dir;
-	struct dirent *d;
-	char path[MAX_STR_LENGTH * 2];
-	char str[MAX_STR_LENGTH];
-	size_t ret;
+	FILE *filep = NULL;
+	DIR *dir = NULL;
+	struct dirent *d = NULL;
+	char path[MAX_STR_LENGTH * 2] = "";
+	char str[MAX_STR_LENGTH] = "";
+	size_t ret = 0;
 
 	if (!in_debug_mode())
 		return 0;

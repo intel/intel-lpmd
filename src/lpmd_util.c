@@ -400,11 +400,11 @@ static int enter_state(lpmd_config_state_t *state, int bsys, int bcpu)
 extern int next_proxy_poll; 
 static int process_next_config_state(lpmd_config_t *config, int wlt_index)
 {
-	lpmd_config_state_t *state;
-	int i;
+	lpmd_config_state_t *state = NULL;
+	int i = 0;
 	int interval = -1;
 	int epp, epb;
-	char epp_str[32];
+	char epp_str[32] = "";
 
 	// Check for new state
 	for (i = 0; i < config->config_state_count; ++i) {
