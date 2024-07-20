@@ -92,6 +92,38 @@ int set_lpm_irq(cpu_set_t *cpumask, int action)
 	return 0;
 }
 
+static int dump_smp_affinity(void)
+{
+	FILE *filep = NULL;
+	DIR *dir = NULL;
+	struct dirent *d = NULL;
+	char path[MAX_STR_LENGTH * 2] = "";
+	char str[MAX_STR_LENGTH] = "";
+	size_t ret = 0;
+
+	if (!in_debug_mode())
+		return 0;
+
+	dir = opendir("/proc/irq");
+	if (dir) {
+		while ((d = readdir(dir)) != NULL) {
+			snprintf(path, MAX_STR_LENGTH * 2, "/proc/irq/%s/smp_affinity", d->d_name);
+			filep = fopen(path, "r+");
+			if (!filep)
+				continue;
+
+			str[0] = '\0';
+			ret = fread(str, 1, MAX_STR_LENGTH, filep);
+			if (ret)
+				lpmd_log_debug("%s:%s", path, str);
+			fclose(filep);
+		}
+		closedir(dir);
+	}
+
+	return 0;
+}
+
 /* Interrupt Management */
 #define SOCKET_PATH "irqbalance"
 #define SOCKET_TMPFS "/run/irqbalance"
