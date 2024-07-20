@@ -23,7 +23,7 @@
 #include <libxml/tree.h>
 
 #define CONFIG_FILE_NAME "intel_lpmd_config.xml"
-#define MAX_FILE_NAME_PATH	64
+#define MAX_FILE_NAME_PATH	128
 
 static void lpmd_dump_config(lpmd_config_t *lpmd_config)
 {
@@ -151,6 +151,19 @@ static void lpmd_parse_state(xmlDoc *doc, xmlNode *a_node, lpmd_config_state_t *
 	}
 }
 
+static int validate_config_state(lpmd_config_t *lpmd_config, lpmd_config_state_t *state)
+{
+	if (lpmd_config->wlt_hint_enable) {
+		if (state->wlt_type >=0 && state->wlt_type <= 3)
+			state->valid = 1;
+	} else {
+		if ((state->enter_cpu_load_thres > 0 && state->enter_cpu_load_thres <= 100) ||
+		    (state->entry_system_load_thres > 0 && state->entry_system_load_thres <= 100))
+			state->valid = 1;
+	}
+	return 0;
+}
+
 static void lpmd_parse_states(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_config)
 {
 	xmlNode *cur_node = NULL;
@@ -185,23 +198,24 @@ static void lpmd_parse_states(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_
 					snprintf (cpu_config, MAX_CONFIG_LEN - 1, "%s", tmp_value);
 					cpu_config[MAX_CONFIG_LEN - 1] = '\0';
 				}
-				
+	
 				if (tmp_value)
 			        xmlFree (tmp_value);
 
 				if (strncmp ((const char*) cur_node->name, "State", strlen ("State")))
 					continue;
 
-				/* Must check cpu family/model/config first to make sure the states applies*/
+				/* Must check cpu family/model/config first to make sure the states applies */
 				if (cpu_family != lpmd_config->cpu_family || cpu_model != lpmd_config->cpu_model || (strncmp(cpu_config, lpmd_config->cpu_config, MAX_CONFIG_LEN) && strncmp(cpu_config, " * ", strlen(" * ")))) {
 					lpmd_log_info("Ignore unsupported states for CPU family:%d,model%d,config:%s\n", cpu_family, cpu_model, cpu_config);
 					return;
-				}			
+				}
 
 				if (lpmd_config->config_state_count >= MAX_CONFIG_STATES)
 					break;
 				lpmd_parse_state (doc, cur_node->children, &lpmd_config->config_states[config_state_count]);
-				config_state_count++;
+				validate_config_state(lpmd_config, &lpmd_config->config_states[config_state_count]);
+				config_state_count += lpmd_config->config_states[config_state_count].valid;
 			}
 		}
 	}

@@ -40,4 +40,18 @@ rm -r src/visualize/.deps
 rm src/visualize/.dirstamp
 rm src/visualize/*.o
 
+rm -r src/weights/.deps/
+rm src/weights/.dirstamp
+rm src/weights/*.o
+
+rm package/troubleshooting/clean
+
+#delete intermediate files and output binaries
+rm data/intel_lpmd.service
+rm data/org.freedesktop.intel_lpmd.service
+rm intel_lpmd
+rm intel_lpmd_dbus_interface.h
+rm lpmd-resource.c
+rm tools/intel_lpmd_control
+
 

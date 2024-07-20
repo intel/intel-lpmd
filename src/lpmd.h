@@ -53,8 +53,6 @@
 #include <gmodule.h>
 
 #include "additional/additional_common.h"
-
-
 // Log macros
 enum log_level {
 	LPMD_LOG_NONE,
@@ -110,7 +108,7 @@ typedef struct {
 
 #define MAX_STR_LENGTH		256
 #define MAX_CONFIG_STATES	10
-#define MAX_STATE_NAME		64
+#define MAX_STATE_NAME		16
 #define MAX_CONFIG_LEN		64
 
 typedef struct {
@@ -306,6 +304,7 @@ void copy_cpu_mask_exclude(enum cpumask_idx source, enum cpumask_idx dest, enum 
 cpu_set_t *get_cpumask(enum cpumask_idx source);
 int cpumask_to_str(cpu_set_t *cpumask, char *buf, int size);
 int cpumask_to_hexstr(cpu_set_t *cpumask, char *buf, int size);
+int cpumask_to_str_reverse(cpu_set_t *mask, char *buf, int size);
 
 int is_equal(enum cpumask_idx idx1, enum cpumask_idx idx2);
 

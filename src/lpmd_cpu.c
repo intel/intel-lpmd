@@ -154,6 +154,7 @@ int cpumask_to_str(cpu_set_t *mask, char *buf, int length)
 	int i;
 	int offset = 0;
 
+	buf[0] = '\0';
 	for (i = 0; i < topo_max_cpus; i++) {
 		if (!CPU_ISSET_S(i, size_cpumask, mask))
 			continue;
@@ -277,6 +278,18 @@ static char* get_cpus_hexstr_reverse(enum cpumask_idx idx)
 	CPU_FREE(mask);
 
 	return cpumasks[idx].hexstr_reverse;
+}
+
+int cpumask_to_str_reverse(cpu_set_t *mask, char *buf, int size)
+{
+	cpu_set_t *tmp;
+
+	alloc_cpu_set (&tmp);
+	CPU_XOR_S(size_cpumask, tmp, mask, cpumasks[CPUMASK_ONLINE].mask);
+	cpumask_to_str (tmp, buf, size);
+	CPU_FREE(tmp);
+
+	return 0;
 }
 
 static char* get_cpus_str_reverse(enum cpumask_idx idx)
@@ -551,7 +564,6 @@ end:
 int set_epp(char *path, int val, char *str)
 {
 	FILE *filep;
-	int epp;
 	int ret;
 
 	filep = fopen (path, "r+");
@@ -1013,7 +1025,7 @@ static int detect_lpm_cpus_cmd(char *cmd)
  */
 static int is_cpu_atom(int cpu)
 {
-	unsigned int eax, ebx, ecx, edx, subleaf;
+	unsigned int eax, ebx, ecx, edx;
 	unsigned int type;
 
 	if (cpu_migrate(cpu) < 0) {
@@ -1137,7 +1149,6 @@ static int detect_cpu_lcore(int cpu)
  */
 static int detect_lpm_cpus_lcore(void)
 {
-	char path[MAX_STR_LENGTH];
 	int i;
 
 	for (i = 0; i < topo_max_cpus; i++) {
@@ -1749,7 +1760,7 @@ static int get_tdp(void)
 	DIR *dir;
 	struct dirent *entry;
 	int ret;
-	char path[MAX_STR_LENGTH];
+	char path[MAX_STR_LENGTH * 2];
 	char str[MAX_STR_LENGTH];
 	char *pos;
 	int tdp = 0;
@@ -1767,7 +1778,8 @@ static int get_tdp(void)
 		if (strncmp(entry->d_name, "intel-rapl", strlen("intel-rapl")))
 			continue;
 
-		snprintf (path, MAX_STR_LENGTH, "%s/%s/name", PATH_RAPL, entry->d_name);
+		snprintf (path, MAX_STR_LENGTH * 2, "%s/%s/name", PATH_RAPL, entry->d_name);
+
 		filep = fopen (path, "r");
 		if (!filep)
 			continue;
@@ -1781,7 +1793,8 @@ static int get_tdp(void)
 		if (strncmp(str, "package", strlen("package")))
 			continue;
 
-		snprintf (path, MAX_STR_LENGTH, "%s/%s/constraint_0_max_power_uw", PATH_RAPL, entry->d_name);
+		snprintf (path, MAX_STR_LENGTH * 2, "%s/%s/constraint_0_max_power_uw", PATH_RAPL, entry->d_name);
+
 		filep = fopen (path, "r");
 		if (!filep)
 			continue;
@@ -1831,8 +1844,7 @@ int check_cpu_capability(lpmd_config_t *lpmd_config)
 	pcores = ecores = lcores = 0;
 
 	for (i = 0; i < topo_max_cpus; i++) {
-		unsigned int online;
-
+		unsigned int online = 0;
 		snprintf (path, sizeof(path), "/sys/devices/system/cpu/cpu%d/online", i);
 		filep = fopen (path, "r");
 		if (filep) {

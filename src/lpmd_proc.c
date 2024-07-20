@@ -23,16 +23,9 @@
 
 #include "lpmd.h"
 #include "wlt_proxy/wlt_proxy.h"
-//#include "wlt_proxy/wlt_proxy_common.h"
 
 extern int next_proxy_poll; 
 static lpmd_config_t lpmd_config;
-
-/*extern void wlt_proxy_action_loop(void);
-extern int wlt_proxy_init(lpmd_config_t *_lpmd_config);
-extern void wlt_proxy_uninit(void);
-*/
-
 
 char *lpm_cmd_str[LPM_CMD_MAX] = {
 		[USER_ENTER] = "usr enter",
@@ -246,7 +239,7 @@ static int lpm_can_process(enum lpm_command cmd)
 			}
 			return 0;
 		case HFI_ENTER:
-			if (lpm_state & LPM_USER_OFF)
+			if (lpm_state & (LPM_USER_OFF | LPM_USER_ON))
 				return 0;
 
 			/* Ignore HFI LPM hints when in SUV mode */
@@ -344,6 +337,7 @@ int enter_lpm(enum lpm_command cmd)
 
 	process_itmt ();
 	process_irqs (1, get_cpu_mode ());
+
 	process_cpus (1, get_cpu_mode ());
 
 end:
@@ -859,7 +853,6 @@ static void* lpmd_core_main_loop(void *arg)
 			break;
 
 //		 Opportunistic LPM is disabled in below cases
-		
 		if (lpmd_config.wlt_proxy_enable){
 			interval = lpmd_config.wlt_proxy_interval;
 			//gets interval of different states 
@@ -913,6 +906,7 @@ static void* lpmd_core_main_loop(void *arg)
 
 		if (idx_wlt_fd >= 0 && (poll_fds[idx_wlt_fd].revents & POLLPRI)) {
 			int wlt_index;
+
 			wlt_index = read_wlt(poll_fds[idx_wlt_fd].fd);
 			interval = periodic_util_update (&lpmd_config, wlt_index);
 		}
@@ -942,6 +936,8 @@ static void build_default_config_state(void)
 	state->poll_interval_increment = -1;
 	state->epp = lpmd_config.lp_mode_epp;
 	state->epb = SETTING_IGNORE;
+	state->valid = 1;
+	state->wlt_type = -1;
 	snprintf(state->active_cpus, MAX_STR_LENGTH, "%s", get_cpus_str(CPUMASK_LPM_DEFAULT));
 
 	state = &lpmd_config.config_states[1];
@@ -955,6 +951,8 @@ static void build_default_config_state(void)
 	state->max_poll_interval = 1000;
 	state->epp = lpmd_config.lp_mode_epp == SETTING_IGNORE ? SETTING_IGNORE : SETTING_RESTORE;
 	state->epb = SETTING_IGNORE;
+	state->valid = 1;
+	state->wlt_type = -1;
 	snprintf(state->active_cpus, MAX_STR_LENGTH, "%s", get_cpus_str(CPUMASK_ONLINE));
 
 	lpmd_config.config_state_count = 2;
@@ -1049,13 +1047,17 @@ int lpmd_main(void)
 				lpmd_log_error ("Invalid WLT Proxy setup\n");
 			}
 		} else {
-			poll_for_wlt(1);
+			if (!lpmd_config.hfi_lpm_enable && !lpmd_config.hfi_suv_enable) {
+				lpmd_config.util_enable = 0;
+				poll_for_wlt(1);
+			}
 		}
 	}
 
 	pthread_attr_init (&lpmd_attr);
 	pthread_attr_setdetachstate (&lpmd_attr, PTHREAD_CREATE_DETACHED);
 
+	connect_to_power_profile_daemon ();
 	/*
 	 * lpmd_core_main_loop: is the thread where all LPMD actions take place.
 	 * All other thread send message via pipe to trigger processing
@@ -1064,7 +1066,6 @@ int lpmd_main(void)
 	if (ret)
 		return LPMD_FATAL_ERROR;
 
-	connect_to_power_profile_daemon ();
 
 	lpmd_log_debug ("lpmd_init succeeds\n");
 
