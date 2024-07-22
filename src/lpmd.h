@@ -52,7 +52,7 @@
 #include <glib/gi18n.h>
 #include <gmodule.h>
 
-#include "additional/additional_common.h"
+
 // Log macros
 enum log_level {
 	LPMD_LOG_NONE,

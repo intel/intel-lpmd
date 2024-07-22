@@ -268,10 +268,11 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_co
 				else if (!strncmp((const char*)cur_node->name, "WLTProxyInterval", strlen("WLTProxyInterval"))) {
 					errno = 0;
 					lpmd_config->wlt_proxy_interval = strtol (tmp_value, &pos, 10);
+					//todo : check for upper limit
 					if (errno || *pos != '\0' || lpmd_config->wlt_proxy_interval <= 0)
 						goto err;
 				}
-				else if (!strncmp((const char*)cur_node->name, "WLTProxyEnable", strlen("WLtProxyEnable"))) {
+				else if (!strncmp((const char*)cur_node->name, "WLTProxyEnable", strlen("WLTProxyEnable"))) {
 					errno = 0;
 					lpmd_config->wlt_proxy_enable = strtol (tmp_value, &pos, 10);
 					if (errno || *pos != '\0'

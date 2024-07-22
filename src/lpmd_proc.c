@@ -24,6 +24,7 @@
 #include "lpmd.h"
 #include "wlt_proxy/wlt_proxy.h"
 
+
 extern int next_proxy_poll; 
 static lpmd_config_t lpmd_config;
 
@@ -876,7 +877,7 @@ static void* lpmd_core_main_loop(void *arg)
 			if (lpmd_config.wlt_proxy_enable){
 				wlt_proxy_action_loop ();
 			}
-			else
+			else //todo: should we call this?
 				interval = periodic_util_update (&lpmd_config, -1);
 		}
 
@@ -1040,7 +1041,7 @@ int lpmd_main(void)
 	}
 
 	if (lpmd_config.wlt_hint_enable) {
-		lpmd_config.util_enable = 0;
+		lpmd_config.util_enable = 0;//todo: check this why?
 		if (lpmd_config.wlt_proxy_enable) {
 			if (wlt_proxy_init(&lpmd_config) != LPMD_SUCCESS || !lpmd_config.wlt_proxy_interval) {
 				lpmd_config.wlt_proxy_enable = 0;

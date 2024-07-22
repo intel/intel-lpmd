@@ -32,7 +32,6 @@ static int _write_str(const char *name, char *str, int print_level, int log_leve
 	FILE *filep;
 	char prefix[16];
 	int i, ret;
-	//_raise_privilege(); 
 
 	if (print_level >= 15)
 		return 1;

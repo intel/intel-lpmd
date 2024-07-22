@@ -33,8 +33,6 @@ intel_lpmd_LDADD = \
 	$(GLIB_LIBS) \
 	$(LIBNL_LIBS) \
 	$(LIBM) \
-        -lm \
-        -lcap \
 	$(LIBDL) \
 	$(XML_LIBS) \
 	$(libnlgenl30_LIBS) \
@@ -64,9 +62,6 @@ intel_lpmd_SOURCES = \
         src/wlt_proxy/perf_msr.c \
         src/wlt_proxy/cpu_group.c \
 	src/weights/power-supply-status.c \
-        src/additional/privilege.c \
-        #src/visualize/plotting.c \
-	#src/wlt_proxy/helper_gaps.c \
 	lpmd-resource.c
 
 man8_MANS = man/intel_lpmd.8
