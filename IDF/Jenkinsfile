@@ -166,8 +166,11 @@ pipeline {
                     }
                     steps {
                         script {  
-                          //  env.CoverityStream = determineCoverityStream(env.IngredientPlatformTarget, params.PkgComponent)
-                            CoverityScan()
+                          PrepareWorkspace(BuildConfig: env.BuildConfig,
+                                             IngredientPath: env.IngredientPath,
+                                             CheckoutPath: env.CheckoutPath,
+                                             PrepareScript: "DTPCoverity"
+                            )
                         }
                     }
                 } //end SecureCoverityScan Stage
