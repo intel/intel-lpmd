@@ -144,7 +144,7 @@ static gboolean sig_int_handler(void)
 {
 //	 Call terminate function
 	lpmd_terminate ();
-	//todo: check for config flag. what if not enabled in config.
+	//proxy check is done inside the function
 	wlt_proxy_uninit();
 	
 	sleep (1);

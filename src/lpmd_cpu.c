@@ -50,8 +50,7 @@
 #include <systemd/sd-bus.h>
 
 #include "lpmd.h"
-//todo: change it to DISABLE_SOC_ENFORCEMENT and get it through build flag -D
-#define valgrind_build 0
+#define DISABLE_SOC_ENFORCEMENT 0
 static int topo_max_cpus;
 static int max_online_cpu;
 static size_t size_cpumask;
@@ -619,11 +618,9 @@ int init_epp_epb(void)
 	int ret;
 	char path[MAX_STR_LENGTH];
 
-	saved_cpu_info = calloc (sizeof(struct cpu_info) * max_cpus);
+	saved_cpu_info = calloc (sizeof(struct cpu_info), max_cpus);
 
 	for (c = 0; c < max_cpus; c++) {
-		//todo: print and make sure calloc sets memory contents to 0 and then remove below line.
-    	//memset( &saved_cpu_info[c], 0, sizeof(struct cpu_info));
 		saved_cpu_info[c].epp_str[0] = '\0';
 		saved_cpu_info[c].epp = -1;
 
@@ -890,7 +887,7 @@ static int detect_supported_cpu(lpmd_config_t *lpmd_config)
 	/* Unsupported model */
         if (!id_table[val].family || max_level < 0x1a) {
 		lpmd_log_info("Unsupported platform\n");
-#ifdef valgrind_build
+#ifdef DISABLE_SOC_ENFORCEMENT
 		lpmd_log_info("valgrind build only, continue\n");
 #else		
 		return -1;
@@ -1829,7 +1826,7 @@ int check_cpu_capability(lpmd_config_t *lpmd_config)
 	ret = detect_supported_cpu(lpmd_config);
 	if (ret) {
 		lpmd_log_info("Unsupported CPU type\n");
-#ifdef valgrind_build			
+#ifdef DISABLE_SOC_ENFORCEMENT
 		lpmd_log_info("valgrind build only, continue\n");
 #else
 		return ret;
@@ -1881,11 +1878,6 @@ int check_cpu_capability(lpmd_config_t *lpmd_config)
 void uninit_cpu(){
     int max_cpus = get_max_cpus ();
     if (saved_cpu_info){
-		//todo: remove for loop.
-		//memset( &saved_cpu_info, 0, sizeof(struct cpu_info) * max_cpus);
-    	for (int c = 0; c < max_cpus; c++) {
-            memset( &saved_cpu_info[c], 0, sizeof(struct cpu_info));
-        }
         free(saved_cpu_info); 
     }        
 }

@@ -420,11 +420,10 @@ static int process_next_config_state(lpmd_config_t *config, int wlt_index)
 
 	get_epp_epb(&epp, epp_str, 32, &epb);
 
-//todo: check for validity of next_proxy_poll variable
 	if (config->wlt_proxy_enable){
 		interval = config->wlt_proxy_interval;
 		//gets interval of different states 
-		if (interval != next_proxy_poll)
+		if (interval != next_proxy_poll && next_proxy_poll > 0)
 			interval = next_proxy_poll;
 	}	
 
@@ -517,10 +516,8 @@ int periodic_util_update(lpmd_config_t *lpmd_config, int wlt_index)
 int util_init(lpmd_config_t *lpmd_config)
 {
 	lpmd_config_state_t *state;
-	//lpmd_config_state_t *last_valid = NULL;
 	int nr_state = 0;
 	int i, ret;
-
 
 	for (i = 0; i < lpmd_config->config_state_count; i++) {
 		state = &lpmd_config->config_states[i];
@@ -545,7 +542,6 @@ int util_init(lpmd_config_t *lpmd_config)
 		state->exit_cpu_load_thres *= 100;
 
 		state->valid = 1;
-		//last_valid = state;
 		nr_state++;
 	}
 

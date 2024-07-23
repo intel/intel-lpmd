@@ -605,15 +605,6 @@ static int idx_hfi_fd = -1;
 static int wlt_fd;
 static int idx_wlt_fd = -1;
 
-/* WLT hints parsing */
-/*typedef enum {
-	WLT_IDLE,
-	WLT_BATTERY_LIFE,
-	WLT_SUSTAINED,
-	WLT_BURSTY,
-	WLT_INVALID,
-} wlt_type_t;*/
-
 // Workload type classification
 #define WORKLOAD_NOTIFICATION_DELAY_ATTRIBUTE "/sys/bus/pci/devices/0000:00:04.0/workload_hint/notification_delay_ms"
 #define WORKLOAD_ENABLE_ATTRIBUTE "/sys/bus/pci/devices/0000:00:04.0/workload_hint/workload_hint_enable"
@@ -857,7 +848,7 @@ static void* lpmd_core_main_loop(void *arg)
 		if (lpmd_config.wlt_proxy_enable){
 			interval = lpmd_config.wlt_proxy_interval;
 			//gets interval of different states 
-			if (interval != next_proxy_poll)
+			if (interval != next_proxy_poll && next_proxy_poll > 0)
 				interval = next_proxy_poll;
 		}
 		else if (lpm_state & (LPM_USER_ON | LPM_USER_OFF | LPM_SUV_ON) | has_hfi_lpm_monitor ())
@@ -877,7 +868,7 @@ static void* lpmd_core_main_loop(void *arg)
 			if (lpmd_config.wlt_proxy_enable){
 				wlt_proxy_action_loop ();
 			}
-			else //todo: should we call this?
+			else 
 				interval = periodic_util_update (&lpmd_config, -1);
 		}
 
@@ -952,8 +943,6 @@ static void build_default_config_state(void)
 	state->max_poll_interval = 1000;
 	state->epp = lpmd_config.lp_mode_epp == SETTING_IGNORE ? SETTING_IGNORE : SETTING_RESTORE;
 	state->epb = SETTING_IGNORE;
-	state->valid = 1;
-	state->wlt_type = -1;
 	snprintf(state->active_cpus, MAX_STR_LENGTH, "%s", get_cpus_str(CPUMASK_ONLINE));
 
 	lpmd_config.config_state_count = 2;
@@ -1041,7 +1030,7 @@ int lpmd_main(void)
 	}
 
 	if (lpmd_config.wlt_hint_enable) {
-		lpmd_config.util_enable = 0;//todo: check this why?
+		lpmd_config.util_enable = 0;
 		if (lpmd_config.wlt_proxy_enable) {
 			if (wlt_proxy_init(&lpmd_config) != LPMD_SUCCESS || !lpmd_config.wlt_proxy_interval) {
 				lpmd_config.wlt_proxy_enable = 0;
@@ -1049,7 +1038,6 @@ int lpmd_main(void)
 			}
 		} else {
 			if (!lpmd_config.hfi_lpm_enable && !lpmd_config.hfi_suv_enable) {
-				lpmd_config.util_enable = 0;
 				poll_for_wlt(1);
 			}
 		}

@@ -33,6 +33,7 @@ intel_lpmd_LDADD = \
 	$(GLIB_LIBS) \
 	$(LIBNL_LIBS) \
 	$(LIBM) \
+	-lm	\
 	$(LIBDL) \
 	$(XML_LIBS) \
 	$(libnlgenl30_LIBS) \
