@@ -76,6 +76,8 @@ pipeline {
         IgnoreOneBOMComponent = "DTP"
         ContainerNode = true
         SkipGitReference = true
+        Compilers = "gcc"
+        DefaultCompilerTemplate = true
         //AppPath = "leankit_linux_x86_64"
         //AppPath = "*.*"
     }
@@ -141,7 +143,7 @@ pipeline {
                     steps {
                         script {
                             echo "Build ${params.IngredientPlatformTarget}"
-                            BuildIngredient(SubComponents: "DTPbuild,DTPbundle", MetadataFile: MetadataFile)
+                            BuildIngredient(MetadataFile: MetadataFile)
                            // abi.shell("${AgentWorkspace}\\src\\IDF\\Buildpkg.sh")
                         }
                     }
@@ -166,11 +168,7 @@ pipeline {
                     }
                     steps {
                         script {  
-                          PrepareWorkspace(BuildConfig: env.BuildConfig,
-                                             IngredientPath: env.IngredientPath,
-                                             CheckoutPath: env.CheckoutPath,
-                                             PrepareScript: "DTPCoverity"
-                            )
+                        CoverityScan()
                         }
                     }
                 } //end SecureCoverityScan Stage

@@ -45,14 +45,6 @@
             "ProjectType": "Script",
             "WorkingDirectory": "package/bundleScript"
             
-        },
-        {
-            "Name": "DTPCoverity",
-            "Description": "DTP Coverity Scan",
-            "ProjectFile": "coverityDTP.sh",
-            "ProjectType": "Script",
-            "WorkingDirectory": "IDF"
-            
         }
     ],
     "SchemaVersion": "1.0"
