@@ -121,7 +121,8 @@ static int get_busy(void) {
 
 			_idle = idle_time - prev_idle;
 			_total = total - prev_total;
-			cpu_usage = (_total - _idle) * 100 / _total;
+			if (_total != 0)
+    			cpu_usage = (_total - _idle) * 100 / _total;
 			lpmd_log_debug("cpu_usage: %d %d %d\n", _idle, _total, cpu_usage);
 		}
 

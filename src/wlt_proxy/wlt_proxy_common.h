@@ -130,9 +130,10 @@ enum lp_state_idx {
 	MDRT2E_MODE,	// 5
 	RESP_MODE,	// 6
 	NORM_MODE,	// 7
-	DEEP_MODE,	// 8
-	MAX_MODE,	// 9
+	DEEP_MODE	// 8
+//	MAX_MODE,	// 9
 };
+#define	MAX_MODE 9
 
 struct group_util {
 	/* top 3 max utils and last (min) util */

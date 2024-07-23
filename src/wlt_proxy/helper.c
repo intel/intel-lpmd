@@ -345,12 +345,21 @@ int init_inject_fd(void)
 	fd = open_fd(PATH_CPUMASK, O_RDWR);
 	if (fd > 0)
 		fd_cache.inject_cpumask = fd;
+    else 
+        close_fd(fd); 
+        		
 	fd = open_fd(PATH_MAXIDLE, O_RDWR);
 	if (fd > 0)
 		fd_cache.inject_idle = fd;
+    else 
+        close_fd(fd); 
+        				
 	fd = open_fd(PATH_DURATION, O_RDWR);
 	if (fd > 0)
 		fd_cache.inject_duration = fd;
+    else 
+        close_fd(fd); 
+        				
 	return 1;
 }
 
@@ -400,9 +409,14 @@ int init_cgroup_fd(void)
 	fd = open_fd("/sys/fs/cgroup/eco/cpuset.cpus.partition", O_RDWR);
 	if (fd > 0)
 		fd_cache.cgroup_partition_fd = fd;
+	else 
+	    close_fd(fd);
+	    
 	fd = open_fd("/sys/fs/cgroup/eco/cpuset.cpus", O_RDWR);
 	if (fd > 0)
 		fd_cache.cgroup_isolate_fd = fd;
+	else 
+	    close_fd(fd);
 	return 1;
 }
 

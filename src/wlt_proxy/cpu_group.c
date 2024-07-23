@@ -735,7 +735,8 @@ int parse_cpu_topology(void)
 		} else
 			break;
 
-		online[strlen(online) - 1] = '\0';
+		online[sizeof(online) - 1] = '\0';
+        printf("rui print length: %ld", strlen(online));
 		if (!atoi(online))
 			continue;
 

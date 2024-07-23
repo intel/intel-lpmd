@@ -781,7 +781,6 @@ static void connect_to_power_profile_daemon(void)
 		else {
 			lpmd_log_info ("Could not setup DBus watch for power-profiles-daemon");
 		}
-		g_object_unref(bus);
 	}
 }
 

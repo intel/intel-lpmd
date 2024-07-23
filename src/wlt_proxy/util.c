@@ -102,7 +102,8 @@ static int read_perf_counter_info(const char *const path, const char *const pars
 	ret = 0;
 
 cleanup_and_exit:
-	close(fdmt);
+    if (fdmt >= 0)
+    	close(fdmt);
 	return ret;
 }
 
@@ -252,10 +253,10 @@ extern int max_util;
 int update_perf_diffs(float *sum_norm_perf, int stat_init_only)
 {
 	int fd, min_cpu, maxed_cpu = -1;
-	float min_load = 100.0, min_s0 = 1.0, next_s0;
+	float min_load = 100.0, min_s0 = 1.0, next_s0 = 1.0;
 	float _sum_nperf = 0, nperf = 0;
-	float max_load = 0, max_2nd_load = 0, max_3rd_load = 0, next_load;
-	uint64_t aperf_raw, mperf_raw, pperf_raw, tsc_raw, poll_cpu_us;
+	float max_load = 0, max_2nd_load = 0, max_3rd_load = 0, next_load = 0;
+	uint64_t aperf_raw, mperf_raw, pperf_raw, tsc_raw, poll_cpu_us = 0;
 
 	int t, min_s0_cpu = 0, first_pass = 1;
 
@@ -453,11 +454,11 @@ int state_max_avg()
 	}
 
 	grp.sma_avg1 =
-	    (int)round(grp.sma_sum[0] / (SMA_LENGTH * SCALE_DECIMAL));
+	    (int)round((double)grp.sma_sum[0] / (double)(SMA_LENGTH * SCALE_DECIMAL));
 	grp.sma_avg2 =
-	    (int)round(grp.sma_sum[1] / (SMA_LENGTH * SCALE_DECIMAL));
+	    (int)round((double)grp.sma_sum[1] / (double)(SMA_LENGTH * SCALE_DECIMAL));
 	grp.sma_avg3 =
-	    (int)round(grp.sma_sum[2] / (SMA_LENGTH * SCALE_DECIMAL));
+	    (int)round((double)grp.sma_sum[2] / (double)(SMA_LENGTH * SCALE_DECIMAL));
 
 	return 1;
 }
@@ -578,7 +579,7 @@ int staytime_to_staycount(enum lp_state_idx state)
 		case NORM_MODE:
 		case DEEP_MODE:
 		case BYPS_MODE:
-		case MAX_MODE:
+		//case MAX_MODE:
 			/* undefined */
 			assert(0);
 			break;
@@ -736,7 +737,7 @@ static int util_main(enum slider_value sld)
 	 * a) bypass mode where the solution temporary bypassed
 	 * b) Responsive transit mode (fast poll can flood avg leading to incorrect decisions)
 	 */
-	if ((present_state != BYPS_MODE) || (present_state != RESP_MODE))
+	if ((present_state != BYPS_MODE) && (present_state != RESP_MODE))
 		state_max_avg();
 
 	switch (sld) {
@@ -808,7 +809,7 @@ static int util_main(enum slider_value sld)
 			    ("\n  time.ms, sldr, state, sma1, sma2, sma3, 1stmax, 2ndmax, 3rdmax, nx_poll, nx_st, Qperf,    Watt,     PPW, min_s0, cpu_s0, SpkRt, Rcnt, brst_pm\n");
 		}
 		log_info
-		     ("%05d.%03d,   %2d,  %4d,  %3d,  %3d,  %3d, %6.2f, %6.2f, %6.2f,  %6d,  %4d, %5.1f,  %6.2f,  %6.2f,   %.2f,    %3d,  %3d,   %3d,  %3d  %d\n",
+		     ("%05ld.%03ld,   %2d,  %4d,  %3d,  %3d,  %3d, %6.2f, %6.2f, %6.2f,  %6d,  %4d, %5.1f,  %6.2f,  %6.2f,   %.2f,    %3d,  %3d,   %3d,  %3d  %d\n",
 		     ts_start.tv_sec - ts_init.tv_sec,
 		     ts_start.tv_nsec / 1000000, sld, present_state,
 		     grp.sma_avg1, grp.sma_avg2, grp.sma_avg3, grp.c0_max,

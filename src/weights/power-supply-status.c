@@ -96,7 +96,9 @@ static int find_dir(char *start_dir, int depth, char *dir_to_find)
     int ret = chdir(start_dir);
     if(ret ==0 ) {
         while((entry = readdir(dp)) != NULL) {
-            lstat(entry->d_name, &statbuf);
+            int res = lstat(entry->d_name, &statbuf);
+            if (res != 0)
+                continue;
             if(S_ISDIR(statbuf.st_mode)) {
 				
                 /* ignore . and .. */
@@ -242,6 +244,9 @@ int is_ac_powered_power_supply_status() {
 				int content_count = 0;
 				char power_supply_base_path[PATH_MAX] = {0};
 				char* p_supply = out_supplies[i];
+				
+				if (!p_supply)
+				    continue; 
 				
 				strncpy(power_supply_base_path, base_path, sizeof(base_path));
 				strncat(power_supply_base_path, "/", sizeof("/"));	
