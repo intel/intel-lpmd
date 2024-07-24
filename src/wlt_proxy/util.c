@@ -479,8 +479,8 @@ enum lp_state_idx nearest_supported(enum lp_state_idx from_state, enum lp_state_
 }
 
 static int get_state_mapping(enum lp_state_idx state){
-    //for now, AC_CONNECTED is set true by default
-    //it needs to read the battery status 
+
+    //read the battery connection status 
     bool AC_CONNECTED = is_ac_powered_power_supply_status() == 0  ? false: true; //unknown is considered as ac powered.
     
     switch(state){
@@ -505,11 +505,15 @@ static int get_state_mapping(enum lp_state_idx state){
 	case DEEP_MODE:							
         return WLT_IDLE; 
 	
+	//there is no corresponding wlt for INIT_MODE, it goes away quickly.
+	//use WLT_SUSTAINED as default type	
 	case INIT_MODE:
 	default:	
 	    return WLT_SUSTAINED;//WLT_INVALID; 	
     }
     
+	//we don't allow invalid wlt type, flag and use WLT_SUSTAINED
+	lpmd_log_error("unknown work load type\n");
     return WLT_SUSTAINED;//WLT_INVALID; 
 }
 

@@ -182,14 +182,14 @@ int state_machine_auto(int present_state)
 			if (!burst_rate_breach() && strikeout_once(N_STRIKE))
 				break;
 			prep_state_change(MDRT3E_MODE, PERF_MODE, 0);
-            lpmd_log_info("MDRT3E_MODE to PERF_MODE %.2f < %d\n", grp.c0_max, UTIL_NEAR_FULL);					
+            lpmd_log_info("MDRT3E_MODE to PERF_MODE %.2f > %d\n", grp.c0_max, UTIL_NEAR_FULL);					
 			break;
 		}
 		// Demote to 4 thread sustained
 		if (A_GTE_B(grp.sma_avg1, SUS_LOW_RANGE_END) &&
 		    A_GTE_B(grp.sma_avg2, (SUS_LOW_RANGE_END - 5))) {
 			prep_state_change(MDRT3E_MODE, MDRT4E_MODE, 0);
-            lpmd_log_info("MDRT3E_MODE to MDRT4E_MODE %d < %d\n", grp.sma_avg1, SUS_LOW_RANGE_END);				
+            lpmd_log_info("MDRT3E_MODE to MDRT4E_MODE %d > %d\n", grp.sma_avg1, SUS_LOW_RANGE_END);				
 			break;
 		}
 		// promote
@@ -210,7 +210,7 @@ int state_machine_auto(int present_state)
 			if (!do_countdown(MDRT3E_MODE))
 				break;
 			prep_state_change(MDRT3E_MODE, NORM_MODE, 0);
-            lpmd_log_info("MDRT3E_MODE to NORM_MODE %d < %d\n", grp.sma_avg1, MDRT2E_MODE);			
+            lpmd_log_info("MDRT3E_MODE to NORM_MODE\n");			
 			break;
 		}
 		// stay

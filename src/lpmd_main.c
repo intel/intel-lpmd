@@ -229,6 +229,18 @@ int main(int argc, char *argv[])
 		fprintf (stderr, "You must be root to run intel_lpmd!\n");
 		exit (EXIT_FAILURE);
 	}
+	
+	/*
+	 * this bare metal program orchestating cpu topology and related
+	 * attributes need to assertively 'run' to avoid decision starving
+	 * e.g. when queued with only lowest performant core and some other
+	 * task hogging 100% cpu, without letting any further decision change.
+	 *
+	struct sched_param param;
+	param.sched_priority = sched_get_priority_max(SCHED_RR);
+	ret = sched_setscheduler(0, SCHED_RR, &param);
+	if (ret < 0)
+		perror("SCHED_RR priority");*/	
 
 	if (g_mkdir_with_parents (TDRUNDIR, 0755) != 0) {
 		fprintf (stderr, "Cannot create '%s': %s", TDRUNDIR, strerror (errno));
