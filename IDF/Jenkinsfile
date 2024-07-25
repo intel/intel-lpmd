@@ -1,5 +1,5 @@
 #!groovy
-@Library(['abi', 'idf-enabling@cov_new_flags']) _
+@Library(['abi', 'idf-enabling']) _
 
 import owm.common.BuildInfo
 Map buildinfo = BuildInfo.instance.data
