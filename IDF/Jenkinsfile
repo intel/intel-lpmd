@@ -167,7 +167,7 @@ pipeline {
                     }
                     steps {
                         script {  
-                        CoverityScan(DefaultCompilerTemplate = false)
+                        CoverityScan(DefaultCompilerTemplate: false)
                         }
                     }
                 } //end SecureCoverityScan Stage
