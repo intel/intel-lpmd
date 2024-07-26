@@ -76,6 +76,7 @@ pipeline {
         IgnoreOneBOMComponent = "DTP"
         ContainerNode = true
         SkipGitReference = true
+        Compilers = "gcc"
         //AppPath = "leankit_linux_x86_64"
         //AppPath = "*.*"
     }
@@ -165,7 +166,7 @@ pipeline {
                     }
                     steps {
                         script {  
-                            CoverityScan()
+                                CoverityScan(DefaultCompilerTemplate: false)
                         }
                     }
                 } //end SecureCoverityScan Stage
