@@ -44,7 +44,7 @@
             "ProjectFile": "bundle.sh",
             "ProjectType": "Script",
             "WorkingDirectory": "package/bundleScript"
-            
+
         }
     ],
     "SchemaVersion": "1.0"
