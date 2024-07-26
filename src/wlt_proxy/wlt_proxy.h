@@ -31,24 +31,8 @@ typedef enum {
 
 void set_workload_hint(int type); 
 
-//extern lpmd_config_t lpmd_config;
-/*
-extern int next_proxy_poll;
-
-
-extern void wlt_proxy_action_loop(void);
-
-extern int wlt_proxy_init(lpmd_config_t *_lpmd_config);
-extern void wlt_proxy_uninit(void);
-*/
-
-
-//int next_proxy_poll;
-//lpmd_config_t *lpmd_config;
-
 void wlt_proxy_action_loop(void);
 
-//int wlt_proxy_init(lpmd_config_t *_lpmd_config);
 void wlt_proxy_uninit(void);
 
 #endif				/* _WLT_PROXY_H_ */

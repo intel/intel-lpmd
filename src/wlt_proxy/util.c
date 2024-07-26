@@ -28,12 +28,16 @@
 #include <errno.h>
 #include <assert.h>
 #include <stdbool.h>
-
+#include <linux/perf_event.h>
+#include <asm/unistd.h>
+#include "lpmd.h"
 #include "wlt_proxy_common.h"
 #include "wlt_proxy.h"
 #include "cpu_group.h"
 #include "perf_msr.h"
 #include "../weights/weights_common.h"
+
+#define PERF_API 1
 
 perf_stats_t *perf_stats;
 struct group_util grp;
@@ -44,6 +48,13 @@ void update_state_epb(enum lp_state_idx state);
 void clamp_to_turbo(enum lp_state_idx for_state);
 
 static float soc_mw;
+
+struct thread_data {
+	unsigned long long tsc;
+	unsigned long long aperf;
+	unsigned long long mperf;
+	unsigned long long pperf; 
+} *thread_even, *thread_odd;
 
 int grp_c0_breach(void)
 {
@@ -56,31 +67,251 @@ int get_msr_fd(int cpu)
 	return perf_stats[cpu].dev_msr_fd;
 }
 
+static int read_perf_counter_info(const char *const path, const char *const parse_format, void *value_ptr)
+{
+	int fdmt;
+	int bytes_read;
+	char buf[64];
+	int ret = -1;
+
+	fdmt = open(path, O_RDONLY, 0);
+	if (fdmt == -1) {
+		//if (debug)
+			fprintf(stderr, "Failed to parse perf counter info %s\n", path);
+		ret = -1;
+		goto cleanup_and_exit;
+	}
+
+	bytes_read = read(fdmt, buf, sizeof(buf) - 1);
+	if (bytes_read <= 0 || bytes_read >= (int)sizeof(buf)) {
+		//if (debug)
+			fprintf(stderr, "Failed to parse perf counter info %s\n", path);
+		ret = -1;
+		goto cleanup_and_exit;
+	}
+
+	buf[bytes_read] = '\0';
+
+	if (sscanf(buf, parse_format, value_ptr) != 1) {
+		//if (debug)
+			fprintf(stderr, "Failed to parse perf counter info %s\n", path);
+		ret = -1;
+		goto cleanup_and_exit;
+	}
+
+	ret = 0;
+
+cleanup_and_exit:
+    if (fdmt >= 0)
+    	close(fdmt);
+	return ret;
+}
+
+static unsigned int read_perf_counter_info_n(const char *const path, const char *const parse_format)
+{
+	unsigned int v;
+	int status;
+
+	status = read_perf_counter_info(path, parse_format, &v);
+	if (status)
+		v = -1;
+
+	return v;
+}
+int read_pperf_config(void)
+{
+	const char *const path = "/sys/bus/event_source/devices/msr/events/pperf";
+	const char *const format = "event=%x";
+
+	return read_perf_counter_info_n(path, format);
+}
+unsigned int read_aperf_config(void)
+{
+	const char *const path = "/sys/bus/event_source/devices/msr/events/aperf";
+	const char *const format = "event=%x";
+
+	return read_perf_counter_info_n(path, format);	
+}
+
+unsigned int read_mperf_config(void)
+{
+	const char *const path = "/sys/bus/event_source/devices/msr/events/mperf";
+	const char *const format = "event=%x";
+
+	return read_perf_counter_info_n(path, format);
+}
+unsigned int read_tsc_config(void)
+{
+	const char *const path = "/sys/bus/event_source/devices/msr/events/tsc";
+	const char *const format = "event=%x";
+
+	return read_perf_counter_info_n(path, format);
+}
+
+
+static unsigned int read_msr_type(void)
+{
+	const char *const path = "/sys/bus/event_source/devices/msr/type";
+	const char *const format = "%u";
+
+	return read_perf_counter_info_n(path, format);
+}
+
+static long perf_event_open(struct perf_event_attr *hw_event, pid_t pid, int cpu, int group_fd, unsigned long flags)
+{
+	return syscall(__NR_perf_event_open, hw_event, pid, cpu, group_fd, flags);
+}
+
+static long open_perf_counter(int cpu, unsigned int type, unsigned int config, int group_fd, __u64 read_format)
+{
+	struct perf_event_attr attr;
+	const pid_t pid = -1;
+	const unsigned long flags = 0;
+
+	memset(&attr, 0, sizeof(struct perf_event_attr));
+
+	attr.type = type;
+	attr.size = sizeof(struct perf_event_attr);
+	attr.config = config;
+	attr.disabled = 0;
+	attr.sample_type = PERF_SAMPLE_IDENTIFIER;
+	attr.read_format = read_format;
+
+	const int fd = perf_event_open(&attr, pid, cpu, group_fd, flags);
+
+	return fd;
+}
+
+void open_amperf_fd(int cpu)
+{
+	const unsigned int msr_type = read_msr_type();
+	const unsigned int aperf_config = read_aperf_config();
+	const unsigned int mperf_config = read_mperf_config();
+	const unsigned int pperf_config = read_pperf_config();	
+
+	perf_stats[cpu].aperf_fd = open_perf_counter(cpu, msr_type, aperf_config, -1, PERF_FORMAT_GROUP);
+	perf_stats[cpu].mperf_fd = open_perf_counter(cpu, msr_type, mperf_config, perf_stats[cpu].aperf_fd, PERF_FORMAT_GROUP);	
+	perf_stats[cpu].pperf_fd = open_perf_counter(cpu, msr_type, pperf_config, perf_stats[cpu].aperf_fd, PERF_FORMAT_GROUP);	
+}
+
+int get_amperf_fd(int cpu)
+{
+	if (perf_stats[cpu].aperf_fd)
+		return perf_stats[cpu].aperf_fd;
+
+	open_amperf_fd(cpu);
+
+	return perf_stats[cpu].aperf_fd;
+}
+
+
+unsigned long long rdtsc(void)
+{
+	unsigned int low, high;
+
+	asm volatile ("rdtsc":"=a" (low), "=d"(high));
+
+	return low | ((unsigned long long)high) << 32;
+}
+
+
+/* Read APERF, MPERF and TSC using the perf API. */
+int read_aperf_mperf_tsc_perf(struct thread_data *t, int cpu)
+{
+	union {
+		struct {
+			unsigned long nr_entries;
+			unsigned long aperf;
+			unsigned long mperf;
+			unsigned long pperf; 
+		};
+
+		unsigned long as_array[4];
+	} cnt;
+
+	const int fd_amperf = get_amperf_fd(cpu);
+
+	/*
+	 * Read the TSC with rdtsc, because we want the absolute value and not
+	 * the offset from the start of the counter.
+	 */
+	t->tsc = rdtsc();
+
+	const int n = read(fd_amperf, &cnt.as_array[0], sizeof(cnt.as_array));
+
+	if (n != sizeof(cnt.as_array))
+		return -2;
+
+	t->aperf = cnt.aperf;
+	t->mperf = cnt.mperf;
+	t->pperf = cnt.pperf;
+
+	return 0;
+}
+
 extern int max_util;
 int update_perf_diffs(float *sum_norm_perf, int stat_init_only)
 {
 	int fd, min_cpu, maxed_cpu = -1;
-	float min_load = 100.0, min_s0 = 1.0, next_s0;
+	float min_load = 100.0, min_s0 = 1.0, next_s0 = 1.0;
 	float _sum_nperf = 0, nperf = 0;
-	float max_load = 0, max_2nd_load = 0, max_3rd_load = 0, next_load;
-	uint64_t aperf_raw, mperf_raw, pperf_raw, tsc_raw, poll_cpu_us;
+	float max_load = 0, max_2nd_load = 0, max_3rd_load = 0, next_load = 0;
+	uint64_t aperf_raw, mperf_raw, pperf_raw, tsc_raw, poll_cpu_us = 0;
 
 	int t, min_s0_cpu = 0, first_pass = 1;
 
 	for (t = 0; t < get_max_online_cpu(); t++) {
 		if (!cpu_applicable(t, get_cur_state()))
 			continue;
+
+#ifdef PERF_API
+        /*reading through perf api*/
+		struct thread_data tdata;
+		read_aperf_mperf_tsc_perf(&tdata , t);
+        lpmd_log_debug("from api pperf_raw %lld\n", tdata.pperf);
+		/*perf_stats[t].pperf_diff*/ uint64_t pperf = cpu_get_diff_pperf(tdata.pperf, t);
+        lpmd_log_debug("from api pperf_diff %ld\n", pperf);
+		perf_stats[t].pperf_diff = pperf;
+
+        lpmd_log_debug("from api aperf_raw %lld\n", tdata.aperf);
+		/*perf_stats[t].aperf_diff*/  uint64_t aperf = cpu_get_diff_aperf(tdata.aperf, t);
+        lpmd_log_debug("from api aperf_diff %ld\n", aperf);
+        perf_stats[t].aperf_diff = aperf;
+
+        lpmd_log_debug("from api mperf_raw %lld\n", tdata.mperf);
+		/*perf_stats[t].mperf_diff*/  uint64_t mperf = cpu_get_diff_mperf(tdata.mperf, t);
+        lpmd_log_debug("from api mperf_diff %ld\n", mperf);
+        perf_stats[t].mperf_diff = mperf;
+
+        lpmd_log_debug("from api tsc_raw %lld\n", tdata.tsc);
+		/*perf_stats[t].tsc_diff*/ uint64_t tsc = cpu_get_diff_tsc(tdata.tsc, t);
+        lpmd_log_debug("from api tsc_diff %ld\n\n", tsc);
+        perf_stats[t].tsc_diff = tsc;
+#else		
+		/* reading through driver*/
 		fd = perf_stats[t].dev_msr_fd;
 
 		read_msr(fd, (uint32_t) MSR_IA32_PPERF, &pperf_raw);
 		read_msr(fd, (uint32_t) MSR_IA32_APERF, &aperf_raw);
 		read_msr(fd, (uint32_t) MSR_IA32_MPERF, &mperf_raw);
-		read_msr(fd, (uint32_t) MSR_IA32_TSC, &tsc_raw);
+		read_msr(fd, (uint32_t) MSR_IA32_TSC, &tsc_raw); 		
 
+        lpmd_log_debug("from driver pperf_raw %ld\n", pperf_raw);
 		perf_stats[t].pperf_diff = cpu_get_diff_pperf(pperf_raw, t);
+		lpmd_log_debug("****from driver pperf_diff %ld\n", perf_stats[t].pperf_diff);
+
+        lpmd_log_debug("from driver aperf_raw %ld\n", aperf_raw);
 		perf_stats[t].aperf_diff = cpu_get_diff_aperf(aperf_raw, t);
+        lpmd_log_debug("****from driver aperf_diff %ld\n", perf_stats[t].aperf_diff);
+
+        lpmd_log_debug("from driver mperf_raw %ld\n", mperf_raw);
 		perf_stats[t].mperf_diff = cpu_get_diff_mperf(mperf_raw, t);
+        lpmd_log_debug("****from driver mperf_diff %ld\n", perf_stats[t].mperf_diff);
+
+        lpmd_log_debug("from driver tsc_raw %ld\n", tsc_raw);
 		perf_stats[t].tsc_diff = cpu_get_diff_tsc(tsc_raw, t);
+        lpmd_log_debug("****from driver tsc_diff %ld\n\n", perf_stats[t].tsc_diff);*/
+#endif
 
 		if (stat_init_only)
 			continue;
@@ -144,7 +375,6 @@ int update_perf_diffs(float *sum_norm_perf, int stat_init_only)
 		    (float)perf_stats[maxed_cpu].aperf_diff * 0.01 /
 		    perf_stats[maxed_cpu].mperf_diff * cpu_hfm_mhz;
 	grp.worst_stall = min_s0;
-//printf("test, grp.worst_stall %.2f\n", grp.worst_stall);
 	grp.worst_stall_cpu = min_s0_cpu;
 
 	grp.c0_max = max_load;
@@ -194,15 +424,6 @@ int do_sum(int *sam, int len)
 	return sum;
 }
 
-void print_sma(void)
-{
-	for (int i = 0; i < SMA_CPU_COUNT; i++) {
-		for (int j = 0; j < SMA_LENGTH; j++)
-			printf(" %d ", sample[i][j]);
-		printf("\n");
-	}
-	printf("\n");
-}
 
 #define SCALE_DECIMAL (100)
 int state_max_avg()
@@ -233,11 +454,11 @@ int state_max_avg()
 	}
 
 	grp.sma_avg1 =
-	    (int)round(grp.sma_sum[0] / (SMA_LENGTH * SCALE_DECIMAL));
+	    (int)round((double)grp.sma_sum[0] / (double)(SMA_LENGTH * SCALE_DECIMAL));
 	grp.sma_avg2 =
-	    (int)round(grp.sma_sum[1] / (SMA_LENGTH * SCALE_DECIMAL));
+	    (int)round((double)grp.sma_sum[1] / (double)(SMA_LENGTH * SCALE_DECIMAL));
 	grp.sma_avg3 =
-	    (int)round(grp.sma_sum[2] / (SMA_LENGTH * SCALE_DECIMAL));
+	    (int)round((double)grp.sma_sum[2] / (double)(SMA_LENGTH * SCALE_DECIMAL));
 
 	return 1;
 }
@@ -258,8 +479,8 @@ enum lp_state_idx nearest_supported(enum lp_state_idx from_state, enum lp_state_
 }
 
 static int get_state_mapping(enum lp_state_idx state){
-    //for now, AC_CONNECTED is set true by default
-    //it needs to read the battery status 
+
+    //read the battery connection status 
     bool AC_CONNECTED = is_ac_powered_power_supply_status() == 0  ? false: true; //unknown is considered as ac powered.
     
     switch(state){
@@ -284,11 +505,15 @@ static int get_state_mapping(enum lp_state_idx state){
 	case DEEP_MODE:							
         return WLT_IDLE; 
 	
+	//there is no corresponding wlt for INIT_MODE, it goes away quickly.
+	//use WLT_SUSTAINED as default type	
 	case INIT_MODE:
 	default:	
 	    return WLT_SUSTAINED;//WLT_INVALID; 	
     }
     
+	//we don't allow invalid wlt type, flag and use WLT_SUSTAINED
+	lpmd_log_error("unknown work load type\n");
     return WLT_SUSTAINED;//WLT_INVALID; 
 }
 
@@ -318,7 +543,7 @@ int prep_state_change(enum lp_state_idx from_state, enum lp_state_idx to_state,
     //switch(to_state)
     //do to_state to WLT mapping
     int type = get_state_mapping((int)to_state); 
-    printf("proxy WLT hint :%d\n", type);
+    lpmd_log_info("proxy WLT state value :%d\n", type);
 	set_workload_hint(type);
 
 	set_cur_state(to_state);
@@ -358,7 +583,7 @@ int staytime_to_staycount(enum lp_state_idx state)
 		case NORM_MODE:
 		case DEEP_MODE:
 		case BYPS_MODE:
-		case MAX_MODE:
+		//case MAX_MODE:
 			/* undefined */
 			assert(0);
 			break;
@@ -516,7 +741,7 @@ static int util_main(enum slider_value sld)
 	 * a) bypass mode where the solution temporary bypassed
 	 * b) Responsive transit mode (fast poll can flood avg leading to incorrect decisions)
 	 */
-	if ((present_state != BYPS_MODE) || (present_state != RESP_MODE))
+	if ((present_state != BYPS_MODE) && (present_state != RESP_MODE))
 		state_max_avg();
 
 	switch (sld) {
@@ -588,7 +813,7 @@ static int util_main(enum slider_value sld)
 			    ("\n  time.ms, sldr, state, sma1, sma2, sma3, 1stmax, 2ndmax, 3rdmax, nx_poll, nx_st, Qperf,    Watt,     PPW, min_s0, cpu_s0, SpkRt, Rcnt, brst_pm\n");
 		}
 		log_info
-		     ("%05d.%03d,   %2d,  %4d,  %3d,  %3d,  %3d, %6.2f, %6.2f, %6.2f,  %6d,  %4d, %5.1f,  %6.2f,  %6.2f,   %.2f,    %3d,  %3d,   %3d,  %3d  %d\n",
+		     ("%05ld.%03ld,   %2d,  %4d,  %3d,  %3d,  %3d, %6.2f, %6.2f, %6.2f,  %6d,  %4d, %5.1f,  %6.2f,  %6.2f,   %.2f,    %3d,  %3d,   %3d,  %3d  %d\n",
 		     ts_start.tv_sec - ts_init.tv_sec,
 		     ts_start.tv_nsec / 1000000, sld, present_state,
 		     grp.sma_avg1, grp.sma_avg2, grp.sma_avg3, grp.c0_max,
@@ -694,7 +919,7 @@ void *state_handler(void)
 				  util_max, next_state, next_poll);
 			usleep(next_poll * 1000);
 		} else {
-			printf("unknown state %d", next_state);
+			lpmd_log_info("unknown state %d", next_state);
 			break;
 		}
 	}
@@ -720,9 +945,15 @@ void update_state_epb(enum lp_state_idx state)
 int perf_stat_init(void)
 {
 	int max_cpus = get_max_cpus();
+	perf_stats = NULL; 
 	perf_stats = malloc(sizeof(perf_stats_t) * max_cpus);
+    if ( !perf_stats ) {
+        return 0;
+    }
 
 	for (int t = 0; t < max_cpus; t++) {
+        memset( &perf_stats[t], 0, sizeof(perf_stats_t));
+
 		if (!is_cpu_online(t))
 			continue;
 		perf_stats[t].cpu = t;
@@ -734,6 +965,17 @@ int perf_stat_init(void)
 		    update_epb(perf_stats[t].dev_msr_fd, (uint64_t) EPB_AC);
 	}
 	return 1;
+}
+
+void perf_stat_uninit(){
+    int max_cpus = get_max_cpus();
+	if (perf_stats) {
+	    for (size_t i = 0; i < max_cpus; ++i) {
+            memset( &perf_stats[i], 0, sizeof(perf_stats_t));	        	    
+    	}
+    	free(perf_stats); 
+	}
+
 }
 
 /* EP BIAS. XXX switch to sysfs */

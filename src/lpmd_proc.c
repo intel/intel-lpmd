@@ -23,16 +23,10 @@
 
 #include "lpmd.h"
 #include "wlt_proxy/wlt_proxy.h"
-//#include "wlt_proxy/wlt_proxy_common.h"
+
 
 extern int next_proxy_poll; 
 static lpmd_config_t lpmd_config;
-
-/*extern void wlt_proxy_action_loop(void);
-extern int wlt_proxy_init(lpmd_config_t *_lpmd_config);
-extern void wlt_proxy_uninit(void);
-*/
-
 
 char *lpm_cmd_str[LPM_CMD_MAX] = {
 		[USER_ENTER] = "usr enter",
@@ -246,7 +240,7 @@ static int lpm_can_process(enum lpm_command cmd)
 			}
 			return 0;
 		case HFI_ENTER:
-			if (lpm_state & LPM_USER_OFF)
+			if (lpm_state & (LPM_USER_OFF | LPM_USER_ON))
 				return 0;
 
 			/* Ignore HFI LPM hints when in SUV mode */
@@ -344,6 +338,7 @@ int enter_lpm(enum lpm_command cmd)
 
 	process_itmt ();
 	process_irqs (1, get_cpu_mode ());
+
 	process_cpus (1, get_cpu_mode ());
 
 end:
@@ -610,15 +605,6 @@ static int idx_hfi_fd = -1;
 static int wlt_fd;
 static int idx_wlt_fd = -1;
 
-/* WLT hints parsing */
-/*typedef enum {
-	WLT_IDLE,
-	WLT_BATTERY_LIFE,
-	WLT_SUSTAINED,
-	WLT_BURSTY,
-	WLT_INVALID,
-} wlt_type_t;*/
-
 // Workload type classification
 #define WORKLOAD_NOTIFICATION_DELAY_ATTRIBUTE "/sys/bus/pci/devices/0000:00:04.0/workload_hint/notification_delay_ms"
 #define WORKLOAD_ENABLE_ATTRIBUTE "/sys/bus/pci/devices/0000:00:04.0/workload_hint/workload_hint_enable"
@@ -858,11 +844,10 @@ static void* lpmd_core_main_loop(void *arg)
 			break;
 
 //		 Opportunistic LPM is disabled in below cases
-		
 		if (lpmd_config.wlt_proxy_enable){
 			interval = lpmd_config.wlt_proxy_interval;
 			//gets interval of different states 
-			if (interval != next_proxy_poll)
+			if (interval != next_proxy_poll && next_proxy_poll > 0)
 				interval = next_proxy_poll;
 		}
 		else if (lpm_state & (LPM_USER_ON | LPM_USER_OFF | LPM_SUV_ON) | has_hfi_lpm_monitor ())
@@ -882,7 +867,7 @@ static void* lpmd_core_main_loop(void *arg)
 			if (lpmd_config.wlt_proxy_enable){
 				wlt_proxy_action_loop ();
 			}
-			else
+			else 
 				interval = periodic_util_update (&lpmd_config, -1);
 		}
 
@@ -912,6 +897,7 @@ static void* lpmd_core_main_loop(void *arg)
 
 		if (idx_wlt_fd >= 0 && (poll_fds[idx_wlt_fd].revents & POLLPRI)) {
 			int wlt_index;
+
 			wlt_index = read_wlt(poll_fds[idx_wlt_fd].fd);
 			interval = periodic_util_update (&lpmd_config, wlt_index);
 		}
@@ -941,6 +927,8 @@ static void build_default_config_state(void)
 	state->poll_interval_increment = -1;
 	state->epp = lpmd_config.lp_mode_epp;
 	state->epb = SETTING_IGNORE;
+	state->valid = 1;
+	state->wlt_type = -1;
 	snprintf(state->active_cpus, MAX_STR_LENGTH, "%s", get_cpus_str(CPUMASK_LPM_DEFAULT));
 
 	state = &lpmd_config.config_states[1];
@@ -1048,13 +1036,16 @@ int lpmd_main(void)
 				lpmd_log_error ("Invalid WLT Proxy setup\n");
 			}
 		} else {
-			poll_for_wlt(1);
+			if (!lpmd_config.hfi_lpm_enable && !lpmd_config.hfi_suv_enable) {
+				poll_for_wlt(1);
+			}
 		}
 	}
 
 	pthread_attr_init (&lpmd_attr);
 	pthread_attr_setdetachstate (&lpmd_attr, PTHREAD_CREATE_DETACHED);
 
+	connect_to_power_profile_daemon ();
 	/*
 	 * lpmd_core_main_loop: is the thread where all LPMD actions take place.
 	 * All other thread send message via pipe to trigger processing
@@ -1063,7 +1054,6 @@ int lpmd_main(void)
 	if (ret)
 		return LPMD_FATAL_ERROR;
 
-	connect_to_power_profile_daemon ();
 
 	lpmd_log_debug ("lpmd_init succeeds\n");
 

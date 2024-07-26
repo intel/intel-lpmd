@@ -98,7 +98,6 @@ static int parse_proc_stat(void)
 	FILE *filep;
 	int i;
 	int val;
-	int pos = 0;
 	int count = get_max_online_cpu() + 1;
 	int sys_idx = count - 1;
 	int size = sizeof(struct proc_stat_info) * count;
@@ -398,13 +397,14 @@ static int enter_state(lpmd_config_state_t *state, int bsys, int bcpu)
 }
 
 extern int next_proxy_poll; 
+
 static int process_next_config_state(lpmd_config_t *config, int wlt_index)
 {
-	lpmd_config_state_t *state;
-	int i;
+	lpmd_config_state_t *state = NULL;
+	int i = 0;
 	int interval = -1;
 	int epp, epb;
-	char epp_str[32];
+	char epp_str[32] = "";
 
 	// Check for new state
 	for (i = 0; i < config->config_state_count; ++i) {
@@ -419,12 +419,14 @@ static int process_next_config_state(lpmd_config_t *config, int wlt_index)
 		return interval;
 
 	get_epp_epb(&epp, epp_str, 32, &epb);
+
 	if (config->wlt_proxy_enable){
 		interval = config->wlt_proxy_interval;
 		//gets interval of different states 
-		if (interval != next_proxy_poll)
+		if (interval != next_proxy_poll && next_proxy_poll > 0)
 			interval = next_proxy_poll;
 	}	
+
 	if (epp >= 0)
 		lpmd_log_info(
 				"[%d/%d] %12s: bsys: %3d.%02d, bcpu: %3d.%02d, epp %20d, epb %3d, itmt %2d, interval %4d\n",
@@ -514,18 +516,18 @@ int periodic_util_update(lpmd_config_t *lpmd_config, int wlt_index)
 int util_init(lpmd_config_t *lpmd_config)
 {
 	lpmd_config_state_t *state;
-	lpmd_config_state_t *last_valid = NULL;
 	int nr_state = 0;
 	int i, ret;
-	size_t size;
 
 	for (i = 0; i < lpmd_config->config_state_count; i++) {
 		state = &lpmd_config->config_states[i];
 
 		if (state->active_cpus[0] != '\0') {
 			ret = parse_cpu_str(state->active_cpus, CPUMASK_UTIL);
-			if (ret <= 0)
+			if (ret <= 0) {
+				state->valid = 0;
 				continue;
+			}
 		}
 
 		if (!state->min_poll_interval)
@@ -535,13 +537,11 @@ int util_init(lpmd_config_t *lpmd_config)
 		if (!state->poll_interval_increment)
 			state->poll_interval_increment = -1;
 
-
 		state->entry_system_load_thres *= 100;
 		state->enter_cpu_load_thres *= 100;
 		state->exit_cpu_load_thres *= 100;
 
 		state->valid = 1;
-		last_valid = state;
 		nr_state++;
 	}
 
