@@ -488,20 +488,27 @@ static int get_state_mapping(enum lp_state_idx state){
     	return WLT_BURSTY;
 	
 	case RESP_MODE:
-	    if (AC_CONNECTED)	
+	    if (AC_CONNECTED){	
+		lpmd_log_info("AC_CONNECTED: WLT_SUSTAINED\n");
             return WLT_SUSTAINED;
-        else 
+		}
+        else{
+		lpmd_log_info("NOT AC_CONNECTED: WLT_SUSTAINED_BAT\n");			
             return WLT_SUSTAINED_BAT;
+		}
             
 	case MDRT4E_MODE:
 	case MDRT3E_MODE:
 	case MDRT2E_MODE:
 	case NORM_MODE:
-	    if (AC_CONNECTED)
+	    if (AC_CONNECTED){
+			lpmd_log_info("AC_CONNECTED: WLT_BATTERY_LIFE\n");
     	    return WLT_BATTERY_LIFE;
-    	else 
+		}
+    	else {
+			lpmd_log_info("AC_CONNECTED: WLT_BATTERY_LIFE_BAT\n");			
         	return WLT_BATTERY_LIFE_BAT;
-	
+		}	
 	case DEEP_MODE:							
         return WLT_IDLE; 
 	

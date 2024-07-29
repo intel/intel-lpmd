@@ -1,4 +1,25 @@
 ****************************************************************************
+7/24/2024
+pkg.OPT.HEPO release notes
+package name: pkg.OPT.HEPO-0.08.240724-x86_64
+tag: pkg-hepo-0.08.240724
+ww: 30.3
+
+Support Ubuntu distro 22.04 and 24.04
+Sanity checks completed on 24.04
+
+List of all JIRAs fixed:
+
+
+List of all bugs fixed:
+https://jira.devtools.intel.com/browse/LNUX-7698
+https://jira.devtools.intel.com/browse/LNUX-7701
+https://jira.devtools.intel.com/browse/LNUX-7479
+https://jira.devtools.intel.com/browse/LNUX-7682
+https://jira.devtools.intel.com/browse/LNUX-7702
+https://jira.devtools.intel.com/browse/LNUX-7686
+
+****************************************************************************
 7/17/2024
 pkg.OPT.HEPO release notes
 package name: pkg.OPT.HEPO-0.07.240717-x86_64
