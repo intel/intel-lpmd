@@ -152,7 +152,9 @@ static int get_contents(char *start_dir, int* count, int only_folders, contents_
     int ret = chdir(start_dir);
     if(ret == 0 ) {
         while((entry = readdir(dp)) != NULL) {
-            lstat(entry->d_name, &statbuf);
+            if (lstat(entry->d_name, &statbuf) == -1)
+				continue; 
+			
             if(S_ISDIR(statbuf.st_mode)) {
                 /* ignore . and .. */
                 if(strcmp(".",entry->d_name) == 0 ||
@@ -239,7 +241,12 @@ int is_ac_powered_power_supply_status() {
 			
 			//char out_supplies[PATH_MAX][PATH_MAX];
 			contents_array out_supplies;
-			get_contents(base_path, &supply_names_count, folder_names_only, out_supplies);
+			int res = get_contents(base_path, &supply_names_count, folder_names_only, out_supplies);
+			if (res == -1){
+				printf ("unable to power_supply directory information %s\n", base_path);
+				return -1;
+			}
+				
 			for (int i = 0; i < supply_names_count; i++) {
 				int content_count = 0;
 				char power_supply_base_path[PATH_MAX] = {0};
@@ -254,12 +261,16 @@ int is_ac_powered_power_supply_status() {
 				//printf("power_supply_base_path 1 = %s \n", power_supply_base_path);
 
 				contents_array out_contents;
-				get_contents(power_supply_base_path, &content_count, files_only, out_contents);
+				res = get_contents(power_supply_base_path, &content_count, files_only, out_contents);
+				if (res == -1){
+					printf ("unable to power_supply directory information, continue %s\n", power_supply_base_path);
+					continue;
+				}				
 				for (int j = 0; j < content_count; j++) {
-					char* p_content = out_contents[j];
+					char* p_content = strdup(out_contents[j]);
 					if(strcmp(p_content, "online") == 0) {
 						strncat(power_supply_base_path, "/", sizeof("/"));
-						strncat(power_supply_base_path, p_content, sizeof(p_content));
+						strncat(power_supply_base_path, p_content, strlen(p_content));
 						//printf("power_supply_base_path = %s \n", power_supply_base_path);
 						int value = -1;
 						int ret = get_value(power_supply_base_path, &value);

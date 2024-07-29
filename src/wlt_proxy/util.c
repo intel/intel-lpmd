@@ -325,7 +325,8 @@ int update_perf_diffs(float *sum_norm_perf, int stat_init_only)
 		 * as given below.
 		 */
 		if (perf_stats[t].mperf_diff) {
-			nperf = (float)perf_stats[t].pperf_diff / poll_cpu_us;
+			if (poll_cpu_us != 0)
+				nperf = (float)perf_stats[t].pperf_diff / poll_cpu_us;
 			nperf = (float)nperf *perf_stats[t].tsc_diff;
 			nperf = (float)nperf / (perf_stats[t].mperf_diff);
 			perf_stats[t].nperf = (uint64_t) nperf;
@@ -382,7 +383,8 @@ int update_perf_diffs(float *sum_norm_perf, int stat_init_only)
 	grp.c0_3rd_max = max_3rd_load;
 	grp.c0_min = min_load;
 	*sum_norm_perf = _sum_nperf;
-	soc_mw = (float)rapl_ediff_pkg0(read_rapl_pkg0()) * 1000 / poll_cpu_us;
+	if (poll_cpu_us != 0)
+		soc_mw = (float)rapl_ediff_pkg0(read_rapl_pkg0()) * 1000 / poll_cpu_us;
 
 	return maxed_cpu;
 }
@@ -515,13 +517,13 @@ static int get_state_mapping(enum lp_state_idx state){
 	//there is no corresponding wlt for INIT_MODE, it goes away quickly.
 	//use WLT_SUSTAINED as default type	
 	case INIT_MODE:
-	default:	
-	    return WLT_SUSTAINED;//WLT_INVALID; 	
-    }
-    
-	//we don't allow invalid wlt type, flag and use WLT_SUSTAINED
-	lpmd_log_error("unknown work load type\n");
-    return WLT_SUSTAINED;//WLT_INVALID; 
+		return WLT_SUSTAINED;
+		
+	//we don't allow invalid wlt type, flag and use WLT_SUSTAINED		
+	default:
+		lpmd_log_error("unknown work load type\n");
+	    return WLT_SUSTAINED;	
+    }    
 }
 
 int state_demote = 0;
