@@ -1,3 +1,47 @@
+****************************************************************************
+7/17/2024
+pkg.OPT.HEPO release notes
+package name: pkg.OPT.HEPO-0.07.240717-x86_64
+tag: pkg-hepo-0.07.240717
+ww: 29.3
+
+Support Ubuntu distro 22.04 and 24.04
+Sanity checks completed on 24.04
+
+Special valgrind build addeded for 24.04
+
+List of all JIRAs fixed:
+https://jira.devtools.intel.com/browse/LNUX-7680
+https://jira.devtools.intel.com/browse/LNUX-7681
+https://jira.devtools.intel.com/browse/LNUX-7682
+https://jira.devtools.intel.com/browse/LNUX-7689
+https://jira.devtools.intel.com/browse/LNUX-7690
+
+List of all bugs fixed:
+https://jira.devtools.intel.com/browse/LNUX-7478
+
+
+****************************************************************************
+
+7/11/2024
+pkg.OPT.HEPO release notes
+package name: pkg.OPT.HEPO-0.06.240711-x86_64
+tag: pkg-hepo-0.06.240711
+ww: 28.4
+
+Support Ubuntu distro 22.04 and 24.04
+Replace the code accessing driver directly by the code using perf API call.  We shall see on performance and functional changes in respect to the code change.  
+
+Known issue: 
+coverity build is not working 
+valgrind requires special build to run as it changes CPUID
+	
+
+
+
+****************************************************************************
+
+
 6/5/2024
 pkg.OPT.HEPO release notes
 package name: pkg.OPT.HEPO-0.05.240605-x86_64

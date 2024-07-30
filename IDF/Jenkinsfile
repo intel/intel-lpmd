@@ -167,12 +167,88 @@ pipeline {
                     }
                     steps {
                         script {  
-                        CoverityScan(DefaultCompilerTemplate: false)
+                                CoverityScan(DefaultCompilerTemplate: false)
                         }
                     }
                 } //end SecureCoverityScan Stage
             } // end parallel
         } // end of BuildAndScan stage
+        stage("BinaryScans") {
+            parallel {
+                stage("VirusScan") {
+                    when {
+                        beforeAgent true
+                        anyOf {
+                            expression{(env.BRANCH_NAME == "${DefaultMainBranch}" && params.ReleaseBuild == true)}
+                            expression{(params.VirusScan == true)}
+                            expression{env.BRANCH_NAME == "${DefaultMainBranch}" && TimerEvent == true}
+                        }
+                    }
+                    agent {
+                        kubernetes {
+                            cloud PodCloud
+                            defaultContainer ContainerName
+                            label "${env.STAGE_NAME}-${UUID.randomUUID().toString()}"
+                            customWorkspace AgentWorkspace
+                            yaml GetSecurePodDefinitionYaml(ContainerType: ContainerType, ContainerImage: ContainerImage, ContainerName: ContainerName)
+                        }
+                    }
+                    steps {
+                        script {
+                            VirusBinaryScan()
+                        }
+                    }
+                } //Virus Scan
+                stage("BDBAScan") {
+                    when {
+                        beforeAgent true
+                        anyOf {
+                            expression{(env.BRANCH_NAME == "${DefaultMainBranch}" && params.ReleaseBuild == true)}
+                            expression{(params.BinaryScan == true)}
+                            expression{env.BRANCH_NAME == "${DefaultMainBranch}" && TimerEvent == true}
+                        }
+                    }
+                    agent {
+                        kubernetes {
+                            cloud PodCloud
+                            defaultContainer ContainerName
+                            label "${env.STAGE_NAME}-${UUID.randomUUID().toString()}"
+                            customWorkspace AgentWorkspace
+                            yaml GetSecurePodDefinitionYaml(ContainerType: ContainerType, ContainerImage: ContainerImage, ContainerName: ContainerName)
+                        }
+                    }
+                    steps {
+                        script {
+                            BdbaBinaryScan(ArtifactPkgName: params.ArtifactPkgName)
+                        }
+                    }
+                } // end BDBAScan
+                stage("SSCBScan") {
+                    when {
+                        beforeAgent true
+                        anyOf {
+                            expression{(env.BRANCH_NAME == "${DefaultMainBranch}" && params.ReleaseBuild == true)}
+                            expression{(params.BinaryScan == true)}
+                            expression{env.BRANCH_NAME == "${DefaultMainBranch}" && TimerEvent == true}
+                        }
+                    }
+                    agent {
+                        kubernetes {
+                            cloud PodCloud
+                            defaultContainer ContainerName
+                            label "${env.STAGE_NAME}-${UUID.randomUUID().toString()}"
+                            customWorkspace AgentWorkspace
+                            yaml GetSecurePodDefinitionYaml(ContainerType: ContainerType, ContainerImage: ContainerImage, ContainerName: ContainerName)
+                        }
+                    }
+                    steps {
+                        script {
+                            SscbBinaryScan()
+                        }
+                    }
+                } // end SSCBScan
+            } // end of parallel
+        } // end BinaryScans
         stage("ArtifactGenDeploy") {
             parallel { 
                 stage("ArtifactGen") { 
@@ -191,6 +267,7 @@ pipeline {
                                 ArtifactGenDeploy(ArtifactsDeploy: true,
                                                   DeployCustomArtifact: true,
                                                   ArtifactPkgName: params.ArtifactPkgName,
+                                                  SkipBinaryScans: true,
                                                   SecureCoverityScan: true,
                                                   VirusScan: true,
                                                   BinaryScan: true,
@@ -199,9 +276,11 @@ pipeline {
                                 ArtifactGenDeploy(ArtifactsDeploy: params.ArtifactsDeploy,
                                                   DeployCustomArtifact: true,
                                                   ArtifactPkgName: params.ArtifactPkgName,
+                                                  SkipBinaryScans: true,
                                                   SecureCoverityScan: params.SecureCoverityScan,
                                                   VirusScan: params.VirusScan,
-                                                  BinaryScan: params.BinaryScan,)
+                                                  BinaryScan: params.BinaryScan,
+                                                  Sdle: params.SdleAutomation)
                             }
                         }
                     }

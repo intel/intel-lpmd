@@ -149,7 +149,6 @@ version:
 			<ID> 1 </ID>
 			<Name> WLT_IDLE </Name>
 			<WLTType> 0 </WLTType>
-			<ActiveCPUs></ActiveCPUs>
 			<EPP> 178 </EPP>
 			<EPB> 8 </EPB>			
 			<MinPollInterval>2000</MinPollInterval>

@@ -661,7 +661,8 @@ static int add_cpu_proxy(int cpu, enum lp_state_idx idx)
 static void reset_cpus_proxy(enum lp_state_idx idx)
 {
 	if (lp_state[idx].mask)
-		CPU_ZERO_S(size_cpumask, lp_state[idx].mask);
+		//CPU_ZERO_S(size_cpumask, lp_state[idx].mask);
+		CPU_FREE(lp_state[idx].mask);
 	free(lp_state[idx].str);
 	free(lp_state[idx].str_reverse);
 	free(lp_state[idx].hexstr);
@@ -678,7 +679,7 @@ static void reset_cpus_proxy(enum lp_state_idx idx)
 #define BITMASK_SIZE 32
 static int set_max_cpu_num(void)
 {
-	FILE *filep;
+	FILE *filep=NULL;
 	unsigned long dummy;
 	int i;
 
@@ -710,9 +711,9 @@ static int set_max_cpu_num(void)
 
 int parse_cpu_topology(void)
 {
-	FILE *filep;
+	FILE *filep = NULL;
 	int i,ret;
-	char path[MAX_STR_LENGTH];
+	char path[MAX_STR_LENGTH] = "";
 
 	reset_cpus_proxy(INIT_MODE);
 	/* kenrel 6.5 cpu0 is considered always online */
@@ -720,7 +721,7 @@ int parse_cpu_topology(void)
 	max_online_cpu++;
 
 	for (i = 1; i < topo_max_cpus; i++) {
-		char online[8];
+		char online[8]= "";
 
 		snprintf(path, sizeof(path),
 			 "/sys/devices/system/cpu/cpu%d/online", i);
@@ -728,19 +729,20 @@ int parse_cpu_topology(void)
 		if (filep) {
 			ret = fread(&online, sizeof(online), 1, filep);
             if (!ret) {
-                log_err("read failure\n");            
+                lpmd_log_debug("unable to read cpu %d online status\n", i);            
             }
+            fclose(filep);
 		} else
 			break;
 
-		online[strlen(online) - 1] = '\0';
+		online[sizeof(online) - 1] = '\0';
 		if (!atoi(online))
 			continue;
 
 		max_online_cpu++;
 		add_cpu_proxy(i, INIT_MODE);
 	}
-	printf("cpu topology\n\tonline mask: 0x%s\n\tonline count: %d\n",
+	lpmd_log_info("cpu topology\n\tonline mask: 0x%s\n\tonline count: %d\n",
 	       get_cpus_hexstr(INIT_MODE), max_online_cpu);
 	return 0;
 }
@@ -874,10 +876,10 @@ static int detect_lp_state_actual(void)
 	freq_map[j].end_cpu = i - 1;
 	actual_freq_buckets = j + 1;
 
-	printf("Freq buckets [%d]\n\tbucket turbo cpu-range", actual_freq_buckets);
+	lpmd_log_debug("Freq buckets [%d]\n\tbucket turbo cpu-range", actual_freq_buckets);
 	for (j = 0; j <= actual_freq_buckets - 1; j++) {
 		freq_map_count++;
-		printf("\n\t [%d]  %dMHz  %d-%d", j,
+		lpmd_log_info("\n\t [%d]  %dMHz  %d-%d", j,
 		       freq_map[j].turbo_freq_khz / 1000, freq_map[j].start_cpu,
 		       freq_map[j].end_cpu);
 	}
@@ -954,14 +956,13 @@ static int detect_lp_state_actual(void)
 	/* MDRT with 2 cores is not know to be beneficial comapred. simplyfy */
 	lp_state[MDRT2E_MODE].disabled = true;
 	if (max_online_cpu <= 4) {
-		printf("too few CPU: %d", max_online_cpu);
+		lpmd_log_info("too few CPU: %d", max_online_cpu);
 		exit(1);
 	} else if (max_online_cpu <= 8) {
 		lp_state[MDRT2E_MODE].disabled = true;
 		lp_state[MDRT4E_MODE].disabled = true;
 	}
 
-	printf("\nmodes enabled\n");
 	int cpu_count;
 	for (idx = INIT_MODE; idx < MAX_MODE; idx++) {
 		cpu_count = CPU_COUNT_S(size_cpumask, lp_state[idx].mask);
@@ -971,47 +972,17 @@ static int detect_lp_state_actual(void)
 					alloc_cpu_set(&lp_state[idx].inj_mask);
 				and_into_injmask(INIT_MODE, idx, idx);
 			}
-			printf("\t[%d] %s [0x%s] cpu count: %2d\n", idx,
+			lpmd_log_info("\t[%d] %s [0x%s] cpu count: %2d\n", idx,
 			       lp_state[idx].name, get_cpus_hexstr(idx),
 			       cpu_count);
 		}
 	}
-	printf("\nmodes disabled\n");
 	for (idx = INIT_MODE; idx < MAX_MODE; idx++) {
 		cpu_count = CPU_COUNT_S(size_cpumask, lp_state[idx].mask);
 		if (lp_state[idx].disabled || !cpu_count) {
-			printf("\t[%d] %s [0x%s] cpu count: %2d\n", idx,
+			lpmd_log_info("\t[%d] %s [0x%s] cpu count: %2d\n", idx,
 			       lp_state[idx].name, get_cpus_hexstr(idx),
 			       cpu_count);
-		}
-	}
-
-	/*
-	 * XXX: if single auto mode is implemented (mapping to balance)
-	 * we can do away with this classic sliders and use it 
-	 * for slight bias (say +/-5%) of some base tunables on top of auto.
-	 */
-	enum slider_value s;
-	for (s = unknown + 1; s < MAX_SLIDER; s++) {
-		switch (s) {
-		case performance:
-			printf("\t [%d] performance\n", s);
-			break;
-		case balance_performance:
-			printf("\t [%d] balance_performance\n", s);
-			break;
-		case balance_power:
-			printf("\t [%d] balance_power\n", s);
-			break;
-		case balanced:
-			printf("\t [%d] balanced\n", s);
-			break;
-		case power_saver:
-			printf("\t [%d] power_saver\n", s);
-			break;
-		default:
-			printf("\t [%d] unsupported\n", s);
-			break;
 		}
 	}
 
@@ -1247,4 +1218,11 @@ int init_cpu_proxy(void)
 		return ret;
 
 	return 0;
+}
+
+
+void uninit_cpu_proxy(){
+	for (int idx = INIT_MODE + 1; idx < MAX_MODE; idx++) {
+        reset_cpus_proxy(idx);
+	}
 }

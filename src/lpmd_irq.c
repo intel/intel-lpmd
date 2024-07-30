@@ -79,8 +79,11 @@ int set_lpm_irq(cpu_set_t *cpumask, int action)
 	if (irqbalance_pid > 0) {
 		if (lp_mode_irq == SETTING_RESTORE)
 			snprintf(irq_str, sizeof("NULL"), "NULL");
-		else
-			cpumask_to_str(cpumask, irq_str, MAX_STR_LENGTH);
+		else {
+			cpumask_to_str_reverse(cpumask, irq_str, MAX_STR_LENGTH);
+			if (irq_str[0] == '\0')
+				snprintf(irq_str, sizeof("NULL"), "NULL");
+		}
 	} else {
 		if (lp_mode_irq != SETTING_RESTORE)
 			cpumask_to_hexstr(cpumask, irq_str, MAX_STR_LENGTH);
@@ -91,12 +94,12 @@ int set_lpm_irq(cpu_set_t *cpumask, int action)
 
 static int dump_smp_affinity(void)
 {
-	FILE *filep;
-	DIR *dir;
-	struct dirent *d;
-	char path[MAX_STR_LENGTH * 2];
-	char str[MAX_STR_LENGTH];
-	size_t ret;
+	FILE *filep = NULL;
+	DIR *dir = NULL;
+	struct dirent *d = NULL;
+	char path[MAX_STR_LENGTH * 2] = "";
+	char str[MAX_STR_LENGTH] = "";
+	size_t ret = 0;
 
 	if (!in_debug_mode())
 		return 0;
@@ -129,11 +132,7 @@ static int irqbalance_ban_cpus(int enter)
 {
 	char socket_cmd[MAX_STR_LENGTH];
 	struct timespec tp1, tp2;
-	int cpu;
 	int offset;
-	int first = 1;
-
-	dump_smp_affinity();
 
 	if (lp_mode_irq == SETTING_RESTORE)
 		lpmd_log_debug ("\tRestore IRQ affinity (irqbalance)\n");
@@ -282,8 +281,6 @@ static int native_update_irqs(void)
 
 static int native_process_irqs(int enter)
 {
-	dump_smp_affinity();
-
 	if (lp_mode_irq == SETTING_RESTORE)
 		return native_restore_irqs ();
 	else
