@@ -270,7 +270,8 @@ int is_ac_powered_power_supply_status() {
 					char* p_content = strdup(out_contents[j]);
 					if(strcmp(p_content, "online") == 0) {
 						strncat(power_supply_base_path, "/", sizeof("/"));
-						strncat(power_supply_base_path, p_content, strlen(p_content));
+						strncat(power_supply_base_path, p_content, sizeof("online"));
+							
 						//printf("power_supply_base_path = %s \n", power_supply_base_path);
 						int value = -1;
 						int ret = get_value(power_supply_base_path, &value);
