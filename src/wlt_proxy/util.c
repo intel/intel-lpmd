@@ -508,7 +508,7 @@ static int get_state_mapping(enum lp_state_idx state){
     	    return WLT_BATTERY_LIFE;
 		}
     	else {
-			lpmd_log_info("AC_CONNECTED: WLT_BATTERY_LIFE_BAT\n");			
+			lpmd_log_info("NOT AC_CONNECTED: WLT_BATTERY_LIFE_BAT\n");			
         	return WLT_BATTERY_LIFE_BAT;
 		}	
 	case DEEP_MODE:							

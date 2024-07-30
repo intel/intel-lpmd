@@ -35,7 +35,6 @@
 #include <string.h>
 #include <signal.h>
 #include <poll.h>
-#include <cpuid.h>
 
 #include "config.h"
 #include "thermal.h"

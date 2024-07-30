@@ -48,7 +48,7 @@
 #include <netlink/genl/family.h>
 #include <netlink/genl/ctrl.h>
 #include <systemd/sd-bus.h>
-
+#include <cpuid.h>
 #include "lpmd.h"
 #define DISABLE_SOC_ENFORCEMENT 0
 static int topo_max_cpus;

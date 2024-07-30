@@ -23,7 +23,7 @@
 
 #include "lpmd.h"
 #include "wlt_proxy/wlt_proxy.h"
-
+#include <cpuid.h>
 
 extern int next_proxy_poll; 
 static lpmd_config_t lpmd_config;
