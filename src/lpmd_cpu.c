@@ -1668,6 +1668,33 @@ int has_suv_support(void)
 	return !(in_suv == -1);
 }
 
+static int __process_cpu_isolate_exit(char *name)
+{
+	char path[MAX_STR_LENGTH];
+	DIR *dir;
+
+	snprintf(path, MAX_STR_LENGTH, "/sys/fs/cgroup/%s", name);
+	dir = opendir(path);
+	if (!dir)
+		return 1;
+
+	closedir(dir);
+
+	snprintf(path, MAX_STR_LENGTH, "/sys/fs/cgroup/%s/cpuset.cpus.partition", name);
+	if (lpmd_write_str (path, "member", LPMD_LOG_DEBUG))
+		return 1;
+
+	if (!get_cpus_str (CPUMASK_ONLINE))
+		return 0;
+
+	snprintf(path, MAX_STR_LENGTH, "/sys/fs/cgroup/%s/cpuset.cpus", name);
+	if (lpmd_write_str (path, get_cpus_str (CPUMASK_ONLINE),
+						LPMD_LOG_DEBUG))
+		return 1;
+
+	return 0;
+}
+
 static int check_cpu_isolate_support(void)
 {
 	return check_cpu_cgroupv2_support ();
@@ -1711,14 +1738,7 @@ static int process_cpu_isolate_enter(void)
 
 static int process_cpu_isolate_exit(void)
 {
-	if (lpmd_write_str ("/sys/fs/cgroup/lpm/cpuset.cpus.partition", "member", LPMD_LOG_DEBUG))
-		return 1;
-
-	if (lpmd_write_str ("/sys/fs/cgroup/lpm/cpuset.cpus", get_cpus_str (CPUMASK_ONLINE),
-						LPMD_LOG_DEBUG))
-		return 1;
-
-	return 0;
+	return __process_cpu_isolate_exit("lpm");
 }
 
 static int process_cpu_isolate(int enter)
@@ -1828,6 +1848,12 @@ static int get_tdp(void)
 	return tdp / 1000000;
 }
 
+static void cpu_cleanup(void)
+{
+	/* leanup previous cgroup setting in case service quits unexpectedly last time */
+	__process_cpu_isolate_exit("lpm");
+}
+
 int check_cpu_capability(lpmd_config_t *lpmd_config)
 {
 	FILE *filep;
@@ -1836,6 +1862,9 @@ int check_cpu_capability(lpmd_config_t *lpmd_config)
 	int ret;
 	int pcores, ecores, lcores;
 	int tdp;
+
+	/* Must be called before migrating any tasks */
+	cpu_cleanup();
 
 	ret = detect_supported_cpu(lpmd_config);
 	if (ret) {
