@@ -168,7 +168,7 @@ static int check_cpu_busy(int power_mw, int tdp) {
 }
 
 void set_workload_hint(int type) {
-	lpmd_log_info("proxy WLT hint :%d\n", type);
+	lpmd_log_debug("proxy WLT hint :%d\n", type);
 	periodic_util_update(lpmd_config, type);
 }
 

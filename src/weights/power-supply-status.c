@@ -44,6 +44,7 @@
 #include <string.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include "lpmd.h"
 
 #include "weights_common.h"
 
@@ -89,7 +90,7 @@ static int find_dir(char *start_dir, int depth, char *dir_to_find)
 	//printf("searching depth = %d ; %s \n", depth, start_dir );
 	
     if((dp = opendir(start_dir)) == NULL) {
-        fprintf(stderr,"cannot open directory: %s\n", start_dir);
+        lpmd_log_debug("cannot open directory: %s\n", start_dir);
         return -1;
     }
     
@@ -145,7 +146,7 @@ static int get_contents(char *start_dir, int* count, int only_folders, contents_
 	int n_count = 0;
 	
     if((dp = opendir(start_dir)) == NULL) {
-        fprintf(stderr,"cannot open directory: %s\n", start_dir);
+        lpmd_log_debug("cannot open directory: %s\n", start_dir);
         return -1;
     }
     
@@ -265,26 +266,31 @@ int is_ac_powered_power_supply_status() {
 				if (res == -1){
 					printf ("unable to power_supply directory information, continue %s\n", power_supply_base_path);
 					continue;
-				}				
+				}		
+ 
 				for (int j = 0; j < content_count; j++) {
 					char* p_content = strdup(out_contents[j]);
-					if(strcmp(p_content, "online") == 0) {
+					if(p_content && strcmp(p_content, "online") == 0) {
 						strncat(power_supply_base_path, "/", sizeof("/"));
-						strncat(power_supply_base_path, p_content, sizeof("online"));
+						strncat(power_supply_base_path, "online", sizeof("online"));
 							
 						//printf("power_supply_base_path = %s \n", power_supply_base_path);
 						int value = -1;
 						int ret = get_value(power_supply_base_path, &value);
 						if(ret == 0 ) {
 							strncpy(interface_path, power_supply_base_path, sizeof(power_supply_base_path));
-							printf("interface : %s \n", interface_path);
+							//printf("interface : %s \n", interface_path);
 							is_power_connected = value;
 							is_powered = 0;
+							if (p_content)
+								free(p_content);							
 							break;
 						}
 					}
+					if (p_content)
+						free(p_content);					
 				}
-				
+ 				
 				if(is_powered == 0) {
 					break;
 				}
@@ -296,7 +302,7 @@ int is_ac_powered_power_supply_status() {
 			int ret = get_value(interface_path, &value);
 			if(ret == 0 ) {
 				is_power_connected = value;
-				printf ("is_power_connected %d \n" , is_power_connected);
+				lpmd_log_debug ("is_power_connected %d \n" , is_power_connected);
 				return is_power_connected;
 			}
 		}
