@@ -54,4 +54,10 @@ rm intel_lpmd_dbus_interface.h
 rm lpmd-resource.c
 rm tools/intel_lpmd_control
 
+rm -fr package/bundleScript/bundle/
+rm package/tuned-profile.tar,gz
+rm src/additional/unit-test/a.out
+rm src/weights/unit-test/a.out
+
+
 
