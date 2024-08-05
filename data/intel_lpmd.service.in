@@ -6,7 +6,8 @@ ConditionVirtualization=no
 Type=simple
 SuccessExitStatus=2
 BusName=org.freedesktop.intel_lpmd
-ExecStart=/usr/bin/intel_lpmd --systemd --dbus-enable
+#ExecStart=/usr/bin/intel_lpmd --systemd --dbus-enable
+ExecStart=/usr/bin/intel_lpmd --loglevel=info --no-daemon --dbus-enable
 Restart=on-failure
 
 [Install]

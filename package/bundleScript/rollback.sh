@@ -5,9 +5,6 @@
 #Unless the License provides otherwise, you may not use, modify, copy, publish, distribute, disclose or transmit this software or the related documents without Intel's prior written permission.
 #This software and the related documents are provided as is, with no express or implied warranties, other than those that are expressly stated in the License.
 
-folder="/usr/share/ia_pkg"
-file="/usr/share/ia_pkg/EPPprofile/EPPprofile.install"
-
 #function cleanup
 cleanup()
 {
@@ -30,27 +27,18 @@ cleanup()
     rm /usr/lib/systemd/system/intel_lpmd.service	
 }
 
-ppdstatus=$(echo $(sudo systemctl status power-profiles-daemon | grep "active (running)"))
-if [[ ! -z "$ppdstatus" ]]; then 
-    if [[ $ppdstatus == *"active (running)"* ]]; then
-        installasservice=1
-    else
-        installasservice=0
-    fi
-else 
-    installasservice=0
-fi 
+if test -f /usr/lib/systemd/system/intel_lpmd.service; then
+	sudo systemctl stop intel_lpmd.service >/dev/null 2>&1
+fi
        
-if [[ "$installasservice" -eq 0 ]]; then	   
+if test -f /etc/tuned/inte_hepo; then	   
 	#turn off active profile 
-	tuned-adm off                 
+	tuned-adm off >/dev/null 2>&1                 
 	sudo systemctl restart tuned            
     if test -f /usr/lib/systemd/system/power-profiles-daemon.service; then
-        sudo systemctl unmask power-profiles-daemon
+        sudo systemctl unmask power-profiles-daemon >/dev/null 2>&1
     fi
-else 
-	sudo systemctl stop intel_lpmd.service
-fi
+fi  
 	
 cleanup 
 sudo systemctl daemon-reload    

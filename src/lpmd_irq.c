@@ -294,7 +294,7 @@ int process_irqs(int enter, enum lpm_cpu_process_mode mode)
 		return 0;
 
 	if (lp_mode_irq == SETTING_IGNORE) {
-		lpmd_log_info ("Ignore IRQ migration\n");
+		lpmd_log_debug ("Ignore IRQ migration\n");
 		return 0;
 	}
 
