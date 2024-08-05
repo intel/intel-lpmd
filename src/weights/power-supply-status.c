@@ -251,14 +251,18 @@ int is_ac_powered_power_supply_status() {
 			for (int i = 0; i < supply_names_count; i++) {
 				int content_count = 0;
 				char power_supply_base_path[PATH_MAX] = {0};
-				char* p_supply = out_supplies[i];
-				
-				if (!p_supply)
-				    continue; 
+				char* p_supply = out_supplies[i];				
 				
 				strncpy(power_supply_base_path, base_path, sizeof(base_path));
 				strncat(power_supply_base_path, "/", sizeof("/"));	
-				strncat(power_supply_base_path, p_supply, sizeof(p_supply));
+ 
+				int size = strlen(p_supply);
+				p_supply[size] = '\0'; 
+				if (PATH_MAX > strlen(power_supply_base_path) + size + 1){
+					char s_supply[PATH_MAX] = "";				
+					strcpy(s_supply, p_supply);
+					strncat(power_supply_base_path, s_supply, size);
+				}
 				//printf("power_supply_base_path 1 = %s \n", power_supply_base_path);
 
 				contents_array out_contents;

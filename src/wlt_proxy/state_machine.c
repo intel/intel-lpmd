@@ -22,6 +22,7 @@
 #include "lpmd.h"
 
 #define N_STRIKE	(10)
+extern int burst_count;
 extern struct group_util grp;
 int state_machine_perf(int present_state)
 {
@@ -105,10 +106,6 @@ int state_machine_auto(int present_state)
 			lpmd_log_info("PERF_MODE to INIT_MODE\n");	
 			break;
 		}
-		// Stay -- if there was recent perf/resp bursts
-		//if (get_burst_rate_per_min() > BURST_COUNT_THRESHOLD)
-		if (!do_countdown(PERF_MODE))
-			break;
 			
 		// Promote but through responsive watch -- if top sampled util and their avg are receeding.
 		if (A_LTE_B(sum_c0, (2 * UTIL_LOW)) &&
@@ -123,6 +120,13 @@ int state_machine_auto(int present_state)
 			set_stay_count(MDRT3E_MODE, 0);
 			prep_state_change(PERF_MODE, MDRT3E_MODE, 0);
             lpmd_log_info("PERF_MODE to MDRT3E_MODE\n");			
+			break;
+		}		
+		
+		// Stay -- if there was recent perf/resp bursts
+		//if (get_burst_rate_per_min() > BURST_COUNT_THRESHOLD)
+		if (burst_count > 0 && !do_countdown(PERF_MODE)){
+			//lpmd_log_info("burst_count is %d && !do_countdown\n", burst_count);
 			break;
 		}		
 		// Stay -- all else
