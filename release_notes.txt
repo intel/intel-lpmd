@@ -7,6 +7,8 @@ ww: 32.1
 Support Ubuntu distro 22.04 and 24.04
 Sanity checks completed on 24.04
 
+User guide updated 
+
 List of all bugs Fixed: 
 
 https://jira.devtools.intel.com/browse/LNUX-7782
