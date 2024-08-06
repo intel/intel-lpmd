@@ -35,7 +35,7 @@
 #include "wlt_proxy.h"
 #include "cpu_group.h"
 #include "perf_msr.h"
-#include "../weights/weights_common.h"
+#include "weights_common.h"
 
 #define PERF_API 1
 
