@@ -244,7 +244,7 @@ int is_ac_powered_power_supply_status() {
 			contents_array out_supplies;
 			int res = get_contents(base_path, &supply_names_count, folder_names_only, out_supplies);
 			if (res == -1){
-				printf ("unable to power_supply directory information %s\n", base_path);
+				lpmd_log_debug ("unable to get power_supply base directory information %s\n", base_path);
 				return -1;
 			}
 				
@@ -268,7 +268,7 @@ int is_ac_powered_power_supply_status() {
 				contents_array out_contents;
 				res = get_contents(power_supply_base_path, &content_count, files_only, out_contents);
 				if (res == -1){
-					printf ("unable to power_supply directory information, continue %s\n", power_supply_base_path);
+					lpmd_log_debug ("unable to get power_supply content directory information, continue %s\n", power_supply_base_path);
 					continue;
 				}		
  
@@ -283,12 +283,14 @@ int is_ac_powered_power_supply_status() {
 						int ret = get_value(power_supply_base_path, &value);
 						if(ret == 0 ) {
 							strncpy(interface_path, power_supply_base_path, sizeof(power_supply_base_path));
-							//printf("interface : %s \n", interface_path);
+							lpmd_log_debug("interface_path to check : %s \n", interface_path);
 							is_power_connected = value;
-							is_powered = 0;
-							if (p_content)
-								free(p_content);							
-							break;
+							if (is_power_connected){
+								is_powered = 0;
+								if (p_content)
+									free(p_content);							
+								break;
+							}
 						}
 					}
 					if (p_content)
