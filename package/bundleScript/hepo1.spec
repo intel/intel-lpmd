@@ -1,7 +1,7 @@
-Name:           hepo1
+Name:           ileo1
 Version:        1
 Release:        1%{?dist}
-Summary:        HEPO application
+Summary:        ILEO application
 
 License:        
 URL:            
@@ -11,7 +11,7 @@ BuildRequires:
 Requires:       
 
 %description
-Hepo application
+ILEO application
 
 %prep
 %autosetup

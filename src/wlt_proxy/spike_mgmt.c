@@ -28,8 +28,6 @@
 #include <stdbool.h>
 
 #include "wlt_proxy_common.h"
-//#include "cpu_group.h"
-//#include "perf_msr.h"
 
 /*
  * spike burst refers to coninous spikes in a series of back to back samples.
@@ -57,7 +55,7 @@
 #define MAX_TRACKED_SPIKE_TIME 1000
 #define MAX_BURST_COUNT 1000
 static int total_spike_time;
-static int burst_count = 0;
+int burst_count = 0;
 static int spike_sec_prev = 0;
 static int spike_rate_total;
 static int spike_rate_samples;

@@ -171,14 +171,14 @@ if [[ "$installasservice" -eq 0 ]]; then
     tuned-adm list | grep "intel*"
 
     if [ ! -z "$activeprofile" ]; then
-	    #if the activeprofile already contains the intel profile, set to intel-hepo
+	    #if the activeprofile already contains the intel profile, set to intel_ileo
 	    if echo "$activeprofile" | grep -q "intel"; then
-		    tuned-adm profile intel_hepo
+		    tuned-adm profile intel_ileo
 	    else #add to the active profiles
-		    tuned-adm profile intel_hepo $activeprofile
+		    tuned-adm profile intel_ileo $activeprofile
 	    fi
     else 
-	    tuned-adm profile intel_hepo
+	    tuned-adm profile intel_ileo
     fi 
 
     #echo "**************** 4. verify ***************************"

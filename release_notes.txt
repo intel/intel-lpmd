@@ -1,7 +1,7 @@
 8/5/2024
-pkg.OPT.HEPO release notes
-package name: pkg.OPT.HEPO-0.10.240805-x86_64
-tag: pkg-hepo-0.10.240805
+pkg.OPT.ILEO release notes
+package name: pkg.OPT.ILEO-0.10.240805-x86_64
+tag: pkg-ileo-0.10.240805
 ww: 32.1
 
 Support Ubuntu distro 22.04 and 24.04
