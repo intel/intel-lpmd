@@ -11,24 +11,25 @@ if [ ! -z "$param" ]; then
 			rm -rf $pkgdir/pkg.OPT.ILEO*
 			rm -rf $pkgdir
 		fi
-	fi
-	if [ $param = "upgrade" ]; then
-		if test -f /usr/sbin/tuned-adm; then
-			output=$(echo $(tuned-adm active) | grep -o ":")
-			if [ ! -z "$output" ]; then
-				activeprofile=$(echo $(tuned-adm active) | cut -d ":" -f 2)
-				if [ $activeprofile = "intel_ileo" ]; then
-					sudo tuned-adm off
+	else 
+		if [ $param = "upgrade" ]; then
+			if test -f /usr/lib/systemd/system/intel_lpmd.service; then
+				sudo systemctl stop intel_lpmd >/dev/null 2>&1 &
+			fi
+			
+			if test -f /usr/sbin/tuned-adm; then
+				output=$(echo $(tuned-adm active) | grep -o ":")
+				if [ ! -z "$output" ]; then
+					activeprofile=$(echo $(tuned-adm active) | cut -d ":" -f 2)
+					if [ $activeprofile = "intel_ileo" ]; then
+						sudo tuned-adm off
+					fi
 				fi
 			fi
-			sudo pkill -f intel_lpmd >/dev/null 2>&1 &
-		else
-			if test -f /usr/lib/systemd/system/intel_lpmd.service; then
-				sudo systemctl stop intel_lpmd
-			fi
-		fi
+		else 
+			sudo systemctl stop intel_lpmd >/dev/null 2>&1 &
+		fi 
 	fi
-
 fi
 
 

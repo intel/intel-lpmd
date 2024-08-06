@@ -283,7 +283,7 @@ int is_ac_powered_power_supply_status() {
 						int ret = get_value(power_supply_base_path, &value);
 						if(ret == 0 ) {
 							strncpy(interface_path, power_supply_base_path, sizeof(power_supply_base_path));
-							lpmd_log_debug("interface_path to check : %s \n", interface_path);
+							lpmd_log_info("interface_path and value : %s, %d \n", interface_path, value);
 							is_power_connected = value;
 							if (is_power_connected){
 								is_powered = 0;
