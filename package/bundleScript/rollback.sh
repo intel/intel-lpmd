@@ -5,11 +5,22 @@
 #Unless the License provides otherwise, you may not use, modify, copy, publish, distribute, disclose or transmit this software or the related documents without Intel's prior written permission.
 #This software and the related documents are provided as is, with no express or implied warranties, other than those that are expressly stated in the License.
 
+ppdstatus=$(echo $(sudo systemctl status power-profiles-daemon | grep "active (running)"))
+if [ ! -z "$ppdstatus" ]; then 
+    if [[ $ppdstatus == *"active (running)"* ]]; then
+        installasservice=1
+    else
+        installasservice=0
+    fi
+else 
+    installasservice=0
+fi
+
 #function cleanup
 cleanup()
 {
     #remove the profiles    
-	if [[ "$installasservice" -eq 0 ]]; then	
+	if [ -d "/etc/tuned/inte_ileo" ]; then	
 		sudo rm -r /etc/tuned/intel*        
 	fi
 		
@@ -30,8 +41,9 @@ cleanup()
 if test -f /usr/lib/systemd/system/intel_lpmd.service; then
 	sudo systemctl stop intel_lpmd.service >/dev/null 2>&1
 fi
-       
-if test -f /etc/tuned/inte_hepo; then	   
+      
+#if tuned profiles were installed, remove profiles and unmask the ppd service	  
+if [ -d "/etc/tuned/inte_ileo" ]; then	      
 	#turn off active profile 
 	tuned-adm off >/dev/null 2>&1                 
 	sudo systemctl restart tuned            

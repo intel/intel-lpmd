@@ -130,7 +130,7 @@ int state_machine_auto(int present_state)
 			break;
 		}		
 		// Stay -- all else
-		lpmd_log_info("stay in PERF_MODE\n");
+		//lpmd_log_info("stay in PERF_MODE\n");
 		break;
 
 	case RESP_MODE:
