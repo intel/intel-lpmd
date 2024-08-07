@@ -72,7 +72,7 @@ echo "Package: debkit-"$BASE >> $SOURCEFOLDER/DEBIAN/control
 echo "Version: "$VERSION >> $SOURCEFOLDER/DEBIAN/control
 echo "Maintainer: intel.com" >> $SOURCEFOLDER/DEBIAN/control
 echo "Architecture: amd64" >> $SOURCEFOLDER/DEBIAN/control
-echo "Depends: tuned" >> $SOURCEFOLDER/DEBIAN/control
+#echo "Depends: tuned" >> $SOURCEFOLDER/DEBIAN/control
 echo "Description: Intel Low Engergy Optimizer" >> $SOURCEFOLDER/DEBIAN/control
 
 if [ -d "$BASEDIR/DEBIAN" ]; then
