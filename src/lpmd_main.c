@@ -58,6 +58,16 @@ static gboolean use_syslog;
 // Disable dbus
 static gboolean dbus_enable;
 
+static gboolean ignore_platform_check = FALSE;
+
+int do_platform_check(void)
+{
+	if (ignore_platform_check)
+		return 0;
+
+	return 1;
+}
+
 static GMainLoop *g_main_loop;
 
 #ifdef GDBUS
@@ -180,6 +190,7 @@ int main(int argc, char *argv[])
 			  { "loglevel=info", 0, 0, G_OPTION_ARG_NONE, &log_info, N_ ("Log severity: info level and up"), NULL },
 			  { "loglevel=debug", 0, 0, G_OPTION_ARG_NONE, &log_debug, N_ ("Log severity: debug level and up: Max logging"), NULL },
 			  { "dbus-enable", 0, 0, G_OPTION_ARG_NONE, &dbus_enable, N_ ( "Enable Dbus"), NULL },
+			  { "ignore-platform-check", 0, 0, G_OPTION_ARG_NONE, &ignore_platform_check, N_ ( "Ignore platform check"), NULL },
 			  { NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL } };
 
 	if (!g_module_supported ()) {

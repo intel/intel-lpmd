@@ -225,6 +225,7 @@ int set_lpm_cpus(enum cpumask_idx idx);
 
 /* lpmd_main.c */
 int in_debug_mode(void);
+int do_platform_check(void);
 
 /* lpmd_proc.c: interfaces */
 int lpmd_lock(void);
