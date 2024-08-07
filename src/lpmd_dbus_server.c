@@ -56,6 +56,12 @@ dbus_interface_s_uv__mo_de__en_te_r(PrefObject *obj, GError **error);
 static gboolean
 dbus_interface_s_uv__mo_de__ex_it(PrefObject *obj, GError **error);
 
+static gboolean
+dbus_interface_e_na_bl_e__sw__pr_ox_y(PrefObject *obj, GError **error);
+
+static gboolean
+dbus_interface_d_is_ab_le__sw__pr_ox_y(PrefObject *obj, GError **error);
+
 #include "intel_lpmd_dbus_interface.h"
 
 static gboolean
@@ -130,6 +136,20 @@ static gboolean dbus_interface_s_uv__mo_de__ex_it(PrefObject *obj, GError **erro
 	return TRUE;
 }
 
+static gboolean dbus_interface_e_na_bl_e__sw__pr_ox_y(PrefObject *obj, GError **error)
+{
+	enable_sw_proxy();
+	lpmd_log_debug ("intel_lpmd_dbus_interface: enable cpu util based hints \n");
+	return TRUE;
+}
+
+static gboolean dbus_interface_d_is_ab_le__sw__pr_ox_y(PrefObject *obj, GError **error)
+{
+	disable_sw_proxy();
+	lpmd_log_debug ("intel_lpmd_dbus_interface: disable cpu based hints\n");
+	return TRUE;
+}
+
 #ifdef GDBUS
 #pragma GCC diagnostic push
 
@@ -196,6 +216,16 @@ lpmd_dbus_handle_method_call(GDBusConnection       *connection,
 	if (g_strcmp0(method_name, "SUV_MODE_EXIT") == 0) {
 		g_dbus_method_invocation_return_value(invocation, NULL);
 		dbus_interface_s_uv__mo_de__ex_it(obj, &error);
+		return;
+	}
+	if (g_strcmp0(method_name, "ENABLE_SW_PROXY") == 0) {
+		g_dbus_method_invocation_return_value(invocation, NULL);
+		dbus_interface_e_na_bl_e__sw__pr_ox_y(obj, &error);
+		return;
+	}
+	if (g_strcmp0(method_name, "DISABLE_SW_PROXY") == 0) {
+		g_dbus_method_invocation_return_value(invocation, NULL);
+		dbus_interface_d_is_ab_le__sw__pr_ox_y(obj, &error);
 		return;
 	}
 

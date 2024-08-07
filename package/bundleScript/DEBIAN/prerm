@@ -1,34 +1,46 @@
 param=$1
+
+ppdstatus=$(echo $(sudo systemctl status power-profiles-daemon) | grep -o "active (running)")
+if [ ! -z "$ppdstatus" ]; then 
+    installasservice=1
+else 
+    installasservice=0
+fi 
+
 if [ ! -z "$param" ]; then
 	if [ $param = "purge" -o $param = "remove" ]; then
-		pkgdir="/usr/share/ia_pkg/hepo"
-		pkgfile="/usr/share/ia_pkg/hepo/pkg.opt.hepo.x86_64.tar.gz"
+		pkgdir="/usr/share/ia_pkg/ileo"
+		pkgfile="/usr/share/ia_pkg/ileo/pkg.opt.ileo.x86_64.tar.gz"
 
-		if [ -n "$(ls $pkgdir/pkg.OPT.HEPO*)" ]; then
-			cd $pkgdir/pkg.OPT.HEPO*
+		if [ -n "$(ls $pkgdir/pkg.OPT.ILEO*)" ]; then
+			cd $pkgdir/pkg.OPT.ILEO*
 			sudo ./rollback.sh
 			sleep 1
-			rm -rf $pkgdir/pkg.OPT.HEPO*
+			rm -rf $pkgdir/pkg.OPT.ILEO*
 			rm -rf $pkgdir
 		fi
-	fi
-	if [ $param = "upgrade" ]; then
-		if test -f /usr/sbin/tuned-adm; then
-			output=$(echo $(tuned-adm active) | grep -o ":")
-			if [ ! -z "$output" ]; then
-				activeprofile=$(echo $(tuned-adm active) | cut -d ":" -f 2)
-				if [ $activeprofile = "intel_hepo" ]; then
-					sudo tuned-adm off
-				fi
+	else 
+		if [ $param = "upgrade" ]; then		
+			if test -f /usr/sbin/tuned-adm; then
+				if [ "$installasservice" -eq 0 ]; then
+					output=$(echo $(tuned-adm active) | grep -o ":")
+					if [ ! -z "$output" ]; then
+						activeprofile=$(echo $(tuned-adm active) | cut -d ":" -f 2)
+						if [ $activeprofile = "intel_ileo" ]; then
+							sudo tuned-adm off
+						fi
+					fi
+				fi 
 			fi
-			sudo pkill -f intel_lpmd >/dev/null 2>&1 &
-		else
+			
 			if test -f /usr/lib/systemd/system/intel_lpmd.service; then
-				sudo systemctl stop intel_lpmd
-			fi
-		fi
+				sudo systemctl stop intel_lpmd >/dev/null 2>&1 &
+				sleep 2
+			fi			
+		else 
+			sudo systemctl stop intel_lpmd >/dev/null 2>&1 &
+		fi 
 	fi
-
 fi
 
 

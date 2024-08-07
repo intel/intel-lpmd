@@ -22,8 +22,8 @@
  */
 
 #include "lpmd.h"
-#include "wlt_proxy/wlt_proxy.h"
-
+#include "wlt_proxy.h"
+#include <cpuid.h>
 
 extern int next_proxy_poll; 
 static lpmd_config_t lpmd_config;
@@ -590,6 +590,15 @@ void lpmd_notify_hfi_event(void)
 	sleep (1);
 }
 
+void enable_sw_proxy(void)
+{
+	lpmd_send_message (ENABLE_SW_PROXY, 0, NULL);
+}
+void disable_sw_proxy(void)
+{
+	lpmd_send_message (DISABLE_SW_PROXY, 0, NULL);
+}
+
 #define LPMD_NUM_OF_POLL_FDS	5
 
 static pthread_t lpmd_core_main;
@@ -823,6 +832,14 @@ static int proc_message(message_capsul_t *msg)
 			// Call function to exit SUV mode
 			process_suv_mode (DBUS_SUV_EXIT);
 			break;
+		/*case ENABLE_SW_PROXY:
+			// Call function to enter SUV mode
+			process_sw_proxy (WLT_PROXY_ENTER);
+			break;
+		case DISABLE_SW_PROXY:
+			// Call function to exit SUV mode
+			process_sw_proxy (WLT_PROXY_EXIT);
+			break;*/
 		case HFI_EVENT:
 			// Call the HFI callback from here
 			break;

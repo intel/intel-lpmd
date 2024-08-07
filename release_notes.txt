@@ -1,3 +1,80 @@
+8/5/2024
+pkg.OPT.ILEO release notes
+package name: pkg.OPT.ILEO-0.10.240805-x86_64
+tag: pkg-ileo-0.10.240805
+ww: 32.1
+
+Support Ubuntu distro 22.04 and 24.04
+Sanity checks completed on 24.04
+
+User guide updated
+removed debug log 
+for spiky utilization in bursty state, the lag will not go over 1 minute  
+
+
+List of all bugs Fixed: 
+https://jira.devtools.intel.com/browse/LNUX-7782
+https://jira.devtools.intel.com/browse/LNUX-7779
+https://jira.devtools.intel.com/browse/LNUX-7745
+https://jira.devtools.intel.com/browse/LNUX-7742
+https://jira.devtools.intel.com/browse/LNUX-7747
+https://jira.devtools.intel.com/browse/LNUX-7788
+https://jira.devtools.intel.com/browse/LNUX-7789
+https://jira.devtools.intel.com/browse/LNUX-7781
+https://jira.devtools.intel.com/browse/LNUX-7780
+https://jira.devtools.intel.com/browse/LNUX-7702
+
+****************************************************************************
+7/31/2024
+pkg.OPT.HEPO release notes
+package name: pkg.OPT.HEPO-0.09.240731-x86_64
+tag: pkg-hepo-0.09.240731
+ww: 31.3
+
+Support Ubuntu distro 22.04 and 24.04
+Sanity checks completed on 24.04
+
+This release modified the tuned profile intel_hepo script to start lpmd as a daemon
+The log can be viewed in /var/log/syslog
+AC/DC log is added to the binary to verify the workload type in battery 
+
+Known issue:
+1) kill the lpmd will stop the intel_lpmd service and the service does not restart 
+
+
+List of all JIRAs fixed:
+
+List of all bugs fixed:
+https://jira.devtools.intel.com/browse/LNUX-7742
+
+https://jira.devtools.intel.com/browse/LNUX-7479
+https://jira.devtools.intel.com/browse/LNUX-7748
+https://jira.devtools.intel.com/browse/LNUX-7745
+
+
+
+
+****************************************************************************
+7/24/2024
+pkg.OPT.HEPO release notes
+package name: pkg.OPT.HEPO-0.08.240724-x86_64
+tag: pkg-hepo-0.08.240724
+ww: 30.3
+
+Support Ubuntu distro 22.04 and 24.04
+Sanity checks completed on 24.04
+
+List of all JIRAs fixed:
+
+
+List of all bugs fixed:
+https://jira.devtools.intel.com/browse/LNUX-7698
+https://jira.devtools.intel.com/browse/LNUX-7701
+https://jira.devtools.intel.com/browse/LNUX-7479
+https://jira.devtools.intel.com/browse/LNUX-7682
+https://jira.devtools.intel.com/browse/LNUX-7702
+https://jira.devtools.intel.com/browse/LNUX-7686
+
 ****************************************************************************
 7/17/2024
 pkg.OPT.HEPO release notes

@@ -44,6 +44,7 @@
 #include <string.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include "lpmd.h"
 
 #include "weights_common.h"
 
@@ -89,7 +90,7 @@ static int find_dir(char *start_dir, int depth, char *dir_to_find)
 	//printf("searching depth = %d ; %s \n", depth, start_dir );
 	
     if((dp = opendir(start_dir)) == NULL) {
-        fprintf(stderr,"cannot open directory: %s\n", start_dir);
+        lpmd_log_debug("cannot open directory: %s\n", start_dir);
         return -1;
     }
     
@@ -145,14 +146,16 @@ static int get_contents(char *start_dir, int* count, int only_folders, contents_
 	int n_count = 0;
 	
     if((dp = opendir(start_dir)) == NULL) {
-        fprintf(stderr,"cannot open directory: %s\n", start_dir);
+        lpmd_log_debug("cannot open directory: %s\n", start_dir);
         return -1;
     }
     
     int ret = chdir(start_dir);
     if(ret == 0 ) {
         while((entry = readdir(dp)) != NULL) {
-            lstat(entry->d_name, &statbuf);
+            if (lstat(entry->d_name, &statbuf) == -1)
+				continue; 
+			
             if(S_ISDIR(statbuf.st_mode)) {
                 /* ignore . and .. */
                 if(strcmp(".",entry->d_name) == 0 ||
@@ -239,40 +242,61 @@ int is_ac_powered_power_supply_status() {
 			
 			//char out_supplies[PATH_MAX][PATH_MAX];
 			contents_array out_supplies;
-			get_contents(base_path, &supply_names_count, folder_names_only, out_supplies);
+			int res = get_contents(base_path, &supply_names_count, folder_names_only, out_supplies);
+			if (res == -1){
+				lpmd_log_debug ("unable to get power_supply base directory information %s\n", base_path);
+				return -1;
+			}
+				
 			for (int i = 0; i < supply_names_count; i++) {
 				int content_count = 0;
 				char power_supply_base_path[PATH_MAX] = {0};
-				char* p_supply = out_supplies[i];
-				
-				if (!p_supply)
-				    continue; 
+				char* p_supply = out_supplies[i];				
 				
 				strncpy(power_supply_base_path, base_path, sizeof(base_path));
 				strncat(power_supply_base_path, "/", sizeof("/"));	
-				strncat(power_supply_base_path, p_supply, sizeof(p_supply));
+ 
+				int size = strlen(p_supply);
+				p_supply[size] = '\0'; 
+				if (PATH_MAX > strlen(power_supply_base_path) + size + 1){
+					char s_supply[PATH_MAX] = "";				
+					strcpy(s_supply, p_supply);
+					strncat(power_supply_base_path, s_supply, size);
+				}
 				//printf("power_supply_base_path 1 = %s \n", power_supply_base_path);
 
 				contents_array out_contents;
-				get_contents(power_supply_base_path, &content_count, files_only, out_contents);
+				res = get_contents(power_supply_base_path, &content_count, files_only, out_contents);
+				if (res == -1){
+					lpmd_log_debug ("unable to get power_supply content directory information, continue %s\n", power_supply_base_path);
+					continue;
+				}		
+ 
 				for (int j = 0; j < content_count; j++) {
-					char* p_content = out_contents[j];
-					if(strcmp(p_content, "online") == 0) {
+					char* p_content = strdup(out_contents[j]);
+					if(p_content && strcmp(p_content, "online") == 0) {
 						strncat(power_supply_base_path, "/", sizeof("/"));
-						strncat(power_supply_base_path, p_content, sizeof(p_content));
+						strncat(power_supply_base_path, "online", sizeof("online"));
+							
 						//printf("power_supply_base_path = %s \n", power_supply_base_path);
 						int value = -1;
 						int ret = get_value(power_supply_base_path, &value);
 						if(ret == 0 ) {
 							strncpy(interface_path, power_supply_base_path, sizeof(power_supply_base_path));
-							printf("interface : %s \n", interface_path);
+							lpmd_log_info("interface_path and value : %s, %d \n", interface_path, value);
 							is_power_connected = value;
-							is_powered = 0;
-							break;
+							if (is_power_connected){
+								is_powered = 0;
+								if (p_content)
+									free(p_content);							
+								break;
+							}
 						}
 					}
+					if (p_content)
+						free(p_content);					
 				}
-				
+ 				
 				if(is_powered == 0) {
 					break;
 				}
@@ -284,7 +308,7 @@ int is_ac_powered_power_supply_status() {
 			int ret = get_value(interface_path, &value);
 			if(ret == 0 ) {
 				is_power_connected = value;
-				printf ("is_power_connected %d \n" , is_power_connected);
+				lpmd_log_debug ("is_power_connected %d \n" , is_power_connected);
 				return is_power_connected;
 			}
 		}

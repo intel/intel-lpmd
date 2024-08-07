@@ -26,6 +26,7 @@
 #include <glib.h>
 #include <glib-unix.h>
 #include <syslog.h>
+#include <sys/resource.h>
 
 
 #include "lpmd.h"
@@ -187,6 +188,7 @@ int main(int argc, char *argv[])
 		fprintf (stderr, "GModules are not supported on your platform!\n");
 		exit (EXIT_FAILURE);
 	}
+	
 
 //	Set locale to be able to use environment variables
 	setlocale (LC_ALL, "");
@@ -231,16 +233,19 @@ int main(int argc, char *argv[])
 	}
 	
 	/*
-	 * this bare metal program orchestating cpu topology and related
+	 * this program orchestating cpu topology and related
 	 * attributes need to assertively 'run' to avoid decision starving
 	 * e.g. when queued with only lowest performant core and some other
 	 * task hogging 100% cpu, without letting any further decision change.
 	 *
-	struct sched_param param;
-	param.sched_priority = sched_get_priority_max(SCHED_RR);
-	ret = sched_setscheduler(0, SCHED_RR, &param);
-	if (ret < 0)
-		perror("SCHED_RR priority");*/	
+	*/
+	id_t pid = getpid();
+	int priority = -20; //range -2[ highest] to +20 [lowest] ; default 0
+	int retVal= setpriority(PRIO_PROCESS, pid, priority);
+	if (retVal == ESRCH || retVal==EINVAL || retVal==EPERM || retVal==EACCES) { //error check
+		fprintf (stderr, "Unable to set process priority [%d]\n", retVal);
+		//not a show stopper to exit.
+	}
 
 	if (g_mkdir_with_parents (TDRUNDIR, 0755) != 0) {
 		fprintf (stderr, "Cannot create '%s': %s", TDRUNDIR, strerror (errno));

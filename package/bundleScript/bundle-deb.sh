@@ -1,6 +1,9 @@
 
 #!/bin/sh
-# Script generate deb installation package
+# purpose: script to generate deb installation package
+
+#Copyright (C) 2024 Intel Corporation
+#SPDX-License-Identifier: GPL-3.0-only
 
 set -e
 
@@ -9,7 +12,7 @@ NC='\033[0m'
 
 print_error() {
     echo -e "${RED}*************** !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! ****************"
-    echo "*************** WARNNING: Error in Packaging Process ****************"
+    echo "*************** WARNING: Error in Packaging Process ****************"
     echo -e "*************** !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! ****************${NC}"
     exit 1
 }
@@ -23,10 +26,10 @@ echo $BASEDIR
 echo "Prepare..."
 
 PKG_CATEGORY="OPT"
-PKG_FOLDERNAME="HEPO"
+PKG_FOLDERNAME="ILEO"
 BASE=pkg.$PKG_CATEGORY.$PKG_FOLDERNAME
 MAJOR="0"
-MINOR="08"
+MINOR="11"
 ARCH="x86_64"
 BUILD_DATE=$(date +'%y%m%d')
 #DISTRO_CODENAME=$(cat /etc/lsb-release |grep DISTRIB_CODENAME|cut -d"=" -f2)
@@ -47,17 +50,21 @@ fi
 # make required directories
 rm -fr $SOURCEFOLDER
 mkdir -p $SOURCEFOLDER
+
+#moved to use the script.
+PACK_BINARY_IN_DEB=1
+if [ -z "$1" ]; then
+	echo "no input param"
+else
+	PACK_BINARY_IN_DEB=0
+fi
+
 #mkdir -p $SOURCEFOLDER/usr/share/ia_pkg/$PKG_FOLDERNAME
 
 # copy debian files, this project have all preinst, prerm, postinst, postrm files
 mkdir -p $SOURCEFOLDER/DEBIAN
 
-if [ -d "$BASEDIR/DEBIAN" ]; then
-	#copy post and pre install/remove scripts if any
-	cp -r $BASEDIR/DEBIAN/* $SOURCEFOLDER/DEBIAN/
-fi
-
-#generating control file dynamically.
+#generate control file programatically.
 set -o noclobber
 echo "Section: base" > $SOURCEFOLDER/DEBIAN/control
 echo "Priority: optional" >> $SOURCEFOLDER/DEBIAN/control
@@ -66,7 +73,25 @@ echo "Version: "$VERSION >> $SOURCEFOLDER/DEBIAN/control
 echo "Maintainer: intel.com" >> $SOURCEFOLDER/DEBIAN/control
 echo "Architecture: amd64" >> $SOURCEFOLDER/DEBIAN/control
 #echo "Depends: tuned" >> $SOURCEFOLDER/DEBIAN/control
-echo "Description: Package that dynamically changes the TuneD profile to optimize the device performance and battery life" >> $SOURCEFOLDER/DEBIAN/control
+echo "Description: Intel Low Engergy Optimizer" >> $SOURCEFOLDER/DEBIAN/control
+
+if [ -d "$BASEDIR/DEBIAN" ]; then
+	#copy post and pre install/remove scripts if any
+	cp -r $BASEDIR/DEBIAN/* $SOURCEFOLDER/DEBIAN/
+else
+	if [ $PACK_BINARY_IN_DEB -eq 0 ]; then
+	
+	echo "Description: Package sync, build and install ILEO which dynamically changes soc configuration parameters [EPP/EPB] to optimize the device performance and battery life" >> $SOURCEFOLDER/DEBIAN/control
+	
+		cat <<EOT >> $SOURCEFOLDER/DEBIAN/postinst
+#script to run post install
+/usr/share/ia_pkg/$PKG_FOLDERNAME/install.sh &
+EOT
+		chmod 755 $SOURCEFOLDER/DEBIAN/postinst
+	else
+		echo "Description: Package that dynamically changes soc configuration parameters [EPP/EPB] to optimize the device performance and battery life" >> $SOURCEFOLDER/DEBIAN/control
+	fi
+fi
 
 #cat $SOURCEFOLDER/DEBIAN/control
 chmod 755 $SOURCEFOLDER/DEBIAN/*
@@ -76,14 +101,14 @@ if [ -d "$BASEDIR/bundle" ]; then
 	TAR_FILE=$(find $BASEDIR/bundle -type f -iname *.tar.gz)
 	echo "tar file = $TAR_FILE"
 	#to avoid multiple .gz file exist in the installation directory, copy to a unified name 
-	cp $TAR_FILE $BASEDIR/bundle/pkg.opt.hepo.x86_64.tar.gz
+	cp $TAR_FILE $BASEDIR/bundle/pkg.opt.ileo.x86_64.tar.gz
 	
-	mkdir -p $SOURCEFOLDER/usr/share/ia_pkg/hepo
-	#cp $TAR_FILE $SOURCEFOLDER/usr/share/ia_pkg/hepo/
-	cp $BASEDIR/bundle/pkg.opt.hepo.x86_64.tar.gz $SOURCEFOLDER/usr/share/ia_pkg/hepo/
+	mkdir -p $SOURCEFOLDER/usr/share/ia_pkg/ileo
+	#cp $TAR_FILE $SOURCEFOLDER/usr/share/ia_pkg/ileo/
+	cp $BASEDIR/bundle/pkg.opt.ileo.x86_64.tar.gz $SOURCEFOLDER/usr/share/ia_pkg/ileo/
 	#remove the copied one so not impacting the tar file 
-	rm $BASEDIR/bundle/pkg.opt.hepo.x86_64.tar.gz	
-	#cp bundle/*.gz $SOURCEFOLDER/usr/share/ia_pkg/hepo/pkg.opt.hepo.x86_64.tar.gz
+	rm $BASEDIR/bundle/pkg.opt.ileo.x86_64.tar.gz	
+	#cp bundle/*.gz $SOURCEFOLDER/usr/share/ia_pkg/ileo/pkg.opt.ileo.x86_64.tar.gz
 fi
 
 #build deb
@@ -94,3 +119,5 @@ mv $SOURCEFOLDER.deb $BASEDIR/bundle/
 
 #clean
 rm -fr $SOURCEFOLDER
+
+echo "Program exited"

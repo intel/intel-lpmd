@@ -35,7 +35,6 @@
 #include <string.h>
 #include <signal.h>
 #include <poll.h>
-#include <cpuid.h>
 
 #include "config.h"
 #include "thermal.h"
@@ -95,7 +94,7 @@ static int dummy_printf(const char *__restrict __format, ...)
 #define INTEL_LPMD_SERVICE_INTERFACE	"org.freedesktop.intel_lpmd"
 
 typedef enum {
-	TERMINATE, LPM_FORCE_ON, LPM_FORCE_OFF, LPM_AUTO, SUV_MODE_ENTER, SUV_MODE_EXIT, HFI_EVENT,
+	TERMINATE, LPM_FORCE_ON, LPM_FORCE_OFF, LPM_AUTO, SUV_MODE_ENTER, SUV_MODE_EXIT, HFI_EVENT,ENABLE_SW_PROXY, DISABLE_SW_PROXY
 } message_name_t;
 
 #define MAX_MSG_SIZE		512
@@ -194,6 +193,9 @@ enum lpm_command {
 	UTIL_EXIT,
 	LPM_CMD_MAX,
 };
+
+//	ENABLE_SW_PROXY,
+//	DISABLE_SW_PROXY,
 
 enum cpumask_idx {
 	CPUMASK_LPM_DEFAULT, CPUMASK_ONLINE, CPUMASK_HFI, CPUMASK_HFI_BANNED, CPUMASK_HFI_SUV, /* HFI Survivability mode */
@@ -347,5 +349,7 @@ char* time_delta(void);
 int wlt_proxy_init(lpmd_config_t *lpmd_config);
 void wlt_proxy_action_loop(void);
 void wlt_proxy_uninit(void);
+void enable_sw_proxy(void);
+void disable_sw_proxy(void);
 
 #endif

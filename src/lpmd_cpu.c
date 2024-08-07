@@ -48,7 +48,7 @@
 #include <netlink/genl/family.h>
 #include <netlink/genl/ctrl.h>
 #include <systemd/sd-bus.h>
-
+#include <cpuid.h>
 #include "lpmd.h"
 #define DISABLE_SOC_ENFORCEMENT 0
 static int topo_max_cpus;
@@ -1908,7 +1908,7 @@ int process_cpus(int enter, enum lpm_cpu_process_mode mode)
 	process_epp_epb ();
 
 	if (lpm_cpus_cur == CPUMASK_MAX) {
-		lpmd_log_info ("Ignore Task migration\n");
+		lpmd_log_debug ("Ignore Task migration\n");
 		return 0;
 	}
 

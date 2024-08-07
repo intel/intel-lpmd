@@ -1,9 +1,7 @@
 #!/bin/bash
 
 #Copyright (C) 2024 Intel Corporation
-#This software and the related documents are Intel copyrighted materials, and your use of them is governed by the express license under which they were provided to you ("License"). 
-#Unless the License provides otherwise, you may not use, modify, copy, publish, distribute, disclose or transmit this software or the related documents without Intel's prior written permission.
-#This software and the related documents are provided as is, with no express or implied warranties, other than those that are expressly stated in the License.
+#SPDX-License-Identifier: GPL-3.0-only
 
 #Purpose: copy tuned profiles and restart; activate profile
 #Version:
@@ -65,26 +63,25 @@ fi
 
 activeprofile=""
 
-ppdstatus=$(echo $(sudo systemctl status power-profiles-daemon | grep "active (running)"))
+ppdstatus=$(echo $(sudo systemctl status power-profiles-daemon | grep -o "active (running)"))
 if [ ! -z "$ppdstatus" ]; then 
-    if [[ $ppdstatus == *"active (running)"* ]]; then
-        installasservice=1
-    else
-        installasservice=0
-    fi
+    installasservice=1
 else 
     installasservice=0
 fi 
 
 if [[ "$installasservice" -eq 0 ]]; then
     if test -f /usr/sbin/tuned-adm; then
-        output=$(echo $(tuned-adm active) | grep -o ":")
-        if [ ! -z "$output" ]; then 
-            activeprofile=$(echo $(tuned-adm active) | cut -d ":" -f 2)        
-            if echo $activeprofile | grep -q "intel-best"; then
-            	activeprofile=""
-            fi        
-        fi   
+		tunedstatus=$(echo $(sudo systemctl status tuned | grep -o "active (running)"))
+		if [ ! -z "$tunedstatus" ]; then
+			output=$(echo $(tuned-adm active) | grep -o ":")
+			if [ ! -z "$output" ]; then 
+				activeprofile=$(echo $(tuned-adm active) | cut -d ":" -f 2)        
+				if echo $activeprofile | grep -q "intel-best"; then
+					activeprofile=""
+				fi        
+			fi
+		fi 
     else 
 	    #tuned not installed, if a deb install notify user and exit 
 		#if it's a zip installation, we can install for the user
@@ -171,14 +168,14 @@ if [[ "$installasservice" -eq 0 ]]; then
     tuned-adm list | grep "intel*"
 
     if [ ! -z "$activeprofile" ]; then
-	    #if the activeprofile already contains the intel profile, set to intel-hepo
+	    #if the activeprofile already contains the intel profile, set to intel_ileo
 	    if echo "$activeprofile" | grep -q "intel"; then
-		    tuned-adm profile intel_hepo
+		    tuned-adm profile intel_ileo
 	    else #add to the active profiles
-		    tuned-adm profile intel_hepo $activeprofile
+		    tuned-adm profile intel_ileo $activeprofile
 	    fi
     else 
-	    tuned-adm profile intel_hepo
+	    tuned-adm profile intel_ileo
     fi 
 
     #echo "**************** 4. verify ***************************"

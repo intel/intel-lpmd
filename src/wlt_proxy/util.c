@@ -35,7 +35,7 @@
 #include "wlt_proxy.h"
 #include "cpu_group.h"
 #include "perf_msr.h"
-#include "../weights/weights_common.h"
+#include "weights_common.h"
 
 #define PERF_API 1
 
@@ -325,7 +325,8 @@ int update_perf_diffs(float *sum_norm_perf, int stat_init_only)
 		 * as given below.
 		 */
 		if (perf_stats[t].mperf_diff) {
-			nperf = (float)perf_stats[t].pperf_diff / poll_cpu_us;
+			if (poll_cpu_us != 0)
+				nperf = (float)perf_stats[t].pperf_diff / poll_cpu_us;
 			nperf = (float)nperf *perf_stats[t].tsc_diff;
 			nperf = (float)nperf / (perf_stats[t].mperf_diff);
 			perf_stats[t].nperf = (uint64_t) nperf;
@@ -382,7 +383,8 @@ int update_perf_diffs(float *sum_norm_perf, int stat_init_only)
 	grp.c0_3rd_max = max_3rd_load;
 	grp.c0_min = min_load;
 	*sum_norm_perf = _sum_nperf;
-	soc_mw = (float)rapl_ediff_pkg0(read_rapl_pkg0()) * 1000 / poll_cpu_us;
+	if (poll_cpu_us != 0)
+		soc_mw = (float)rapl_ediff_pkg0(read_rapl_pkg0()) * 1000 / poll_cpu_us;
 
 	return maxed_cpu;
 }
@@ -488,33 +490,40 @@ static int get_state_mapping(enum lp_state_idx state){
     	return WLT_BURSTY;
 	
 	case RESP_MODE:
-	    if (AC_CONNECTED)	
+	    if (AC_CONNECTED){	
+		lpmd_log_info("AC_CONNECTED: WLT_SUSTAINED\n");
             return WLT_SUSTAINED;
-        else 
+		}
+        else{
+		lpmd_log_info("Powered by battery: WLT_SUSTAINED_BAT\n");			
             return WLT_SUSTAINED_BAT;
+		}
             
 	case MDRT4E_MODE:
 	case MDRT3E_MODE:
 	case MDRT2E_MODE:
 	case NORM_MODE:
-	    if (AC_CONNECTED)
+	    if (AC_CONNECTED){
+			lpmd_log_info("AC_CONNECTED: WLT_BATTERY_LIFE\n");
     	    return WLT_BATTERY_LIFE;
-    	else 
+		}
+    	else {
+			lpmd_log_info("Powered by battery: WLT_BATTERY_LIFE_BAT\n");			
         	return WLT_BATTERY_LIFE_BAT;
-	
+		}	
 	case DEEP_MODE:							
         return WLT_IDLE; 
 	
 	//there is no corresponding wlt for INIT_MODE, it goes away quickly.
 	//use WLT_SUSTAINED as default type	
 	case INIT_MODE:
-	default:	
-	    return WLT_SUSTAINED;//WLT_INVALID; 	
-    }
-    
-	//we don't allow invalid wlt type, flag and use WLT_SUSTAINED
-	lpmd_log_error("unknown work load type\n");
-    return WLT_SUSTAINED;//WLT_INVALID; 
+		return WLT_SUSTAINED;
+		
+	//we don't allow invalid wlt type, flag and use WLT_SUSTAINED		
+	default:
+		lpmd_log_error("unknown work load type\n");
+	    return WLT_SUSTAINED;	
+    }    
 }
 
 int state_demote = 0;
@@ -537,13 +546,14 @@ int prep_state_change(enum lp_state_idx from_state, enum lp_state_idx to_state,
 	if (!reset && state_support_freq_ctl(from_state))
 		unclamp_default_freq(from_state);
 #if 0
+	//epp and epb are updated in the main 
 	update_state_epp(to_state);
 	update_state_epb(to_state);
 #endif
     //switch(to_state)
     //do to_state to WLT mapping
     int type = get_state_mapping((int)to_state); 
-    lpmd_log_info("proxy WLT state value :%d\n", type);
+    lpmd_log_debug("proxy WLT state value :%d\n", type);
 	set_workload_hint(type);
 
 	set_cur_state(to_state);

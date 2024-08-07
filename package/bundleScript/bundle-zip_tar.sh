@@ -1,6 +1,9 @@
 #!/bin/bash
 # Script to generate zip/tar deployment package
 
+#Copyright (C) 2024 Intel Corporation
+#SPDX-License-Identifier: GPL-3.0-only
+
 set -e
 
 RED='\033[0;31m'
@@ -22,10 +25,10 @@ echo $BUNDLEDIR
 echo "Prepare..."
 
 PKG_CATEGORY="OPT"
-PKG_FOLDERNAME="HEPO"
+PKG_FOLDERNAME="ILEO"
 BASE=pkg.$PKG_CATEGORY.$PKG_FOLDERNAME
 MAJOR="0"
-MINOR="08"
+MINOR="11"
 ARCH="x86_64"
 BUILD_DATE=$(date +'%y%m%d')
 #DISTRO_CODENAME=$(cat /etc/lsb-release |grep DISTRIB_CODENAME|cut -d"=" -f2)

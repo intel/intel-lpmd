@@ -1,6 +1,9 @@
 #!/bin/bash
 #purpose: script to clean tmp files
 
+#Copyright (C) 2024 Intel Corporation
+#SPDX-License-Identifier: GPL-3.0-only
+
 sudo make clean
 
 cd ../../
@@ -40,9 +43,9 @@ rm -r src/visualize/.deps
 rm src/visualize/.dirstamp
 rm src/visualize/*.o
 
-rm -r src/weights/.deps/
-rm src/weights/.dirstamp
-rm src/weights/*.o
+rm -r src/knobs/.deps/
+rm src/knobs/.dirstamp
+rm src/knobs/*.o
 
 rm package/troubleshooting/clean
 
@@ -53,5 +56,11 @@ rm intel_lpmd
 rm intel_lpmd_dbus_interface.h
 rm lpmd-resource.c
 rm tools/intel_lpmd_control
+
+rm -fr package/bundleScript/bundle/
+rm package/tuned-profile.tar,gz
+rm src/additional/unit-test/a.out
+rm src/knobs/unit-test/a.out
+
 
 
