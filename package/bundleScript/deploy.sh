@@ -1,11 +1,8 @@
 #!/bin/bash
+#purpose: copy files, restart services and activate profile if required.
 
 #Copyright (C) 2024 Intel Corporation
 #SPDX-License-Identifier: GPL-3.0-only
-
-#Purpose: copy tuned profiles and restart; activate profile
-#Version:
-#Parameters
 
 echo on
 param=$1
@@ -65,24 +62,26 @@ activeprofile=""
 
 ppdstatus=$(echo $(sudo systemctl status power-profiles-daemon | grep -o "active (running)"))
 if [ ! -z "$ppdstatus" ]; then 
-    installasservice=1
+    is_ppd_active=1
 else 
-    installasservice=0
+    is_ppd_active=0
 fi 
 
-if [[ "$installasservice" -eq 0 ]]; then
+if [[ "$is_ppd_active" -eq 0 ]]; then
     if test -f /usr/sbin/tuned-adm; then
+		#tuned installed
 		tunedstatus=$(echo $(sudo systemctl status tuned | grep -o "active (running)"))
 		if [ ! -z "$tunedstatus" ]; then
+			#tuned active
 			output=$(echo $(tuned-adm active) | grep -o ":")
 			if [ ! -z "$output" ]; then 
 				activeprofile=$(echo $(tuned-adm active) | cut -d ":" -f 2)        
 				if echo $activeprofile | grep -q "intel-best"; then
 					activeprofile=""
-				fi        
+				fi
 			fi
-		fi 
-    else 
+		fi
+    else
 	    #tuned not installed, if a deb install notify user and exit 
 		#if it's a zip installation, we can install for the user
 		if [[ $param == "debinstall" ]]; then
@@ -91,13 +90,13 @@ if [[ "$installasservice" -eq 0 ]]; then
 		else 
 			echo "Tuned is not detected, installing..."
 			if [[ $OS == "ubuntu" ]]; then
-				sudo apt install tuned -y
+				sudo apt install tar tuned -y
 			else
-				sudo yum install tuned -y
+				sudo yum install tar tuned -y
 			fi 
 		fi 
     fi
-fi 
+fi
 
 echo "**************** executing tasks ***************************"
 BASEDIR="$( cd "$( dirname "$0" )" && pwd )"
@@ -143,7 +142,7 @@ cp intel_lpmd.service /usr/lib/systemd/system/
 #cp $BASEDIR/*.txt $BINDIR/
 #cp $BASEDIR/*.pdf $BINDIR/
 
-if [[ "$installasservice" -eq 0 ]]; then
+if [[ "$is_ppd_active" -eq 0 ]]; then
     echo "**************** copy profiles ***************************"
 	tar -zxvf tuned-profile.tar.gz -C $BASEDIR
     sudo chmod +x $BASEDIR/tuned-profile/intel*/*.sh
@@ -157,7 +156,6 @@ if [[ "$installasservice" -eq 0 ]]; then
         sudo systemctl mask power-profiles-daemon
     fi
 
-
     echo "**************** re-start daemon ***************************"
     sudo systemctl restart tuned
 
@@ -170,12 +168,12 @@ if [[ "$installasservice" -eq 0 ]]; then
     if [ ! -z "$activeprofile" ]; then
 	    #if the activeprofile already contains the intel profile, set to intel_ileo
 	    if echo "$activeprofile" | grep -q "intel"; then
-		    tuned-adm profile intel_ileo
+		    tuned-adm profile intel_energy_optimizer
 	    else #add to the active profiles
-		    tuned-adm profile intel_ileo $activeprofile
+		    tuned-adm profile intel_energy_optimizer $activeprofile
 	    fi
     else 
-	    tuned-adm profile intel_ileo
+	    tuned-adm profile intel_energy_optimizer
     fi 
 
     #echo "**************** 4. verify ***************************"
@@ -183,6 +181,6 @@ if [[ "$installasservice" -eq 0 ]]; then
 else 
     echo "**************** start lpmd service ***************************"
     sudo systemctl start intel_lpmd.service    
-fi 
+fi
 
 echo "**************** done ***************************"

@@ -1,23 +1,24 @@
 #!/bin/bash
+#purpose: clean up
 
 #Copyright (C) 2024 Intel Corporation
 #SPDX-License-Identifier: GPL-3.0-only
 
-ppdstatus=$(echo $(sudo systemctl status power-profiles-daemon | grep "active (running)"))
-if [ ! -z "$ppdstatus" ]; then 
-    installasservice=1
-else 
-    installasservice=0
-fi
+#ppdstatus=$(echo $(sudo systemctl status power-profiles-daemon | grep "active (running)"))
+#if [ ! -z "$ppdstatus" ]; then 
+#    installasservice=1
+#else 
+#    installasservice=0
+#fi
 
 #function cleanup
 cleanup()
 {
     #remove the profiles    
-	if [ -d "/etc/tuned/intel_ileo" ]; then	
+	if [ -d "/etc/tuned/intel_energy_optimizer" ]; then	
 		sudo rm -r /etc/tuned/intel*        
 	fi
-		
+
 	rm /usr/bin/intel_lpmd
     rm /usr/bin/intel_lpmd_control
 
@@ -32,28 +33,35 @@ cleanup()
     rm /usr/lib/systemd/system/intel_lpmd.service	
 }
 
+#is service installed & active.
 if test -f /usr/lib/systemd/system/intel_lpmd.service; then
-	sudo systemctl stop intel_lpmd.service >/dev/null 2>&1
+	service="intel_lpmd"
+	sudo systemctl is-active $service
+	if [ $? = 0 ]; then
+		sudo systemctl stop $service >/dev/null 2>&1
+		sudo systemctl disable $service
+	fi
 fi
-      
+
 #if tuned profiles were installed, remove profiles and unmask the ppd service	  
-if [ -d "/etc/tuned/intel_ileo" ]; then	      
+if [ -d "/etc/tuned/intel_energy_optimizer" ]; then	      
 	tunedstatus=$(echo $(sudo systemctl status tuned | grep -o "active (running)"))
 	if [ ! -z "$tunedstatus" ]; then
 		#turn off active profile 
-		tuned-adm off >/dev/null 2>&1   
-	fi 
-              
-	sudo systemctl restart tuned       
+		tuned-adm off >/dev/null 2>&1
+		sudo systemctl restart tuned
+	fi
 	
+	#Assumption: no ppd on tuned active platform as they both conflict.
     if test -f /usr/lib/systemd/system/power-profiles-daemon.service; then
         sudo systemctl unmask power-profiles-daemon >/dev/null 2>&1
     fi
 fi  
 
-sudo systemctl stop intel_lpmd >/dev/null 2>&1 &
-	
+#sudo systemctl stop intel_lpmd >/dev/null 2>&1 &
+
+#remove files	
 cleanup 
+
+#cache update
 sudo systemctl daemon-reload    
-    
-    
