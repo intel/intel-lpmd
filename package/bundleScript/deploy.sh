@@ -65,26 +65,25 @@ fi
 
 activeprofile=""
 
-ppdstatus=$(echo $(sudo systemctl status power-profiles-daemon | grep "active (running)"))
+ppdstatus=$(echo $(sudo systemctl status power-profiles-daemon | grep -o "active (running)"))
 if [ ! -z "$ppdstatus" ]; then 
-    if [[ $ppdstatus == *"active (running)"* ]]; then
-        installasservice=1
-    else
-        installasservice=0
-    fi
+    installasservice=1
 else 
     installasservice=0
 fi 
 
 if [[ "$installasservice" -eq 0 ]]; then
     if test -f /usr/sbin/tuned-adm; then
-        output=$(echo $(tuned-adm active) | grep -o ":")
-        if [ ! -z "$output" ]; then 
-            activeprofile=$(echo $(tuned-adm active) | cut -d ":" -f 2)        
-            if echo $activeprofile | grep -q "intel-best"; then
-            	activeprofile=""
-            fi        
-        fi   
+		tunedstatus=$(echo $(sudo systemctl status tuned | grep -o "active (running)"))
+		if [ ! -z "$tunedstatus" ]; then
+			output=$(echo $(tuned-adm active) | grep -o ":")
+			if [ ! -z "$output" ]; then 
+				activeprofile=$(echo $(tuned-adm active) | cut -d ":" -f 2)        
+				if echo $activeprofile | grep -q "intel-best"; then
+					activeprofile=""
+				fi        
+			fi
+		fi 
     else 
 	    #tuned not installed, if a deb install notify user and exit 
 		#if it's a zip installation, we can install for the user

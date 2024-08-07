@@ -37,19 +37,13 @@ elif [ $MTL = 0 ]; then
 	echo "*********Warning: The platform is not supported but the installation process will proceed*********"
 fi
 
-ppdstatus=$(echo $(sudo systemctl status power-profiles-daemon | grep "active (running)"))
+ppdstatus=$(echo $(sudo systemctl status power-profiles-daemon | grep -o "active (running)"))
 if [ ! -z "$ppdstatus" ]; then
-    substring="active (running)"
-    if echo "$ppdstatus" | grep -q "$substring"
-    then
-		#ppd active, install lpmd as service "     
-        installasservice=1
-    else
-		#ppd not active, check tuned status
-        installasservice=0
-    fi
+	#ppd active, install lpmd as service "     
+	installasservice=1
 else
-    installasservice=0
+	#ppd not active, check tuned status
+	installasservice=0
 fi 
 
 if [ "$installasservice" -eq 0 ]; then

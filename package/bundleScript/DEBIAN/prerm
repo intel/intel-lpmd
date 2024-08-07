@@ -1,4 +1,12 @@
 param=$1
+
+ppdstatus=$(echo $(sudo systemctl status power-profiles-daemon) | grep -o "active (running)")
+if [ ! -z "$ppdstatus" ]; then 
+    installasservice=1
+else 
+    installasservice=0
+fi 
+
 if [ ! -z "$param" ]; then
 	if [ $param = "purge" -o $param = "remove" ]; then
 		pkgdir="/usr/share/ia_pkg/ileo"
@@ -12,20 +20,23 @@ if [ ! -z "$param" ]; then
 			rm -rf $pkgdir
 		fi
 	else 
-		if [ $param = "upgrade" ]; then
-			if test -f /usr/lib/systemd/system/intel_lpmd.service; then
-				sudo systemctl stop intel_lpmd >/dev/null 2>&1 &
+		if [ $param = "upgrade" ]; then		
+			if test -f /usr/sbin/tuned-adm; then
+				if [ "$installasservice" -eq 0 ]; then
+					output=$(echo $(tuned-adm active) | grep -o ":")
+					if [ ! -z "$output" ]; then
+						activeprofile=$(echo $(tuned-adm active) | cut -d ":" -f 2)
+						if [ $activeprofile = "intel_ileo" ]; then
+							sudo tuned-adm off
+						fi
+					fi
+				fi 
 			fi
 			
-			if test -f /usr/sbin/tuned-adm; then
-				output=$(echo $(tuned-adm active) | grep -o ":")
-				if [ ! -z "$output" ]; then
-					activeprofile=$(echo $(tuned-adm active) | cut -d ":" -f 2)
-					if [ $activeprofile = "intel_ileo" ]; then
-						sudo tuned-adm off
-					fi
-				fi
-			fi
+			if test -f /usr/lib/systemd/system/intel_lpmd.service; then
+				sudo systemctl stop intel_lpmd >/dev/null 2>&1 &
+				sleep 2
+			fi			
 		else 
 			sudo systemctl stop intel_lpmd >/dev/null 2>&1 &
 		fi 

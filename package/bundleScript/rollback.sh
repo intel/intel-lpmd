@@ -7,11 +7,7 @@
 
 ppdstatus=$(echo $(sudo systemctl status power-profiles-daemon | grep "active (running)"))
 if [ ! -z "$ppdstatus" ]; then 
-    if [[ $ppdstatus == *"active (running)"* ]]; then
-        installasservice=1
-    else
-        installasservice=0
-    fi
+    installasservice=1
 else 
     installasservice=0
 fi
@@ -20,7 +16,7 @@ fi
 cleanup()
 {
     #remove the profiles    
-	if [ -d "/etc/tuned/inte_ileo" ]; then	
+	if [ -d "/etc/tuned/intel_ileo" ]; then	
 		sudo rm -r /etc/tuned/intel*        
 	fi
 		
@@ -43,14 +39,21 @@ if test -f /usr/lib/systemd/system/intel_lpmd.service; then
 fi
       
 #if tuned profiles were installed, remove profiles and unmask the ppd service	  
-if [ -d "/etc/tuned/inte_ileo" ]; then	      
-	#turn off active profile 
-	tuned-adm off >/dev/null 2>&1                 
-	sudo systemctl restart tuned            
+if [ -d "/etc/tuned/intel_ileo" ]; then	      
+	tunedstatus=$(echo $(sudo systemctl status tuned | grep -o "active (running)"))
+	if [ ! -z "$tunedstatus" ]; then
+		#turn off active profile 
+		tuned-adm off >/dev/null 2>&1   
+	fi 
+              
+	sudo systemctl restart tuned       
+	
     if test -f /usr/lib/systemd/system/power-profiles-daemon.service; then
         sudo systemctl unmask power-profiles-daemon >/dev/null 2>&1
     fi
 fi  
+
+sudo systemctl stop intel_lpmd >/dev/null 2>&1 &
 	
 cleanup 
 sudo systemctl daemon-reload    
