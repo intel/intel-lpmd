@@ -4,7 +4,7 @@ include $(GLIB_MAKEFILE)
 
 SUBDIRS = . data tools
 
-ACLOCAL_AMFLAGS =
+ACLOCAL_AMFLAGS = -I m4
 
 # Global C Flags
 AM_CFLAGS = \
