@@ -1,0 +1,28 @@
+[
+    {
+       "Components" : [ "default" ],
+       "ConfigurationAttributes" : [
+          "TreatWarningsAsErrors",
+          "UseFolder",
+          "DontUseIngredientMetadata",
+          "GetInfDependencies"
+       ],
+       "OutputRootName" : [ "OWRBin" ],
+       "OutputRules" : [
+          {
+             "prefilter" : "(.*//.git//|.*//OWRBin//)",
+             "ruleType" : "default",
+             "rules" : [
+                {
+                   "Match" : ".*/bundle/.*",
+                   "Pattern" : "(.*/bundle/)",
+                   "Replace" : [ "/" ]
+                }
+             ]
+          }
+       ],
+       "PropertyFilters" : [],
+       "SchemaVersion" : "2.3",
+       "TemplateConfigurationName" : "FlowTool Package Creation"
+    }
+ ]
