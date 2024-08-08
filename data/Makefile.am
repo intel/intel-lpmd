@@ -1,3 +1,5 @@
+## Process this file with automake to generate Makefile.in
+
 include $(GLIB_MAKEFILE)
 
 if HAVE_SYSTEMD
