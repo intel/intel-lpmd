@@ -24,15 +24,15 @@
 .TH intel_lpmd "8" "1 Jun 2023"
 
 .SH NAME
-intel_lpmd \- Intel Low Power Mode Daemon
+intel_lpmd \- Intel Energy Optimizer (LPMD) Daemon
 .SH SYNOPSIS
 .B intel_lpmd
 .RI " [ " OPTIONS " ]
 
 .SH DESCRIPTION
 .B intel_lpmd
-is a Linux daemon used to optimize active idle power. This
-daemon uses a configuration file "intel_lpmd_config.xml".
+is a Linux daemon used for energy optimization on Intel hybrid systems.
+This daemon uses a configuration file "intel_lpmd_config.xml".
 Based on the configuration, it will choose right set of CPUs
 to enable. For example, this daemon can monitor system utilization
 and choose a set of low power CPUs to enable and disable the rest.

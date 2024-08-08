@@ -2,7 +2,7 @@
 
 <!--
 Specifies the configuration data
-for Intel Low Power Mode daemon
+for Intel Energy Optimizer (LPMD) daemon
 -->
 
 <Configuration>
