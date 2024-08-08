@@ -9,7 +9,7 @@ TimerEvent = false
 UserEvent = false
 PushEvent = false
 // Agent Variables
-DefaultMainBranch = "IDF_Enabling"
+DefaultMainBranch = "mtl_platform"
 // Container Variables
 PodCloud = "idoc"
 ContainerName = "build-environment"
@@ -63,7 +63,6 @@ pipeline {
         NO_PROXY = "intel.com,.intel.com,10.0.0.0/8,192.168.0.0/16,localhost,127.0.0.0/8,134.134.0.0/16"
         ABI_CONTAINER = "FALSE"
         TicGenProjectName = "dynamic-tuning-package-ticgen"
-        //SubComponentsName = "DTP_${params.IngredientPlatformTarget}_${params.ContainerType}"
         IngredientName = "DTP"
         IngredientPath = "DTP"
         CheckoutPath = "DTP"
@@ -77,8 +76,6 @@ pipeline {
         ContainerNode = true
         SkipGitReference = true
         Compilers = "gcc"
-        //AppPath = "leankit_linux_x86_64"
-        //AppPath = "*.*"
     }
     
     options {
@@ -143,7 +140,6 @@ pipeline {
                         script {
                             echo "Build ${params.IngredientPlatformTarget}"
                             BuildIngredient(MetadataFile: MetadataFile)
-                           // abi.shell("${AgentWorkspace}\\src\\IDF\\Buildpkg.sh")
                         }
                     }
                 } // end DTP ScriptApp stage
