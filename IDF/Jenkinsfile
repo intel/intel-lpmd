@@ -43,6 +43,7 @@ pipeline {
         booleanParam(name: 'PushEvent', defaultValue: false, description: 'Push Event From UpStream Job')
         string(name: 'SdleUrl', defaultValue: '', description: 'Enter SDLe Submission URL e.g. https://sdl-e.app.intel.com/project?id=3e0f5f68-76b9-4129-823d-b68492c70f78')
         string(name: 'SdleId', defaultValue: '', description: 'Enter SDLe Project ID e.g. 8976')
+        string(name: 'AppPath', defaultValue: '', description: 'Added the default AppPath')
         string(name: 'ContainerImage', defaultValue: 'amr-registry.caas.intel.com/owr/idf2/abi/lnx/ingredient/ubuntu22.04.03/dtp:latest', description: 'Enter Container Image to execute the Pipeline')
         string(name: 'ContainerType', defaultValue: 'linux', description: 'Enter Container type to execute the Pipeline')
         string(name: 'IngredientPlatformTarget', defaultValue: 'ubuntu', description: 'Added the formate target)')
