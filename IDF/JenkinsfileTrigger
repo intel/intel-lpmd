@@ -98,7 +98,7 @@ pipeline {
                         BuildConfig = "IDF/BuildConfig.json"
                         MetadataFile = "IDF/PackageGen.json"
                         ArtifactPkgName = "HEPO_DTP-ubuntu22.04.03-${env.BuildVersion}-${env.BUILD_ID}"
-                        AppPath = "pkg.OPT.ILEO-*.*deb"
+                        AppPath = "/*.*deb"
                     }
                     steps {
                         script {
@@ -124,7 +124,7 @@ pipeline {
                         BuildConfig = "IDF/BuildConfig.json"
                         MetadataFile = "IDF/PackageGen.json"
                         ArtifactPkgName = "HEPO_DTP-ubuntu24.04-${env.BuildVersion}-${env.BUILD_ID}"
-                        AppPath = "pkg.OPT.ILEO-*.*deb"
+                        AppPath = "/*.*deb"
                     }
                     steps {
                         script {
@@ -143,11 +143,11 @@ pipeline {
                         }
                     }
                     environment {
-                        ContainerImage = "amr-registry.caas.intel.com/owr/idf2/abi/lnx/ingredient/ubuntu22.04.03/dtp:test"
+                        ContainerImage = "amr-registry.caas.intel.com/owr/idf2/abi/lnx/ingredient/fedora40/dtp:test"
                         ContainerType = "linux"
                         IngredientPlatformTarget = "DTP-fedora40"
                         CoverityStream = "hepo_pkg_Fedora40"
-                        BuildConfig = "IDF/.json"
+                        BuildConfig = "IDF/BuildConfig.json"
                         MetadataFile = "IDF/.json"
                         ArtifactPkgName = "DTP-fedora40-${env.BuildVersion}-${env.BUILD_ID}"
                         AppPath = "*.*"
@@ -156,6 +156,7 @@ pipeline {
                         script {
 
                             TriggerDownstreamJob()
+
                         }
                     }
                 } // end DTPfedora40*/ 
