@@ -9,7 +9,7 @@ TimerEvent = false
 UserEvent = false
 PushEvent = false
 // Agent Variables
-DefaultMainBranch = "main"
+DefaultMainBranch = "mtl_platform"
 // Container Variables
 PodCloud = "idoc"
 ContainerName = "build-environment"
@@ -98,7 +98,7 @@ pipeline {
                         BuildConfig = "IDF/BuildConfig.json"
                         MetadataFile = "IDF/PackageGen.json"
                         ArtifactPkgName = "HEPO_DTP-ubuntu22.04.03-${env.BuildVersion}-${env.BUILD_ID}"
-                        AppPath = "*.*"
+                        AppPath = "pkg.OPT.ILEO-*.*deb"
                     }
                     steps {
                         script {
@@ -124,7 +124,7 @@ pipeline {
                         BuildConfig = "IDF/BuildConfig.json"
                         MetadataFile = "IDF/PackageGen.json"
                         ArtifactPkgName = "HEPO_DTP-ubuntu24.04-${env.BuildVersion}-${env.BUILD_ID}"
-                        AppPath = "*.*"
+                        AppPath = "pkg.OPT.ILEO-*.*deb"
                     }
                     steps {
                         script {
