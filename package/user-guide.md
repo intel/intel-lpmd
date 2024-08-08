@@ -1,5 +1,5 @@
-
-Package sets up ILEO Intel Linux energy Optimier. Installation executes a script to build ILEO package from open source and execute ILEO as daemon. On system with tuneD support package adds custom profiles to activate and deactive ILEO. ILEO optimizes Intel SoC enegry settings set to achieve optimal  power and performance on Intel Ultra 1st Gen linux platforms.
+# Intel Linux energy Optimier [ILEO]
+ILEO is a Linux daemon to optimize workload performance on Intel SoC. On system with tuneD support package adds custom profiles to activate and deactive ILEO. ILEO optimizes Intel SoC enegry settings set to achieve optimal  power and performance on Intel Ultra 1st Gen linux platforms.
 
 Note: Limited validation on Ubuntu 24.04 LTS and Ubuntu 22.04 LTS with common workloads like video playback, video conference and web browsing.
 

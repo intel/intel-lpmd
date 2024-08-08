@@ -37,9 +37,7 @@ static int burst_count;
 static int burst_len;
 static bool proxy_initialized = false;
 int action_interval = DEFAULT_ACTION_INTERVAL;
-
 static lpmd_config_t *lpmd_config;
-//lpmd_config_t *lpmd_config;
 extern int next_proxy_poll;
 
 struct _threshold {

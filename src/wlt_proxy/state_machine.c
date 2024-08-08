@@ -22,8 +22,12 @@
 #include "lpmd.h"
 
 #define N_STRIKE	(10)
+
 extern int burst_count;
 extern struct group_util grp;
+extern int state_demote;
+int max_util; 
+
 int state_machine_perf(int present_state)
 {
 	if (present_state != INIT_MODE)
@@ -31,6 +35,7 @@ int state_machine_perf(int present_state)
 	return 1;
 }
 
+#ifdef _REMOVE_
 int state_machine_power(int present_state)
 {
 	switch (present_state) {
@@ -40,10 +45,8 @@ int state_machine_power(int present_state)
 	}
 	return 1;
 }
+#endif
 
-
-extern int state_demote;
-int max_util; 
 int state_machine_auto(int present_state)
 {
 	//this used to be part of function util_main

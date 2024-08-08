@@ -61,6 +61,10 @@ static int spike_rate_total;
 static int spike_rate_samples;
 static int burst_rate_per_min;
 static bool spike_burst_flag = false;
+static float bc_reset_min = 90.0;
+extern int state_demote;
+static int once_flag;
+static int strike_count;
 
 int update_spike_rate_avg(int sr)
 {
@@ -88,8 +92,6 @@ int clear_spike_rate_avg()
  * TODO: The routine does not have support to decrement stale spikes in
  * specific case with continous bursts with gap of less than 1 min.
  */
-static float bc_reset_min = 90.0;
-
 int update_burst_count(int real_spike_burst)
 {
 	float minutes = 1.0;
@@ -150,8 +152,6 @@ int get_spike_rate()
 	return (spike_pct > 100) ? 100 : spike_pct;
 }
 
-extern int state_demote;
-static int once_flag;
 int add_spike_time(int duration)
 {
 	int spike_rate;
@@ -201,7 +201,6 @@ int add_non_spike_time(int duration)
 	return 1;
 }
 
-static int strike_count;
 int strikeout_once(int n)
 {
 	if (!strike_count)

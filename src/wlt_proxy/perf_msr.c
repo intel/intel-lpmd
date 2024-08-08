@@ -27,11 +27,11 @@
 #include "lpmd.h"
 
 int cpu_hfm_mhz;
+
 int initialize_dev_msr(int c)
 {
 	int fd;
 	char msr_file[128];
-	//_raise_privilege(); 	
 
 	sprintf(msr_file, "/dev/cpu/%d/msr", c);
 	fd = open(msr_file, O_RDWR);
@@ -61,7 +61,6 @@ int initialize_cpu_hfm_mhz(int fd)
 
 int read_msr(int fd, uint32_t reg, uint64_t * data)
 {
-	//_raise_privilege();
 	if (pread(fd, data, sizeof(*data), reg) != sizeof(*data)) {
 		lpmd_log_info("read_msr fail on fd:%d\n", fd);
 		return -1;
@@ -71,7 +70,6 @@ int read_msr(int fd, uint32_t reg, uint64_t * data)
 
 int write_msr(int fd, uint32_t reg, uint64_t * data)
 {
-	//_raise_privilege();
 	if (pwrite(fd, data, sizeof(*data), reg) != sizeof(*data)) {
 		perror("wrmsr fail");
 		return -1;
