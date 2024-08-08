@@ -44,8 +44,13 @@
 #include <string.h>
 #include <dirent.h>
 #include <sys/stat.h>
-#include "lpmd.h"
 
+#ifdef _ENABLE_UEVENT_
+//#include <glib-object.h>
+#include <gudev/gudev.h> //gudev-1.0; upower-glib
+#endif
+
+#include "lpmd.h"
 #include "weights_common.h"
 
 static int is_initialized = -1;//not initialized
@@ -55,6 +60,10 @@ static int is_folder_found = 0;
 static char interface_path[PATH_MAX] = "";//todo: can be more than 1 power supply - wall charger /usb...
 static char base_path[PATH_MAX] = "";
 typedef char contents_array[100][PATH_MAX];
+static bool bueventSubscription = false;
+
+void status_init();
+void status_deinit();
 
 /*
 #define POWER_SUPPLY_BASE_PATH "/sys/class/power_supply"
@@ -201,18 +210,22 @@ int PSS_init() {
         return is_supported;
     }
 	
+	bueventSubscription = false;
 	is_supported = -1;
 	is_folder_found = 0;
 	memset(base_path, '\0', sizeof(base_path));
 	memset(interface_path, '\0', sizeof(interface_path));
 		
     is_supported = find_dir("/sys/", 0, "power_supply");
-		
+	
+	status_init();//uevent subscribe
+	
     is_initialized = 1;
     return is_supported;
 }
 
 void PSS_deinit() {
+	status_deinit();//uevent unsubscribe
     is_initialized = -1; //reset
     return;
 }
@@ -230,6 +243,11 @@ int is_ac_powered_power_supply_status() {
     if(is_initialized != 1) {
        PSS_init();
     }// else printf ("is_initialized = true \n");
+	
+	//if uevent subscription is successful then
+	if(bueventSubscription == true && is_power_connected != -1) {
+		return is_power_connected;
+	}
 	
 	if(is_supported == 1 ) {
 		//printf("interface_path : %s \n", interface_path);
@@ -315,4 +333,78 @@ int is_ac_powered_power_supply_status() {
 	}
 	
 	return -1;//unknown if not available.
+}
+
+#ifdef _ENABLE_UEVENT_
+//uevent based power supply status detection
+
+GUdevClient *gdev_client;
+gboolean gb_active;
+
+void get_battery_status ()
+{
+  GList *devices, *l;
+  devices = g_udev_client_query_by_subsystem (gdev_client, "power_supply");
+  if (devices == NULL)
+    return;
+
+  for (l = devices; l != NULL; l = l->next) {
+    GUdevDevice *dev = l->data;
+    const char *value;
+
+    if (g_strcmp0 (g_udev_device_get_sysfs_attr (dev, "scope"), "Device") != 0)
+      continue;
+
+    value = g_udev_device_get_sysfs_attr_uncached (dev, "status");
+    if (!value)
+      continue;
+
+    if (g_strcmp0 ("full", value) == 0) {
+		is_power_connected = true;
+	} else if (g_strcmp0 ("charging", value) == 0) {
+		is_power_connected = true;
+	} else if (g_strcmp0 ("discharging", value) == 0) {
+		is_power_connected = false;
+	} else {
+		is_power_connected = false;
+	}
+	
+    break;
+  }
+
+  g_list_free_full (devices, g_object_unref);
+}
+
+void uevent_cb (GUdevClient *client,
+           gchar       *action,
+           GUdevDevice *device,
+           gpointer     user_data)
+{
+  if (g_strcmp0 (action, "add") != 0)
+    return;
+
+  if (!g_udev_device_has_sysfs_attr (device, "status"))
+    return;
+
+	//read power supply status.
+	get_battery_status();
+}
+#endif
+
+//sudo udevadm trigger --subsystem-match=power_supply --action=add
+void status_init() {
+#ifdef _ENABLE_UEVENT_
+	const gchar * const subsystem_match[] = { "power_supply", NULL };
+	gdev_client = g_udev_client_new (subsystem_match);
+	g_signal_connect (G_OBJECT (gdev_client), "uevent",
+                    G_CALLBACK (uevent_cb), NULL);
+	bueventSubscription = true;
+#endif
+}
+
+void status_deinit() {
+#ifdef _ENABLE_UEVENT_
+	bueventSubscription = false;
+	g_clear_object (gdev_client);
+#endif
 }

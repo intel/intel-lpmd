@@ -1,4 +1,3 @@
-
 #!/bin/sh
 # purpose: script to generate deb installation package
 

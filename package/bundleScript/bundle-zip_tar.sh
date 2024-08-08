@@ -73,13 +73,8 @@ rm -fr $SOURCEFOLDER
 mkdir -p $SOURCEFOLDER
 
 # copy tuned-profile
-
-#mkdir -p $SOURCEFOLDER/tuned-profile
-#cd $BUNDLEDIR/..
 pushd $BUNDLEDIR/..
-#tar -czvf $BUNDLEDIR/bundle/tuned-profile.tar.gz tuned-profile
 tar -czvf $SOURCEFOLDER/tuned-profile.tar.gz tuned-profile
-#tar -czvf tuned-profile.tar,gz tuned-profile
 popd
 
 #mv $BUNDLEDIR/bundle/tuned-profile.tar.gz $SOURCEFOLDER/
@@ -113,8 +108,6 @@ chmod +x $SOURCEFOLDER/*.sh
 
 #copy license, user guide
 cp $BUNDLEDIR/../release-notes* $SOURCEFOLDER/
-cp $BUNDLEDIR/../license/readme-license* $SOURCEFOLDER/
-cp $BUNDLEDIR/../license/*.pdf $SOURCEFOLDER/
 cp $BUNDLEDIR/../user-guide* $SOURCEFOLDER/
 
 #zip/tar folder
