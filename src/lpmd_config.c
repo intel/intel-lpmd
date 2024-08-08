@@ -154,7 +154,7 @@ static void lpmd_parse_state(xmlDoc *doc, xmlNode *a_node, lpmd_config_state_t *
 static int validate_config_state(lpmd_config_t *lpmd_config, lpmd_config_state_t *state)
 {
 	if (lpmd_config->wlt_hint_enable) {
-		if (state->wlt_type >=0 && state->wlt_type <= 5)
+		if (state->wlt_type >=0 && state->wlt_type <= 5) //todo: hardcoded state count
 			state->valid = 1;
 	} else {
 		if ((state->enter_cpu_load_thres > 0 && state->enter_cpu_load_thres <= 100) ||
