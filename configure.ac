@@ -83,7 +83,8 @@ AC_ARG_ENABLE(werror, AS_HELP_STRING([--disable-werror], [Disable -Werror]))
 AS_IF([test "x$enable_werror" != "xno"], [CFLAGS="$CFLAGS -Werror"])
 
 AC_CONFIG_FILES([Makefile
-                 data/Makefile])
+                 data/Makefile
+                 tools/Makefile])
 
 AC_ARG_ENABLE(gdbus,
               [AS_HELP_STRING([--disable-gdbus],
