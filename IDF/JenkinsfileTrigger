@@ -117,7 +117,7 @@ pipeline {
                         }
                     }
                     environment {
-                        ContainerImage = "amr-registry.caas.intel.com/owr/idf2/abi/lnx/ingredient/ubuntu24.04/dtp:test"
+                        ContainerImage = "amr-registry.caas.intel.com/owr/idf2/abi/lnx/ingredient/ubuntu24.04/dtp:latest"
                         ContainerType = "linux"
                         IngredientPlatformTarget = "DTP-Ubuntu24.04"
                         CoverityStream = "hepo_pkg_24_04"
