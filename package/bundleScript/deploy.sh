@@ -104,8 +104,8 @@ BASEDIR="$( cd "$( dirname "$0" )" && pwd )"
 
 echo "**************** copy binary ***************************"
 #Copy binaries
-cp intel_lpmd /usr/bin/
-cp intel_lpmd_control /usr/bin/
+cp intel_lpmd /sbin/
+cp intel_lpmd_control /sbin/
 
 # copy man
 if [ ! -d "/usr/local/share/man/man5" ]; then

@@ -19,8 +19,8 @@ cleanup()
 		sudo rm -r /etc/tuned/intel*        
 	fi
 
-	rm /usr/bin/intel_lpmd
-    rm /usr/bin/intel_lpmd_control
+	rm /sbin/intel_lpmd
+    rm /sbin/intel_lpmd_control
 
     rm /usr/local/share/man/man5/intel_lpmd_config.xml.5
     rm /usr/local/share/man/man8/intel_lpmd.8

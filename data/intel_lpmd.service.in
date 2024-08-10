@@ -8,8 +8,8 @@ StartLimitBurst=5
 Type=simple
 SuccessExitStatus=2
 BusName=org.freedesktop.intel_lpmd
-#ExecStart=/usr/bin/intel_lpmd --systemd --dbus-enable
-ExecStart=/usr/bin/intel_lpmd --loglevel=info --no-daemon --dbus-enable
+#ExecStart=/sbin/intel_lpmd --systemd --dbus-enable
+ExecStart=/sbin/intel_lpmd --loglevel=info --no-daemon --dbus-enable
 Restart=on-failure
 RestartSec=30
 
