@@ -26,7 +26,7 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include <stdbool.h>
-
+#include "cpu_group.h"
 #include "wlt_proxy_common.h"
 
 /*
@@ -109,7 +109,7 @@ int update_burst_count(int real_spike_burst)
 		return 0;
 	}
 
-	if (real_spike_burst /*&& (get_cur_state() <= MDRT4E_MODE)*/) { //todo: error function not found
+	if (real_spike_burst && (get_cur_state() <= MDRT4E_MODE)) { 
 		burst_count++;
 		spike_sec_prev = ts.tv_sec;
 	} else if ((minutes > 1.0) || (burst_count > MAX_BURST_COUNT)) {
