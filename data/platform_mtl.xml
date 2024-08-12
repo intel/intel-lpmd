@@ -56,7 +56,7 @@ for Intel Energy Optimizer (LPMD) daemon
 		0 : No
 		1 : Yes
 	-->
-	<HfiLpmEnable>1</HfiLpmEnable>
+	<HfiLpmEnable>0</HfiLpmEnable>
 
 	<!--
 		Use WLT hints
@@ -153,9 +153,9 @@ for Intel Energy Optimizer (LPMD) daemon
             <CPUModel> 170 </CPUModel>
             <CPUConfig> * </CPUConfig>
 		<State>
-			<ID> 1 </ID>
+			<ID> 1 </ID> <!-- no significance number can be anything -->
 			<Name> WLT_IDLE </Name>
-			<WLTType> 0 </WLTType> <!-- no significance number can be anything -->
+			<WLTType> 0 </WLTType> 
 			<EPP> 178 </EPP>
 			<EPB> 8 </EPB>			
 			<MinPollInterval>2000</MinPollInterval>
