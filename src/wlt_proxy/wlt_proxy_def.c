@@ -22,24 +22,35 @@
  */
 
 #include "lpmd.h"
+#ifdef __REMOVE__
 #include "cpu_group.h"
+#endif
 #include "wlt_proxy_common.h"
 #include "wlt_proxy.h"
 
+#ifdef __REMOVE__
 #define DEFAULT_ACTION_INTERVAL	1
 #define CPU_UTIL_SUSTAIN		50
 #define CPU_UTIL_IDLE			10
 #define CPU_UTIL_BATTERY_LIFE	20
 #define BURST_COUNT_ABOVE_TDP	3
 
+int action_interval = DEFAULT_ACTION_INTERVAL;
+#endif
+
 static int tdp_mw;
 static int burst_count;
 static int burst_len;
 static bool proxy_initialized = false;
+<<<<<<< HEAD
+
+=======
 int action_interval = DEFAULT_ACTION_INTERVAL;
+>>>>>>> 8bdd374d0b94e358ae5f751f6073b81a06042633
 static lpmd_config_t *lpmd_config;
 extern int next_proxy_poll;
 
+#ifdef __REMOVE__
 struct _threshold {
 	int cpu_util_sustain; /* Above this utilization the workload will be identified as sustained */
 	int cpu_util_idle; /* Below this util the workload will be identified as idle */
@@ -64,7 +75,9 @@ static int cpu_usage_count;
 
 static unsigned long prev_idle, prev_total;
 
+
 #define PATH_PROC_STAT "/proc/stat"
+#endif
 
 static int sysfs_read(const char *path, char *buf, int len) {
 	int fd;
@@ -86,6 +99,7 @@ static int sysfs_read(const char *path, char *buf, int len) {
 	return ret;
 }
 
+#ifdef __REMOVE__
 static int get_busy(void) {
 	unsigned int cpu_usage = 0;
 	char buffer[512];
@@ -164,12 +178,14 @@ static int check_cpu_busy(int power_mw, int tdp) {
 
 	return avg_cpu_usage;
 }
+#endif
 
 void set_workload_hint(int type) {
 	lpmd_log_debug("proxy WLT hint :%d\n", type);
 	periodic_util_update(lpmd_config, type);
 }
 
+#ifdef __REMOVE__
 /*this is replaced by state_machine_auto*/
 static void action_loop(int power_mw, int tdp_mw) {
 	static int interval;
@@ -197,6 +213,8 @@ static void action_loop(int power_mw, int tdp_mw) {
 		burst_count = 0;
 	}
 }
+
+#endif
 
 /* Called at the configured interval to take action */
 void wlt_proxy_action_loop(void) {
@@ -235,7 +253,7 @@ void wlt_proxy_action_loop(void) {
 	}
 
 	//action_loop(power_mw, tdp_mw);
-	if (proxy_initialized){
+	if (proxy_initialized) {
 		lpmd_log_debug("\n\nwlt_proxy_action_loop, proxy initialzied\n");
 		state_machine_auto(get_cur_state());
 		lpmd_log_debug("wlt_proxy_action_loop, handled states\n");		
@@ -275,12 +293,21 @@ int wlt_proxy_init(lpmd_config_t *_lpmd_config) {
 	if (ret)
 		return ret;
 
-	proxy_initialized = true; 
+	proxy_initialized = true;
 	next_proxy_poll = 2000;
 	return LPMD_SUCCESS;
 }
 
 /*make sure all resource are properly released and clsoed*/
+<<<<<<< HEAD
+void wlt_proxy_uninit(void) {
+    //if proxy is enabled, make sure we close all open fd.
+	exit_state_change();
+    if (lpmd_config->wlt_proxy_enable) {
+        close_all_fd();
+        perf_stat_uninit();
+		uninit_delta_vars();
+=======
 void wlt_proxy_uninit(void){
     //if proxy is enabled, make sure we close all open fd.
     if (lpmd_config->wlt_proxy_enable){
@@ -289,6 +316,7 @@ void wlt_proxy_uninit(void){
        	uninit_delta_vars();
         uninit_cpu_proxy();
        	perf_stat_uninit();
+>>>>>>> 8bdd374d0b94e358ae5f751f6073b81a06042633
     }
 }
 
