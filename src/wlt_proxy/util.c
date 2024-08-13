@@ -956,14 +956,12 @@ int perf_stat_init(void)
 {
 	int max_cpus = get_max_cpus();
 	perf_stats = NULL; 
-	perf_stats = malloc(sizeof(perf_stats_t) * max_cpus);
+	perf_stats = calloc(sizeof(perf_stats_t), max_cpus);
     if ( !perf_stats ) {
         return 0;
     }
 
 	for (int t = 0; t < max_cpus; t++) {
-        memset( &perf_stats[t], 0, sizeof(perf_stats_t));
-
 		if (!is_cpu_online(t))
 			continue;
 		perf_stats[t].cpu = t;

@@ -275,6 +275,7 @@ int state_machine_perf(int);
 int state_machine_auto(int);
 
 /* spike_mgmt */
+int burst_count;
 int add_spike_time(int);
 int add_non_spike_time(int);
 int get_spike_rate(void);

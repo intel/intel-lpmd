@@ -58,7 +58,7 @@ rm lpmd-resource.c
 rm tools/intel_lpmd_control
 
 rm -fr package/bundleScript/bundle/
-rm package/tuned-profile.tar,gz
+rm package/tuned-profile.tar*
 rm src/additional/unit-test/a.out
 rm src/knobs/unit-test/a.out
 

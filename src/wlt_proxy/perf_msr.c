@@ -95,21 +95,15 @@ uint64_t *last_tsc = NULL;
 
 int init_delta_vars(int n)
 {
-	last_aperf = malloc(sizeof(uint64_t) * n);
-	last_mperf = malloc(sizeof(uint64_t) * n);
-	last_pperf = malloc(sizeof(uint64_t) * n);
-	last_tsc = malloc(sizeof(uint64_t) * n);
+	last_aperf = calloc(sizeof(uint64_t), n);
+	last_mperf = calloc(sizeof(uint64_t), n);
+	last_pperf = calloc(sizeof(uint64_t), n);
+	last_tsc = calloc(sizeof(uint64_t), n);
 	if (!last_aperf || !last_mperf || !last_mperf || !last_tsc) {
 		lpmd_log_info("malloc failure perf vars\n");
 		return 0;
-	}
-	
-    for (size_t i = 0; i < n; ++i) {
-        memset( &last_aperf[i], 0, sizeof(uint64_t));
-        memset( &last_mperf[i], 0, sizeof(uint64_t));
-        memset( &last_pperf[i], 0, sizeof(uint64_t));
-        memset( &last_tsc[i], 0, sizeof(uint64_t));                        
-    }		
+	}	
+
 	return 1;
 }
 
@@ -121,7 +115,7 @@ void uninit_delta_vars(){
 	if (last_pperf)
 		free(last_pperf);
 	if (last_tsc)
-		free(last_tsc); 	
+		free(last_tsc);
 }
 
 /*

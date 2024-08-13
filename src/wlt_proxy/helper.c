@@ -241,7 +241,7 @@ int fs_read_str(const char *name, char *val)
 	}
 	fclose(filep);
 
-	return 0;
+	return ret;
 }
 
 int fs_read_int(const char *name, int *val)
@@ -340,26 +340,26 @@ int fs_open_check(const char *name)
 
 int init_inject_fd(void)
 {
-	int fd;
+	int fd_mask, fd_maxidle, fd_path;
 
-	fd = open_fd(PATH_CPUMASK, O_RDWR);
-	if (fd > 0)
-		fd_cache.inject_cpumask = fd;
-    else 
-        close_fd(fd); 
-        		
-	fd = open_fd(PATH_MAXIDLE, O_RDWR);
-	if (fd > 0)
-		fd_cache.inject_idle = fd;
-    else 
-        close_fd(fd); 
+	fd_mask = open_fd(PATH_CPUMASK, O_RDWR);
+	if (fd_mask > 0)
+		fd_cache.inject_cpumask = fd_mask;
+    else
+        close_fd(fd_mask);
+
+	fd_maxidle = open_fd(PATH_MAXIDLE, O_RDWR);
+	if (fd_maxidle > 0)
+		fd_cache.inject_idle = fd_maxidle;
+    else
+        close_fd(fd_maxidle);
         				
-	fd = open_fd(PATH_DURATION, O_RDWR);
-	if (fd > 0)
-		fd_cache.inject_duration = fd;
-    else 
-        close_fd(fd); 
-        				
+	fd_path = open_fd(PATH_DURATION, O_RDWR);
+	if (fd_path > 0)
+		fd_cache.inject_duration = fd_path;
+    else
+        close_fd(fd_path);
+
 	return 1;
 }
 
@@ -390,7 +390,7 @@ int write_cgroup_isolate(const char *str)
 
 int init_cgroup_fd(void)
 {
-	int fd;
+	int fd_part, fd_set;
 	DIR *dir;
 	int ret;
 
@@ -406,17 +406,17 @@ int init_cgroup_fd(void)
 	} else
 		closedir(dir);
 
-	fd = open_fd("/sys/fs/cgroup/eco/cpuset.cpus.partition", O_RDWR);
-	if (fd > 0)
-		fd_cache.cgroup_partition_fd = fd;
+	fd_part = open_fd("/sys/fs/cgroup/eco/cpuset.cpus.partition", O_RDWR);
+	if (fd_part > 0)
+		fd_cache.cgroup_partition_fd = fd_part;
 	else 
-	    close_fd(fd);
+	    close_fd(fd_part);
 	    
-	fd = open_fd("/sys/fs/cgroup/eco/cpuset.cpus", O_RDWR);
-	if (fd > 0)
-		fd_cache.cgroup_isolate_fd = fd;
+	fd_set = open_fd("/sys/fs/cgroup/eco/cpuset.cpus", O_RDWR);
+	if (fd_set > 0)
+		fd_cache.cgroup_isolate_fd = fd_set;
 	else 
-	    close_fd(fd);
+	    close_fd(fd_set);
 	return 1;
 }
 
