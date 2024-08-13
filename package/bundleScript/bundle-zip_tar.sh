@@ -1,6 +1,9 @@
 #!/bin/bash
 # Script to generate zip/tar deployment package
 
+#Copyright (C) 2024 Intel Corporation
+#SPDX-License-Identifier: GPL-3.0-only
+
 set -e
 
 RED='\033[0;31m'
@@ -22,10 +25,10 @@ echo $BUNDLEDIR
 echo "Prepare..."
 
 PKG_CATEGORY="OPT"
-PKG_FOLDERNAME="HEPO"
+PKG_FOLDERNAME="ILEO"
 BASE=pkg.$PKG_CATEGORY.$PKG_FOLDERNAME
 MAJOR="0"
-MINOR="06"
+MINOR="11"
 ARCH="x86_64"
 BUILD_DATE=$(date +'%y%m%d')
 #DISTRO_CODENAME=$(cat /etc/lsb-release |grep DISTRIB_CODENAME|cut -d"=" -f2)
@@ -70,13 +73,8 @@ rm -fr $SOURCEFOLDER
 mkdir -p $SOURCEFOLDER
 
 # copy tuned-profile
-
-#mkdir -p $SOURCEFOLDER/tuned-profile
-#cd $BUNDLEDIR/..
 pushd $BUNDLEDIR/..
-#tar -czvf $BUNDLEDIR/bundle/tuned-profile.tar.gz tuned-profile
 tar -czvf $SOURCEFOLDER/tuned-profile.tar.gz tuned-profile
-#tar -czvf tuned-profile.tar,gz tuned-profile
 popd
 
 #mv $BUNDLEDIR/bundle/tuned-profile.tar.gz $SOURCEFOLDER/
@@ -92,7 +90,7 @@ cp $BUNDLEDIR/../../man/intel_lpmd_config.xml.5 $SOURCEFOLDER/
 cp $BUNDLEDIR/../../man/intel_lpmd.8 $SOURCEFOLDER/
 
 #copy config
-cp $BUNDLEDIR/../data/platform_mtl.xml $SOURCEFOLDER/intel_lpmd_config.xml
+cp $BUNDLEDIR/../../data/platform_mtl.xml $SOURCEFOLDER/intel_lpmd_config.xml
 cp $BUNDLEDIR/../../data/org.freedesktop.intel_lpmd.conf $SOURCEFOLDER/
 
 #copy dbus service
@@ -110,8 +108,6 @@ chmod +x $SOURCEFOLDER/*.sh
 
 #copy license, user guide
 cp $BUNDLEDIR/../release-notes* $SOURCEFOLDER/
-cp $BUNDLEDIR/../license/readme-license* $SOURCEFOLDER/
-cp $BUNDLEDIR/../license/*.pdf $SOURCEFOLDER/
 cp $BUNDLEDIR/../user-guide* $SOURCEFOLDER/
 
 #zip/tar folder

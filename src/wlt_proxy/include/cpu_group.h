@@ -43,6 +43,7 @@ int is_cpu_online(int);
 int get_max_cpus(void);
 int get_max_online_cpu(void);
 int init_cpu_proxy(void);//defined in lpmd.h
+void uninit_cpu_proxy();
 cpu_set_t *get_cpu_mask(enum lp_state_idx idx);
 char *get_cpus_hexstr(enum lp_state_idx);
 int process_cpu_powerclamp_enter(int, int);

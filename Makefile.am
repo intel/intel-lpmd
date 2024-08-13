@@ -24,17 +24,20 @@ sbin_PROGRAMS = intel_lpmd
 
 intel_lpmd_CPPFLAGS = \
 	-I@top_srcdir@/src \
+	-I@top_srcdir@/src/include \
+	-I@top_srcdir@/src/wlt_proxy/include \
+	-I@top_srcdir@/src/knobs/include \
 	-DTDLOCALEDIR=\"$(datadir)/locale\" \
 	-DGLIB_SUPPORT
 
 intel_lpmd_includedir = @top_srcdir@
+
 intel_lpmd_LDADD = \
 	$(DBUS_LIBS) \
 	$(GLIB_LIBS) \
 	$(LIBNL_LIBS) \
 	$(LIBM) \
-    -lm \
-    -lcap \
+	-lm \
 	$(LIBDL) \
 	$(XML_LIBS) \
 	$(libnlgenl30_LIBS) \
@@ -60,13 +63,10 @@ intel_lpmd_SOURCES = \
     src/wlt_proxy/spike_mgmt.c \    
     src/wlt_proxy/state_machine.c \
     src/wlt_proxy/util.c \
-    src/wlt_proxy/irq.c \
+    src/wlt_proxy/irq.c \	
     src/wlt_proxy/perf_msr.c \
     src/wlt_proxy/cpu_group.c \
-	src/weights/power-supply-status.c \
-    src/additional/privilege.c \
-    #src/visualize/plotting.c \
-	#src/wlt_proxy/helper_gaps.c \
+	src/knobs/power-supply-status.c \
 	lpmd-resource.c
 
 man8_MANS = man/intel_lpmd.8

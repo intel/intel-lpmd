@@ -1,28 +1,34 @@
+# Intel Linux energy Optimier [ILEO]
+ILEO is a Linux daemon to optimize workload performance on Intel SoC. On system with tuneD support package adds custom profiles to activate and deactive ILEO. ILEO optimizes Intel SoC enegry settings set to achieve optimal  power and performance on Intel Ultra 1st Gen linux platforms.
 
-Package contains tuneD custom profiles to set to achieve best power and performance on Intel Ultra 1st Gen linux platforms.
 Note: Limited validation on Ubuntu 24.04 LTS and Ubuntu 22.04 LTS with common workloads like video playback, video conference and web browsing.
 
 # prerequisite
 Please make sure the system is up to date by running "apt update" command before installing this package.
-tuned - system tuning daemon (will be installed by the program from ubuntu repo).
+tuned - system tuning daemon (on supported distros, will be installed/updated by the program from distro repo).
 
 # Deployment steps
     copy the package to target machine
     cd to the package folder
     ## format deb
         ### install
-                #### tuned already installed.
-                    sudo dpkg -i <deb file name>
- 
-                #### tuned not installed already
-                    this package install dependencies [tuned] automatically.
-                    ##### option 1
-                        sudo apt install tuned
-                        sudo dpkg -i <deb file name>
-                    ##### option 2
-                        sudo dpkg -i <deb file name>
-                            -- results in failure. continue with below command.
-                        sudo apt-get -f install
+		        #### PPD (power-profiles-daemon) is actively running
+					sudo dpkg -i <deb file name>
+						
+		        #### PPD (power-profiles-daemon) is not actively running		
+				
+					#### tuned already installed or tuned not supported on the platform.
+						sudo dpkg -i <deb file name>
+	 
+					#### tuned not installed already but supported on the platform
+						this package install dependencies [tuned] automatically.
+						##### option 1
+							sudo apt install tuned
+							sudo dpkg -i <deb file name>
+						##### option 2
+							sudo dpkg -i <deb file name>
+								-- results in failure. continue with below command.
+							sudo apt-get -f install
         ### uninstall
             sudo dpkg -r <deb name>
 		
@@ -32,26 +38,22 @@ tuned - system tuning daemon (will be installed by the program from ubuntu repo)
             run: sudo ./deploy.sh
             
         ### uninstall
-            run: sudo ./remove.sh
+            run: sudo ./rollback.sh
             manually remove the untar folder
 	
     ## uninstallation behaviour
-	If tuned is installed by this package:
-		- after installation the current profile will be set to intel-best_performance_mode
-		- package uninstallation will automatically remove tuned
-		- if tuned is installed as an dependency of the debian package, the uninstallation will not automatically remove tuned 
+		If tuned is required by this package:
+			- after installation the current profile will be set to intel_hepo
+			- package uninstallation will set the default tuned profile off
         
-	If tuned was installed before this package:
-		- if current profile already exists, profile intel-best_performance_mode will be added to the existing profile upon package installation
-		- the package uninstallation will turn off the active profile (no current active profile).  
-		- if the previous tuned profile information was not available, the current profile will be left untouched.
+		Upon uninstallation,
+			- the EPP value will be set to "balance_performance".
+			- power-profiles-daemon service will be unmasked
 
-    Upon uninstallation,
-        - the EPP value will be set to "balance_performance".
-        - power-profiles-daemon service will be unmasked
-
-# note: [tuneD conflicts with ppd on ubuntu]
-    power-profiles-daemon[ppd] will be disabled when installing tuned. Choosing power profile option [ "performance", "balanced", or "power saver" ] won't be available in settings UI after disabling PPD service. Upon reboot, ppd service will take a priority to start and disable the Tuned service. This package installation will unmask power-profiles-daemon service so Tuned service and the profile activates properly after reboot.
+# system daemon commands:
+	sudo systemctl status intel_lpmd
+	sudo systemctl start intel_lpmd
+	sudo systemctl stop intel_lpmd	
 
 # tuneD commands:
 
@@ -62,7 +64,6 @@ To switch profile [to activate new profile and deactivate current profile] use b
 "sudo tuned-adm profile <profile name>"
 "sudo tuned-adm off" to turn off profile.
 "tuned-adm active" to get lists the active profiles.
-
 
 # License
 tuneD releated files [configuration, profile scripts, ...] are under GPL-2.0-or-later license

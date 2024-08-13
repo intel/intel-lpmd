@@ -26,6 +26,7 @@
 #include <glib.h>
 #include <glib-unix.h>
 #include <syslog.h>
+#include <sys/resource.h>
 
 
 #include "lpmd.h"
@@ -144,7 +145,9 @@ static gboolean sig_int_handler(void)
 {
 //	 Call terminate function
 	lpmd_terminate ();
-
+	//proxy check is done inside the function
+	wlt_proxy_uninit();
+	
 	sleep (1);
 
 	if (g_main_loop)
@@ -152,9 +155,7 @@ static gboolean sig_int_handler(void)
 
 //	 Clean up if any
 	clean_up_lockfile ();
-	wlt_proxy_uninit(); 
-
-	exit (EXIT_SUCCESS);
+ 	exit (EXIT_SUCCESS);
 
 	return FALSE;
 }
@@ -187,6 +188,7 @@ int main(int argc, char *argv[])
 		fprintf (stderr, "GModules are not supported on your platform!\n");
 		exit (EXIT_FAILURE);
 	}
+	
 
 //	Set locale to be able to use environment variables
 	setlocale (LC_ALL, "");
@@ -203,18 +205,20 @@ int main(int argc, char *argv[])
 	g_option_context_add_main_entries (opt_ctx, options, NULL);
 
 	g_option_context_set_summary (opt_ctx,
-				"Intel Low Power Daemon based on system usage takes action "
-				"to reduce active power of the system.\n\n"
-				"Copyright (c) 2023, Intel Corporation\n"
+				"Intel Energy Optimizer (LPMD) Daemon based on system usage takes action "
+				"to improve energy efficiency the system.\n\n"
+				"Copyright (c) 2024, Intel Corporation\n"
 				"This program comes with ABSOLUTELY NO WARRANTY.\n"
 				"This work is licensed under GPL v2.\n\n"
 				"Use \"man intel_lpmd\" to get more details.");
 
-	success = g_option_context_parse (opt_ctx, &argc, &argv, NULL);
+    GError *error = NULL;
+	success = g_option_context_parse (opt_ctx, &argc, &argv, &error);
 	g_option_context_free (opt_ctx);
 
 	if (!success) {
 		fprintf (stderr, "Invalid option.  Please use --help to see a list of valid options.\n");
+		g_error_free (error);
 		exit (EXIT_FAILURE);
 	}
 
@@ -226,6 +230,21 @@ int main(int argc, char *argv[])
 	if (getuid () != 0) {
 		fprintf (stderr, "You must be root to run intel_lpmd!\n");
 		exit (EXIT_FAILURE);
+	}
+	
+	/*
+	 * this program orchestating cpu topology and related
+	 * attributes need to assertively 'run' to avoid decision starving
+	 * e.g. when queued with only lowest performant core and some other
+	 * task hogging 100% cpu, without letting any further decision change.
+	 *
+	*/
+	id_t pid = getpid();
+	int priority = -20; //range -2[ highest] to +20 [lowest] ; default 0
+	int retVal= setpriority(PRIO_PROCESS, pid, priority);
+	if (retVal == ESRCH || retVal==EINVAL || retVal==EPERM || retVal==EACCES) { //error check
+		fprintf (stderr, "Unable to set process priority [%d]\n", retVal);
+		//not a show stopper to exit.
 	}
 
 	if (g_mkdir_with_parents (TDRUNDIR, 0755) != 0) {

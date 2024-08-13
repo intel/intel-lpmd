@@ -42,9 +42,12 @@ static int tdp_mw;
 static int burst_count;
 static int burst_len;
 static bool proxy_initialized = false;
+<<<<<<< HEAD
 
+=======
+int action_interval = DEFAULT_ACTION_INTERVAL;
+>>>>>>> 8bdd374d0b94e358ae5f751f6073b81a06042633
 static lpmd_config_t *lpmd_config;
-//lpmd_config_t *lpmd_config;
 extern int next_proxy_poll;
 
 #ifdef __REMOVE__
@@ -130,7 +133,8 @@ static int get_busy(void) {
 
 			_idle = idle_time - prev_idle;
 			_total = total - prev_total;
-			cpu_usage = (_total - _idle) * 100 / _total;
+			if (_total != 0)
+    			cpu_usage = (_total - _idle) * 100 / _total;
 			lpmd_log_debug("cpu_usage: %d %d %d\n", _idle, _total, cpu_usage);
 		}
 
@@ -177,7 +181,7 @@ static int check_cpu_busy(int power_mw, int tdp) {
 #endif
 
 void set_workload_hint(int type) {
-	lpmd_log_info("proxy WLT hint :%d\n", type);
+	lpmd_log_debug("proxy WLT hint :%d\n", type);
 	periodic_util_update(lpmd_config, type);
 }
 
@@ -295,6 +299,7 @@ int wlt_proxy_init(lpmd_config_t *_lpmd_config) {
 }
 
 /*make sure all resource are properly released and clsoed*/
+<<<<<<< HEAD
 void wlt_proxy_uninit(void) {
     //if proxy is enabled, make sure we close all open fd.
 	exit_state_change();
@@ -302,5 +307,28 @@ void wlt_proxy_uninit(void) {
         close_all_fd();
         perf_stat_uninit();
 		uninit_delta_vars();
+=======
+void wlt_proxy_uninit(void){
+    //if proxy is enabled, make sure we close all open fd.
+    if (lpmd_config->wlt_proxy_enable){
+    	exit_state_change();
+        close_all_fd();
+       	uninit_delta_vars();
+        uninit_cpu_proxy();
+       	perf_stat_uninit();
+>>>>>>> 8bdd374d0b94e358ae5f751f6073b81a06042633
     }
 }
+
+#if 0
+/** enabling through dbus command */
+void enable_sw_proxy(void) {
+	//lpmd_config->wlt_proxy_enable = true;
+	wlt_proxy_init(NULL);
+}
+
+/** disabling through dbus command */
+void disable_sw_proxy(void) {
+	wlt_proxy_uninit();
+}
+#endif

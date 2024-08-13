@@ -1,15 +1,17 @@
-pkgdir="/usr/share/ia_pkg/hepo"
-pkgfile="/usr/share/ia_pkg/hepo/pkg.opt.hepo.x86_64.tar.gz"
+pkgdir="/usr/share/ia_pkg/ileo"
+pkgfile="/usr/share/ia_pkg/ileo/pkg.opt.ileo.x86_64.tar.gz"
 
 if [ -f "$pkgfile" ]; then
-        tar -zxvf $pkgfile -C $pkgdir		
-        if [ -n "ls $pkgdir/pkg.OPT.HEPO*x86_64" ]; then
-                cd $pkgdir/pkg.OPT.HEPO*x86_64				
-                sudo ./deploy.sh
-        else
-                echo "untared folder does not exist"
-        fi
+	tar -zxvf $pkgfile -C $pkgdir		
+	if [ -n "ls $pkgdir/pkg.OPT.ILEO*x86_64" ]; then
+		cd $pkgdir/pkg.OPT.ILEO*x86_64				
+		sudo ./deploy.sh debinstall
+	else
+		echo "untared folder does not exist"
+	fi
 else
-        echo "package install file does not exist"
-        exit 1
+	echo "package install file does not exist"
+	exit 1
 fi
+	
+ 

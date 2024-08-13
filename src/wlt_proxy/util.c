@@ -35,7 +35,7 @@
 #include "wlt_proxy.h"
 #include "cpu_group.h"
 #include "perf_msr.h"
-#include "../weights/weights_common.h"
+#include "weights_common.h"
 
 #define PERF_API 1
 
@@ -102,7 +102,8 @@ static int read_perf_counter_info(const char *const path, const char *const pars
 	ret = 0;
 
 cleanup_and_exit:
-	close(fdmt);
+    if (fdmt >= 0)
+    	close(fdmt);
 	return ret;
 }
 
@@ -193,7 +194,7 @@ void open_amperf_fd(int cpu)
 	perf_stats[cpu].pperf_fd = open_perf_counter(cpu, msr_type, pperf_config, perf_stats[cpu].aperf_fd, PERF_FORMAT_GROUP);	
 }
 
-static int get_amperf_fd(int cpu)
+int get_amperf_fd(int cpu)
 {
 	if (perf_stats[cpu].aperf_fd)
 		return perf_stats[cpu].aperf_fd;
@@ -204,7 +205,7 @@ static int get_amperf_fd(int cpu)
 }
 
 
-static unsigned long long rdtsc(void)
+unsigned long long rdtsc(void)
 {
 	unsigned int low, high;
 
@@ -215,7 +216,7 @@ static unsigned long long rdtsc(void)
 
 
 /* Read APERF, MPERF and TSC using the perf API. */
-static int read_aperf_mperf_tsc_perf(struct thread_data *t, int cpu)
+int read_aperf_mperf_tsc_perf(struct thread_data *t, int cpu)
 {
 	union {
 		struct {
@@ -252,10 +253,10 @@ extern int max_util;
 int update_perf_diffs(float *sum_norm_perf, int stat_init_only)
 {
 	int fd, min_cpu, maxed_cpu = -1;
-	float min_load = 100.0, min_s0 = 1.0, next_s0;
+	float min_load = 100.0, min_s0 = 1.0, next_s0 = 1.0;
 	float _sum_nperf = 0, nperf = 0;
-	float max_load = 0, max_2nd_load = 0, max_3rd_load = 0, next_load;
-	uint64_t aperf_raw, mperf_raw, pperf_raw, tsc_raw, poll_cpu_us;
+	float max_load = 0, max_2nd_load = 0, max_3rd_load = 0, next_load = 0;
+	uint64_t aperf_raw, mperf_raw, pperf_raw, tsc_raw, poll_cpu_us = 0;
 
 	int t, min_s0_cpu = 0, first_pass = 1;
 
@@ -324,7 +325,8 @@ int update_perf_diffs(float *sum_norm_perf, int stat_init_only)
 		 * as given below.
 		 */
 		if (perf_stats[t].mperf_diff) {
-			nperf = (float)perf_stats[t].pperf_diff / poll_cpu_us;
+			if (poll_cpu_us != 0)
+				nperf = (float)perf_stats[t].pperf_diff / poll_cpu_us;
 			nperf = (float)nperf *perf_stats[t].tsc_diff;
 			nperf = (float)nperf / (perf_stats[t].mperf_diff);
 			perf_stats[t].nperf = (uint64_t) nperf;
@@ -374,7 +376,6 @@ int update_perf_diffs(float *sum_norm_perf, int stat_init_only)
 		    (float)perf_stats[maxed_cpu].aperf_diff * 0.01 /
 		    perf_stats[maxed_cpu].mperf_diff * cpu_hfm_mhz;
 	grp.worst_stall = min_s0;
-//printf("test, grp.worst_stall %.2f\n", grp.worst_stall);
 	grp.worst_stall_cpu = min_s0_cpu;
 
 	grp.c0_max = max_load;
@@ -382,7 +383,8 @@ int update_perf_diffs(float *sum_norm_perf, int stat_init_only)
 	grp.c0_3rd_max = max_3rd_load;
 	grp.c0_min = min_load;
 	*sum_norm_perf = _sum_nperf;
-	soc_mw = (float)rapl_ediff_pkg0(read_rapl_pkg0()) * 1000 / poll_cpu_us;
+	if (poll_cpu_us != 0)
+		soc_mw = (float)rapl_ediff_pkg0(read_rapl_pkg0()) * 1000 / poll_cpu_us;
 
 	return maxed_cpu;
 }
@@ -424,15 +426,6 @@ int do_sum(int *sam, int len)
 	return sum;
 }
 
-void print_sma(void)
-{
-	for (int i = 0; i < SMA_CPU_COUNT; i++) {
-		for (int j = 0; j < SMA_LENGTH; j++)
-			printf(" %d ", sample[i][j]);
-		printf("\n");
-	}
-	printf("\n");
-}
 
 #define SCALE_DECIMAL (100)
 int state_max_avg()
@@ -463,11 +456,11 @@ int state_max_avg()
 	}
 
 	grp.sma_avg1 =
-	    (int)round(grp.sma_sum[0] / (SMA_LENGTH * SCALE_DECIMAL));
+	    (int)round((double)grp.sma_sum[0] / (double)(SMA_LENGTH * SCALE_DECIMAL));
 	grp.sma_avg2 =
-	    (int)round(grp.sma_sum[1] / (SMA_LENGTH * SCALE_DECIMAL));
+	    (int)round((double)grp.sma_sum[1] / (double)(SMA_LENGTH * SCALE_DECIMAL));
 	grp.sma_avg3 =
-	    (int)round(grp.sma_sum[2] / (SMA_LENGTH * SCALE_DECIMAL));
+	    (int)round((double)grp.sma_sum[2] / (double)(SMA_LENGTH * SCALE_DECIMAL));
 
 	return 1;
 }
@@ -488,8 +481,8 @@ enum lp_state_idx nearest_supported(enum lp_state_idx from_state, enum lp_state_
 }
 
 static int get_state_mapping(enum lp_state_idx state){
-    //for now, AC_CONNECTED is set true by default
-    //it needs to read the battery status 
+
+    //read the battery connection status 
     bool AC_CONNECTED = is_ac_powered_power_supply_status() == 0  ? false: true; //unknown is considered as ac powered.
     
     switch(state){
@@ -497,29 +490,40 @@ static int get_state_mapping(enum lp_state_idx state){
     	return WLT_BURSTY;
 	
 	case RESP_MODE:
-	    if (AC_CONNECTED)	
+	    if (AC_CONNECTED){	
+		lpmd_log_info("AC_CONNECTED: WLT_SUSTAINED\n");
             return WLT_SUSTAINED;
-        else 
+		}
+        else{
+		lpmd_log_info("Powered by battery: WLT_SUSTAINED_BAT\n");			
             return WLT_SUSTAINED_BAT;
+		}
             
 	case MDRT4E_MODE:
 	case MDRT3E_MODE:
 	case MDRT2E_MODE:
 	case NORM_MODE:
-	    if (AC_CONNECTED)
+	    if (AC_CONNECTED){
+			lpmd_log_info("AC_CONNECTED: WLT_BATTERY_LIFE\n");
     	    return WLT_BATTERY_LIFE;
-    	else 
+		}
+    	else {
+			lpmd_log_info("Powered by battery: WLT_BATTERY_LIFE_BAT\n");			
         	return WLT_BATTERY_LIFE_BAT;
-	
+		}	
 	case DEEP_MODE:							
         return WLT_IDLE; 
 	
+	//there is no corresponding wlt for INIT_MODE, it goes away quickly.
+	//use WLT_SUSTAINED as default type	
 	case INIT_MODE:
-	default:	
-	    return WLT_SUSTAINED;//WLT_INVALID; 	
-    }
-    
-    return WLT_SUSTAINED;//WLT_INVALID; 
+		return WLT_SUSTAINED;
+		
+	//we don't allow invalid wlt type, flag and use WLT_SUSTAINED		
+	default:
+		lpmd_log_error("unknown work load type\n");
+	    return WLT_SUSTAINED;	
+    }    
 }
 
 int state_demote = 0;
@@ -542,13 +546,14 @@ int prep_state_change(enum lp_state_idx from_state, enum lp_state_idx to_state,
 	if (!reset && state_support_freq_ctl(from_state))
 		unclamp_default_freq(from_state);
 #if 0
+	//epp and epb are updated in the main 
 	update_state_epp(to_state);
 	update_state_epb(to_state);
 #endif
     //switch(to_state)
     //do to_state to WLT mapping
     int type = get_state_mapping((int)to_state); 
-    printf("proxy WLT hint :%d\n", type);
+    lpmd_log_debug("proxy WLT state value :%d\n", type);
 	set_workload_hint(type);
 
 	set_cur_state(to_state);
@@ -588,7 +593,7 @@ int staytime_to_staycount(enum lp_state_idx state)
 		case NORM_MODE:
 		case DEEP_MODE:
 		case BYPS_MODE:
-		case MAX_MODE:
+		//case MAX_MODE:
 			/* undefined */
 			assert(0);
 			break;
@@ -746,7 +751,7 @@ static int util_main(enum slider_value sld)
 	 * a) bypass mode where the solution temporary bypassed
 	 * b) Responsive transit mode (fast poll can flood avg leading to incorrect decisions)
 	 */
-	if ((present_state != BYPS_MODE) || (present_state != RESP_MODE))
+	if ((present_state != BYPS_MODE) && (present_state != RESP_MODE))
 		state_max_avg();
 
 	switch (sld) {
@@ -818,7 +823,7 @@ static int util_main(enum slider_value sld)
 			    ("\n  time.ms, sldr, state, sma1, sma2, sma3, 1stmax, 2ndmax, 3rdmax, nx_poll, nx_st, Qperf,    Watt,     PPW, min_s0, cpu_s0, SpkRt, Rcnt, brst_pm\n");
 		}
 		log_info
-		     ("%05d.%03d,   %2d,  %4d,  %3d,  %3d,  %3d, %6.2f, %6.2f, %6.2f,  %6d,  %4d, %5.1f,  %6.2f,  %6.2f,   %.2f,    %3d,  %3d,   %3d,  %3d  %d\n",
+		     ("%05ld.%03ld,   %2d,  %4d,  %3d,  %3d,  %3d, %6.2f, %6.2f, %6.2f,  %6d,  %4d, %5.1f,  %6.2f,  %6.2f,   %.2f,    %3d,  %3d,   %3d,  %3d  %d\n",
 		     ts_start.tv_sec - ts_init.tv_sec,
 		     ts_start.tv_nsec / 1000000, sld, present_state,
 		     grp.sma_avg1, grp.sma_avg2, grp.sma_avg3, grp.c0_max,
@@ -924,7 +929,7 @@ void *state_handler(void)
 				  util_max, next_state, next_poll);
 			usleep(next_poll * 1000);
 		} else {
-			printf("unknown state %d", next_state);
+			lpmd_log_info("unknown state %d", next_state);
 			break;
 		}
 	}
@@ -933,7 +938,6 @@ void *state_handler(void)
 
 void update_state_epp(enum lp_state_idx state)
 {
-//printf("test: update epp of state %d\n", state);
 	for (int t = 0; t < get_max_online_cpu(); t++) {
 		update_epp(perf_stats[t].dev_msr_fd,
 			   (uint64_t) get_state_epp(state));
@@ -951,9 +955,15 @@ void update_state_epb(enum lp_state_idx state)
 int perf_stat_init(void)
 {
 	int max_cpus = get_max_cpus();
+	perf_stats = NULL; 
 	perf_stats = malloc(sizeof(perf_stats_t) * max_cpus);
+    if ( !perf_stats ) {
+        return 0;
+    }
 
 	for (int t = 0; t < max_cpus; t++) {
+        memset( &perf_stats[t], 0, sizeof(perf_stats_t));
+
 		if (!is_cpu_online(t))
 			continue;
 		perf_stats[t].cpu = t;
@@ -968,8 +978,13 @@ int perf_stat_init(void)
 }
 
 void perf_stat_uninit(){
-	if (perf_stats)
-	    free(perf_stats); 
+    int max_cpus = get_max_cpus();
+	if (perf_stats) {
+	    for (size_t i = 0; i < max_cpus; ++i) {
+            memset( &perf_stats[i], 0, sizeof(perf_stats_t));	        	    
+    	}
+    	free(perf_stats); 
+	}
 
 }
 
@@ -997,7 +1012,6 @@ int revert_orig_epb(void)
 /* EP Preference. XXX switch to sysfs */
 uint32_t update_epp(int fd, uint64_t new_value)
 {
-//printf("test: update epp to %ld\n", new_value);
 	uint64_t orig_value;
 	read_msr(fd, (uint32_t) MSR_HWP, &orig_value);
 	new_value = (((orig_value << 40) >> 40) | (new_value << 24));

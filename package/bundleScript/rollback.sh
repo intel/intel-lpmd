@@ -1,23 +1,26 @@
 #!/bin/bash
+#purpose: clean up
 
 #Copyright (C) 2024 Intel Corporation
-#This software and the related documents are Intel copyrighted materials, and your use of them is governed by the express license under which they were provided to you ("License"). 
-#Unless the License provides otherwise, you may not use, modify, copy, publish, distribute, disclose or transmit this software or the related documents without Intel's prior written permission.
-#This software and the related documents are provided as is, with no express or implied warranties, other than those that are expressly stated in the License.
+#SPDX-License-Identifier: GPL-3.0-only
 
-folder="/usr/share/ia_pkg"
-file="/usr/share/ia_pkg/EPPprofile/EPPprofile.install"
+#ppdstatus=$(echo $(sudo systemctl status power-profiles-daemon | grep "active (running)"))
+#if [ ! -z "$ppdstatus" ]; then 
+#    installasservice=1
+#else 
+#    installasservice=0
+#fi
 
 #function cleanup
 cleanup()
 {
     #remove the profiles    
-	if [[ "$installasservice" -eq 0 ]]; then	
+	if [ -d "/etc/tuned/intel_energy_optimizer" ]; then	
 		sudo rm -r /etc/tuned/intel*        
 	fi
-		
-	rm /usr/bin/intel_lpmd
-    rm /usr/bin/intel_lpmd_control
+
+	rm /sbin/intel_lpmd
+    rm /sbin/intel_lpmd_control
 
     rm /usr/local/share/man/man5/intel_lpmd_config.xml.5
     rm /usr/local/share/man/man8/intel_lpmd.8
@@ -30,29 +33,35 @@ cleanup()
     rm /usr/lib/systemd/system/intel_lpmd.service	
 }
 
-ppdstatus=$(echo $(sudo systemctl status power-profiles-daemon | grep "active (running)"))
-if [[ ! -z "$ppdstatus" ]]; then 
-    if [[ $ppdstatus == *"active (running)"* ]]; then
-        installasservice=1
-    else
-        installasservice=0
-    fi
-else 
-    installasservice=0
-fi 
-       
-if [[ "$installasservice" -eq 0 ]]; then	   
-	#turn off active profile 
-	tuned-adm off                 
-	sudo systemctl restart tuned            
-    if test -f /usr/lib/systemd/system/power-profiles-daemon.service; then
-        sudo systemctl unmask power-profiles-daemon
-    fi
-else 
-	sudo systemctl stop intel_lpmd.service
+#is service installed & active.
+if test -f /usr/lib/systemd/system/intel_lpmd.service; then
+	service="intel_lpmd"
+	sudo systemctl is-active $service
+	if [ $? = 0 ]; then
+		sudo systemctl stop $service >/dev/null 2>&1
+		sudo systemctl disable $service
+	fi
 fi
+
+#if tuned profiles were installed, remove profiles and unmask the ppd service	  
+if [ -d "/etc/tuned/intel_energy_optimizer" ]; then	      
+	tunedstatus=$(echo $(sudo systemctl status tuned | grep -o "active (running)"))
+	if [ ! -z "$tunedstatus" ]; then
+		#turn off active profile 
+		tuned-adm off >/dev/null 2>&1
+		sudo systemctl restart tuned
+	fi
 	
+	#Assumption: no ppd on tuned active platform as they both conflict.
+    if test -f /usr/lib/systemd/system/power-profiles-daemon.service; then
+        sudo systemctl unmask power-profiles-daemon >/dev/null 2>&1
+    fi
+fi  
+
+#sudo systemctl stop intel_lpmd >/dev/null 2>&1 &
+
+#remove files	
 cleanup 
+
+#cache update
 sudo systemctl daemon-reload    
-    
-    

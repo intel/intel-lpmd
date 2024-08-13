@@ -1,13 +1,17 @@
 [Unit]
-Description= Intel Low Power Daemon Service
+Description= Intel Linux Energy Optimizer (lpmd) Service
 ConditionVirtualization=no
+StartLimitInterval=200
+StartLimitBurst=5
 
 [Service]
 Type=simple
 SuccessExitStatus=2
 BusName=org.freedesktop.intel_lpmd
-ExecStart=/usr/bin/intel_lpmd --systemd 
+#ExecStart=/sbin/intel_lpmd --systemd --dbus-enable
+ExecStart=/sbin/intel_lpmd --loglevel=info --no-daemon --dbus-enable
 Restart=on-failure
+RestartSec=30
 
 [Install]
 WantedBy=multi-user.target

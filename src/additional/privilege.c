@@ -27,7 +27,8 @@
 #include <sys/capability.h>
 #include <sys/prctl.h>
 
-#include "additional_common.h"
+//#include "additional_common.h"
+#include "lpmd.h"
 
 #include <sys/capability.h>
 cap_t cap_get_proc(void);

@@ -1,13 +1,10 @@
 #!/bin/bash
 #purpose: script to setup build environment
 
-#sed -i -e 's/\r$//' *.sh
+#Copyright (C) 2024 Intel Corporation
+#SPDX-License-Identifier: GPL-3.0-only
 
 echo "executing setup_ubuntu script ..."
-
-#BASEDIR=$(dirname $0)
-#BASEDIR="$( cd "$( dirname "$0" )" && pwd )"
-#echo "BASEDIR = $BASEDIR"
 
 #auto config for software source packages
 sudo apt install -y autoconf 
@@ -41,10 +38,8 @@ sudo apt -y -- install libcap-dev libssl-dev
 #sudo apt install -y nlohmann-json3-dev
 
 #bundle as zip, tar
-sudo apt install -y zip tar
+sudo apt install -y tar
 
 sudo apt install -y dos2unix
 
 sudo apt autoremove
-
-#cd $BASEDIR

@@ -2,10 +2,7 @@
 
 <!--
 Specifies the configuration data
-for Intel Low Power Mode daemon
-
-version:
- 1.1 - consider power supply status
+for Intel Energy Optimizer (LPMD) daemon
 -->
 
 <Configuration>
@@ -15,12 +12,19 @@ version:
 	<lp_mode_cpus></lp_mode_cpus>
 
 	<!--
+		EPP to use in Low Power Mode
+		0-255: Valid EPP value to use in Low Power Mode
+		   -1: Don't change EPP in Low Power Mode
+	-->
+	<lp_mode_epp>-1</lp_mode_epp>
+
+	<!--
 		Mode values
 		0: Cgroup v2
 		1: Cgroup v2 isolate
 		2: CPU idle injection
 	-->
-	<Mode>1</Mode>
+	<Mode>0</Mode>
 
 	<!--
 		Default behavior when Performance power setting is used
@@ -45,32 +49,20 @@ version:
 		 0: auto. (opportunistic Low Power Mode enter/exit)
 	-->
 	<PowersaverDef>-1</PowersaverDef>
-    
-    <!--
-		Default behavior when Power supply is battery and discharging
-		-1: force off. (Never enter Low Power Mode)
-		 1: force on. (Always stay in Low Power Mode)
-		 0: ignore. (opportunistic Low Power Mode enter/exit)
-	-->
-	<!-- <PowerSupplyBATDischargeDef>-1</PowerSupplyBATDischargeDef> -->
 
 	<!--
 		Use HFI LPM hints
 		0 : No
 		1 : Yes
 	-->
-	<HfiLpmEnable>1</HfiLpmEnable>
+	<HfiLpmEnable>0</HfiLpmEnable>
 
 	<!--
 		Use WLT hints
 		0 : No
 		1 : Yes
 	-->
-	<WLTHintEnable>1</WLTHintEnable>
-	
-	<WLTProxyEnable>1</WLTProxyEnable>
-		
-	<WLTProxyInterval>2000</WLTProxyInterval>
+	<WLTHintEnable>0</WLTHintEnable>
 
 	<!--
 		Use HFI SUV hints
@@ -125,33 +117,19 @@ version:
 	<IgnoreITMT>0</IgnoreITMT>
 
 	<!--
-		State should be arranged in order of most power to low power.
-		States are traversed in reverse.
-		In the below example:
-			- If the util is less than 10, state LPM_DEEP is entered
-				If any CPU is busy more than 95% then it will exit LPM state
-				This will cause transition to state FULL_POWER
-			- In FULL POWER state, whatever system util entered, it needs to
-				atleast +-5 percent to leave the state
+		Example WorkLoad Type hints based config states applied to
+		12Pcore-8Ecore-2Lcore 28W TDP Meteor Lake platform.
+		Need to set WLTHintEnable to make it work.
 	-->
-
-	<!--
-		MTL 6+8+2 with HT enabled with WLT Type
-		Make sure that the above config for WLT enable is set
-			<WLTHintEnable>1</WLTHintEnable>
-	-->
-
-        <States>
-            <CPUFamily> 6 </CPUFamily>
-            <CPUModel> 170 </CPUModel>
-            <CPUConfig> * </CPUConfig>
+	<States>
+		<CPUFamily> 6 </CPUFamily>
+		<CPUModel> 170 </CPUModel>
+		<CPUConfig> 12P8E2L-28W </CPUConfig>
 		<State>
 			<ID> 1 </ID>
 			<Name> WLT_IDLE </Name>
 			<WLTType> 0 </WLTType>
-			<EPP> 178 </EPP>
-			<EPB> 8 </EPB>			
-			<MinPollInterval>2000</MinPollInterval>
+			<EPP> 255 </EPP>
 			<ITMTState> -1 </ITMTState>
 			<IRQMigrate> -1 </IRQMigrate>
 		</State>
@@ -159,12 +137,7 @@ version:
 			<ID> 2 </ID>
 			<Name> WLT_BATTERY_LIFE </Name>
 			<WLTType> 1 </WLTType>
-			<EPP> 178 </EPP>
-            <!-- <PS>AC</PS> -->
-			<EPB> 6 </EPB>
-			<MinPollInterval>2000</MinPollInterval>
-            <!-- <PS>BAT</PS> -->
-			<!-- <EPB> 8</EPB> -->
+			<EPP> 192 </EPP>
 			<ITMTState> -1 </ITMTState>
 			<IRQMigrate> -1 </IRQMigrate>
 		</State>
@@ -173,11 +146,6 @@ version:
 			<Name> WLT_SUSTAINED </Name>
 			<WLTType> 2 </WLTType>
 			<EPP> 64 </EPP>
-            <!-- <PS>AC</PS> -->
-			<EPB> 6 </EPB>
-			<MinPollInterval>2000</MinPollInterval>
-            <!-- <PS>BAT</PS> -->
-			<!-- <EPB> 8</EPB> -->
 			<ITMTState> -1 </ITMTState>
 			<IRQMigrate> -1 </IRQMigrate>
 		</State>
@@ -186,30 +154,60 @@ version:
 			<Name> WLT_BURSTY </Name>
 			<WLTType> 3 </WLTType>
 			<EPP> 64 </EPP>
-			<EPB> 6 </EPB>
-			<MinPollInterval>2000</MinPollInterval>
 			<ITMTState> -1 </ITMTState>
 			<IRQMigrate> -1 </IRQMigrate>
 		</State>
+	</States>
+
+	<!--
+		Example Utilization based config states applied to
+		4Pcore-8Ecore-2Lcore 15W TDP Meteor Lake platform.
+	-->
+	<States>
+		<CPUFamily> 6 </CPUFamily>
+		<CPUModel> 170 </CPUModel>
+		<CPUConfig> 4P8E2L-15W </CPUConfig>
 		<State>
-			<ID> 5 </ID>
-			<Name> WLT_BATTERY_LIFE_BAT </Name>
-			<WLTType> 4 </WLTType>
-			<EPP> 178 </EPP>
-			<EPB> 8 </EPB>
-			<MinPollInterval>2000</MinPollInterval>			
+			<ID> 1 </ID>
+			<Name> LPM_DEEP </Name>
+			<EntrySystemLoadThres> 2 </EntrySystemLoadThres>
+			<EnterCPULoadThres> 50 </EnterCPULoadThres>
+			<EPP> -1 </EPP>
+			<EPB> -1 </EPB>
 			<ITMTState> -1 </ITMTState>
 			<IRQMigrate> -1 </IRQMigrate>
+			<ActiveCPUs>16,17</ActiveCPUs>
+			<MinPollInterval> 500 </MinPollInterval>
+			<PollIntervalIncrement> 500 </PollIntervalIncrement>
+			<MaxPollInterval> 2000 </MaxPollInterval>
 		</State>
 		<State>
-			<ID> 6 </ID>
-			<Name> WLT_SUSTAINED_BAT </Name>
-			<WLTType> 5 </WLTType>
-			<EPP> 64 </EPP>
-			<EPB> 8 </EPB>			
-			<MinPollInterval>2000</MinPollInterval>
+			<ID> 2 </ID>
+			<Name> LPM_LOW </Name>
+			<EntrySystemLoadThres> 10 </EntrySystemLoadThres>
+			<ExitSystemLoadhysteresis> 3 </ExitSystemLoadhysteresis>
+			<EPP> -1 </EPP>
+			<EPB> -1 </EPB>
 			<ITMTState> -1 </ITMTState>
 			<IRQMigrate> -1 </IRQMigrate>
+			<ActiveCPUs>12,13,14,15</ActiveCPUs>
+			<MinPollInterval> 1000 </MinPollInterval>
+			<PollIntervalIncrement> 1000 </PollIntervalIncrement>
+			<MaxPollInterval> 3000 </MaxPollInterval>
+		</State>
+		<State>
+			<ID> 3 </ID>
+			<Name> FULL_POWER </Name>
+			<EntrySystemLoadThres></EntrySystemLoadThres>
+			<EnterCPULoadThres></EnterCPULoadThres>
+			<EPP> -1 </EPP>
+			<EPB> -1 </EPB>
+			<ITMTState> -1 </ITMTState>
+			<IRQMigrate> -1 </IRQMigrate>
+			<ActiveCPUs>0-17</ActiveCPUs>
+			<MinPollInterval> 500 </MinPollInterval>
+			<PollIntervalIncrement> -1 </PollIntervalIncrement>
+			<MaxPollInterval> 2000 </MaxPollInterval>
 		</State>
 	</States>
 </Configuration>

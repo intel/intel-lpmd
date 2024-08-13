@@ -26,10 +26,8 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include <stdbool.h>
-
+#include "cpu_group.h"
 #include "wlt_proxy_common.h"
-//#include "cpu_group.h"
-//#include "perf_msr.h"
 
 /*
  * spike burst refers to coninous spikes in a series of back to back samples.
@@ -57,12 +55,16 @@
 #define MAX_TRACKED_SPIKE_TIME 1000
 #define MAX_BURST_COUNT 1000
 static int total_spike_time;
-static int burst_count = 0;
+int burst_count = 0;
 static int spike_sec_prev = 0;
 static int spike_rate_total;
 static int spike_rate_samples;
 static int burst_rate_per_min;
 static bool spike_burst_flag = false;
+static float bc_reset_min = 90.0;
+extern int state_demote;
+static int once_flag;
+static int strike_count;
 
 int update_spike_rate_avg(int sr)
 {
@@ -90,8 +92,6 @@ int clear_spike_rate_avg()
  * TODO: The routine does not have support to decrement stale spikes in
  * specific case with continous bursts with gap of less than 1 min.
  */
-static float bc_reset_min = 90.0;
-
 int update_burst_count(int real_spike_burst)
 {
 	float minutes = 1.0;
@@ -109,7 +109,7 @@ int update_burst_count(int real_spike_burst)
 		return 0;
 	}
 
-	if (real_spike_burst /*&& (get_cur_state() <= MDRT4E_MODE)*/) { //todo: error function not found
+	if (real_spike_burst && (get_cur_state() <= MDRT4E_MODE)) { 
 		burst_count++;
 		spike_sec_prev = ts.tv_sec;
 	} else if ((minutes > 1.0) || (burst_count > MAX_BURST_COUNT)) {
@@ -152,8 +152,6 @@ int get_spike_rate()
 	return (spike_pct > 100) ? 100 : spike_pct;
 }
 
-extern int state_demote;
-static int once_flag;
 int add_spike_time(int duration)
 {
 	int spike_rate;
@@ -203,7 +201,6 @@ int add_non_spike_time(int duration)
 	return 1;
 }
 
-static int strike_count;
 int strikeout_once(int n)
 {
 	if (!strike_count)

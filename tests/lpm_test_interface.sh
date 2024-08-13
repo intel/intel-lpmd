@@ -25,6 +25,8 @@ do
 		echo "5 : SUV_MODE Enter"
 		echo "6 : SUV_MODE Exit"
 		echo "7 : Quit"
+		echo "8 : Enable CPU Util based hints"
+		echo "9 : Disable CPU Util based hints"
 	        echo -n " Enter choice: "
 	        read opt_no
 	fi
@@ -60,6 +62,14 @@ do
 	6)
 		echo "6 : SUV_MODE Exit"
 		dbus-send --system --dest=org.freedesktop.intel_lpmd --print-reply /org/freedesktop/intel_lpmd org.freedesktop.intel_lpmd.SUV_MODE_EXIT
+		;;
+	8)
+		echo "8 : Enable CPU Util based hints"
+		dbus-send --system --dest=org.freedesktop.intel_lpmd --print-reply /org/freedesktop/intel_lpmd org.freedesktop.intel_lpmd.ENABLE_SW_PROXY
+		;;
+	9)
+		echo "9 : Disable CPU Util based hints"
+		dbus-send --system --dest=org.freedesktop.intel_lpmd --print-reply /org/freedesktop/intel_lpmd org.freedesktop.intel_lpmd.DISABLE_SW_PROXY
 		;;
 	7)
 		exit 0

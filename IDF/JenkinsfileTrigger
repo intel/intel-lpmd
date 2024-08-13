@@ -1,0 +1,218 @@
+#!groovy
+@Library(['abi', 'idf-enabling']) _
+
+import owm.common.BuildInfo
+Map buildinfo = BuildInfo.instance.data
+
+// Job Trigger Event Variables
+TimerEvent = false
+UserEvent = false
+PushEvent = false
+// Agent Variables
+DefaultMainBranch = "mtl_platform"
+// Container Variables
+PodCloud = "idoc"
+ContainerName = "build-environment"
+ContainerImage = "amr-registry.caas.intel.com/owr/idf2/abi/lnx/ingredient/ubuntu22.04.03/dtp:latest"
+ContainerType = "linux"
+AgentWorkspace = "workspace/DTPWS"
+// Ingredient Feature Variables
+
+pipeline {
+
+    agent none
+
+    triggers {
+        cron( env.BRANCH_NAME.equals('main') ? '00 06 * * *' : '')
+    }
+
+    environment {
+        BuildVersionPrefix = "1.0.00"
+        BuildType = 'eng'
+        BuildQuality = 'bronze'
+        HTTP_PROXY = "http://proxy-dmz.intel.com:912"
+        HTTPS_PROXY = "http://proxy-dmz.intel.com:912"
+        NO_PROXY = "intel.com,.intel.com,10.0.0.0/8,192.168.0.0/16,localhost,127.0.0.0/8,134.134.0.0/16"
+        ABI_CONTAINER = "FALSE"
+        TicGenProjectName = "dynamic-tuning-package-ticgen"
+        ContainerNode = true
+        SkipGitReference = true
+        IngredientPipeline = "DTP/DTP_DownStream"
+    }
+
+    // Parameters for the Jenkins GUI. It is recommended to not change them in the Jenkinsfile unless you are trying to change the Jenkins GUI.
+    // Parameters take +1 cycle to adopt the change. ie If you change a defaultValue below and push, the first run the defaultValue will be the old value.
+    // All subsequent runs will have the new default value.
+    parameters {
+        choice(choices: ['all', 'ubuntu22.04.03', 'ubuntu24.04'/*, 'fedora40'*/], name: 'TriggerPipeline', description: 'Please Select the Choice to Trigger All or Specific Pipelines')
+        booleanParam(name: 'ReleaseBuild', defaultValue: false, description: 'Enable for Release Build trigger')
+        booleanParam(name: 'SecureCoverityScan', defaultValue: false, description: 'Enable to run Secure Coverity Scan')
+        booleanParam(name: 'BinaryScan', defaultValue: false, description: 'Enable to run BDBA and SSCB Scans')
+        booleanParam(name: 'VirusScan', defaultValue: false, description: 'Enable to run Virus Scan')
+        booleanParam(name: 'ArtifactsDeploy', defaultValue: true, description: 'Enable to Deploy to Artifactory')
+        booleanParam(name: 'SdleAutomation', defaultValue: false, description: 'Enable SDLe Automation')
+        booleanParam(name: 'SdleAutomationDryRun', defaultValue: false, description: 'Enable SDLe Automation in DryRun Mode')
+        string(name: 'SdleUrl', defaultValue: '', description: 'Enter SDLe Submission URL e.g. https://sdl-e.app.intel.com/project?id=3e0f5f68-76b9-4129-823d-b68492c70f78')
+        string(name: 'SdleId', defaultValue: '', description: 'Enter SDLe Project ID e.g. 8976')
+        string(name: 'VersionNumber', defaultValue: '', description: 'Use this version number for build (if empty the number will be derived from the Build Version Prefix in the Jenkinsfile)')
+    }
+
+    options {
+        timeout(time: 300, unit: 'MINUTES')
+        timestamps()
+        skipDefaultCheckout true
+        buildDiscarder(logRotator(numToKeepStr: '30', artifactNumToKeepStr: '30'))
+    }
+
+    stages {
+        stage("GetBuildVersion") {
+            steps {
+                script {
+
+                    if (params.VersionNumber) {
+                        env.BuildVersion = params.VersionNumber
+                        (TimerEvent, UserEvent, PushEvent) = [false, true, false]
+                    } else {
+                        (TimerEvent, UserEvent, PushEvent) = GenerateBuildVersion()
+                    }
+                    currentBuild.displayName = env.BuildVersion + "-" + "TRIGGER"
+                    BuildInfo.instance.data["Version"] = env.BuildVersion
+                }
+            }
+        } // end GetBuildVersion stage
+        stage("TriggerIngredientPipelines") {
+            parallel { 
+                stage("DTPUbuntu22.04.03") { 
+                    agent none
+                    when{
+                        beforeAgent true
+                        anyOf {
+                            expression{params.TriggerPipeline == 'ubuntu22.04.03' || params.TriggerPipeline == 'all'}
+                        }
+                    }
+                    environment {
+                        ContainerImage = "amr-registry.caas.intel.com/owr/idf2/abi/lnx/ingredient/ubuntu22.04.03/dtp:latest"
+                        ContainerType = "linux"
+                        IngredientPlatformTarget = "DTP-Ubuntu22.04.03"
+                        CoverityStream = "hepo_pkg_22_04"
+                        BuildConfig = "IDF/BuildConfig.json"
+                        MetadataFile = "IDF/PackageGen.json"
+                        ArtifactPkgName = "HEPO_DTP-ubuntu22.04.03-${env.BuildVersion}-${env.BUILD_ID}"
+                        AppPath = "/*.*deb"
+                    }
+                    steps {
+                        script {
+
+                            TriggerDownstreamJob()
+
+                        }
+                    }
+                } // end DTPUbuntu22.04.03
+                stage("DTPUbuntu24.04") { 
+                    agent none
+                    when{
+                        beforeAgent true
+                        anyOf {
+                            expression{params.TriggerPipeline == 'ubuntu24.04' || params.TriggerPipeline == 'all'}
+                        }
+                    }
+                    environment {
+                        ContainerImage = "amr-registry.caas.intel.com/owr/idf2/abi/lnx/ingredient/ubuntu24.04/dtp:latest"
+                        ContainerType = "linux"
+                        IngredientPlatformTarget = "DTP-Ubuntu24.04"
+                        CoverityStream = "hepo_pkg_24_04"
+                        BuildConfig = "IDF/BuildConfig.json"
+                        MetadataFile = "IDF/PackageGen.json"
+                        ArtifactPkgName = "HEPO_DTP-ubuntu24.04-${env.BuildVersion}-${env.BUILD_ID}"
+                        AppPath = "/*.*deb"
+                    }
+                    steps {
+                        script {
+
+                            TriggerDownstreamJob()
+
+                        }
+                    }
+                } // end DTPUbuntu24.04 
+                /*stage("DTPfedora40") { 
+                    agent none
+                    when{
+                        beforeAgent true
+                        anyOf {
+                            expression{params.TriggerPipeline == 'fedora40' || params.TriggerPipeline == 'all'}
+                        }
+                    }
+                    environment {
+                        ContainerImage = "amr-registry.caas.intel.com/owr/idf2/abi/lnx/ingredient/fedora40/dtp:test"
+                        ContainerType = "linux"
+                        IngredientPlatformTarget = "DTP-fedora40"
+                        CoverityStream = "hepo_pkg_Fedora40"
+                        BuildConfig = "IDF/BuildConfig.json"
+                        MetadataFile = "IDF/.json"
+                        ArtifactPkgName = "DTP-fedora40-${env.BuildVersion}-${env.BUILD_ID}"
+                        AppPath = "*.*"
+                    }
+                    steps {
+                        script {
+
+                            TriggerDownstreamJob()
+
+                        }
+                    }
+                } // end DTPfedora40*/ 
+            } // end parallel
+        } // end of BuildAndScan stage
+    } // end stages
+    post {
+        always {
+            abi_send_email()
+            echo "JOB COMPLETED!!!"
+        }
+        failure {
+            echo "JOB FAILED!!!"
+        }
+        success {
+            echo "JOB PASSED!!!"
+        }
+    }
+} //end pipeline
+void TriggerDownstreamJob() {
+    log.Info("Enter") 
+    echo "Started from the function in jenkins file"
+    echo "Triggering job=${IngredientPipeline}, BranchName=${env.BRANCH_NAME}, VersionNumber=${env.BuildVersion}"
+    def buildJob = build job: "${IngredientPipeline}", parameters: [
+            booleanParam(name: 'ReleaseBuild', value: params.ReleaseBuild),
+            stringParam(name: 'VersionNumber', value: env.BuildVersion),
+            stringParam(name: 'BranchName', value: env.BRANCH_NAME),
+            stringParam(name: 'BuildConfig', value: env.BuildConfig),
+            stringParam(name: 'MetadataFile', value: env.MetadataFile),
+            stringParam(name: 'UpStreamJobBuildId', value: env.BUILD_ID),
+            booleanParam(name: 'SecureCoverityScan', value: params.SecureCoverityScan),
+            booleanParam(name: 'VirusScan', value: params.VirusScan),
+            booleanParam(name: 'BinaryScan', value: params.BinaryScan),
+            booleanParam(name: 'ArtifactsDeploy', value: params.ArtifactsDeploy),
+            booleanParam(name: 'SdleAutomation', value: params.SdleAutomation),
+            booleanParam(name: 'SdleAutomationDryRun', value: params.SdleAutomationDryRun),
+            stringParam(name: 'SdleUrl', value: params.SdleUrl),
+            stringParam(name: 'SdleId', value: params.SdleId),
+            stringParam(name: 'ContainerImage', value: env.ContainerImage),
+            stringParam(name: 'ContainerType', value: env.ContainerType),
+            stringParam(name: 'IngredientPlatformTarget', value: env.IngredientPlatformTarget),
+            stringParam(name: 'CoverityStream', value: env.CoverityStream),
+            stringParam(name: 'ArtifactPkgName', value: env.ArtifactPkgName),
+            booleanParam(name: 'GetUpStreamVersionEvents', value: true),
+            booleanParam(name: 'TimerEvent', value: TimerEvent),
+            booleanParam(name: 'UserEvent', value: UserEvent),
+            booleanParam(name: 'PushEvent', value: PushEvent), 
+            stringParam(name: 'AppPath', value: env.AppPath)
+    ], wait: true, propagate: true
+
+    if (IngredientPlatformTarget) {
+        currentBuild.description += "<p/><a href=\'${buildJob.absoluteUrl}'>${buildJob.projectName}/${buildJob.id} (${IngredientPlatformTarget}-${ContainerType})</a>"
+    } else {
+        currentBuild.description += "<p/><a href=\'${buildJob.absoluteUrl}'>${buildJob.projectName}/${buildJob.id} (${ContainerType})</a>"
+    }
+    echo 'Build: ' + buildJob?.getAbsoluteUrl()
+
+    log.Info("Exit")
+}

@@ -35,7 +35,6 @@
 #include <string.h>
 #include <signal.h>
 #include <poll.h>
-#include <cpuid.h>
 
 #include "config.h"
 #include "thermal.h"
@@ -95,7 +94,7 @@ static int dummy_printf(const char *__restrict __format, ...)
 #define INTEL_LPMD_SERVICE_INTERFACE	"org.freedesktop.intel_lpmd"
 
 typedef enum {
-	TERMINATE, LPM_FORCE_ON, LPM_FORCE_OFF, LPM_AUTO, SUV_MODE_ENTER, SUV_MODE_EXIT, HFI_EVENT,
+	TERMINATE, LPM_FORCE_ON, LPM_FORCE_OFF, LPM_AUTO, SUV_MODE_ENTER, SUV_MODE_EXIT, HFI_EVENT,ENABLE_SW_PROXY, DISABLE_SW_PROXY
 } message_name_t;
 
 #define MAX_MSG_SIZE		512
@@ -195,6 +194,9 @@ enum lpm_command {
 	LPM_CMD_MAX,
 };
 
+//	ENABLE_SW_PROXY,
+//	DISABLE_SW_PROXY,
+
 enum cpumask_idx {
 	CPUMASK_LPM_DEFAULT, CPUMASK_ONLINE, CPUMASK_HFI, CPUMASK_HFI_BANNED, CPUMASK_HFI_SUV, /* HFI Survivability mode */
 	CPUMASK_HFI_LAST, CPUMASK_UTIL, CPUMASK_MAX,
@@ -284,6 +286,7 @@ int check_cpu_capability(lpmd_config_t *lpmd_config);
 int init_cpu(char *cmd_cpus, enum lpm_cpu_process_mode mode, int lp_mode_epp);
 int process_cpus(int enter, enum lpm_cpu_process_mode mode);
 int parse_cpu_str(char *buf, enum cpumask_idx idx);
+void uninit_cpu(); 
 
 /* cpu.c: helpers */
 int is_cpu_online(int cpu);
@@ -303,6 +306,7 @@ void copy_cpu_mask_exclude(enum cpumask_idx source, enum cpumask_idx dest, enum 
 cpu_set_t *get_cpumask(enum cpumask_idx source);
 int cpumask_to_str(cpu_set_t *cpumask, char *buf, int size);
 int cpumask_to_hexstr(cpu_set_t *cpumask, char *buf, int size);
+int cpumask_to_str_reverse(cpu_set_t *mask, char *buf, int size);
 
 int is_equal(enum cpumask_idx idx1, enum cpumask_idx idx2);
 
@@ -345,5 +349,7 @@ char* time_delta(void);
 int wlt_proxy_init(lpmd_config_t *lpmd_config);
 void wlt_proxy_action_loop(void);
 void wlt_proxy_uninit(void);
+void enable_sw_proxy(void);
+void disable_sw_proxy(void);
 
 #endif

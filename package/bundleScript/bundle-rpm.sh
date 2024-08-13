@@ -1,6 +1,9 @@
 #!/bin/bash
 # Script to generate rpm deployment package
 
+#Copyright (C) 2024 Intel Corporation
+#SPDX-License-Identifier: GPL-3.0-only
+
 set -e
 
 RED='\033[0;31m'

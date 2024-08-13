@@ -1,0 +1,345 @@
+#!groovy
+@Library(['abi', 'idf-enabling']) _
+
+import owm.common.BuildInfo
+Map buildinfo = BuildInfo.instance.data
+
+// Job Trigger Event Variables
+TimerEvent = false
+UserEvent = false
+PushEvent = false
+// Agent Variables
+DefaultMainBranch = "mtl_platform"
+// Container Variables
+PodCloud = "idoc"
+ContainerName = "build-environment"
+ContainerType = "linux"
+AgentWorkspace = "workspace/DTPWS"
+// Ingredient Feature Variables
+
+pipeline {
+
+    agent none
+
+    triggers {
+        cron( env.BRANCH_NAME.equals('main') ? '00 06 * * *' : '')
+    }
+
+    // Parameters for the Jenkins GUI. It is recommended to not change them in the Jenkinsfile unless you are trying to change the Jenkins GUI.
+    // Parameters take +1 cycle to adopt the change. ie If you change a defaultValue below and push, the first run the defaultValue will be the old value.
+    // All subsequent runs will have the new default value.
+    parameters {
+        string(name: 'BranchName', defaultValue: "", description: 'Input BranchName for the Repository when executed as Single Branch Pipeline')
+        string(name: 'VersionNumber', defaultValue: '', description: 'Use this version number for build (if empty the number will be derived from the Build Version Prefix in the Jenkinsfile)') 
+        booleanParam(name: 'ReleaseBuild', defaultValue: false, description: 'Enable for Release Build trigger')
+        booleanParam(name: 'SecureCoverityScan', defaultValue: false, description: 'Enable to run Secure Coverity Scan')
+        booleanParam(name: 'BinaryScan', defaultValue: false, description: 'Enable to run BDBA and SSCB Scans')
+        booleanParam(name: 'VirusScan', defaultValue: false, description: 'Enable to run Virus Scan')
+        booleanParam(name: 'ArtifactsDeploy', defaultValue: true, description: 'Enable to Deploy to Artifactory')
+        booleanParam(name: 'SdleAutomation', defaultValue: false, description: 'Enable SDLe Automation')
+        booleanParam(name: 'SdleAutomationDryRun', defaultValue: false, description: 'Enable SDLe Automation in DryRun Mode')
+        booleanParam(name: 'TimerEvent', defaultValue: false, description: 'Timer Event From UpStream Job')
+        booleanParam(name: 'UserEvent', defaultValue: false, description: 'User Event From UpStream Job')
+        booleanParam(name: 'PushEvent', defaultValue: false, description: 'Push Event From UpStream Job')
+        string(name: 'SdleUrl', defaultValue: '', description: 'Enter SDLe Submission URL e.g. https://sdl-e.app.intel.com/project?id=3e0f5f68-76b9-4129-823d-b68492c70f78')
+        string(name: 'SdleId', defaultValue: '', description: 'Enter SDLe Project ID e.g. 8976')
+        string(name: 'AppPath', defaultValue: '', description: 'Added the default AppPath')
+        string(name: 'ContainerImage', defaultValue: 'amr-registry.caas.intel.com/owr/idf2/abi/lnx/ingredient/ubuntu22.04.03/dtp:latest', description: 'Enter Container Image to execute the Pipeline')
+        string(name: 'ContainerType', defaultValue: 'linux', description: 'Enter Container type to execute the Pipeline')
+        string(name: 'IngredientPlatformTarget', defaultValue: 'ubuntu', description: 'Added the formate target)')
+        string(name: 'CoverityStream', defaultValue: '', description: 'Added the CoverityStream value)') 
+        string(name:'UpStreamJobBuildId', defaultValue: '', description: 'UpStreamJobBuildId set by the upstream project')
+        booleanParam(name: 'GetUpStreamVersionEvents', defaultValue: false, description: 'Get Event Details from UpStream Job')
+        string(name:'BuildConfig', defaultValue: '', description: 'BuildConfig set by the upstream project')
+        string(name:'MetadataFile', defaultValue: '', description: 'MetadataFile set by the upstream project')
+        string(name:'ArtifactPkgName', defaultValue: '', description: 'ArtifactPkgName set by the upstream project')
+    }
+
+    environment {
+        BuildVersionPrefix = "1.0.00"
+        BuildType = 'eng'
+        BuildQuality = 'bronze'
+        HTTP_PROXY = "http://proxy-dmz.intel.com:912"
+        HTTPS_PROXY = "http://proxy-dmz.intel.com:912"
+        NO_PROXY = "intel.com,.intel.com,10.0.0.0/8,192.168.0.0/16,localhost,127.0.0.0/8,134.134.0.0/16"
+        ABI_CONTAINER = "FALSE"
+        TicGenProjectName = "dynamic-tuning-package-ticgen"
+        IngredientName = "DTP"
+        IngredientPath = "DTP"
+        CheckoutPath = "DTP"
+        BuildConfig = "${params.BuildConfig}"
+        CoverityStream = "${params.CoverityStream}"
+        COVERITY_UNSUPPORTED = 1
+        IngredientOneBOMPath = "IDF/OneBOM"
+        IngredientOneBOMWorkSheetName = "BOM - Bill of Materials"
+        OneBOMProjectName = "DTP"
+        IgnoreOneBOMComponent = "DTP"
+        ContainerNode = true
+        SkipGitReference = true
+        Compilers = "gcc"
+    }
+    
+    options {
+        timeout(time: 300, unit: 'MINUTES')
+        timestamps()
+        skipDefaultCheckout true
+        buildDiscarder(logRotator(numToKeepStr: '30', artifactNumToKeepStr: '30'))
+    }
+
+    stages {
+        stage("GetBuildVersion") {
+            steps {
+                script {
+                    echo "Build ${params.IngredientPlatformTarget}"
+
+                    if (params.GetUpStreamVersionEvents) {
+                        (TimerEvent, UserEvent, PushEvent) = GetUpStreamVersionEvents()
+                    } else {
+                        (TimerEvent, UserEvent, PushEvent) = GenerateBuildVersion()
+                    }
+                    BuildInfo.instance.data["Version"] = env.BuildVersion
+
+                    currentBuild.displayName = params.IngredientPlatformTarget + "-" + env.BuildVersion
+                }
+            }
+        } // end GetBuildVersion stage
+        stage("Init") { 
+            agent {
+                kubernetes {
+                    cloud PodCloud
+                    defaultContainer ContainerName
+                    label "${env.STAGE_NAME}-${UUID.randomUUID().toString()}"
+                    customWorkspace AgentWorkspace
+                    yaml GetSecurePodDefinitionYaml(ContainerType: ContainerType, ContainerImage: ContainerImage, ContainerName: ContainerName)
+                }
+            }
+            steps {
+                script {
+                    Initialize()
+
+                    if ((env.BRANCH_NAME == "${DefaultMainBranch}" && params.ReleaseBuild == true) || (env.BRANCH_NAME == "${DefaultMainBranch}" && TimerEvent == true)) {
+                        echo "Init Stage: Release/Timer Run"
+                    } else {
+                        echo "Init Stage: Manual/Push Run"
+                    }
+                }
+            }
+        } // end Init stage
+        stage("BuildAndScan") {
+            parallel { 
+                stage("Build") { 
+                    agent {
+                        kubernetes {
+                            cloud PodCloud
+                            defaultContainer ContainerName
+                            label "${env.STAGE_NAME}-${UUID.randomUUID().toString()}"
+                            customWorkspace AgentWorkspace
+                            yaml GetSecurePodDefinitionYaml(ContainerType: ContainerType, ContainerImage: ContainerImage, ContainerName: ContainerName)
+                        }
+                    }
+                    steps {
+                        script {
+                            echo "Build ${params.IngredientPlatformTarget}"
+                            BuildIngredient(MetadataFile: MetadataFile)
+                        }
+                    }
+                } // end DTP ScriptApp stage
+                stage("SecureCoverityScan") {
+                    when {
+                        beforeAgent true
+                        anyOf {
+                            expression{(env.BRANCH_NAME == "${DefaultMainBranch}" && params.ReleaseBuild == true)}
+                            expression{(params.SecureCoverityScan == true)}
+                            expression{env.BRANCH_NAME == "${DefaultMainBranch}" && TimerEvent == true}
+                        }
+                    } 
+                    agent {
+                        kubernetes {
+                            cloud PodCloud
+                            defaultContainer ContainerName
+                            label "${env.STAGE_NAME}-${UUID.randomUUID().toString()}"
+                            customWorkspace AgentWorkspace
+                            yaml GetSecurePodDefinitionYaml(ContainerType: ContainerType, ContainerImage: ContainerImage, ContainerName: ContainerName)
+                        }
+                    }
+                    steps {
+                        script {  
+                                CoverityScan(DefaultCompilerTemplate: false)
+                        }
+                    }
+                } //end SecureCoverityScan Stage
+            } // end parallel
+        } // end of BuildAndScan stage
+        stage("BinaryScans") {
+            parallel {
+                stage("VirusScan") {
+                    when {
+                        beforeAgent true
+                        anyOf {
+                            expression{(env.BRANCH_NAME == "${DefaultMainBranch}" && params.ReleaseBuild == true)}
+                            expression{(params.VirusScan == true)}
+                            expression{env.BRANCH_NAME == "${DefaultMainBranch}" && TimerEvent == true}
+                        }
+                    }
+                    agent {
+                        kubernetes {
+                            cloud PodCloud
+                            defaultContainer ContainerName
+                            label "${env.STAGE_NAME}-${UUID.randomUUID().toString()}"
+                            customWorkspace AgentWorkspace
+                            yaml GetSecurePodDefinitionYaml(ContainerType: ContainerType, ContainerImage: ContainerImage, ContainerName: ContainerName)
+                        }
+                    }
+                    steps {
+                        script {
+                            VirusBinaryScan()
+                        }
+                    }
+                } //Virus Scan
+                stage("BDBAScan") {
+                    when {
+                        beforeAgent true
+                        anyOf {
+                            expression{(env.BRANCH_NAME == "${DefaultMainBranch}" && params.ReleaseBuild == true)}
+                            expression{(params.BinaryScan == true)}
+                            expression{env.BRANCH_NAME == "${DefaultMainBranch}" && TimerEvent == true}
+                        }
+                    }
+                    agent {
+                        kubernetes {
+                            cloud PodCloud
+                            defaultContainer ContainerName
+                            label "${env.STAGE_NAME}-${UUID.randomUUID().toString()}"
+                            customWorkspace AgentWorkspace
+                            yaml GetSecurePodDefinitionYaml(ContainerType: ContainerType, ContainerImage: ContainerImage, ContainerName: ContainerName)
+                        }
+                    }
+                    steps {
+                        script {
+                            BdbaBinaryScan(ArtifactPkgName: params.ArtifactPkgName)
+                        }
+                    }
+                } // end BDBAScan
+                stage("SSCBScan") {
+                    when {
+                        beforeAgent true
+                        anyOf {
+                            expression{(env.BRANCH_NAME == "${DefaultMainBranch}" && params.ReleaseBuild == true)}
+                            expression{(params.BinaryScan == true)}
+                            expression{env.BRANCH_NAME == "${DefaultMainBranch}" && TimerEvent == true}
+                        }
+                    }
+                    agent {
+                        kubernetes {
+                            cloud PodCloud
+                            defaultContainer ContainerName
+                            label "${env.STAGE_NAME}-${UUID.randomUUID().toString()}"
+                            customWorkspace AgentWorkspace
+                            yaml GetSecurePodDefinitionYaml(ContainerType: ContainerType, ContainerImage: ContainerImage, ContainerName: ContainerName)
+                        }
+                    }
+                    steps {
+                        script {
+                            SscbBinaryScan()
+                        }
+                    }
+                } // end SSCBScan
+            } // end of parallel
+        } // end BinaryScans
+        stage("ArtifactGenDeploy") {
+            parallel { 
+                stage("ArtifactGen") { 
+                    agent {
+                        kubernetes {
+                            cloud PodCloud
+                            defaultContainer ContainerName
+                            label "${env.STAGE_NAME}-${UUID.randomUUID().toString()}"
+                            customWorkspace AgentWorkspace
+                            yaml GetSecurePodDefinitionYaml(ContainerType: ContainerType, ContainerImage: ContainerImage, ContainerName: ContainerName)
+                        }
+                    }
+                    steps {
+                        script {
+                           if ((env.BRANCH_NAME == "${DefaultMainBranch}" && params.ReleaseBuild == true) || (env.BRANCH_NAME == "${DefaultMainBranch}" && TimerEvent == true)) {
+                                ArtifactGenDeploy(ArtifactsDeploy: true,
+                                                  DeployCustomArtifact: true,
+                                                  ArtifactPkgName: params.ArtifactPkgName,
+                                                  SkipBinaryScans: true,
+                                                  SecureCoverityScan: true,
+                                                  VirusScan: true,
+                                                  BinaryScan: true,
+                                                  Sdle: true,)
+                            } else {
+                                ArtifactGenDeploy(ArtifactsDeploy: params.ArtifactsDeploy,
+                                                  DeployCustomArtifact: true,
+                                                  ArtifactPkgName: params.ArtifactPkgName,
+                                                  SkipBinaryScans: true,
+                                                  SecureCoverityScan: params.SecureCoverityScan,
+                                                  VirusScan: params.VirusScan,
+                                                  BinaryScan: params.BinaryScan,
+                                                  Sdle: params.SdleAutomation)
+                            }
+                        }
+                    }
+                } //end ArtifactGen Stage
+            } // end parallel
+        } // end of ArtifactGenAndDeploy stage
+        stage("SDLeOneBOMAutomation") {
+            parallel { 
+                stage("SDLeAutomation") {
+                    when {
+                        beforeAgent true
+                        expression{(params.SdleAutomation == true || params.SdleAutomationDryRun == true) && env.BRANCH_NAME == "${DefaultMainBranch}" && params.ReleaseBuild == true}
+                    } 
+                    agent {
+                        kubernetes {
+                            cloud PodCloud
+                            defaultContainer ContainerName
+                            label "${env.STAGE_NAME}-${UUID.randomUUID().toString()}"
+                            customWorkspace AgentWorkspace
+                            yaml GetSecurePodDefinitionYaml(ContainerType: ContainerType, ContainerImage: ContainerImage, ContainerName: ContainerName)
+                        }
+                    }
+                    steps {
+                        script {
+                            SdleAutomation()
+                        }
+                    }
+                } // end SDLeAutomation
+                stage("AutoBOM") {
+                    when{
+                        beforeAgent true
+                        expression{env.BRANCH_NAME == "${DefaultMainBranch}" && params.ReleaseBuild == true}
+                    } 
+                    agent {
+                        kubernetes {
+                            cloud PodCloud
+                            defaultContainer ContainerName
+                            label "${env.STAGE_NAME}-${UUID.randomUUID().toString()}"
+                            customWorkspace AgentWorkspace
+                            yaml GetSecurePodDefinitionYaml(ContainerType: ContainerType, ContainerImage: ContainerImage, ContainerName: ContainerName)
+                        }
+                    }
+                    steps {
+                        script {
+                            if (env.IngredientOneBOMPath && env.IngredientOneBOMWorkSheetName && env.OneBOMProjectName) {
+                                AutoBOM()
+                            }
+                        }
+                    }
+                } // end AutoBOM
+            } // end parallel
+        } // end of SDLeOneBOMAutomation
+    } // end stages
+    post {
+        always {
+            echo "JOB COMPLETED!!!"
+        }
+        failure {
+            echo "JOB FAILED!!!"
+        }
+        success {
+            echo "JOB PASSED!!!"
+        }
+    }
+} //end pipeline

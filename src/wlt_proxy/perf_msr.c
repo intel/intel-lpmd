@@ -16,15 +16,18 @@
  */
 
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-
+#include "wlt_proxy_common.h"
 #include "perf_msr.h"
+#include "lpmd.h"
 
 int cpu_hfm_mhz;
+
 int initialize_dev_msr(int c)
 {
 	int fd;
@@ -49,7 +52,7 @@ int initialize_cpu_hfm_mhz(int fd)
 		/* most x86 platform have BaseCLK as 100MHz */
 		cpu_hfm_mhz = ((msr_val >> 8) & 0xffUll) * 100;
 	} else {
-		printf("***can't read MSR_PLATFORM_INFO***\n");
+		lpmd_log_info("***can't read MSR_PLATFORM_INFO***\n");
 		return -1;
 	}
 
@@ -59,7 +62,7 @@ int initialize_cpu_hfm_mhz(int fd)
 int read_msr(int fd, uint32_t reg, uint64_t * data)
 {
 	if (pread(fd, data, sizeof(*data), reg) != sizeof(*data)) {
-		printf("rdmsr fail on fd:%d\n", fd);
+		lpmd_log_info("read_msr fail on fd:%d\n", fd);
 		return -1;
 	}
 	return 0;
@@ -97,9 +100,16 @@ int init_delta_vars(int n)
 	last_pperf = malloc(sizeof(uint64_t) * n);
 	last_tsc = malloc(sizeof(uint64_t) * n);
 	if (!last_aperf || !last_mperf || !last_mperf || !last_tsc) {
-		printf("malloc failure perf vars\n");
+		lpmd_log_info("malloc failure perf vars\n");
 		return 0;
 	}
+	
+    for (size_t i = 0; i < n; ++i) {
+        memset( &last_aperf[i], 0, sizeof(uint64_t));
+        memset( &last_mperf[i], 0, sizeof(uint64_t));
+        memset( &last_pperf[i], 0, sizeof(uint64_t));
+        memset( &last_tsc[i], 0, sizeof(uint64_t));                        
+    }		
 	return 1;
 }
 

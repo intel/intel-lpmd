@@ -3,6 +3,7 @@
 #Copyright (C) 2024 Intel Corporation
 #SPDX-License-Identifier: GPL-2.0-or-later
 
+#Applicable for powersave governer. /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor
 #EPP_PATH "/sys/devices/system/cpu/cpu$i/cpufreq/energy_performance_preference"
 #EPB_PATH "/sys/devices/system/cpu/cpu$i/power/energy_perf_bias"
 

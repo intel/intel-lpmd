@@ -48,9 +48,9 @@
 #include <netlink/genl/family.h>
 #include <netlink/genl/ctrl.h>
 #include <systemd/sd-bus.h>
-
+#include <cpuid.h>
 #include "lpmd.h"
-
+#define DISABLE_SOC_ENFORCEMENT 0
 static int topo_max_cpus;
 static int max_online_cpu;
 static size_t size_cpumask;
@@ -154,6 +154,7 @@ int cpumask_to_str(cpu_set_t *mask, char *buf, int length)
 	int i;
 	int offset = 0;
 
+	buf[0] = '\0';
 	for (i = 0; i < topo_max_cpus; i++) {
 		if (!CPU_ISSET_S(i, size_cpumask, mask))
 			continue;
@@ -277,6 +278,18 @@ static char* get_cpus_hexstr_reverse(enum cpumask_idx idx)
 	CPU_FREE(mask);
 
 	return cpumasks[idx].hexstr_reverse;
+}
+
+int cpumask_to_str_reverse(cpu_set_t *mask, char *buf, int size)
+{
+	cpu_set_t *tmp;
+
+	alloc_cpu_set (&tmp);
+	CPU_XOR_S(size_cpumask, tmp, mask, cpumasks[CPUMASK_ONLINE].mask);
+	cpumask_to_str (tmp, buf, size);
+	CPU_FREE(tmp);
+
+	return 0;
 }
 
 static char* get_cpus_str_reverse(enum cpumask_idx idx)
@@ -551,7 +564,6 @@ end:
 int set_epp(char *path, int val, char *str)
 {
 	FILE *filep;
-	int epp;
 	int ret;
 
 	filep = fopen (path, "r+");
@@ -606,7 +618,7 @@ int init_epp_epb(void)
 	int ret;
 	char path[MAX_STR_LENGTH];
 
-	saved_cpu_info = malloc (sizeof(struct cpu_info) * max_cpus);
+	saved_cpu_info = calloc (sizeof(struct cpu_info), max_cpus);
 
 	for (c = 0; c < max_cpus; c++) {
 		saved_cpu_info[c].epp_str[0] = '\0';
@@ -875,7 +887,11 @@ static int detect_supported_cpu(lpmd_config_t *lpmd_config)
 	/* Unsupported model */
         if (!id_table[val].family || max_level < 0x1a) {
 		lpmd_log_info("Unsupported platform\n");
+#ifdef DISABLE_SOC_ENFORCEMENT
+		lpmd_log_info("valgrind build only, continue\n");
+#else		
 		return -1;
+#endif		
         }
 
 	lpmd_config->cpu_family = family;
@@ -1008,7 +1024,7 @@ static int detect_lpm_cpus_cmd(char *cmd)
  */
 static int is_cpu_atom(int cpu)
 {
-	unsigned int eax, ebx, ecx, edx, subleaf;
+	unsigned int eax, ebx, ecx, edx;
 	unsigned int type;
 
 	if (cpu_migrate(cpu) < 0) {
@@ -1132,7 +1148,6 @@ static int detect_cpu_lcore(int cpu)
  */
 static int detect_lpm_cpus_lcore(void)
 {
-	char path[MAX_STR_LENGTH];
 	int i;
 
 	for (i = 0; i < topo_max_cpus; i++) {
@@ -1744,7 +1759,7 @@ static int get_tdp(void)
 	DIR *dir;
 	struct dirent *entry;
 	int ret;
-	char path[MAX_STR_LENGTH];
+	char path[MAX_STR_LENGTH * 2];
 	char str[MAX_STR_LENGTH];
 	char *pos;
 	int tdp = 0;
@@ -1762,7 +1777,7 @@ static int get_tdp(void)
 		if (strncmp(entry->d_name, "intel-rapl", strlen("intel-rapl")))
 			continue;
 
-		snprintf (path, MAX_STR_LENGTH, "%s/%s/name", PATH_RAPL, entry->d_name);
+		snprintf (path, MAX_STR_LENGTH * 2, "%s/%s/name", PATH_RAPL, entry->d_name);
 		filep = fopen (path, "r");
 		if (!filep)
 			continue;
@@ -1776,7 +1791,7 @@ static int get_tdp(void)
 		if (strncmp(str, "package", strlen("package")))
 			continue;
 
-		snprintf (path, MAX_STR_LENGTH, "%s/%s/constraint_0_max_power_uw", PATH_RAPL, entry->d_name);
+		snprintf (path, MAX_STR_LENGTH * 2, "%s/%s/constraint_0_max_power_uw", PATH_RAPL, entry->d_name);
 		filep = fopen (path, "r");
 		if (!filep)
 			continue;
@@ -1811,7 +1826,11 @@ int check_cpu_capability(lpmd_config_t *lpmd_config)
 	ret = detect_supported_cpu(lpmd_config);
 	if (ret) {
 		lpmd_log_info("Unsupported CPU type\n");
+#ifdef DISABLE_SOC_ENFORCEMENT
+		lpmd_log_info("valgrind build only, continue\n");
+#else
 		return ret;
+#endif		
 	}
 
 	ret = set_max_cpu_num ();
@@ -1822,8 +1841,7 @@ int check_cpu_capability(lpmd_config_t *lpmd_config)
 	pcores = ecores = lcores = 0;
 
 	for (i = 0; i < topo_max_cpus; i++) {
-		unsigned int online;
-
+		unsigned int online = 0;
 		snprintf (path, sizeof(path), "/sys/devices/system/cpu/cpu%d/online", i);
 		filep = fopen (path, "r");
 		if (filep) {
@@ -1857,6 +1875,13 @@ int check_cpu_capability(lpmd_config_t *lpmd_config)
 	return 0;
 }
 
+void uninit_cpu(){
+    int max_cpus = get_max_cpus ();
+    if (saved_cpu_info){
+        free(saved_cpu_info); 
+    }        
+}
+
 int init_cpu(char *cmd_cpus, enum lpm_cpu_process_mode mode, int epp)
 {
 	int ret;
@@ -1883,7 +1908,7 @@ int process_cpus(int enter, enum lpm_cpu_process_mode mode)
 	process_epp_epb ();
 
 	if (lpm_cpus_cur == CPUMASK_MAX) {
-		lpmd_log_info ("Ignore Task migration\n");
+		lpmd_log_debug ("Ignore Task migration\n");
 		return 0;
 	}
 

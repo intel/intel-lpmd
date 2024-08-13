@@ -1,6 +1,9 @@
 #!/bin/bash
 # purpose: script to setup build environment
 
+#Copyright (C) 2024 Intel Corporation
+#SPDX-License-Identifier: GPL-3.0-only
+
 #sudo yum install gcc gcc-c++ kernel-devel make
 #sudo dnf group install "Development Tools"
 

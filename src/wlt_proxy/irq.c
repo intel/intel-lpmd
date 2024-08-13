@@ -19,13 +19,14 @@
 #include <ctype.h>
 
 #include "wlt_proxy_common.h"
-//#include "wlt_proxy.h"
 #include "cpu_group.h"
 
 /* 
  * XXX: MAX_IRQS may need to be bumped up
  */
 #define MAX_IRQS_PROXY	256
+#define MAX_IRQ_STR_LENGTH 127
+#define MASK_LEN (32)
 
 struct each_irq {
 	int irq_num;
@@ -44,7 +45,6 @@ struct info_irqs_proxy info_irqs_proxy;
 struct info_irqs_proxy *p_info = &info_irqs_proxy;
 
 /* Interrupt Management */
-
 int restore_irq_mask(void)
 {
 	int i;
@@ -63,8 +63,6 @@ int restore_irq_mask(void)
 	memset(p_info, 0, sizeof(*p_info));
 	return 0;
 }
-
-#define MAX_IRQ_STR_LENGTH 127
 
 static int save_irq_mask(void)
 {
@@ -103,7 +101,6 @@ static int save_irq_mask(void)
 	return 0;
 }
 
-#define MASK_LEN (32)
 int update_irqs()
 {
 	int i;
@@ -123,6 +120,6 @@ int init_irq_proxy()
 {
 	log_debug("Saving original IRQs ...\n");
 	save_irq_mask();
-
+	
 	return 0;
 }

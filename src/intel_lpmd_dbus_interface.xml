@@ -24,6 +24,12 @@
 
 		<method name="SUV_MODE_EXIT">
 		</method>
+		
+		<method name="ENABLE_SW_PROXY">
+		</method>
+		
+		<method name="DISABLE_SW_PROXY">
+		</method>
 
 	</interface>
 </node>
