@@ -33,9 +33,10 @@ BASEDIR="$( cd "$( dirname "$0" )" && pwd )"
 echo $BASEDIR
 
 #create working dir.
-WORKING_FOLDER="$BASEDIR/flow-tool-src"
+WORKING_FOLDER="$BASEDIR/src_tmp"
 mkdir -p $WORKING_FOLDER
 
+#step: sync source
 pushd $WORKING_FOLDER
 git clone https://github.com/intel/intel-lpmd
 #extract the repo name
@@ -48,23 +49,38 @@ PROJECT_FOLDER=$WORKING_FOLDER/intel-lpmd
 
 pushd $PROJECT_FOLDER
 
+#step: setup env & build
 echo "set up development environment & build ..."
-BUILDSCRIPT_PATH=$WORKING_FOLDER/intel-lpmd/package/buildScript/
+BUILDSCRIPT_PATH=$PROJECT_FOLDER/package/buildScript/
 pushd $BUILDSCRIPT_PATH #fix otherwise it messes with basedir in other script.
-sed -i -e 's/\r$//' *sh
+dos2unix *.sh
 chmod +x *.sh
 source build.sh || print_error
 popd #BUILDSCRIPT_PATH
 
+[ ! -d "$BUILDSCRIPT_PATH/out" ] && echo "Directory $BUILDSCRIPT_PATH/out DOES NOT exists."
+
+#step: bundle tar
+echo "bundle binaries ..."
+BUNDLESCRIPT_PATH=$PROJECT_FOLDER/package/bundleScript/
+pushd $BUNDLESCRIPT_PATH
+dos2unix *.sh
+chmod +x *.sh
+source bundle-zip_tar.sh || print_error
+popd #BUNDLESCRIPT_PATH
+
+#step: Deploy binaries
+echo "deploy binaries ..."
+DEPLOYSCRIPT_PATH=$WORKING_FOLDER/intel-lpmd/package/bundleScript/
+pushd $DEPLOYSCRIPT_PATH
+dos2unix *.sh
+chmod +x *.sh
+source deploy.sh || print_error
+popd #DEPLOYSCRIPT_PATH
+
 popd #PROJECT_FOLDER
 
 popd #WORKING_FOLDER
-
-[ ! -d "$BUILDSCRIPT_PATH/out" ] && echo "Directory $BUILDSCRIPT_PATH/out DOES NOT exists."
-
-INSTALL_PATH=/usr/local/bin/intel-lpmd
-sudo mkdir -p $INSTALL_PATH
-sudo cp -r $BUILDSCRIPT_PATH/out/* $INSTALL_PATH
 
 #delete working dir
 rm -fr $WORKING_FOLDER
