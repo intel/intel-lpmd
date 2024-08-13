@@ -209,15 +209,18 @@ int is_state_valid(enum lp_state_idx);
 /*mapping the state to wlt proxy workload type*/
 int getStateMapping(int state); 
 
+//#ifdef __REMOVE__
 /* irq.c */
 int init_irq(void);
 int process_irqs_proxy(int);//defined in lpmd
 int dump_interrupts(int);
 int restore_irq_mask(void);
 int update_irqs(void);
+//#endif
 
 /* util.c */
 int util_init_proxy(void);//defined in lpmd_util
+void util_uninit_proxy(void);
 void set_eco_timeout(int);
 int get_msr_fd(int);
 int perf_stat_init(void);
@@ -264,18 +267,20 @@ char *get_mode_name(enum lp_state_idx);
 int get_mode_cpu_count(enum lp_state_idx);
 int get_mode_max(void);
 
+#ifdef __REMOVE__
 /* slider */
 int slider_monitor(void);
 int set_slider(int s);
 int get_slider(void);
+#endif
 
 /* state machine */
 int state_machine_power(int);
 int state_machine_perf(int);
 int state_machine_auto(int);
+int state_machine_auto1();
 
 /* spike_mgmt */
-int burst_count;
 int add_spike_time(int);
 int add_non_spike_time(int);
 int get_spike_rate(void);

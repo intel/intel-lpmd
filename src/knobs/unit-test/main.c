@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <time.h>
-#include "../weights_common.h"
+#include "../knobs_common.h"
 
 int main() {
 	

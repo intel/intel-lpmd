@@ -29,7 +29,7 @@ typedef enum {
 	WLT_INVALID,
 } wlt_type_t;
 
-void set_workload_hint(int type); 
+void set_workload_hint(int type);
 
 void wlt_proxy_action_loop(void);
 

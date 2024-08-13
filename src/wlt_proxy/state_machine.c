@@ -47,6 +47,10 @@ int state_machine_power(int present_state)
 }
 #endif
 
+int state_machine_auto1() {
+ 	return state_machine_auto(get_cur_state());
+}
+
 int state_machine_auto(int present_state)
 {
 	//this used to be part of function util_main

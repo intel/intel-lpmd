@@ -41,6 +41,8 @@
 /* System should quit Low Power Mode when it is overloaded */
 #define PATH_PROC_STAT "/proc/stat"
 
+extern int next_proxy_poll; 
+
 static lpmd_config_state_t *current_state;
 
 void reset_config_state(void)
@@ -395,8 +397,6 @@ static int enter_state(lpmd_config_state_t *state, int bsys, int bcpu)
 
 	return interval;
 }
-
-extern int next_proxy_poll; 
 
 static int process_next_config_state(lpmd_config_t *config, int wlt_index)
 {

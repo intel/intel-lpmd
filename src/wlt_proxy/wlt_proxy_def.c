@@ -39,14 +39,8 @@ int action_interval = DEFAULT_ACTION_INTERVAL;
 #endif
 
 static int tdp_mw;
-static int burst_count;
 static int burst_len;
 static bool proxy_initialized = false;
-<<<<<<< HEAD
-
-=======
-int action_interval = DEFAULT_ACTION_INTERVAL;
->>>>>>> 8bdd374d0b94e358ae5f751f6073b81a06042633
 static lpmd_config_t *lpmd_config;
 extern int next_proxy_poll;
 
@@ -75,8 +69,8 @@ static int cpu_usage_count;
 
 static unsigned long prev_idle, prev_total;
 
-
 #define PATH_PROC_STAT "/proc/stat"
+
 #endif
 
 static int sysfs_read(const char *path, char *buf, int len) {
@@ -218,6 +212,7 @@ static void action_loop(int power_mw, int tdp_mw) {
 
 /* Called at the configured interval to take action */
 void wlt_proxy_action_loop(void) {
+    
 	static int last_energy;
 	static int burst_seen;
 	int energy, power_mw;
@@ -255,7 +250,8 @@ void wlt_proxy_action_loop(void) {
 	//action_loop(power_mw, tdp_mw);
 	if (proxy_initialized) {
 		lpmd_log_debug("\n\nwlt_proxy_action_loop, proxy initialzied\n");
-		state_machine_auto(get_cur_state());
+		//state_machine_auto(get_cur_state());
+        state_machine_auto1();
 		lpmd_log_debug("wlt_proxy_action_loop, handled states\n");		
 	}
 }
@@ -281,8 +277,7 @@ static int get_tdp() {
 /* Return non zero if the proxy is not present for a platform */
 int wlt_proxy_init(lpmd_config_t *_lpmd_config) {
 	int ret;
-
-    init_cpu_proxy();
+    
     util_init_proxy();
 
 	/* Check model check and fail */
@@ -295,32 +290,22 @@ int wlt_proxy_init(lpmd_config_t *_lpmd_config) {
 
 	proxy_initialized = true;
 	next_proxy_poll = 2000;
+    
 	return LPMD_SUCCESS;
 }
 
 /*make sure all resource are properly released and clsoed*/
-<<<<<<< HEAD
-void wlt_proxy_uninit(void) {
-    //if proxy is enabled, make sure we close all open fd.
-	exit_state_change();
-    if (lpmd_config->wlt_proxy_enable) {
-        close_all_fd();
-        perf_stat_uninit();
-		uninit_delta_vars();
-=======
 void wlt_proxy_uninit(void){
     //if proxy is enabled, make sure we close all open fd.
     if (lpmd_config->wlt_proxy_enable){
-    	exit_state_change();
+        util_uninit_proxy();    	
         close_all_fd();
-       	uninit_delta_vars();
-        uninit_cpu_proxy();
+       	uninit_delta_vars();        
        	perf_stat_uninit();
->>>>>>> 8bdd374d0b94e358ae5f751f6073b81a06042633
     }
 }
 
-#if 0
+#ifdef __REMOVE__
 /** enabling through dbus command */
 void enable_sw_proxy(void) {
 	//lpmd_config->wlt_proxy_enable = true;

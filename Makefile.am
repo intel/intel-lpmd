@@ -57,13 +57,13 @@ intel_lpmd_SOURCES = \
 	src/lpmd_hfi.c \
 	src/lpmd_irq.c \
 	src/lpmd_socket.c \
-	src/lpmd_util.c	\
+    src/lpmd_util.c	\
     src/wlt_proxy/helper.c \
-	src/wlt_proxy/wlt_proxy_def.c \
+	src/wlt_proxy/wlt_proxy_main.c \
+	src/wlt_proxy/irq.c \
     src/wlt_proxy/spike_mgmt.c \    
     src/wlt_proxy/state_machine.c \
-    src/wlt_proxy/util.c \
-    src/wlt_proxy/irq.c \	
+    src/wlt_proxy/util.c \    
     src/wlt_proxy/perf_msr.c \
     src/wlt_proxy/cpu_group.c \
 	src/knobs/power-supply-status.c \

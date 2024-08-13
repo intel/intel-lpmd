@@ -28,7 +28,7 @@
 #include "wlt_proxy_common.h"
 #include "cpu_group.h"
 #include "lpmd.h"
-#include "weights_common.h"
+//#include "knobs_common.h"
 
 extern int cpumask_to_hexstr(cpu_set_t *mask, char *str, int size);
 extern int cpumask_to_str(cpu_set_t *mask, char *buf, int length);

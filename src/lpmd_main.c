@@ -240,7 +240,7 @@ int main(int argc, char *argv[])
 	 *
 	*/
 	id_t pid = getpid();
-	int priority = -20; //range -2[ highest] to +20 [lowest] ; default 0
+	int priority = -20; //range -20[ highest] to +20 [lowest] ; default 0
 	int retVal= setpriority(PRIO_PROCESS, pid, priority);
 	if (retVal == ESRCH || retVal==EINVAL || retVal==EPERM || retVal==EACCES) { //error check
 		fprintf (stderr, "Unable to set process priority [%d]\n", retVal);

@@ -21,9 +21,11 @@
  * processing function on receiving user or system command.
  */
 
+#include <cpuid.h>
+
 #include "lpmd.h"
 #include "wlt_proxy.h"
-#include <cpuid.h>
+#include "lpmd_irq.h"
 
 extern int next_proxy_poll; 
 static lpmd_config_t lpmd_config;

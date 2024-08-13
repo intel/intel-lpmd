@@ -35,7 +35,7 @@
 #include "wlt_proxy.h"
 #include "cpu_group.h"
 #include "perf_msr.h"
-#include "weights_common.h"
+#include "knobs_common.h"
 
 #define PERF_API 1
 
@@ -1032,6 +1032,8 @@ int revert_orig_epp(void)
 int util_init_proxy(void)
 {
 	float dummy;
+    
+    init_cpu_proxy();
 
 	if (IDLE_INJECT_FEATURE)
 		check_cpu_powerclamp_support();
@@ -1051,4 +1053,9 @@ int util_init_proxy(void)
 
 	//close_all_fd();
 	return 1;
+}
+
+void util_uninit_proxy(void) {
+    exit_state_change();
+    uninit_cpu_proxy();
 }

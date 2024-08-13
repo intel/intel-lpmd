@@ -155,7 +155,7 @@ for Intel Energy Optimizer (LPMD) daemon
 		<State>
 			<ID> 1 </ID> <!-- no significance number can be anything -->
 			<Name> WLT_IDLE </Name>
-			<WLTType> 0 </WLTType> 
+			<WLTType> 0 </WLTType> <variable - state counter>
 			<EPP> 178 </EPP>
 			<EPB> 8 </EPB>			
 			<MinPollInterval>2000</MinPollInterval>

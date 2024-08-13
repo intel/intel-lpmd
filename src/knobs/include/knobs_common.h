@@ -17,8 +17,8 @@
  * 
  */
  
-#ifndef _WEIGHTS_COMMON_H_
-#define _WEIGHTS_COMMON_H_
+#ifndef _KNOBS_COMMON_H_
+#define _KNOBS_COMMON_H_
  
  //Power supply status 
  
@@ -33,7 +33,6 @@ extern void PSS_deinit();
  
 /** return 1 if ac powered; -1 unknown; 0 if not */
 extern int is_ac_powered_power_supply_status();
- 
 
 //Hardware WLT hint support status
  
@@ -52,4 +51,4 @@ extern void HWS_deinit();
 /** 1 if true. */
 extern int PPS_is_performance_governer();
 
-#endif /*_WEIGHTS_COMMON_H_*/
+#endif /*_KNOBS_COMMON_H_*/

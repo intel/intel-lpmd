@@ -51,7 +51,7 @@
 #endif
 
 #include "lpmd.h"
-#include "weights_common.h"
+#include "knobs_common.h"
 
 static int is_initialized = -1;//not initialized
 static int is_supported = -1; //unknown
