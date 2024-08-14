@@ -557,6 +557,8 @@ static void lpmd_send_message(message_name_t msg_id, int size, unsigned char *ms
 
 void lpmd_terminate(void)
 {
+	wlt_proxy_uninit();
+
 	lpmd_send_message (TERMINATE, 0, NULL);
 	sleep (1);
 }

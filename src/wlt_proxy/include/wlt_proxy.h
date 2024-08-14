@@ -18,6 +18,9 @@
 
 #include <stdio.h>
 
+#include "lpmd.h"
+
+
 /* WLT hints parsing */
 typedef enum {
 	WLT_IDLE,
@@ -33,6 +36,8 @@ void set_workload_hint(int type);
 
 void wlt_proxy_action_loop(void);
 
+int wlt_proxy_init(lpmd_config_t *_lpmd_config);
+
 void wlt_proxy_uninit(void);
 
-#endif				/* _WLT_PROXY_H_ */
+#endif/* _WLT_PROXY_H_ */

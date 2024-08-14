@@ -28,7 +28,6 @@
 #include <syslog.h>
 #include <sys/resource.h>
 
-
 #include "lpmd.h"
 
 #if !defined(INTEL_LPMD_DIST_VERSION)
@@ -145,8 +144,6 @@ static gboolean sig_int_handler(void)
 {
 //	 Call terminate function
 	lpmd_terminate ();
-	//proxy check is done inside the function
-	wlt_proxy_uninit();
 	
 	sleep (1);
 
