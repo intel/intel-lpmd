@@ -25,4 +25,10 @@ int write_msr(int fd, uint32_t reg, uint64_t * data);
 
 void uninit_delta_vars();
 
+uint64_t cpu_get_diff_aperf(uint64_t a, int i);
+uint64_t cpu_get_diff_mperf(uint64_t m, int i);
+uint64_t cpu_get_diff_pperf(uint64_t p, int i);
+uint64_t cpu_get_diff_tsc(uint64_t t, int i);
+int rapl_ediff_pkg0(long long x);
+
 #endif /*_PERF_MSR_*/

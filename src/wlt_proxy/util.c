@@ -30,6 +30,7 @@
 #include <stdbool.h>
 #include <linux/perf_event.h>
 #include <asm/unistd.h>
+
 #include "lpmd.h"
 #include "wlt_proxy_common.h"
 #include "state_machine.h"
@@ -61,7 +62,7 @@
 #define MSR_HWP            0x774
 #define MSR_EPB            0x1b0
 
-#if 1
+extern int cpu_hfm_mhz; //pref_msr.c
 
 typedef struct {
     int cpu;
@@ -87,21 +88,6 @@ typedef struct {
     float l0;
     float s0;
 } perf_stats_t;
-
-//#ifndef PERF_API
-extern int read_msr(int fd, uint32_t reg, uint64_t * data);
-extern int write_msr(int fd, uint32_t reg, uint64_t * data);
-//#endif
-extern int cpu_hfm_mhz; //pref_msr.c
-//extern int initialize_dev_msr(int c);
-//extern int initialize_cpu_hfm_mhz(int fd);
-//extern int init_delta_vars(int n);
-extern uint64_t cpu_get_diff_aperf(uint64_t a, int i);
-extern uint64_t cpu_get_diff_mperf(uint64_t m, int i);
-extern uint64_t cpu_get_diff_pperf(uint64_t p, int i);
-extern uint64_t cpu_get_diff_tsc(uint64_t t, int i);
-extern int rapl_ediff_pkg0(long long x);
-#endif 
 
 perf_stats_t *perf_stats;
 struct group_util grp;

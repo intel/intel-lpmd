@@ -22,21 +22,21 @@
 #include <sched.h>
 #include "wlt_proxy_common.h"
 
-#define MAX_CPUS_NUM		1024
-#define MAX_CPUMASK_SIZE	MAX_CPUS_NUM / 8
+#define MAX_CPUS_NUM        1024
+#define MAX_CPUMASK_SIZE    MAX_CPUS_NUM / 8
 
-#define MAX_MDRT4E_LP_CPU	(4)
-#define MAX_MDRT3E_LP_CPU	(3)
-#define MAX_MDRT2E_LP_CPU	(2)
-#define MAX_RESP_LP_CPU		(2)
-#define MAX_NORM_LP_CPU		(2)
-#define MAX_DEEP_LP_CPU		(1)
+#define MAX_MDRT4E_LP_CPU    (4)
+#define MAX_MDRT3E_LP_CPU    (3)
+#define MAX_MDRT2E_LP_CPU    (2)
+#define MAX_RESP_LP_CPU        (2)
+#define MAX_NORM_LP_CPU        (2)
+#define MAX_DEEP_LP_CPU        (1)
 
 struct _freq_map {
-	int start_cpu;
-	int end_cpu;
-	int turbo_freq_khz;
-	int perf_order;
+    int start_cpu;
+    int end_cpu;
+    int turbo_freq_khz;
+    int perf_order;
 };
 
 int is_cpu_online(int);
@@ -77,4 +77,4 @@ int state_support_freq_ctl(enum lp_state_idx);
 void exit_state_change(void);
 int check_cpu_powerclamp_support(void);
 
-#endif				/* _CPU_GROUP_H_ */
+#endif                /* _CPU_GROUP_H_ */

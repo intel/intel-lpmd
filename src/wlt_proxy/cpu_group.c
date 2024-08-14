@@ -28,12 +28,27 @@
 #include "wlt_proxy_common.h"
 #include "cpu_group.h"
 #include "lpmd.h"
+
 #ifdef __USE_LPMD_IRQ__
 #include "lpmd_irq.h"
 #endif
 
+#define BITMASK_SIZE 32
+#define MAX_FREQ_MAPS (6)
+/* Support for CGROUPV2 */
+#define PATH_CGROUP                    "/sys/fs/cgroup"
+#define PATH_CG2_SUBTREE_CONTROL	PATH_CGROUP "/cgroup.subtree_control"
+
+#define PATH_CPUMASK "/sys/module/intel_powerclamp/parameters/cpumask"
+#define PATH_MAXIDLE "/sys/module/intel_powerclamp/parameters/max_idle"
+#define PATH_DURATION "/sys/module/intel_powerclamp/parameters/duration"
+#define PATH_THERMAL "/sys/class/thermal"
+
 extern int cpumask_to_hexstr(cpu_set_t *mask, char *str, int size);
 extern int cpumask_to_str(cpu_set_t *mask, char *buf, int length);
+extern int irq_rebalance;
+extern int inject_update;
+extern struct group_util grp;
 
 static int topo_max_cpus;
 /* starting 6.5 kernel, cpu0 is assumed to be always online */
@@ -68,24 +83,12 @@ struct _lp_state {
 
 static int common_min_freq;
 static int freq_map_count;
-
-int get_freq_map_count()
-{
-	return freq_map_count;
-}
-
-#define MAX_FREQ_MAPS (6)
 static struct _freq_map freq_map[MAX_FREQ_MAPS];
 
-int get_freq_map(int j, struct _freq_map *fmap)
-{
-	*fmap = freq_map[j];
-	return 1;
-}
 /*
  * ppw is not tested. disabled for now.
  */
-static struct _lp_state lp_state[MAX_MODE] = {
+/*static struct _lp_state lp_state[MAX_MODE] = {
 	[INIT_MODE] = {.name = "Avail cpu: P/E/L",.poll = BASE_POLL_MT,.epp =
 		       PERFORMANCE_EPP,.epb = EPB_AC,.stay_scalar = 1,
 		       .poll_order = ZEROTH,.freq_ctl = 1},
@@ -115,10 +118,41 @@ static struct _lp_state lp_state[MAX_MODE] = {
 	[DEEP_MODE] = {.name = "Deep LP 1L      ",.poll = BASE_POLL_DEEP,.epp =
 		       POWERSAVE_EPP,.epb = EPB_DC,.stay_scalar = 1,
 		       .poll_order = CUBIC},
+};*/
+
+static struct _lp_state lp_state[MAX_MODE] = {
+	[INIT_MODE] = {.name =   "Avail cpu: P/E/L",.poll = BASE_POLL_MT,.poll_order = ZEROTH,.freq_ctl = 1},
+	[PERF_MODE] = {.name =   "Perf:non-soc cpu",.poll = BASE_POLL_PERF,.poll_order = ZEROTH,.freq_ctl = 1},
+	[BYPS_MODE] = {.name =   "bypass mode",.poll = BASE_POLL_PERF,.poll_order = ZEROTH},
+	[MDRT2E_MODE] = {.name = "Moderate 2E",.poll =	BASE_POLL_MDRT2E,.poll_order = LINEAR},
+	[MDRT3E_MODE] = {.name = "Moderate 3E",.poll = BASE_POLL_MDRT3E,.poll_order = LINEAR},
+	[MDRT4E_MODE] = {.name = "Moderate 4E",.poll =	BASE_POLL_MDRT4E, .poll_order = LINEAR},
+	[RESP_MODE] = {.name =   "Responsive 2L",.poll = BASE_POLL_RESP, .poll_order = CUBIC,.freq_ctl = 1},
+	[NORM_MODE] = {.name =   "Normal LP 2L",.poll = BASE_POLL_NORM, .poll_order = QUADRATIC},
+	[DEEP_MODE] = {.name =   "Deep LP 1L",.poll = BASE_POLL_DEEP, .poll_order = CUBIC},
 };
 
 static enum lp_state_idx cur_state = INIT_MODE;
 static int needs_state_reset = 1;
+
+int process_cpu_isolate_enter(void);
+int process_cpu_isolate_exit(void);
+int process_cpu_powerclamp_exit(void);
+static int zero_isol_cpu(enum lp_state_idx);
+static char *get_inj_hexstr(enum lp_state_idx idx);
+static char path_powerclamp[MAX_STR_LENGTH * 2];
+static int default_dur = -1;
+
+int get_freq_map_count()
+{
+	return freq_map_count;
+}
+
+int get_freq_map(int j, struct _freq_map *fmap)
+{
+	*fmap = freq_map[j];
+	return 1;
+}
 
 int get_state_reset(void)
 {
@@ -316,11 +350,6 @@ int get_turbo_freq(int cpu)
 	return 0;
 }
 
-int process_cpu_isolate_enter(void);
-int process_cpu_isolate_exit(void);
-int process_cpu_powerclamp_exit(void);
-static int zero_isol_cpu(enum lp_state_idx);
-
 int check_reset_status(void)
 {
 	return needs_state_reset;
@@ -342,21 +371,22 @@ void exit_state_change(void)
 #endif
 }
 
-extern int irq_rebalance;
-extern int inject_update;
-extern struct group_util grp;
 int apply_state_change(void)
 {
 	float test;
 
 	if (!needs_state_reset)
 		return 0;
+#ifdef __REMOVE__
 	// reset idle inject to 0 every state change
 	if (IDLE_INJECT_FEATURE
 	    && ((inject_update == DEACTIVATED) || (inject_update == PAUSE))) {
 		process_cpu_powerclamp_exit();
 	}
-	if (irq_rebalance) {		
+#endif
+
+	if (irq_rebalance) {
+		lpmd_log_error("ECO irq active -- revisit");
 #ifdef __USE_LPMD_IRQ__
         native_update_irqs();
 #else
@@ -364,6 +394,7 @@ int apply_state_change(void)
 #endif
 		irq_rebalance = 0;
 	}
+
 	if ((cur_state == INIT_MODE) || (zero_isol_cpu(get_cur_state())))
 		process_cpu_isolate_exit();
 	else
@@ -510,8 +541,6 @@ int cpumask_to_hexstr(cpu_set_t * mask, char *str, int size)
 
 	return 0;
 }*/
-
-static char *get_inj_hexstr(enum lp_state_idx idx);
 
 void initialize_state_mask(void)
 {
@@ -685,8 +714,6 @@ static void reset_cpus_proxy(enum lp_state_idx idx)
 }
 
 /* Parse CPU topology */
-
-#define BITMASK_SIZE 32
 static int set_max_cpu_num(void)
 {
 	FILE *filep=NULL;
@@ -1019,10 +1046,6 @@ static int detect_lp_state(void)
 	return 0;
 }
 
-/* Support for CGROUPV2 */
-#define PATH_CGROUP                    "/sys/fs/cgroup"
-#define PATH_CG2_SUBTREE_CONTROL	PATH_CGROUP "/cgroup.subtree_control"
-
 static int update_cpusets(char *data, int update)
 {
 	DIR *dir;
@@ -1065,13 +1088,6 @@ static int update_cpusets(char *data, int update)
 		ret = 1;
 	return ret ? 1 : 0;
 }
-
-#define PATH_CPUMASK "/sys/module/intel_powerclamp/parameters/cpumask"
-#define PATH_MAXIDLE "/sys/module/intel_powerclamp/parameters/max_idle"
-#define PATH_DURATION "/sys/module/intel_powerclamp/parameters/duration"
-#define PATH_THERMAL "/sys/class/thermal"
-
-static char path_powerclamp[MAX_STR_LENGTH * 2];
 
 int check_cpu_powerclamp_support(void)
 {
@@ -1120,8 +1136,6 @@ int check_cpu_powerclamp_support(void)
 	lpmd_log_debug("\tFound %s device at %s\n", name, path_powerclamp);
 	return 0;
 }
-
-static int default_dur = -1;
 
 int process_cpu_powerclamp_update(int dur, int idl)
 {
@@ -1229,7 +1243,6 @@ int init_cpu_proxy(void)
 
 	return 0;
 }
-
 
 void uninit_cpu_proxy(){
 	for (int idx = INIT_MODE + 1; idx < MAX_MODE; idx++) {
