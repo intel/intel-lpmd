@@ -167,7 +167,7 @@ enum elastic_poll {
 #define PAUSE 		(3)
 
 
-//#ifdef _USE_ECO
+#ifdef __REMOVE__
 /* main.c */
 void eco_printf(int level, const char *format, ...);
 
@@ -191,7 +191,7 @@ do {							\
 		eco_printf(3, fmt, ##__VA_ARGS__);	\
 } while (0)
 	
-//#endif
+#endif
 
 #ifdef __GNUC__
 #define likely(x)       __builtin_expect(!!(x), 1)

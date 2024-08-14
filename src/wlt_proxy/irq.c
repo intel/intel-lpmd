@@ -20,6 +20,7 @@
 
 #include "wlt_proxy_common.h"
 #include "cpu_group.h"
+#include "lpmd.h"
 
 /* 
  * XXX: MAX_IRQS may need to be bumped up
@@ -49,7 +50,7 @@ int restore_irq_mask(void)
 {
 	int i;
 
-	log_debug("\tRestore IRQ affinity (native)\n");
+	lpmd_log_debug("\tRestore IRQ affinity (native)\n");
 
 	for (i = 0; i < MAX_IRQS_PROXY - 1; i++) {
 
@@ -72,7 +73,7 @@ static int save_irq_mask(void)
 	char path[MAX_STR_LENGTH];
 	char *str = NULL;
 
-	log_debug("\tsave IRQ affinity (native)\n");
+	lpmd_log_debug("\tsave IRQ affinity (native)\n");
 
 	for (i = 0; i < MAX_IRQS_PROXY - 1; i++) {
 		p_info->nr_irqs++;
@@ -87,7 +88,7 @@ static int save_irq_mask(void)
 			continue;
 
 		if (getline(&str, &size, filep) <= 0) {
-			log_err("Failed to get IRQ%d smp_affinity\n", i);
+			lpmd_log_error("Failed to get IRQ%d smp_affinity\n", i);
 			continue;
 		}
 
@@ -118,7 +119,7 @@ int update_irqs()
 
 int init_irq_proxy()
 {
-	log_debug("Saving original IRQs ...\n");
+	lpmd_log_debug("Saving original IRQs ...\n");
 	save_irq_mask();
 	
 	return 0;

@@ -438,7 +438,7 @@ size_t alloc_cpu_set(cpu_set_t ** cpu_set)
 		size_cpumask = size;
 
 	if (size_cpumask && size_cpumask != size) {
-		log_err("Conflict cpumask size %lu vs. %lu\n", size,
+		lpmd_log_error("Conflict cpumask size %lu vs. %lu\n", size,
 			size_cpumask);
 		exit(-1);
 	}
@@ -456,7 +456,7 @@ size_t alloc_cpu_set(cpu_set_t ** cpu_set)
 		if (!CPU_ISSET_S(i, size_cpumask, mask))
 			continue;
 		if (offset > length - 3) {
-			log_debug("cpumask_to_str: Too many cpus\n");
+			lpmd_log_debug("cpumask_to_str: Too many cpus\n");
 			return 1;
 		}
 		offset += snprintf(buf + offset, length - 1 - offset, "%d,", i);
@@ -661,9 +661,9 @@ static int add_cpu_proxy(int cpu, enum lp_state_idx idx)
 	CPU_SET_S(cpu, size_cpumask, lp_state[idx].mask);
 
 	if (idx == INIT_MODE)
-		log_debug("\tDetected %s CPU%d\n", lp_state[idx].name, cpu);
+		lpmd_log_debug("\tDetected %s CPU%d\n", lp_state[idx].name, cpu);
 	else
-		log_verbose("\tDetected %s CPU%d\n", lp_state[idx].name, cpu);
+		lpmd_log_info("\tDetected %s CPU%d\n", lp_state[idx].name, cpu);
 
 	return 0;
 }
@@ -707,7 +707,7 @@ static int set_max_cpu_num(void)
 	}
 
 	if (!filep) {
-		log_err("Can't get max cpu number\n");
+		lpmd_log_error("Can't get max cpu number\n");
 		return -1;
 	}
 
@@ -715,7 +715,7 @@ static int set_max_cpu_num(void)
 		topo_max_cpus += BITMASK_SIZE;
 	fclose(filep);
 
-	log_debug("\t%d CPUs supported in maximum\n", topo_max_cpus);
+	lpmd_log_debug("\t%d CPUs supported in maximum\n", topo_max_cpus);
 	return 0;
 }
 
@@ -817,7 +817,7 @@ int parse_cpu_str_proxy(char *buf, enum lp_state_idx idx)
 
 	return nr_cpus;
  error:
-	log_err("CPU string malformed: %s\n", buf);
+	lpmd_log_error("CPU string malformed: %s\n", buf);
 	return -1;
 }
 
@@ -832,7 +832,7 @@ static int detect_lp_state_actual(void)
 
 	for (idx = INIT_MODE + 1; idx < MAX_MODE; idx++) {
 		if (!alloc_cpu_set(&lp_state[idx].mask))
-			log_err("aloc fail");
+			lpmd_log_error("aloc fail");
 	}
 
 	/* 
@@ -1006,14 +1006,14 @@ static int detect_lp_state(void)
 	ret = detect_lp_state_actual();
 
 	if (ret <= 0) {
-		log_info("\tNo valid Low Power CPUs detected, exit\n");
+		lpmd_log_info("\tNo valid Low Power CPUs detected, exit\n");
 		exit(1);
 	} else {
 
 	}
 
 	if (has_cpus_proxy(INIT_MODE))
-		log_debug("\tUse CPU %s as Default Low Power CPUs\n",
+		lpmd_log_debug("\tUse CPU %s as Default Low Power CPUs\n",
 			  get_cpus_str_proxy(INIT_MODE));
 
 	return 0;
@@ -1117,7 +1117,7 @@ int check_cpu_powerclamp_support(void)
 	if (path_powerclamp[0] == '\0')
 		return 1;
 
-	log_debug("\tFound %s device at %s\n", name, path_powerclamp);
+	lpmd_log_debug("\tFound %s device at %s\n", name, path_powerclamp);
 	return 0;
 }
 
@@ -1213,7 +1213,7 @@ int init_cpu_proxy(void)
 	if (ret)
 		return ret;
 
-	log_debug("Detecting CPUs ...\n");
+	lpmd_log_debug("Detecting CPUs ...\n");
 	ret = parse_cpu_topology();
 	if (ret)
 		return ret;

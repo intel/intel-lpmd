@@ -32,9 +32,10 @@
 #include <sys/un.h>
 
 #include "wlt_proxy_common.h"
+#include "lpmd.h"
 
 static char output_file[MAX_STR_LENGTH];
-
+#ifdef __REMOVE__
 enum log_level {
 	LOG_ERR,
 	LOG_INFO,
@@ -68,6 +69,7 @@ void eco_printf(int level, const char *format, ...)
 
 	va_end(args);
 }
+#endif
 
 struct _fd_cache {
 	int pkg0_rapl_fd;
@@ -231,14 +233,14 @@ int fs_read_str(const char *name, char *val)
 
 	filep = fopen(name, "r");
 	if (!filep) {
-		log_err("fs_read_str: Open %s failed\n", name);
+		lpmd_log_error("fs_read_str: Open %s failed\n", name);
 		return -1;
 	}
 	fseek(filep, 0, SEEK_SET);
 	ret = fread(val, 256, 256, filep);
 	/* XXX check feof and ret */
     if (ret != 1) {
-		log_err("fs_read_str: Read %s failed, ret %d\n", name, ret);		
+		lpmd_log_error("fs_read_str: Read %s failed, ret %d\n", name, ret);		
 	}
 	fclose(filep);
 
@@ -252,13 +254,13 @@ int fs_read_int(const char *name, int *val)
 
 	filep = fopen(name, "r");
 	if (!filep) {
-		log_err("fs_read_int: Open %s failed\n", name);
+		lpmd_log_error("fs_read_int: Open %s failed\n", name);
 		return 1;
 	}
 
 	ret = fscanf(filep, "%d", &t);
 	if (ret != 1) {
-		log_err("fs_read_int: Read %s failed, ret %d\n", name, ret);
+		lpmd_log_error("fs_read_int: Read %s failed, ret %d\n", name, ret);
 		fclose(filep);
 		return 1;
 	}
@@ -280,7 +282,7 @@ int init_rapl_fd(void)
 	int fd;
 	fd = open(RAPL_PKG0_PWR, O_RDONLY);
 	if (fd == -1) {
-		log_debug("init_rapl_fd: Open %s failed\n", RAPL_PKG0_PWR);
+		lpmd_log_debug("init_rapl_fd: Open %s failed\n", RAPL_PKG0_PWR);
 		return -1;
 	}
 	fd_cache.pkg0_rapl_fd = fd;
@@ -305,7 +307,7 @@ int open_fd(const char *name, int flags)
 
 	fd = open(name, flags);
 	if (fd == -1) {
-		log_debug("Open %s failed\n", name);
+		lpmd_log_debug("Open %s failed\n", name);
 		return -1;
 	}
 	return fd;
@@ -314,7 +316,7 @@ int open_fd(const char *name, int flags)
 int close_fd(int fd)
 {
 	if (fd < 0) {
-		log_debug("invalid fd:%d\n", fd);
+		lpmd_log_debug("invalid fd:%d\n", fd);
 		return -1;
 	}
 	close(fd);
@@ -327,7 +329,7 @@ int fs_open_check(const char *name)
 
 	filep = fopen(name, "r");
 	if (!filep) {
-		log_debug("Open %s failed\n", name);
+		lpmd_log_debug("Open %s failed\n", name);
 		return 1;
 	}
 
@@ -399,11 +401,11 @@ int init_cgroup_fd(void)
 	if (!dir) {
 		ret = mkdir("/sys/fs/cgroup/eco", 0744);
 		if (ret) {
-			log_debug("Can't create dir:%s errno:%d\n",
+			lpmd_log_debug("Can't create dir:%s errno:%d\n",
 			       "/sys/fs/cgroup/eco", errno);
 			return ret;
 		}
-		log_debug("\tCreate %s\n", "/sys/fs/cgroup/eco");
+		lpmd_log_debug("\tCreate %s\n", "/sys/fs/cgroup/eco");
 	} else
 		closedir(dir);
 

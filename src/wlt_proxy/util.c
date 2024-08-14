@@ -657,7 +657,7 @@ void clamp_to_freq(enum lp_state_idx for_state, int to_freq)
 	for (int i = 0; i < get_max_online_cpu(); i++) {
 		if (cpu_applicable(i, for_state)) {
 			if (to_freq > get_turbo_freq(i))
-				log_err("cpu%d reqested freq %d > turbo %d\n",
+				lpmd_log_error("cpu%d reqested freq %d > turbo %d\n",
 					i, to_freq, get_turbo_freq(i));
 			snprintf(path_max, sizeof(path_max),
 				 "/sys/devices/system/cpu/cpufreq/policy%d/scaling_max_freq",
@@ -789,7 +789,7 @@ static int util_main(enum slider_value sld)
 				inject_update = PAUSE;
 				/* XXX check if freq and inject are already expected state */
 				process_cpu_powerclamp_exit();
-				log_debug
+				lpmd_log_debug
 				    (" maxutil:%d poll: %d idle_pct: PAUSED sma: %d\n",
 				     max_util, get_state_poll(max_util,
 							      get_cur_state()),
@@ -800,7 +800,7 @@ static int util_main(enum slider_value sld)
 					    (get_state_poll
 					     (max_util, get_cur_state()) * DURATION_SPILL,
 					     MAX_IDLE_INJECT);
-					log_debug
+					lpmd_log_debug
 					    (" maxutil:%d poll: %d idle_pct: %d sma:%d BACK.\n",
 					     max_util, get_state_poll(max_util,
 								      get_cur_state
@@ -819,10 +819,10 @@ static int util_main(enum slider_value sld)
 	 {
 		if (!(record % RECORDS_PER_HEADER)
 		    && (ts_start.tv_sec - ts_prev.tv_sec) > 10) {
-			log_info
+			lpmd_log_info
 			    ("\n  time.ms, sldr, state, sma1, sma2, sma3, 1stmax, 2ndmax, 3rdmax, nx_poll, nx_st, Qperf,    Watt,     PPW, min_s0, cpu_s0, SpkRt, Rcnt, brst_pm\n");
 		}
-		log_info
+		lpmd_log_info
 		     ("%05ld.%03ld,   %2d,  %4d,  %3d,  %3d,  %3d, %6.2f, %6.2f, %6.2f,  %6d,  %4d, %5.1f,  %6.2f,  %6.2f,   %.2f,    %3d,  %3d,   %3d,  %3d  %d\n",
 		     ts_start.tv_sec - ts_init.tv_sec,
 		     ts_start.tv_nsec / 1000000, sld, present_state,
@@ -925,7 +925,7 @@ void *state_handler(void)
 		next_state = get_cur_state();
 		if (likely(is_state_valid(next_state))) {
 			next_poll = get_state_poll(util_max, next_state);
-			log_debug(" max_util %d next state:%d Poll:%4d \n",
+			lpmd_log_debug(" max_util %d next state:%d Poll:%4d \n",
 				  util_max, next_state, next_poll);
 			usleep(next_poll * 1000);
 		} else {
