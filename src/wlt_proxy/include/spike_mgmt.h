@@ -13,16 +13,19 @@
  * Author: Noor ul Mubeen <noor.u.mubeen@intel.com>
  */
 
-#ifndef _PERF_MSR_
-#define _PERF_MSR_
+#ifndef _SPIKE_MGMT_
+#define _SPIKE_MGMT_
 
-int initialize_dev_msr(int c);
-int initialize_cpu_hfm_mhz(int fd);
-int init_delta_vars(int n);
+int add_spike_time(int);
+int add_non_spike_time(int);
+int get_spike_rate(void);
+int get_burst_rate_per_min(void);
+int fresh_burst_response(int initial_val);
+int burst_rate_breach(void);
+//int set_spike_type(int);
+int strikeout_once(int);
+//int update_burst_count(int);
+int update_spike_rate_maxima();
+int clear_spike_rate_maxima();
 
-int read_msr(int fd, uint32_t reg, uint64_t * data);
-int write_msr(int fd, uint32_t reg, uint64_t * data);
-
-void uninit_delta_vars();
-
-#endif /*_PERF_MSR_*/
+#endif /*_SPIKE_MGMT_*/

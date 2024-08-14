@@ -13,16 +13,12 @@
  * Author: Noor ul Mubeen <noor.u.mubeen@intel.com>
  */
 
-#ifndef _PERF_MSR_
-#define _PERF_MSR_
+#ifndef _STATE_MACHINE_
+#define _STATE_MACHINE_
 
-int initialize_dev_msr(int c);
-int initialize_cpu_hfm_mhz(int fd);
-int init_delta_vars(int n);
+int state_machine_power(int);
+int state_machine_perf(int);
+int state_machine_auto(int);
+int state_machine_auto1();
 
-int read_msr(int fd, uint32_t reg, uint64_t * data);
-int write_msr(int fd, uint32_t reg, uint64_t * data);
-
-void uninit_delta_vars();
-
-#endif /*_PERF_MSR_*/
+#endif /*_STATE_MACHINE_*/

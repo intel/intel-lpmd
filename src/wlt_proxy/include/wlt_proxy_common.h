@@ -222,23 +222,4 @@ char *get_mode_name(enum lp_state_idx);
 int get_mode_cpu_count(enum lp_state_idx);
 int get_mode_max(void);
 
-/* state machine */
-int state_machine_power(int);
-int state_machine_perf(int);
-int state_machine_auto(int);
-int state_machine_auto1();
-
-/* spike_mgmt */
-int add_spike_time(int);
-int add_non_spike_time(int);
-int get_spike_rate(void);
-int get_burst_rate_per_min(void);
-int fresh_burst_response(int initial_val);
-int burst_rate_breach(void);
-//int set_spike_type(int);
-int strikeout_once(int);
-int update_burst_count(int);
-int update_spike_rate_maxima();
-int clear_spike_rate_maxima();
-
 #endif /* _WLT_PROXY_COMMON_H_ */

@@ -32,6 +32,8 @@
 #include <asm/unistd.h>
 #include "lpmd.h"
 #include "wlt_proxy_common.h"
+#include "state_machine.h"
+#include "spike_mgmt.h"
 #include "wlt_proxy.h"
 #include "cpu_group.h"
 #include "perf_msr.h"

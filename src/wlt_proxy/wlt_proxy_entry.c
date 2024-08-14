@@ -23,6 +23,7 @@
 
 #include "lpmd.h"
 #include "wlt_proxy_common.h"
+#include "state_machine.h"
 #include "wlt_proxy.h"
 #include "perf_msr.h"
 
