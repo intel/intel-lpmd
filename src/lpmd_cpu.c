@@ -719,7 +719,7 @@ int uevent_init(void)
 		return uevent_fd;
 
 	if (bind (uevent_fd, (struct sockaddr*) &nls, sizeof(struct sockaddr_nl))) {
-		lpmd_log_warn ("kob_uevent bind failed \n");
+		lpmd_log_warn ("kob_uevent bind failed\n");
 		close (uevent_fd);
 		return -1;
 	}

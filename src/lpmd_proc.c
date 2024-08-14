@@ -232,7 +232,7 @@ static int lpm_can_process(enum lpm_command cmd)
 			lpm_state &= ~LPM_USER_OFF;
 			/* Assume the system is already in HFI_LPM so that we can handle next HFI update whatever it is */
 			if (has_hfi_lpm_monitor()) {
-				lpmd_log_info("Use HFI \n");
+				lpmd_log_info("Use HFI\n");
 				lpm_state |= LPM_HFI_ON;
 			}
 			return 0;
@@ -545,7 +545,7 @@ static void lpmd_send_message(message_name_t msg_id, int size, unsigned char *ms
 
 	result = write (write_pipe_fd, &msg_cap, sizeof(message_capsul_t));
 	if (result < 0)
-		lpmd_log_warn ("Write to pipe failed \n");
+		lpmd_log_warn ("Write to pipe failed\n");
 }
 
 void lpmd_terminate(void)
@@ -855,7 +855,7 @@ static void* lpmd_core_main_loop(void *arg)
 
 		n = poll (poll_fds, poll_fd_cnt, interval);
 		if (n < 0) {
-			lpmd_log_warn ("Write to pipe failed \n");
+			lpmd_log_warn ("Write to pipe failed\n");
 			continue;
 		}
 
