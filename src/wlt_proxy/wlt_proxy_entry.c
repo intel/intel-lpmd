@@ -72,15 +72,3 @@ void wlt_proxy_uninit(void) {
     perf_stat_uninit();
 }
 
-#ifdef __REMOVE__
-/** enabling through dbus command */
-void enable_sw_proxy(void) {
-	//lpmd_config->wlt_proxy_enable = true;
-	wlt_proxy_init(NULL);
-}
-
-/** disabling through dbus command */
-void disable_sw_proxy(void) {
-	wlt_proxy_uninit();
-}
-#endif
