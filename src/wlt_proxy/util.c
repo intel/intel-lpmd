@@ -39,7 +39,15 @@
 
 #define PERF_API 1
 
-#if 0
+#ifdef __GNUC__
+#define likely(x)       __builtin_expect(!!(x), 1)
+#define unlikely(x)     __builtin_expect(!!(x), 0)
+#else
+#define likely(x)       (x)
+#define unlikely(x)     (x)
+#endif
+
+#ifndef PERF_API
 #define MSR_IA32_MPERF        0xe7
 #define MSR_IA32_APERF        0xe8
 #define MSR_IA32_PPERF        0x64e

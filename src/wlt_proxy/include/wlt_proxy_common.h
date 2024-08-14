@@ -91,22 +91,14 @@
  */
 #define DURATION_SPILL        (1.2)
 
-
 #define EPB_AC            (6)
 #define EPB_DC            (8)
-
 #define POWERSAVE_EPP_PCT    (70)
 #define POWERSAVE_EPP         ((uint)ceil(POWERSAVE_EPP_PCT*256/100))
 #define BALANCED_EPP_PCT    (50)
 #define BALANCED_EPP         ((uint)ceil(BALANCED_EPP_PCT*256/100))
 #define PERFORMANCE_EPP_PCT    (25)
 #define PERFORMANCE_EPP     ((uint)ceil(PERFORMANCE_EPP_PCT*256/100))
-
-#ifdef __REMOVE__
-#define MAX_STR_LENGTH        256
-#define CLSS_SOCKET_TMPFS    "/run/eco"
-#endif
-
 
 /* floating point comparison */
 #define EPSILON    (0.01)
@@ -173,48 +165,8 @@ enum elastic_poll {
 #define ACTIVATED    (2)
 #define PAUSE         (3)
 
-
-#ifdef __REMOVE__
-/* main.c */
-void eco_printf(int level, const char *format, ...);
-
-#define log_err(fmt, ...)            \
-do {                            \
-        eco_printf(0, fmt, ##__VA_ARGS__);    \
-} while (0)
-
-#define log_info(fmt, ...)            \
-do {                            \
-        eco_printf(1, fmt, ##__VA_ARGS__);    \
-} while (0)
-
-#define log_debug(fmt, ...)                \
-do {                            \
-        eco_printf(2, fmt, ##__VA_ARGS__);    \
-} while (0)
-
-#define log_verbose(fmt, ...)            \
-do {                            \
-        eco_printf(3, fmt, ##__VA_ARGS__);    \
-} while (0)
-    
-#endif
-
-#ifdef __GNUC__
-#define likely(x)       __builtin_expect(!!(x), 1)
-#define unlikely(x)     __builtin_expect(!!(x), 0)
-#else
-#define likely(x)       (x)
-#define unlikely(x)     (x)
-#endif
-
-void print_state(void);
-int get_cpu_mode(void);
 void set_cur_state(enum lp_state_idx);
 int is_state_valid(enum lp_state_idx);
-
-/*mapping the state to wlt proxy workload type*/
-int getStateMapping(int state); 
 
 #ifndef __USE_LPMD_IRQ__
 /* irq.c */
@@ -269,13 +221,6 @@ int write_str_fs(FILE *, const char *);
 char *get_mode_name(enum lp_state_idx);
 int get_mode_cpu_count(enum lp_state_idx);
 int get_mode_max(void);
-
-#ifdef __REMOVE__
-/* slider */
-int slider_monitor(void);
-int set_slider(int s);
-int get_slider(void);
-#endif
 
 /* state machine */
 int state_machine_power(int);
