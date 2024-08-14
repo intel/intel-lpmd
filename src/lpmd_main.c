@@ -26,7 +26,9 @@
 #include <glib.h>
 #include <glib-unix.h>
 #include <syslog.h>
+#ifdef __ADD_REJECTED_PATCH__
 #include <sys/resource.h>
+#endif
 
 #include "lpmd.h"
 
@@ -228,7 +230,7 @@ int main(int argc, char *argv[])
 		fprintf (stderr, "You must be root to run intel_lpmd!\n");
 		exit (EXIT_FAILURE);
 	}
-	
+#ifdef __ADD_REJECTED_PATCH__
 	/*
 	 * this program orchestating cpu topology and related
 	 * attributes need to assertively 'run' to avoid decision starving
@@ -243,7 +245,7 @@ int main(int argc, char *argv[])
 		fprintf (stderr, "Unable to set process priority [%d]\n", retVal);
 		//not a show stopper to exit.
 	}
-
+#endif
 	if (g_mkdir_with_parents (TDRUNDIR, 0755) != 0) {
 		fprintf (stderr, "Cannot create '%s': %s", TDRUNDIR, strerror (errno));
 		exit (EXIT_FAILURE);
