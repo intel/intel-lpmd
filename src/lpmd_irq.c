@@ -152,7 +152,7 @@ static int irqbalance_ban_cpus(int enter)
 	return 0;
 }
 
-static int native_restore_irqs(void)
+int native_restore_irqs(void)
 {
 	char path[MAX_STR_LENGTH];
 	int i;
@@ -216,7 +216,7 @@ static int update_one_irq(int irq)
 	return lpmd_write_str (path, irq_str, LPMD_LOG_DEBUG);
 }
 
-static int native_update_irqs(void)
+int native_update_irqs(void)
 {
 	FILE *filep;
 	char *line = NULL;

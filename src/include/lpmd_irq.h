@@ -26,5 +26,7 @@
 int init_irq(void);
 int process_irqs(int enter, enum lpm_cpu_process_mode mode);
 int update_lpm_irq(cpu_set_t *cpumask, int action);
+int native_restore_irqs();
+int native_update_irqs();
 
 #endif
