@@ -24,6 +24,7 @@
 #include "lpmd.h"
 #include "wlt_proxy_common.h"
 #include "wlt_proxy.h"
+#include "perf_msr.h"
 
 static bool proxy_initialized = false;
 static lpmd_config_t *lpmd_config;
