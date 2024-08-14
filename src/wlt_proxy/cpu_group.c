@@ -28,7 +28,9 @@
 #include "wlt_proxy_common.h"
 #include "cpu_group.h"
 #include "lpmd.h"
+#ifdef __USE_LPMD_IRQ__
 #include "lpmd_irq.h"
+#endif
 
 extern int cpumask_to_hexstr(cpu_set_t *mask, char *str, int size);
 extern int cpumask_to_str(cpu_set_t *mask, char *buf, int length);
@@ -333,8 +335,11 @@ void exit_state_change(void)
 	process_cpu_isolate_exit();
 	revert_orig_epp();
 	revert_orig_epb();
-	//restore_irq_mask();//replace with lpmd_irq function.
+#ifdef __USE_LPMD_IRQ__
     native_restore_irqs();
+#else
+    restore_irq_mask();//replace with lpmd_irq function.
+#endif
 }
 
 extern int irq_rebalance;
@@ -351,9 +356,12 @@ int apply_state_change(void)
 	    && ((inject_update == DEACTIVATED) || (inject_update == PAUSE))) {
 		process_cpu_powerclamp_exit();
 	}
-	if (irq_rebalance) {
-		//update_irqs();//replace with lpmd_irq function
+	if (irq_rebalance) {		
+#ifdef __USE_LPMD_IRQ__
         native_update_irqs();
+#else
+        update_irqs();//replace with lpmd_irq function
+#endif
 		irq_rebalance = 0;
 	}
 	if ((cur_state == INIT_MODE) || (zero_isol_cpu(get_cur_state())))

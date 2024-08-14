@@ -320,13 +320,6 @@ int check_cpu_hotplug(void);
 int process_suv_mode(enum lpm_command cmd);
 int has_suv_support(void);
 
-#ifdef __REMOVE__
-/* irq.c */
-int init_irq(void);
-int process_irqs(int enter, enum lpm_cpu_process_mode mode);
-int update_lpm_irq(cpu_set_t *cpumask, int action);
-#endif
-
 /* hfi.c */
 int hfi_init(void);
 int hfi_kill(void);

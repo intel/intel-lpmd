@@ -209,14 +209,14 @@ int is_state_valid(enum lp_state_idx);
 /*mapping the state to wlt proxy workload type*/
 int getStateMapping(int state); 
 
-//#ifdef __REMOVE__
+#ifndef __USE_LPMD_IRQ__
 /* irq.c */
 int init_irq(void);
 int process_irqs_proxy(int);//defined in lpmd
 int dump_interrupts(int);
 int restore_irq_mask(void);
 int update_irqs(void);
-//#endif
+#endif
 
 /* util.c */
 int util_init_proxy(void);//defined in lpmd_util

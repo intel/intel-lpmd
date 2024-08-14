@@ -60,6 +60,7 @@ intel_lpmd_SOURCES = \
     src/lpmd_util.c	\
     src/wlt_proxy/helper.c \
 	src/wlt_proxy/wlt_proxy_entry.c \
+    src/wlt_proxy/irq.c \
     src/wlt_proxy/spike_mgmt.c \    
     src/wlt_proxy/state_machine.c \
     src/wlt_proxy/util.c \    
@@ -68,7 +69,7 @@ intel_lpmd_SOURCES = \
 	src/knobs/power-supply-status.c \
 	lpmd-resource.c
 
-# src/wlt_proxy/irq.c \ - not used
+#  - not used
 
 man8_MANS = man/intel_lpmd.8
 man5_MANS = man/intel_lpmd_config.xml.5

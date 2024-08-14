@@ -20,7 +20,6 @@
 
 #include "lpmd.h"
 
-
 /* WLT hints parsing */
 typedef enum {
 	WLT_IDLE,
