@@ -18,6 +18,9 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
+
+#ifdef __REMOVE__
+
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -31,16 +34,20 @@
 #include <sys/time.h>
 #include <sys/un.h>
 
+#endif
+
 #include "wlt_proxy_common.h"
 #include "lpmd.h"
 
-
+#ifdef __REMOVE__
 #define PATH_CPUMASK "/sys/module/intel_powerclamp/parameters/cpumask"
 #define PATH_MAXIDLE "/sys/module/intel_powerclamp/parameters/max_idle"
 #define PATH_DURATION "/sys/module/intel_powerclamp/parameters/duration"
+#endif 
 
 #define PATH_CGROUP                    "/sys/fs/cgroup"
 #define PATH_CG2_SUBTREE_CONTROL        PATH_CGROUP "/cgroup.subtree_control"
+
 #define RAPL_PKG0_PWR "/sys/devices/virtual/powercap/intel-rapl/intel-rapl:0/energy_uj"
 
 //static char output_file[MAX_STR_LENGTH];
@@ -202,7 +209,6 @@ int fs_write_int(const char *name, int val)
 
     fclose(filep);
     return 0;
-
 }
 
 int fs_read_str(const char *name, char *val)

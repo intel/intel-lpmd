@@ -44,6 +44,9 @@
 #define PATH_DURATION "/sys/module/intel_powerclamp/parameters/duration"
 #define PATH_THERMAL "/sys/class/thermal"
 
+#define ENABLE_FREQ_CLAMPING 1
+#define ENABLE_IRQ_REBALANCE 1
+
 extern int cpumask_to_hexstr(cpu_set_t *mask, char *str, int size);
 extern int cpumask_to_str(cpu_set_t *mask, char *buf, int length);
 extern int irq_rebalance;
@@ -78,7 +81,7 @@ struct _lp_state {
 	int ppw_enabled;
 	int last_max_util;
 	int last_poll;
-	int freq_ctl;
+	int freq_ctl; //enable freq clamping
 };
 
 static int common_min_freq;
@@ -362,8 +365,10 @@ void exit_state_change(void)
 	unclamp_default_freq(INIT_MODE);
 	process_cpu_powerclamp_exit();
 	process_cpu_isolate_exit();
+#ifdef __REMOVE__
 	revert_orig_epp();
 	revert_orig_epb();
+#endif
 #ifdef __USE_LPMD_IRQ__
     native_restore_irqs();
 #else
@@ -881,7 +886,7 @@ static int detect_lp_state_actual(void)
 		snprintf(path, sizeof(path),
 			 "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_max_freq",
 			 i);
-		fs_read_int(path, &tmp);
+		lpmd_read_int(path, &tmp, -1);
 
 		if (!prev_turbo) {
 			/* max turbo freq */
@@ -904,7 +909,7 @@ static int detect_lp_state_actual(void)
 		snprintf(path, sizeof(path),
 			 "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_min_freq",
 			 i);
-		fs_read_int(path, &tmp);
+		lpmd_read_int(path, &tmp, -1);
 
 		if ((common_min_freq == 0) || (common_min_freq == tmp))
 			common_min_freq = tmp;
@@ -930,7 +935,7 @@ static int detect_lp_state_actual(void)
 		snprintf(path, sizeof(path),
 			 "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_max_freq",
 			 i);
-		fs_read_int(path, &tmp);
+		lpmd_read_int(path, &tmp, -1);
 		/* TBD: address the favoured core system with 1 or 2 top bin cpu */
 		if (tmp == tmp_max) {
 			/* for PERF mode need all cpu other than LP */
@@ -985,7 +990,7 @@ static int detect_lp_state_actual(void)
 			continue;
 		snprintf(path, sizeof(path),
 			 "/sys/devices/system/cpu/cpu%d/cache/index3/level", i);
-		if (!fs_open_check(path)) {
+		if (!lpmd_open(path, -1)) {
 			CPU_SET_S(i, size_cpumask, lp_state[PERF_MODE].mask);
 			CPU_SET_S(i, size_cpumask, lp_state[BYPS_MODE].mask);
 		}
@@ -1073,9 +1078,9 @@ static int update_cpusets(char *data, int update)
 						 "%s/%s/cpuset.cpus",
 						 PATH_CGROUP, entry->d_name);
 					if (update)
-						ret = fs_write_str(path, data);
+						ret = lpmd_write_str(path, data, -1);
 					else
-						ret = fs_open_check(path);
+						ret = lpmd_open(path, -1);
 					if (ret)
 						goto closedir;
 					processed = 1;
@@ -1101,7 +1106,7 @@ int check_cpu_powerclamp_support(void)
 	char str[20];
 	int ret;
 
-	if (fs_open_check(PATH_CPUMASK))
+	if (lpmd_open(PATH_CPUMASK , -1))
 		return 1;
 
 	if ((dir = opendir(PATH_THERMAL)) == NULL) {
@@ -1142,13 +1147,13 @@ int check_cpu_powerclamp_support(void)
 
 int process_cpu_powerclamp_update(int dur, int idl)
 {
-	if (fs_write_int(PATH_DURATION, dur))
+	if (lpmd_write_int(PATH_DURATION, dur, -1))
 		return 1;
 
-	if (fs_write_int(PATH_MAXIDLE, idl))
+	if (lpmd_write_int(PATH_MAXIDLE, idl, -1))
 		return 1;
 
-	if (fs_write_int(path_powerclamp, idl))
+	if (lpmd_write_int(path_powerclamp, idl, -1))
 		return 1;
 
 	return 0;
@@ -1156,22 +1161,21 @@ int process_cpu_powerclamp_update(int dur, int idl)
 
 int process_cpu_powerclamp_enter(int dur, int idl)
 {
-
-	if (fs_write_str(PATH_CPUMASK, get_inj_hexstr(cur_state)))
+	if (lpmd_write_str(PATH_CPUMASK, get_inj_hexstr(cur_state), -1))
 		return 1;
 
 	if (dur > 0) {
-		if (fs_read_int(PATH_DURATION, &default_dur))
+		if (lpmd_read_int(PATH_DURATION, &default_dur, -1))
 			return 1;
 
-		if (fs_write_int(PATH_DURATION, dur))
+		if (lpmd_write_int(PATH_DURATION, dur, -1))
 			return 1;
 	}
 
-	if (fs_write_int(PATH_MAXIDLE, idl))
+	if (lpmd_write_int(PATH_MAXIDLE, idl, -1))
 		return 1;
 
-	if (fs_write_int(path_powerclamp, idl))
+	if (lpmd_write_int(path_powerclamp, idl, -1))
 		return 1;
 
 	return 0;
@@ -1179,14 +1183,14 @@ int process_cpu_powerclamp_enter(int dur, int idl)
 
 int process_cpu_powerclamp_exit()
 {
-	if (fs_write_int(PATH_DURATION, default_dur))
+	if (lpmd_write_int(PATH_DURATION, default_dur, -1))
 		return 1;
-	return fs_write_int(path_powerclamp, 0);
+	return lpmd_write_int(path_powerclamp, 0, -1);
 }
 
 static int check_cpu_isolate_support(void)
 {
-	fs_write_str(PATH_CG2_SUBTREE_CONTROL, "+cpuset");
+	lpmd_write_str(PATH_CG2_SUBTREE_CONTROL, "+cpuset", -1);
 	return update_cpusets(NULL, 0);
 }
 

@@ -201,34 +201,38 @@ void perf_stat_uninit();
 void init_all_fd(void);
 void close_all_fd(void);
 
+//only used in irq.c
 FILE *open_fs(const char *, char *);
 int write_str_fs(FILE *, const char *);
 int close_fs(FILE *);
 
+#ifdef __REMOVE__
 long long read_rapl_pkg0(void);
-
-int fs_open_check(const char *name);
-int fs_write_int(const char *name, int val);
-int fs_read_int(const char *name, int *val);
-int fs_write_str(const char *name, char *str);
+#endif
 
 int write_cgroup_partition(const char *);
 int write_cgroup_isolate(const char *);
 
 #ifdef __REMOVE__
-int fs_write_str_append(const char *name, char *str);
+
+int fs_open_check(const char *name); //lpmd_open
+int fs_write_int(const char *name, int val); //lpmd_write_int
+int fs_read_int(const char *name, int *val); //lpmd_read_int
+int fs_write_str(const char *name, char *str); //lpmd_write_str
+
+int fs_write_str_append(const char *name, char *str);//lpmd_write_str_append
 int fs_read_str(const char *name, char *val);
 
-int open_fd(const char *name, int flags);
-int close_fd(int fd);
-int init_rapl_fd(void);
+int open_fd(const char *name, int flags);//static functions not used anywhere
+int close_fd(int fd);//static functions not used anywhere
+int init_rapl_fd(void);//static functions not used anywhere
 //void close_rapl_fd(void);
-int write_str_fd(int fd, const char *);
-int read_str_fd(int fd, char *);
+int write_str_fd(int fd, const char *);//static functions not used anywhere
+int read_str_fd(int fd, char *);//static functions not used anywhere
 
-char *get_mode_name(enum lp_state_idx);
-int get_mode_cpu_count(enum lp_state_idx);
-int get_mode_max(void);
+char *get_mode_name(enum lp_state_idx);//static functions not used anywhere
+int get_mode_cpu_count(enum lp_state_idx);//static functions not used anywhere
+int get_mode_max(void);//static functions not used anywhere
 #endif
 
 #endif /* _WLT_PROXY_COMMON_H_ */
