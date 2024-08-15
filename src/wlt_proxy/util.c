@@ -91,10 +91,14 @@ typedef struct {
 
 perf_stats_t *perf_stats;
 struct group_util grp;
+
+#ifdef __REMOVE__
 uint32_t update_epp(int fd, uint64_t epp);
 uint32_t update_epb(int fd, uint64_t epb);
 void update_state_epp(enum lp_state_idx state);
 void update_state_epb(enum lp_state_idx state);
+#endif
+
 void clamp_to_turbo(enum lp_state_idx for_state);
 
 static float soc_mw;
@@ -433,8 +437,10 @@ int update_perf_diffs(float *sum_norm_perf, int stat_init_only)
     grp.c0_3rd_max = max_3rd_load;
     grp.c0_min = min_load;
     *sum_norm_perf = _sum_nperf;
+#ifdef __REMOVE__//soc_mw used in plotting.
     if (poll_cpu_us != 0)
         soc_mw = (float)rapl_ediff_pkg0(read_rapl_pkg0()) * 1000 / poll_cpu_us;
+#endif
 
     return maxed_cpu;
 }
@@ -595,7 +601,7 @@ int prep_state_change(enum lp_state_idx from_state, enum lp_state_idx to_state,
     /* state exit: p-state reset back */
     if (!reset && state_support_freq_ctl(from_state))
         unclamp_default_freq(from_state);
-#if 0
+#ifdef __REMOVE__
     //epp and epb are updated in the main 
     update_state_epp(to_state);
     update_state_epb(to_state);
@@ -653,6 +659,7 @@ int staytime_to_staycount(enum lp_state_idx state)
 
 int prepare_deomote_bypass(enum lp_state_idx to_state, int epp_high)
 {
+#ifdef __REMOVE__
     if (!epp_high) {
         update_state_epp(NORM_MODE);
         update_state_epb(NORM_MODE);
@@ -660,11 +667,13 @@ int prepare_deomote_bypass(enum lp_state_idx to_state, int epp_high)
         update_state_epp(PERF_MODE);
         update_state_epb(PERF_MODE);
     }
-
+#endif
     set_cur_state(to_state);
     set_state_reset();
     set_last_maxutil(DEACTIVATED);
+#ifdef __REMOVE__
     irq_rebalance = 1;
+#endif
     return 1;
 }
 
@@ -680,18 +689,18 @@ void unclamp_default_freq(enum lp_state_idx for_state)
                 snprintf(path, sizeof(path),
                      "/sys/devices/system/cpu/cpufreq/policy%d/cpuinfo_min_freq",
                      i);
-                fs_read_int(path, &min_freq);
+                lpmd_read_int(path, &min_freq, -1);
             }
 
             max_freq = get_turbo_freq(i);
             snprintf(path, sizeof(path),
                  "/sys/devices/system/cpu/cpufreq/policy%d/scaling_max_freq",
                  i);
-            fs_write_int(path, max_freq);
+            lpmd_write_int(path, max_freq, -1);
             snprintf(path, sizeof(path),
                  "/sys/devices/system/cpu/cpufreq/policy%d/scaling_min_freq",
                  i);
-            fs_write_int(path, min_freq);
+            lpmd_write_int(path, min_freq, -1);
         }
     }
 }
@@ -716,15 +725,15 @@ void clamp_to_freq(enum lp_state_idx for_state, int to_freq)
                  "/sys/devices/system/cpu/cpufreq/policy%d/scaling_min_freq",
                  i);
 
-            fs_read_int(path_max, &cur_max_freq);
+            lpmd_read_int(path_max, &cur_max_freq, -1);
 
             if (cur_max_freq > to_freq) {
                 /* reducing max freq. so, ok to set min first */
-                fs_write_int(path_min, to_freq);
-                fs_write_int(path_max, to_freq);
+                lpmd_write_int(path_min, to_freq, -1);
+                lpmd_write_int(path_max, to_freq, -1);
             } else {
-                fs_write_int(path_max, to_freq);
-                fs_write_int(path_min, to_freq);
+                lpmd_write_int(path_max, to_freq, -1);
+                lpmd_write_int(path_min, to_freq, -1);
             }
         }
     }
@@ -740,11 +749,11 @@ void clamp_to_turbo(enum lp_state_idx for_state)
             snprintf(path, sizeof(path),
                  "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_max_freq",
                  i);
-            fs_write_int(path, turbo_freq);
+            lpmd_write_int(path, turbo_freq, -1);
             snprintf(path, sizeof(path),
                  "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_min_freq",
                  i);
-            fs_write_int(path, turbo_freq);
+            lpmd_write_int(path, turbo_freq, -1);
         }
     }
 }
@@ -774,6 +783,8 @@ int max_mt_detected(enum lp_state_idx state)
 uint64_t diff_ms(struct timespec *ts_then, struct timespec *ts_now);
 static struct timespec ts_start, ts_prev;
 static struct timespec ts_init = { 0, 0 };
+
+#ifdef __REMOVE__
 
 //extern bool plotting;
 float max_Qperf = 1;;
@@ -912,6 +923,8 @@ static int util_main(enum slider_value sld)
     return max_util;
 }
 
+#endif
+
 int inject_active()
 {
     switch (inject_update) {
@@ -943,6 +956,7 @@ uint64_t diff_ms(struct timespec *ts_then, struct timespec *ts_now)
     return diff;
 }
 
+#ifdef __REMOVE__
 //extern enum slider_value sld;
 void *state_handler(void)
 {
@@ -1001,6 +1015,7 @@ void update_state_epb(enum lp_state_idx state)
                (uint64_t) get_state_epb(state));
     }
 }
+#endif
 
 int perf_stat_init(void)
 {
@@ -1014,13 +1029,16 @@ int perf_stat_init(void)
     for (int t = 0; t < max_cpus; t++) {
         if (!is_cpu_online(t))
             continue;
+        
         perf_stats[t].cpu = t;
         perf_stats[t].dev_msr_fd = initialize_dev_msr(t);
+#ifdef __REMOVE__ //dont store the orignial epp/epb
         perf_stats[t].orig_epp =
             update_epp(perf_stats[t].dev_msr_fd,
                    (uint64_t) PERFORMANCE_EPP);
         perf_stats[t].orig_epb =
             update_epb(perf_stats[t].dev_msr_fd, (uint64_t) EPB_AC);
+#endif
     }
     return 1;
 }
@@ -1036,9 +1054,10 @@ void perf_stat_uninit(){
 
 }
 
+#ifdef __REMOVE__
 /* EP BIAS. XXX switch to sysfs */
 
-uint32_t update_epb(int fd, uint64_t new_value)
+static uint32_t update_epb(int fd, uint64_t new_value)
 {
     uint64_t orig_value;
     read_msr(fd, (uint32_t) MSR_EPB, &orig_value);
@@ -1046,7 +1065,7 @@ uint32_t update_epb(int fd, uint64_t new_value)
     return (uint32_t) orig_value;
 }
 
-int revert_orig_epb(void)
+static int revert_orig_epb(void)
 {
     for (int t = 0; t < get_max_cpus(); t++) {
         if (!is_cpu_online(t))
@@ -1058,7 +1077,7 @@ int revert_orig_epb(void)
 }
 
 /* EP Preference. XXX switch to sysfs */
-uint32_t update_epp(int fd, uint64_t new_value)
+static uint32_t update_epp(int fd, uint64_t new_value)
 {
     uint64_t orig_value;
     read_msr(fd, (uint32_t) MSR_HWP, &orig_value);
@@ -1067,7 +1086,7 @@ uint32_t update_epp(int fd, uint64_t new_value)
     return (uint32_t) orig_value;
 }
 
-int revert_orig_epp(void)
+static int revert_orig_epp(void)
 {
     for (int t = 0; t < get_max_cpus(); t++) {
         if (!is_cpu_online(t))
@@ -1077,6 +1096,8 @@ int revert_orig_epp(void)
     }
     return 1;
 }
+
+#endif
 
 /*defined in lpmd_util*/
 int util_init_proxy(void)
@@ -1096,10 +1117,11 @@ int util_init_proxy(void)
 
     initialize_cpu_hfm_mhz(perf_stats[0].dev_msr_fd);
 
+#ifdef __REMOVE__
     //state_handler();
+#endif
     initialize_state_mask();
     sma_init();
-
 
     //close_all_fd();
     return 1;
