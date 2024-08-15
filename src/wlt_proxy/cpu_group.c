@@ -400,6 +400,7 @@ int apply_state_change(void)
 	else
 		process_cpu_isolate_enter();
 
+#ifdef __REMOVE__
 	if (IDLE_INJECT_FEATURE && (inject_update == ACTIVATED)
 	    && state_has_ppw(get_cur_state())) {
 		process_cpu_powerclamp_enter(DURATION_SPILL *
@@ -408,6 +409,8 @@ int apply_state_change(void)
 					     (100 - INJ_BUF_PCT - grp.c0_max));
 		inject_update = RUNNING;
 	}
+#endif
+
 	update_perf_diffs(&test, 1);
 
 	needs_state_reset = 0;

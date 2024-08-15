@@ -34,15 +34,26 @@
 #include "wlt_proxy_common.h"
 #include "lpmd.h"
 
-static char output_file[MAX_STR_LENGTH];
+
+#define PATH_CPUMASK "/sys/module/intel_powerclamp/parameters/cpumask"
+#define PATH_MAXIDLE "/sys/module/intel_powerclamp/parameters/max_idle"
+#define PATH_DURATION "/sys/module/intel_powerclamp/parameters/duration"
+
+#define PATH_CGROUP                    "/sys/fs/cgroup"
+#define PATH_CG2_SUBTREE_CONTROL        PATH_CGROUP "/cgroup.subtree_control"
+#define RAPL_PKG0_PWR "/sys/devices/virtual/powercap/intel-rapl/intel-rapl:0/energy_uj"
+
+//static char output_file[MAX_STR_LENGTH];
 
 struct _fd_cache {
     int pkg0_rapl_fd;
     int cgroup_partition_fd;
     int cgroup_isolate_fd;
+#ifdef __REMOVE__
     int inject_cpumask;
     int inject_duration;
     int inject_idle;
+#endif
 };
 
 static struct _fd_cache fd_cache;
@@ -89,16 +100,19 @@ static int _read_str_fd(int fd, char *str)
     return ret;
 }
 
-int write_str_fd(int fd, const char *str)
+#ifdef __REMOVE__
+
+static int write_str_fd(int fd, const char *str)
 {
     return _write_str_fd(fd, str);
 }
 
-int read_str_fd(int fd, char *str)
+static int read_str_fd(int fd, char *str)
 {
     return _read_str_fd(fd, str);
 }
 
+#endif
 
 FILE *open_fs(const char *name, char *mode)
 {
@@ -109,6 +123,7 @@ FILE *open_fs(const char *name, char *mode)
     }
     return filep;
 }
+
 int close_fs(FILE * filep)
 {
     return fclose(filep);
@@ -158,10 +173,12 @@ int fs_write_str(const char *name, char *str)
     return _write_str(name, str, "r+");
 }
 
-int fs_write_str_append(const char *name, char *str)
+#ifdef __REMOVE__
+static int fs_write_str_append(const char *name, char *str)
 {
     return _write_str(name, str, "a+");
 }
+#endif
 
 int fs_write_int(const char *name, int val)
 {
@@ -238,11 +255,7 @@ int fs_read_int(const char *name, int *val)
 
 }
 
-#define PATH_CGROUP                    "/sys/fs/cgroup"
-#define PATH_CG2_SUBTREE_CONTROL        PATH_CGROUP "/cgroup.subtree_control"
-#define RAPL_PKG0_PWR "/sys/devices/virtual/powercap/intel-rapl/intel-rapl:0/energy_uj"
-
-int init_rapl_fd(void)
+static int init_rapl_fd(void)
 {
     int fd;
     fd = open(RAPL_PKG0_PWR, O_RDONLY);
@@ -266,7 +279,7 @@ long long read_rapl_pkg0(void)
     return atoll(buf);
 }
 
-int open_fd(const char *name, int flags)
+static int open_fd(const char *name, int flags)
 {
     int fd;
 
@@ -278,7 +291,7 @@ int open_fd(const char *name, int flags)
     return fd;
 }
 
-int close_fd(int fd)
+static int close_fd(int fd)
 {
     if (fd < 0) {
         lpmd_log_debug("invalid fd:%d\n", fd);
@@ -302,9 +315,7 @@ int fs_open_check(const char *name)
     return 0;
 }
 
-#define PATH_CPUMASK "/sys/module/intel_powerclamp/parameters/cpumask"
-#define PATH_MAXIDLE "/sys/module/intel_powerclamp/parameters/max_idle"
-#define PATH_DURATION "/sys/module/intel_powerclamp/parameters/duration"
+#ifdef __REMOVE__
 
 int init_inject_fd(void)
 {
@@ -345,6 +356,8 @@ int write_inject_cpumask(const char *str)
 {
     return _write_str_fd(fd_cache.inject_cpumask, str);
 }
+
+#endif
 
 int write_cgroup_partition(const char *str)
 {
@@ -392,22 +405,28 @@ void init_all_fd(void)
 {
     init_rapl_fd();
     init_cgroup_fd();
+#ifdef __REMOVE__
     init_inject_fd();
+#endif
 }
 
 void close_all_fd(void)
 {
     if (fd_cache.pkg0_rapl_fd > 0)
         close(fd_cache.pkg0_rapl_fd);
+    
     if (fd_cache.cgroup_isolate_fd > 0)
         close(fd_cache.cgroup_isolate_fd);
     if (fd_cache.cgroup_partition_fd > 0)
         close(fd_cache.cgroup_partition_fd);
+    
+#ifdef __REMOVE__
     if (fd_cache.inject_cpumask > 0)
         close(fd_cache.inject_cpumask);
     if (fd_cache.inject_idle > 0)
         close(fd_cache.inject_idle);
     if (fd_cache.inject_duration > 0)
         close(fd_cache.inject_duration);
+#endif
 
 }

@@ -198,28 +198,37 @@ int staytime_to_staycount(enum lp_state_idx);
 void perf_stat_uninit(); 
 
 /* helper */
-int fs_write_str(const char *name, char *str);
-int fs_write_str_append(const char *name, char *str);
-int fs_write_int(const char *name, int val);
+void init_all_fd(void);
+void close_all_fd(void);
+
+FILE *open_fs(const char *, char *);
+int write_str_fs(FILE *, const char *);
+int close_fs(FILE *);
+
+long long read_rapl_pkg0(void);
+
 int fs_open_check(const char *name);
+int fs_write_int(const char *name, int val);
 int fs_read_int(const char *name, int *val);
+int fs_write_str(const char *name, char *str);
+
+int write_cgroup_partition(const char *);
+int write_cgroup_isolate(const char *);
+
+#ifdef __REMOVE__
+int fs_write_str_append(const char *name, char *str);
 int fs_read_str(const char *name, char *val);
+
 int open_fd(const char *name, int flags);
 int close_fd(int fd);
 int init_rapl_fd(void);
-void close_rapl_fd(void);
-long long read_rapl_pkg0(void);
-void init_all_fd(void);
-void close_all_fd(void);
-int write_cgroup_partition(const char *);
-int write_cgroup_isolate(const char *);
+//void close_rapl_fd(void);
 int write_str_fd(int fd, const char *);
 int read_str_fd(int fd, char *);
-FILE *open_fs(const char *, char *);
-int close_fs(FILE *);
-int write_str_fs(FILE *, const char *);
+
 char *get_mode_name(enum lp_state_idx);
 int get_mode_cpu_count(enum lp_state_idx);
 int get_mode_max(void);
+#endif
 
 #endif /* _WLT_PROXY_COMMON_H_ */
