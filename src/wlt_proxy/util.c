@@ -92,6 +92,9 @@ typedef struct {
 perf_stats_t *perf_stats;
 struct group_util grp;
 
+static struct timespec ts_start, ts_prev;
+static struct timespec ts_init = { 0, 0 };
+
 #ifdef __REMOVE__
 uint32_t update_epp(int fd, uint64_t epp);
 uint32_t update_epb(int fd, uint64_t epb);
@@ -537,9 +540,25 @@ enum lp_state_idx nearest_supported(enum lp_state_idx from_state, enum lp_state_
 }
 
 static int get_state_mapping(enum lp_state_idx state){
-
-    //read the battery connection status 
-    bool AC_CONNECTED = is_ac_powered_power_supply_status() == 0  ? false: true; //unknown is considered as ac powered.
+    
+    //read the battery connection status, if the last reading is beyond 30 seconds
+    bool AC_CONNECTED = true; 
+    clockid_t clk = CLOCK_MONOTONIC;
+    if (!ts_init.tv_sec){ //first time 
+        clock_gettime(clk, &ts_init); 
+        lpmd_log_info("Init, read AC_CONNECTED status");
+        AC_CONNECTED = is_ac_powered_power_supply_status() == 0  ? false: true; //unknown is considered as ac powered.
+        ts_prev = ts_init; 
+    } else {
+        clock_gettime(clk, &ts_init); //get current time 
+        if (ts_init.tv_sec - ts_prev.tv_sec > 30){
+            lpmd_log_info("30s elapsed, read AC_CONNECTED status");
+            AC_CONNECTED = is_ac_powered_power_supply_status() == 0  ? false: true; //unknown is considered as ac powered.
+        }
+        ts_prev = ts_init; 
+    }
+ 
+    //bool AC_CONNECTED = is_ac_powered_power_supply_status() == 0  ? false: true; //unknown is considered as ac powered.
     
     switch(state){
     case PERF_MODE:
@@ -547,11 +566,9 @@ static int get_state_mapping(enum lp_state_idx state){
     
     case RESP_MODE:
         if (AC_CONNECTED){    
-        lpmd_log_info("AC_CONNECTED: WLT_SUSTAINED\n");
             return WLT_SUSTAINED;
         }
         else{
-        lpmd_log_info("Powered by battery: WLT_SUSTAINED_BAT\n");            
             return WLT_SUSTAINED_BAT;
         }
             
@@ -560,11 +577,9 @@ static int get_state_mapping(enum lp_state_idx state){
     case MDRT2E_MODE:
     case NORM_MODE:
         if (AC_CONNECTED){
-            lpmd_log_info("AC_CONNECTED: WLT_BATTERY_LIFE\n");
             return WLT_BATTERY_LIFE;
         }
-        else {
-            lpmd_log_info("Powered by battery: WLT_BATTERY_LIFE_BAT\n");            
+        else {         
             return WLT_BATTERY_LIFE_BAT;
         }    
     case DEEP_MODE:                            
@@ -780,11 +795,9 @@ int max_mt_detected(enum lp_state_idx state)
     return 1;
 }
 
-uint64_t diff_ms(struct timespec *ts_then, struct timespec *ts_now);
-static struct timespec ts_start, ts_prev;
-static struct timespec ts_init = { 0, 0 };
 
 #ifdef __REMOVE__
+uint64_t diff_ms(struct timespec *ts_then, struct timespec *ts_now);
 
 //extern bool plotting;
 float max_Qperf = 1;;
@@ -937,6 +950,9 @@ int inject_active()
     }
 }
 
+
+#ifdef __REMOVE__
+
 #define MSEC_PER_SEC (1000)
 #define NSEC_PER_MSEC (1000000)
 uint64_t diff_ms(struct timespec *ts_then, struct timespec *ts_now)
@@ -956,7 +972,7 @@ uint64_t diff_ms(struct timespec *ts_then, struct timespec *ts_now)
     return diff;
 }
 
-#ifdef __REMOVE__
+
 //extern enum slider_value sld;
 void *state_handler(void)
 {
@@ -1104,7 +1120,10 @@ int util_init_proxy(void)
 {
     float dummy;
     
-    init_cpu_proxy();
+    if (init_cpu_proxy()){
+        lpmd_log_error("\nerror initing cpu proxy\n");
+        return -1; 
+    }
 
     if (IDLE_INJECT_FEATURE)
         check_cpu_powerclamp_support();
@@ -1124,7 +1143,7 @@ int util_init_proxy(void)
     sma_init();
 
     //close_all_fd();
-    return 1;
+    return 0;
 }
 
 void util_uninit_proxy(void) {

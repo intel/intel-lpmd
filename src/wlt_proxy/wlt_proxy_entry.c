@@ -53,15 +53,16 @@ void wlt_proxy_action_loop(void) {
 /** Return non zero if the proxy is not present for a platform */
 int wlt_proxy_init(lpmd_config_t *_lpmd_config) {
 	
-    util_init_proxy();
+    if (util_init_proxy()){
+        return LPMD_ERROR; 
+    }
 
 	/* Check model check and fail */
 	/* TODO */
 	lpmd_config = _lpmd_config;//todo: remove
 
 	proxy_initialized = true;
-	next_proxy_poll = 2000;//value from config?
-    
+    next_proxy_poll = 2000; 
 	return LPMD_SUCCESS;
 }
 

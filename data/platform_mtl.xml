@@ -91,14 +91,14 @@ for Intel Energy Optimizer (LPMD) daemon
 		from 0 - 100
 		clear both util_entry_threshold and util_exit_threshold to disable util monitor
 	-->
-	<util_entry_threshold>10</util_entry_threshold>
+	<util_entry_threshold></util_entry_threshold>
 
 	<!--
 		System utilization threshold to exit LP mode
 		from 0 - 100
 		clear both util_entry_threshold and util_exit_threshold to disable util monitor
 	-->
-	<util_exit_threshold>95</util_exit_threshold>
+	<util_exit_threshold></util_exit_threshold>
 
 	<!--
 		Entry delay. Minimum delay in non Low Power mode to

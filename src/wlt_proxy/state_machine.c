@@ -101,8 +101,8 @@ int state_machine_auto(int present_state)
 		 */
 		/* promote -- if not high multi-thread trend */
 		if (!max_mt_detected(INIT_MODE)) {
-            lpmd_log_info("INIT_MODE to NORM_MODE\n");			
-			prep_state_change(INIT_MODE, NORM_MODE, 0);
+            //lpmd_log_info("INIT_MODE to NORM_MODE\n");			
+			prep_state_change(INIT_MODE, PERF_MODE, 0);
 			break;
 		}
 		// stay -- full MT

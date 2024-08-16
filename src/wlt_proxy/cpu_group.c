@@ -391,7 +391,7 @@ int apply_state_change(void)
 #endif
 
 	if (irq_rebalance) {
-		lpmd_log_error("ECO irq active -- revisit");
+		//lpmd_log_error("ECO irq active -- revisit\n");
 #ifdef __USE_LPMD_IRQ__
         native_update_irqs();
 #else
@@ -479,7 +479,8 @@ size_t alloc_cpu_set(cpu_set_t ** cpu_set)
 	if (size_cpumask && size_cpumask != size) {
 		lpmd_log_error("Conflict cpumask size %lu vs. %lu\n", size,
 			size_cpumask);
-		exit(-1);
+		//exit(-1);
+        return -1; 
 	}
 	return size;
 }
@@ -662,7 +663,10 @@ static char *get_cpus_str_reverse(enum lp_state_idx idx)
 	if (!lp_state[idx].str_reverse)
 		err(3, "STR_ALLOC");
 
-	alloc_cpu_set(&mask);
+	if (alloc_cpu_set(&mask) < 0){
+        lpmd_log_error("failure allocating cpu set\n");
+        return NULL; 
+    }
 	CPU_XOR_S(size_cpumask, mask, lp_state[idx].mask,
 		  lp_state[INIT_MODE].mask);
 	ret = cpumask_to_str(mask, lp_state[idx].str_reverse, MAX_STR_LENGTH);
@@ -692,9 +696,12 @@ static int add_cpu_proxy(int cpu, enum lp_state_idx idx)
 	if (idx != INIT_MODE && !is_cpu_online(cpu))
 		return 0;
 
-	if (!lp_state[idx].mask)
-		alloc_cpu_set(&lp_state[idx].mask);
-
+	if (!lp_state[idx].mask){
+		if (alloc_cpu_set(&lp_state[idx].mask) < 0){
+            lpmd_log_error("failure add cpu proxy\n");
+            return -1; 
+        }
+    }
 	CPU_SET_S(cpu, size_cpumask, lp_state[idx].mask);
 
 	if (idx == INIT_MODE)
@@ -1001,8 +1008,9 @@ static int detect_lp_state_actual(void)
 	/* MDRT with 2 cores is not know to be beneficial comapred. simplyfy */
 	lp_state[MDRT2E_MODE].disabled = true;
 	if (max_online_cpu <= 4) {
-		lpmd_log_info("too few CPU: %d", max_online_cpu);
-		exit(1);
+		lpmd_log_error("too few CPU: %d", max_online_cpu);
+		//exit(1);
+        return -1; 
 	} else if (max_online_cpu <= 8) {
 		lp_state[MDRT2E_MODE].disabled = true;
 		lp_state[MDRT4E_MODE].disabled = true;
@@ -1013,9 +1021,13 @@ static int detect_lp_state_actual(void)
 		cpu_count = CPU_COUNT_S(size_cpumask, lp_state[idx].mask);
 		if (!lp_state[idx].disabled && cpu_count) {
 			if (state_has_ppw(idx)) {
-				if (!lp_state[idx].inj_mask)
-					alloc_cpu_set(&lp_state[idx].inj_mask);
-				and_into_injmask(INIT_MODE, idx, idx);
+				if (!lp_state[idx].inj_mask) {
+					if (alloc_cpu_set(&lp_state[idx].inj_mask) < 0){
+                        lpmd_log_error("error allocating cpu set\n");
+                        continue; 
+                    }
+                }
+                and_into_injmask(INIT_MODE, idx, idx);
 			}
 			lpmd_log_info("\t[%d] %s [0x%s] cpu count: %2d\n", idx,
 			       lp_state[idx].name, get_cpus_hexstr(idx),
@@ -1041,8 +1053,9 @@ static int detect_lp_state(void)
 	ret = detect_lp_state_actual();
 
 	if (ret <= 0) {
-		lpmd_log_info("\tNo valid Low Power CPUs detected, exit\n");
-		exit(1);
+		lpmd_log_error("\tNo valid Low Power CPUs detected, exit\n");
+		//exit(1);
+        return -1; 
 	} else {
 
 	}
