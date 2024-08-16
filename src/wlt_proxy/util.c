@@ -112,7 +112,7 @@ struct thread_data {
     unsigned long long mperf;
     unsigned long long pperf; 
 } *thread_even, *thread_odd;
-
+#ifdef __REMOVE__
 int grp_c0_breach(void)
 {
     return (A_GT_B(grp.c0_max, UTIL_NEAR_FULL)
@@ -123,6 +123,7 @@ int get_msr_fd(int cpu)
 {
     return perf_stats[cpu].dev_msr_fd;
 }
+#endif
 
 static int read_perf_counter_info(const char *const path, const char *const parse_format, void *value_ptr)
 {
@@ -803,7 +804,9 @@ uint64_t diff_ms(struct timespec *ts_then, struct timespec *ts_now);
 float max_Qperf = 1;;
 float max_Wattage = 1;
 float max_QperW = 1;
-static int util_main(enum slider_value sld)
+
+//static int util_main(enum slider_value sld)
+static int util_main(/*enum slider_value sld*/)
 {
     int max_util, present_state;
     int next_freq;
@@ -827,7 +830,7 @@ static int util_main(enum slider_value sld)
      */
     if ((present_state != BYPS_MODE) && (present_state != RESP_MODE))
         state_max_avg();
-
+#ifdef __REMOVE__
     switch (sld) {
     case performance:
     case balance_performance:
@@ -838,14 +841,17 @@ static int util_main(enum slider_value sld)
         state_machine_power(present_state);
         break;
     case balanced:
-                state_machine_auto(present_state);
-                break;
+        state_machine_auto(present_state);
+        break;
     case unknown:
     case MAX_SLIDER:
         exit_state_change();
         exit(0);
         break;
     }
+#else
+    state_machine_auto(present_state);
+#endif
 
     if (state_has_ppw(get_cur_state())) {
         /* 

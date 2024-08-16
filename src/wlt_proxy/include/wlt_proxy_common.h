@@ -106,9 +106,10 @@
 #define A_GTE_B(A,B)    (((A-B) >= EPSILON) ? 1 : 0 )
 #define A_GT_B(A,B)    (((A-B) > EPSILON) ? 1 : 0 )
 
-//#ifdef __REMOVE__
+
 #define RECORDS_PER_HEADER    (30)
 extern int slider;
+#ifdef __REMOVE__
 enum slider_value {
     unknown,
     performance,
@@ -118,7 +119,7 @@ enum slider_value {
     power_saver,
     MAX_SLIDER,
 };
-//#endif
+#endif
 
 enum lp_state_idx {
     INIT_MODE,    // 0
@@ -159,11 +160,11 @@ enum elastic_poll {
 };
 
 /* feature states */
-#define DEACTIVATED     (-1)
+#define DEACTIVATED  (-1)
 #define UNDEFINED    (0)
-#define RUNNING        (1)
+#define RUNNING      (1)
 #define ACTIVATED    (2)
-#define PAUSE         (3)
+#define PAUSE        (3)
 
 void set_cur_state(enum lp_state_idx);
 int is_state_valid(enum lp_state_idx);
@@ -180,22 +181,29 @@ int update_irqs(void);
 /* util.c */
 int util_init_proxy(void);//defined in lpmd_util
 void util_uninit_proxy(void);
-void set_eco_timeout(int);
-int get_msr_fd(int);
+
 int perf_stat_init(void);
-void unclamp_default_freq(enum lp_state_idx);
+void perf_stat_uninit(); 
+
+int prep_state_change(enum lp_state_idx, enum lp_state_idx, int);
 int update_perf_diffs(float *, int);
+
+int staytime_to_staycount(enum lp_state_idx);
+int max_mt_detected(enum lp_state_idx);
+
+void unclamp_default_freq(enum lp_state_idx);
+
+#ifdef __REMOVE__
+//void set_eco_timeout(int);
+int get_msr_fd(int);
 int revert_orig_epp(void);
 int revert_orig_epb(void);
-int max_mt_detected(enum lp_state_idx);
-int prep_state_change(enum lp_state_idx, enum lp_state_idx, int);
-int count_up_breach(int);
+//int count_up_breach(int);
 int grp_c0_breach(void);
-int breach_per_sec(int);
-int state_toggle_per_sec(int);
-int grp_c0_breach_fast(void);
-int staytime_to_staycount(enum lp_state_idx);
-void perf_stat_uninit(); 
+//int breach_per_sec(int);
+//int state_toggle_per_sec(int);
+//int grp_c0_breach_fast(void);
+#endif
 
 /* helper */
 void init_all_fd(void);
