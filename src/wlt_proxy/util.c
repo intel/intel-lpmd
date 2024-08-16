@@ -554,9 +554,9 @@ static int get_state_mapping(enum lp_state_idx state){
         clock_gettime(clk, &ts_init); //get current time 
         if (ts_init.tv_sec - ts_prev.tv_sec > 30){
             lpmd_log_info("30s elapsed, read AC_CONNECTED status");
+            ts_prev = ts_init;
             AC_CONNECTED = is_ac_powered_power_supply_status() == 0  ? false: true; //unknown is considered as ac powered.
-        }
-        ts_prev = ts_init; 
+        } 
     }
  
     //bool AC_CONNECTED = is_ac_powered_power_supply_status() == 0  ? false: true; //unknown is considered as ac powered.

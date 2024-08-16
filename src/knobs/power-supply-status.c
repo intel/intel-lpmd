@@ -21,7 +21,7 @@
 * battery presence, count and battery charging status.
 * 1. /power_supply - find power supply folder in /sys
 * 2. /supply_name - enumerate all supply_names [AC, BAT, USB] avialable under power supply
-* 3. /status - unknown, charging, discharging, not charging, full
+* 3. /status - unknown(AC connected), charging(AC connected), discharging, not charging, full(AC connected)
 * 4. /online - 
 * 5. type - 
 */
@@ -44,6 +44,7 @@
 #include <string.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <ctype.h>
 
 #ifdef _ENABLE_UEVENT_
 //#include <glib-object.h>
@@ -204,6 +205,28 @@ static int get_value(char *path, int *val)
 	return ret;
 }
 
+static int get_value_str(char *path, char *val)
+{
+	FILE *filep;
+	int ret=0;
+	
+    if (!val)
+		return -1;
+    
+	filep = fopen (path, "r");
+	if (!filep)
+		return -1;
+
+	ret = fread(val, 1, 256, filep);
+    if (ret <= 0) {
+		lpmd_log_error("get_value_str from %s failed\n", path);		
+	}
+	fclose(filep);
+
+	return ret;
+}
+
+
 int PSS_init() {
 
     if(is_initialized == 1) {
@@ -266,6 +289,7 @@ int is_ac_powered_power_supply_status() {
 				return -1;
 			}
 				
+            bool bFoundBatt = false;     
 			for (int i = 0; i < supply_names_count; i++) {
 				int content_count = 0;
 				char power_supply_base_path[PATH_MAX] = {0};
@@ -281,8 +305,16 @@ int is_ac_powered_power_supply_status() {
 					strcpy(s_supply, p_supply);
 					strncat(power_supply_base_path, s_supply, size);
 				}
-				//printf("power_supply_base_path 1 = %s \n", power_supply_base_path);
-
+				lpmd_log_info("power_supply_base_path: %s \n", power_supply_base_path);
+                
+                //checking whether the folder name is a BAT* 
+                if (strstr(power_supply_base_path, "BAT")!= NULL)
+                    bFoundBatt = true; 
+                else {
+                    bFoundBatt = false; 
+                    continue; 
+                }
+                
 				contents_array out_contents;
 				res = get_contents(power_supply_base_path, &content_count, files_only, out_contents);
 				if (res == -1){
@@ -292,7 +324,38 @@ int is_ac_powered_power_supply_status() {
  
 				for (int j = 0; j < content_count; j++) {
 					char* p_content = strdup(out_contents[j]);
-					if(p_content && strcmp(p_content, "online") == 0) {
+
+                    //in battery folder, we only care about the status file 
+                    if (p_content && strcmp(p_content, "status") == 0){
+                        char str_value[256];
+                        strncat(power_supply_base_path, "/", sizeof("/"));
+                        strncat(power_supply_base_path, "status", sizeof("status"));                        
+                        int ret = get_value_str(power_supply_base_path, str_value);
+                        //to all lower case 
+                        if (strlen(str_value) != 0){
+                            for(int i = 0; str_value[i]; i++){
+                                str_value[i] = tolower(str_value[i]);
+                            }
+                        }
+                        
+                        if (strcmp(str_value, "discharging") == 0 || strcmp(str_value, "not charging") == 0){
+                            lpmd_log_info("value of status is %s, battery powered\n", str_value);
+                            is_power_connected = false; 
+                        } else {
+                            is_power_connected = true; 
+                            lpmd_log_info("value of status is %s, power connected\n", str_value);
+                        }
+                        
+                        if (p_content)
+                            free(p_content);                        
+                        return is_power_connected; 
+                    } else {
+                        if (p_content)
+                            free(p_content);
+                        continue; 
+                    }
+                }        
+                    /*else if(p_content && strcmp(p_content, "online") == 0) {
 						strncat(power_supply_base_path, "/", sizeof("/"));
 						strncat(power_supply_base_path, "online", sizeof("online"));
 							
@@ -310,17 +373,20 @@ int is_ac_powered_power_supply_status() {
 								break;
 							}
 						}
-					}
-					if (p_content)
-						free(p_content);					
-				}
- 				
+					}									
+                
 				if(is_powered == 0) {
 					break;
-				}
+				}*/
 			}
+            // no battery folder found, assume it's AC/USB connected    
+            if (!bFoundBatt){
+                is_power_connected = true; 
+                return is_power_connected; 
+            }
+            
 		}// else printf ("is_supported = true \n");
-		
+
 		if(strcmp(interface_path, "") != 0) {
 			int value = -1;
 			int ret = get_value(interface_path, &value);
