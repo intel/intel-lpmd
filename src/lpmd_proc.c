@@ -866,7 +866,10 @@ static void* lpmd_core_main_loop(void *arg)
 
 //		 Opportunistic LPM is disabled in below cases
 		if (lpmd_config.wlt_proxy_enable){
+#ifdef __REMOVE__
 			interval = lpmd_config.wlt_proxy_interval;
+#endif
+            interval = 2000;//initialize to 2s
 			//gets interval of different states 
 			if (interval != next_proxy_poll && next_proxy_poll > 0)
 				interval = next_proxy_poll;
@@ -1052,7 +1055,11 @@ int lpmd_main(void)
 	if (lpmd_config.wlt_hint_enable) {
 		lpmd_config.util_enable = 0;
 		if (lpmd_config.wlt_proxy_enable) {
+#ifdef __REMOVE__
 			if (wlt_proxy_init(&lpmd_config) != LPMD_SUCCESS || !lpmd_config.wlt_proxy_interval) {
+#else
+            if (wlt_proxy_init(&lpmd_config) != LPMD_SUCCESS) {
+#endif
 				lpmd_config.wlt_proxy_enable = 0;
 				lpmd_log_error ("Invalid WLT Proxy setup\n");
 			}
