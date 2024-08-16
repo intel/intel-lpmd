@@ -171,8 +171,9 @@ static int parse_proc_stat(void)
 				continue;
 			}
 
-			sscanf (p, "%llu", &info->stat[idx]);
-			p = strtok (NULL, " ");
+			int result = sscanf (p, "%llu", &info->stat[idx]);
+            if (result != EOF)
+                p = strtok (NULL, " ");
 			idx++;
 		}
 

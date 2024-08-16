@@ -480,7 +480,6 @@ size_t alloc_cpu_set(cpu_set_t ** cpu_set)
 		lpmd_log_error("Conflict cpumask size %lu vs. %lu\n", size,
 			size_cpumask);
 		//exit(-1);
-        return -1; 
 	}
 	return size;
 }
@@ -663,10 +662,8 @@ static char *get_cpus_str_reverse(enum lp_state_idx idx)
 	if (!lp_state[idx].str_reverse)
 		err(3, "STR_ALLOC");
 
-	if (alloc_cpu_set(&mask) < 0){
-        lpmd_log_error("failure allocating cpu set\n");
-        return NULL; 
-    }
+	alloc_cpu_set(&mask);
+
 	CPU_XOR_S(size_cpumask, mask, lp_state[idx].mask,
 		  lp_state[INIT_MODE].mask);
 	ret = cpumask_to_str(mask, lp_state[idx].str_reverse, MAX_STR_LENGTH);
@@ -697,10 +694,7 @@ static int add_cpu_proxy(int cpu, enum lp_state_idx idx)
 		return 0;
 
 	if (!lp_state[idx].mask){
-		if (alloc_cpu_set(&lp_state[idx].mask) < 0){
-            lpmd_log_error("failure add cpu proxy\n");
-            return -1; 
-        }
+		alloc_cpu_set(&lp_state[idx].mask);
     }
 	CPU_SET_S(cpu, size_cpumask, lp_state[idx].mask);
 
@@ -1021,12 +1015,8 @@ static int detect_lp_state_actual(void)
 		cpu_count = CPU_COUNT_S(size_cpumask, lp_state[idx].mask);
 		if (!lp_state[idx].disabled && cpu_count) {
 			if (state_has_ppw(idx)) {
-				if (!lp_state[idx].inj_mask) {
-					if (alloc_cpu_set(&lp_state[idx].inj_mask) < 0){
-                        lpmd_log_error("error allocating cpu set\n");
-                        continue; 
-                    }
-                }
+				if (!lp_state[idx].inj_mask) 
+					alloc_cpu_set(&lp_state[idx].inj_mask);
                 and_into_injmask(INIT_MODE, idx, idx);
 			}
 			lpmd_log_info("\t[%d] %s [0x%s] cpu count: %2d\n", idx,
