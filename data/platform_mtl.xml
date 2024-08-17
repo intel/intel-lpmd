@@ -74,12 +74,6 @@ for Intel Energy Optimizer (LPMD) daemon
 	<WLTProxyEnable>1</WLTProxyEnable>
 	
 	<!--
-		default WLTProxyInterval only applied when WLTProxyEnable = 1
-		range: 1 to 10000 [milliseconds]. optional. default is 2000
-	-->		
-	<WLTProxyInterval>2000</WLTProxyInterval>
-
-	<!--
 		Use HFI SUV hints
 		0 : No
 		1 : Yes

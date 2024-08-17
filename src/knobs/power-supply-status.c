@@ -62,6 +62,7 @@ static char interface_path[PATH_MAX] = "";//todo: can be more than 1 power suppl
 static char base_path[PATH_MAX] = "";
 typedef char contents_array[100][PATH_MAX];
 static bool bueventSubscription = false;
+static int bFoundBatt = 0;
 
 void status_init();
 void status_deinit();
@@ -267,6 +268,12 @@ int is_ac_powered_power_supply_status() {
        PSS_init();
     }// else printf ("is_initialized = true \n");
 	
+    //-1 means BAT* folder does not exist from previous searching; if BAT* folder does not exist, no need to check any more
+    if (bFoundBatt == -1){
+        is_power_connected = true; 
+        lpmd_log_info("There is no battery on this device\n");
+        return is_power_connected; 
+    }
 	//if uevent subscription is successful then
 	if(bueventSubscription == true && is_power_connected != -1) {
 		return is_power_connected;
@@ -279,7 +286,6 @@ int is_ac_powered_power_supply_status() {
 			int value = 0;
 			int supply_names_count = 0;
 			int folder_names_only = 1, files_only = 0;
-			int is_powered = -1;
 			
 			//char out_supplies[PATH_MAX][PATH_MAX];
 			contents_array out_supplies;
@@ -288,8 +294,7 @@ int is_ac_powered_power_supply_status() {
 				lpmd_log_debug ("unable to get power_supply base directory information %s\n", base_path);
 				return -1;
 			}
-				
-            bool bFoundBatt = false;     
+				    
 			for (int i = 0; i < supply_names_count; i++) {
 				int content_count = 0;
 				char power_supply_base_path[PATH_MAX] = {0};
@@ -309,9 +314,9 @@ int is_ac_powered_power_supply_status() {
                 
                 //checking whether the folder name is a BAT* 
                 if (strstr(power_supply_base_path, "BAT")!= NULL)
-                    bFoundBatt = true; 
+                    bFoundBatt = 1; 
                 else {
-                    bFoundBatt = false; 
+                    bFoundBatt = 0; 
                     continue; 
                 }
                 
@@ -321,8 +326,7 @@ int is_ac_powered_power_supply_status() {
 					lpmd_log_debug ("unable to get power_supply content directory information, continue %s\n", power_supply_base_path);
 					continue;
 				}		
- 
-				for (int j = 0; j < content_count; j++) {
+ 				for (int j = 0; j < content_count; j++) {
 					char* p_content = strdup(out_contents[j]);
 
                     //in battery folder, we only care about the status file 
@@ -339,12 +343,14 @@ int is_ac_powered_power_supply_status() {
                         }
                         
                         if (strcmp(str_value, "discharging") == 0 || strcmp(str_value, "not charging") == 0){
-                            lpmd_log_info("value of status is %s, battery powered\n", str_value);
+                            lpmd_log_info("battery powered, value of status is %s\n", str_value);
                             is_power_connected = false; 
                         } else {
                             is_power_connected = true; 
-                            lpmd_log_info("value of status is %s, power connected\n", str_value);
+                            lpmd_log_info("power connected, value of status is %s\n", str_value);
                         }
+                        //saving the interface_path for next time checking
+                        strncpy(interface_path, power_supply_base_path, sizeof(power_supply_base_path));
                         
                         if (p_content)
                             free(p_content);                        
@@ -355,46 +361,35 @@ int is_ac_powered_power_supply_status() {
                         continue; 
                     }
                 }        
-                    /*else if(p_content && strcmp(p_content, "online") == 0) {
-						strncat(power_supply_base_path, "/", sizeof("/"));
-						strncat(power_supply_base_path, "online", sizeof("online"));
-							
-						//printf("power_supply_base_path = %s \n", power_supply_base_path);
-						int value = -1;
-						int ret = get_value(power_supply_base_path, &value);
-						if(ret == 0 ) {
-							strncpy(interface_path, power_supply_base_path, sizeof(power_supply_base_path));
-							lpmd_log_info("interface_path and value : %s, %d \n", interface_path, value);
-							is_power_connected = value;
-							if (is_power_connected){
-								is_powered = 0;
-								if (p_content)
-									free(p_content);							
-								break;
-							}
-						}
-					}									
-                
-				if(is_powered == 0) {
-					break;
-				}*/
 			}
             // no battery folder found, assume it's AC/USB connected    
-            if (!bFoundBatt){
+            if (bFoundBatt == 0){
+                bFoundBatt = -1; 
                 is_power_connected = true; 
                 return is_power_connected; 
+            }            
+		}
+    
+        //interface path saved, get the value directly 
+		if(strcmp(interface_path, "") != 0) {
+			char str_value[256];
+			int ret = get_value_str(interface_path, str_value);
+            //to all lower case 
+            if (strlen(str_value) != 0){
+                for(int i = 0; str_value[i]; i++){
+                    str_value[i] = tolower(str_value[i]);
+                }
             }
             
-		}// else printf ("is_supported = true \n");
-
-		if(strcmp(interface_path, "") != 0) {
-			int value = -1;
-			int ret = get_value(interface_path, &value);
-			if(ret == 0 ) {
-				is_power_connected = value;
-				lpmd_log_debug ("is_power_connected %d \n" , is_power_connected);
-				return is_power_connected;
-			}
+            if (strcmp(str_value, "discharging") == 0 || strcmp(str_value, "not charging") == 0){
+                lpmd_log_info("interface exists, value of status is %s, battery powered\n", str_value);
+                is_power_connected = false; 
+            } else {
+                is_power_connected = true; 
+                lpmd_log_info("interface exists, value of status is %s, power connected\n", str_value);
+            }            
+            
+			return is_power_connected;
 		}
 	}
 	
