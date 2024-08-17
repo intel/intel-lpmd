@@ -547,13 +547,11 @@ static int get_state_mapping(enum lp_state_idx state){
     clockid_t clk = CLOCK_MONOTONIC;
     if (!ts_current.tv_sec){ //first time 
         clock_gettime(clk, &ts_current); 
-        lpmd_log_info("Init, read AC_CONNECTED status");
         AC_CONNECTED = is_ac_powered_power_supply_status() == 0  ? false: true; //unknown is considered as ac powered.
         ts_prev = ts_current; 
     } else {
         clock_gettime(clk, &ts_current); //get current time 
         if (ts_current.tv_sec - ts_prev.tv_sec > 30){
-            lpmd_log_info("30s elapsed, read AC_CONNECTED status");
             ts_prev = ts_current;
             AC_CONNECTED = is_ac_powered_power_supply_status() == 0  ? false: true; //unknown is considered as ac powered.
         } 
