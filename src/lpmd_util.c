@@ -169,7 +169,9 @@ static int parse_proc_stat(void)
 				continue;
 			}
 
-			sscanf (p, "%llu", &info->stat[idx]);
+			if (sscanf (p, "%llu", &info->stat[idx]) <= 0)
+				lpmd_log_debug("Failed to parse /proc/stat, defer update in next snapshot.");
+
 			p = strtok (NULL, " ");
 			idx++;
 		}
