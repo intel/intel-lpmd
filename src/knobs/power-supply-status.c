@@ -54,6 +54,7 @@
 #include "lpmd.h"
 #include "knobs_common.h"
 
+#define READ_SIZE 256
 static int is_initialized = -1;//not initialized
 static int is_supported = -1; //unknown
 static int is_power_connected = -1; //unknown
@@ -206,7 +207,7 @@ static int get_value(char *path, int *val)
 	return ret;
 }
 
-static int get_value_str(char *path, char *val)
+static int get_value_str(char *path, char *val, int size)
 {
 	FILE *filep;
 	int ret=0;
@@ -217,11 +218,15 @@ static int get_value_str(char *path, char *val)
 	filep = fopen (path, "r");
 	if (!filep)
 		return -1;
+    
+    while (fgets(val, size, filep) != NULL) {
+       lpmd_log_debug("Read: %s", val);
+    }
 
-	ret = fread(val, 1, 256, filep);
-    if (ret <= 0) {
-		lpmd_log_error("get_value_str from %s failed\n", path);		
-	}
+    if (ferror(filep)) {
+       lpmd_log_error("An error occurred reading file.\n");
+    }    
+   
 	fclose(filep);
 
 	return ret;
@@ -331,10 +336,10 @@ int is_ac_powered_power_supply_status() {
 
                     //in battery folder, we only care about the status file 
                     if (p_content && strcmp(p_content, "status") == 0){
-                        char str_value[256];
+                        char str_value[READ_SIZE];
                         strncat(power_supply_base_path, "/", sizeof("/"));
                         strncat(power_supply_base_path, "status", sizeof("status"));                        
-                        int ret = get_value_str(power_supply_base_path, str_value);
+                        int ret = get_value_str(power_supply_base_path, str_value, READ_SIZE);
                         //to all lower case 
                         if (strlen(str_value) != 0){
                             for(int i = 0; str_value[i]; i++){
@@ -372,8 +377,8 @@ int is_ac_powered_power_supply_status() {
     
         //interface path saved, get the value directly 
 		if(strcmp(interface_path, "") != 0) {
-			char str_value[256];
-			int ret = get_value_str(interface_path, str_value);
+			char str_value[READ_SIZE];
+			int ret = get_value_str(interface_path, str_value, READ_SIZE);
             //to all lower case 
             if (strlen(str_value) != 0){
                 for(int i = 0; str_value[i]; i++){
