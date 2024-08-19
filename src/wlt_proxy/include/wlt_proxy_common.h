@@ -177,16 +177,4 @@ int max_mt_detected(enum lp_state_idx);
 
 void unclamp_default_freq(enum lp_state_idx);
 
-#ifdef __REMOVE__
-//void set_eco_timeout(int);
-int get_msr_fd(int);
-int revert_orig_epp(void);
-int revert_orig_epb(void);
-//int count_up_breach(int);
-int grp_c0_breach(void);
-//int breach_per_sec(int);
-//int state_toggle_per_sec(int);
-//int grp_c0_breach_fast(void);
-#endif
-
 #endif /* _WLT_PROXY_COMMON_H_ */

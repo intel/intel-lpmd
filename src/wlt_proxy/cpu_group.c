@@ -1367,7 +1367,7 @@ int init_cpu_proxy(void)
 	return 0;
 }
 
-void uninit_cpu_proxy(){
+void uninit_cpu_proxy() {
     
 	for (int idx = INIT_MODE + 1; idx < MAX_MODE; idx++) {
         reset_cpus_proxy(idx);

@@ -20,7 +20,6 @@
 #include "state_machine.h"
 #include "spike_mgmt.h"
 #include "cpu_group.h"
-#include "perf_msr.h"
 #include "lpmd.h"
 
 /*

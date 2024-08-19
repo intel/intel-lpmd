@@ -57,13 +57,12 @@ intel_lpmd_SOURCES = \
 	src/lpmd_hfi.c \
 	src/lpmd_irq.c \
 	src/lpmd_socket.c \
-    src/lpmd_util.c	\    
-	src/wlt_proxy/wlt_proxy_entry.c \
+    src/lpmd_util.c	\
+    src/wlt_proxy/wlt_proxy_entry.c \
     src/wlt_proxy/irq.c \
-    src/wlt_proxy/spike_mgmt.c \    
+    src/wlt_proxy/spike_mgmt.c \
     src/wlt_proxy/state_machine.c \
-    src/wlt_proxy/util.c \    
-    src/wlt_proxy/perf_msr.c \
+    src/wlt_proxy/util.c \
     src/wlt_proxy/cpu_group.c \
     src/knobs/power-supply-status.c \
 	lpmd-resource.c
@@ -76,6 +75,5 @@ intel_lpmd_dbus_interface.h: $(top_srcdir)/src/intel_lpmd_dbus_interface.xml
 
 lpmd-resource.c: $(top_srcdir)/lpmd-resource.gresource.xml
 	$(AM_V_GEN) glib-compile-resources --generate-source lpmd-resource.gresource.xml
-
 
 CLEANFILES = $(BUILT_SOURCES)

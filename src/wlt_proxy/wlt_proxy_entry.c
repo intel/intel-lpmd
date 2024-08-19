@@ -25,7 +25,6 @@
 #include "wlt_proxy_common.h"
 #include "state_machine.h"
 #include "wlt_proxy.h"
-#include "perf_msr.h"
 
 static bool proxy_initialized = false;
 static lpmd_config_t *lpmd_config;
@@ -73,7 +72,6 @@ void wlt_proxy_uninit(void) {
 #ifdef __REMOVE__
     close_all_fd();
 #endif    
-    uninit_delta_vars();
     perf_stat_uninit();
 }
 
