@@ -167,7 +167,7 @@ int util_init_proxy(void);//defined in lpmd_util
 void util_uninit_proxy(void);
 
 int perf_stat_init(void);
-void perf_stat_uninit(); 
+//void perf_stat_uninit();
 
 int prep_state_change(enum lp_state_idx, enum lp_state_idx, int);
 int update_perf_diffs(float *, int);
@@ -176,5 +176,19 @@ int staytime_to_staycount(enum lp_state_idx);
 int max_mt_detected(enum lp_state_idx);
 
 void unclamp_default_freq(enum lp_state_idx);
+
+/* state machine */
+int state_machine_auto();
+
+/* spike managament */
+int add_spike_time(int);
+int add_non_spike_time(int);
+int get_spike_rate(void);
+int get_burst_rate_per_min(void);
+int fresh_burst_response(int initial_val);
+int burst_rate_breach(void);
+int strikeout_once(int);
+int update_spike_rate_maxima();
+int clear_spike_rate_maxima();
 
 #endif /* _WLT_PROXY_COMMON_H_ */

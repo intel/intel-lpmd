@@ -23,7 +23,6 @@
 
 #include "lpmd.h"
 #include "wlt_proxy_common.h"
-#include "state_machine.h"
 #include "wlt_proxy.h"
 
 static bool proxy_initialized = false;
@@ -32,46 +31,40 @@ extern int next_proxy_poll;
 
 /** Framework callback to update state */
 void set_workload_hint(int type) {
-	lpmd_log_debug("proxy WLT hint :%d\n", type);
-	periodic_util_update(lpmd_config, type);
+    lpmd_log_debug("proxy WLT hint :%d\n", type);
+    periodic_util_update(lpmd_config, type);
 }
 
 /** Called at the configured interval to take action */
 void wlt_proxy_action_loop(void) {
 
-	if (proxy_initialized) {
-		lpmd_log_debug("\n\nwlt_proxy_action_loop, proxy initialzied\n");
-		//state_machine_auto(get_cur_state());
-        state_machine_auto1();
-		lpmd_log_debug("wlt_proxy_action_loop, handled states\n");		
-	} else {
+    if (proxy_initialized) {
+        lpmd_log_debug("\n\nwlt_proxy_action_loop, proxy initialzied\n");
+        state_machine_auto();
+        lpmd_log_debug("wlt_proxy_action_loop, handled states\n");        
+    } else {
         lpmd_log_debug("\n internal error \n");
     }
 }
 
 /** Return non zero if the proxy is not present for a platform */
 int wlt_proxy_init(lpmd_config_t *_lpmd_config) {
-	
+    
     if (util_init_proxy()){
         return LPMD_ERROR; 
     }
 
-	/* Check model check and fail */
-	/* TODO */
-	lpmd_config = _lpmd_config;//todo: remove
+    /* Check model check and fail */
+    /* TODO */
+    lpmd_config = _lpmd_config;//todo: remove
 
-	proxy_initialized = true;
+    proxy_initialized = true;
     next_proxy_poll = 2000; 
-	return LPMD_SUCCESS;
+    return LPMD_SUCCESS;
 }
 
 /** make sure all resource are properly released and closed */
 void wlt_proxy_uninit(void) {
-    
     util_uninit_proxy();
-#ifdef __REMOVE__
-    close_all_fd();
-#endif    
-    perf_stat_uninit();
 }
 

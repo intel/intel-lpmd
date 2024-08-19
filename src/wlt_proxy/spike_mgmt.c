@@ -13,23 +13,14 @@
  * Author: Noor ul Mubeen <noor.u.mubeen@intel.com>
  */
 #define _GNU_SOURCE
-#include <stdio.h>
-#include <err.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <time.h>
-#include <fcntl.h>
-#include <sys/file.h>
-#include <sys/types.h>
-#include <sys/time.h>
-#include <sys/stat.h>
-#include <errno.h>
-#include <stdbool.h>
 
-#include "cpu_group.h"
+#include <stdio.h>
+#include <time.h> //clockid_t
+#include <err.h> //perror
+#include <errno.h>
+
+#include "cpu_group.h" //get_cur_state
 #include "wlt_proxy_common.h"
-#include "spike_mgmt.h"
 
 /*
  * spike burst refers to coninous spikes in a series of back to back samples.
@@ -53,7 +44,6 @@
  *   SPIKE_TIME_BIAS macro will bias this to be longer or shorter based on
  *   recent history (i.e more prominent the spiking, the longer it will be remembered)
  */
-
 #define MAX_TRACKED_SPIKE_TIME 1000
 #define MAX_BURST_COUNT 1000
 

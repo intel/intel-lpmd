@@ -33,8 +33,6 @@
 
 #include "lpmd.h"
 #include "wlt_proxy_common.h"
-#include "state_machine.h"
-#include "spike_mgmt.h"
 #include "wlt_proxy.h"
 #include "cpu_group.h"
 #include "knobs_common.h"
@@ -959,7 +957,8 @@ static int util_main(/*enum slider_value sld*/)
         break;
     }
 #else
-    state_machine_auto(present_state);
+    //state_machine_auto(present_state);
+    state_machine_auto1();
 #endif
 
     if (state_has_ppw(get_cur_state())) {
@@ -1174,7 +1173,7 @@ int perf_stat_init(void)
     return 1;
 }
 
-void perf_stat_uninit(){
+static void perf_stat_uninit(){
     int max_cpus = get_max_cpus();
     if (perf_stats) {
         for (size_t i = 0; i < max_cpus; ++i) {
@@ -1268,4 +1267,5 @@ void util_uninit_proxy(void) {
     exit_state_change();
     uninit_cpu_proxy();
     uninit_delta_vars();
+    perf_stat_uninit();
 }

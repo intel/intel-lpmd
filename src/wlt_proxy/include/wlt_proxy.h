@@ -22,13 +22,13 @@
 
 /* WLT hints parsing */
 typedef enum {
-	WLT_IDLE,
-	WLT_BATTERY_LIFE,
-	WLT_SUSTAINED,
-	WLT_BURSTY,
+    WLT_IDLE,
+    WLT_BATTERY_LIFE,
+    WLT_SUSTAINED,
+    WLT_BURSTY,
     WLT_SUSTAINED_BAT,
     WLT_BATTERY_LIFE_BAT,    
-	WLT_INVALID,
+    WLT_INVALID,
 } wlt_type_t;
 
 void set_workload_hint(int type);
