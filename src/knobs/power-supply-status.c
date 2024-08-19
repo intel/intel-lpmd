@@ -341,19 +341,25 @@ int is_ac_powered_power_supply_status() {
                         strncat(power_supply_base_path, "status", sizeof("status"));                        
                         int ret = get_value_str(power_supply_base_path, str_value, READ_SIZE);
                         //to all lower case 
+                        is_power_connected = true;
                         if (strlen(str_value) != 0){
+                            char* val= NULL;
                             for(int i = 0; str_value[i]; i++){
                                 str_value[i] = tolower(str_value[i]);
                             }
-                        }
-                        
-                        if (strcmp(str_value, "discharging") == 0 || strcmp(str_value, "not charging") == 0){
-                            lpmd_log_info("battery powered, value of status is %s\n", str_value);
-                            is_power_connected = false; 
-                        } else {
-                            is_power_connected = true; 
-                            lpmd_log_info("power connected, value of status is %s\n", str_value);
-                        }
+                            //trim the string so no white space or \t\n gets in the comparison
+                            val = trim(str_value);
+
+                            if (val){
+                                if (strcmp(val, "discharging") == 0 || strcmp(val, "not charging") == 0){
+                                    lpmd_log_info("interface exists, value of status is %s, battery powered\n", val); //print for debug purpose
+                                    is_power_connected = false;
+                                } else {
+                                    lpmd_log_info("interface exists, value of status is %s, power connected\n", val); //print for debug purpose
+                                }
+                                free(val);
+                            }                    
+                        } 
                         //saving the interface_path for next time checking
                         strncpy(interface_path, power_supply_base_path, sizeof(power_supply_base_path));
                         
@@ -380,19 +386,25 @@ int is_ac_powered_power_supply_status() {
 			char str_value[READ_SIZE];
 			int ret = get_value_str(interface_path, str_value, READ_SIZE);
             //to all lower case 
+            is_power_connected = true;
             if (strlen(str_value) != 0){
+                char* val= NULL;
                 for(int i = 0; str_value[i]; i++){
                     str_value[i] = tolower(str_value[i]);
                 }
+                //trim the string so no white space or \t\n gets in the comparison
+                val = trim(str_value);
+
+                if (val){
+                    if (strcmp(val, "discharging") == 0 || strcmp(val, "not charging") == 0){
+                        lpmd_log_info("interface exists, value of status is %s, battery powered\n", val); //print for debug purpose
+                        is_power_connected = false;
+                    } else {
+                        lpmd_log_info("interface exists, value of status is %s, power connected\n", val); //print for debug purpose
+                    }
+                    free(val);
+                }
             }
-            
-            if (strcmp(str_value, "discharging") == 0 || strcmp(str_value, "not charging") == 0){
-                lpmd_log_info("interface exists, value of status is %s, battery powered\n", str_value);
-                is_power_connected = false; 
-            } else {
-                is_power_connected = true; 
-                lpmd_log_info("interface exists, value of status is %s, power connected\n", str_value);
-            }            
             
 			return is_power_connected;
 		}

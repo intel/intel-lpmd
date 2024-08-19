@@ -341,5 +341,6 @@ int lpmd_read_int(const char *name, int *val, int print_level);
 char* get_time(void);
 void time_start(void);
 char* time_delta(void);
+char* trim(char *s);
 
 #endif

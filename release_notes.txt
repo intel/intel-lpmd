@@ -1,3 +1,29 @@
+8/17/2024
+pkg.OPT.ILEO release notes
+package name: pkg.OPT.ILEO-0.13.240817-x86_64
+tag: pkg-ileo-0.13.240817
+ww: 33.5
+
+Support Ubuntu distro 22.04 and 24.04
+Sanity checks completed on 24.04
+
+-changed the profile name to intel_energy_optimizer
+-the binary location is moved from /usr/bin to /sbin
+-clear the value of HfiLpmEnable in config file 
+-clear the value of util_entry_threshold and util_exit_threshold in config file 
+-remove the check of AC connection status on every state change, check the AC connection status when the elapsed seconds of last check is greater than 30
+-update copyright 
+-removed license file 
+-code clean up: remove unused code. remove querying rapl for plotting,
+
+
+List of all bugs Fixed: 
+https://jira.devtools.intel.com/browse/LNUX-7817
+https://jira.devtools.intel.com/browse/LNUX-7843
+https://jira.devtools.intel.com/browse/LNUX-7779
+
+****************************************************************************
+
 8/15/2024
 pkg.OPT.ILEO release notes
 package name: pkg.OPT.ILEO-0.12.240815-x86_64

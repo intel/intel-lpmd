@@ -268,3 +268,44 @@ char* time_delta(void)
 	return time_buf;
 }
 
+/*this function allocates the memory, please make sure to free the memory after calling*/
+char* trim(char *s) {
+  char *start, *end;
+
+  int len = strlen(s);
+  start = s;
+  end = s + len - 1;
+
+  while (1) {
+    if (*start == ' ' || *start == '\t' || *start == '\n') {
+      start++;
+    } else {
+      break;
+    }
+  }
+
+  while (1) {
+    if (*end == ' ' || *end == '\t' || *end == '\n') {
+      end--;
+    } else {
+      break;
+    }
+  }
+
+  char temp[len + 1];
+  int index = 0;
+
+  while (start <= end) {
+    temp[index++] = *start;
+    start++;
+  }
+  
+  temp[index] = '\0';
+
+  char *result = malloc(strlen(temp) + 1);
+  if (result == NULL)  
+    return NULL;
+
+  strcpy(result, temp);
+  return result;  
+}
