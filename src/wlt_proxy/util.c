@@ -62,6 +62,8 @@
 //todo: hardcoded platform info? should we get it from config file?
 #define MSR_PLATFORM_INFO	0xce
 
+#define SCALE_DECIMAL (100)
+
 #define MAX_INJECT    (90)
 #define LIMIT_INJECT(i)    (i > MAX_INJECT ? MAX_INJECT:(i < 0 ? 1 : i))
 
@@ -69,6 +71,10 @@ int idle_inject_feature = IDLE_INJECT_FEATURE;
 int inject_update = UNDEFINED;
 int irq_rebalance = 0;
 static int record = 0;
+
+int state_demote = 0;
+int next_proxy_poll = 2000; 
+
 /* 
  * simple moving average (sma), event count based - not time. 
  * updated for upto top 3 max util streams.
@@ -81,7 +87,7 @@ static int record = 0;
 #define SMA_CPU_COUNT    (3)
 static int sample[3][SMA_LENGTH];
 
-extern int cpu_hfm_mhz; //pref_msr.c
+extern int max_util;
 
 typedef struct {
     int cpu;
@@ -114,16 +120,11 @@ struct group_util grp;
 static struct timespec ts_start, ts_prev;
 static struct timespec ts_current = { 0, 0 };
 
-#ifdef __REMOVE__
-uint32_t update_epp(int fd, uint64_t epp);
-uint32_t update_epb(int fd, uint64_t epb);
-void update_state_epp(enum lp_state_idx state);
-void update_state_epb(enum lp_state_idx state);
-#endif
-
 void clamp_to_turbo(enum lp_state_idx for_state);
 
+#ifdef __REMOVE__//soc_mw used in plotting.
 static float soc_mw;
+#endif
 
 struct thread_data {
     unsigned long long tsc;
@@ -131,19 +132,6 @@ struct thread_data {
     unsigned long long mperf;
     unsigned long long pperf; 
 } *thread_even, *thread_odd;
-
-#ifdef __REMOVE__
-int grp_c0_breach(void)
-{
-    return (A_GT_B(grp.c0_max, UTIL_NEAR_FULL)
-        || A_GT_B(grp.delta, DELTA_THRESHOLD));
-}
-
-int get_msr_fd(int cpu)
-{
-    return perf_stats[cpu].dev_msr_fd;
-}
-#endif
 
 int cpu_hfm_mhz;
 
@@ -304,6 +292,7 @@ static unsigned int read_perf_counter_info_n(const char *const path, const char 
 
     return v;
 }
+
 int read_pperf_config(void)
 {
     const char *const path = "/sys/bus/event_source/devices/msr/events/pperf";
@@ -311,6 +300,7 @@ int read_pperf_config(void)
 
     return read_perf_counter_info_n(path, format);
 }
+
 unsigned int read_aperf_config(void)
 {
     const char *const path = "/sys/bus/event_source/devices/msr/events/aperf";
@@ -326,6 +316,7 @@ unsigned int read_mperf_config(void)
 
     return read_perf_counter_info_n(path, format);
 }
+//not used?
 unsigned int read_tsc_config(void)
 {
     const char *const path = "/sys/bus/event_source/devices/msr/events/tsc";
@@ -333,7 +324,6 @@ unsigned int read_tsc_config(void)
 
     return read_perf_counter_info_n(path, format);
 }
-
 
 static unsigned int read_msr_type(void)
 {
@@ -390,7 +380,6 @@ int get_amperf_fd(int cpu)
     return perf_stats[cpu].aperf_fd;
 }
 
-
 unsigned long long rdtsc(void)
 {
     unsigned int low, high;
@@ -399,7 +388,6 @@ unsigned long long rdtsc(void)
 
     return low | ((unsigned long long)high) << 32;
 }
-
 
 /* Read APERF, MPERF and TSC using the perf API. */
 int read_aperf_mperf_tsc_perf(struct thread_data *t, int cpu)
@@ -435,7 +423,6 @@ int read_aperf_mperf_tsc_perf(struct thread_data *t, int cpu)
     return 0;
 }
 
-extern int max_util;
 int update_perf_diffs(float *sum_norm_perf, int stat_init_only)
 {
     int fd, min_cpu, maxed_cpu = -1;
@@ -577,7 +564,7 @@ int update_perf_diffs(float *sum_norm_perf, int stat_init_only)
     return maxed_cpu;
 }
 
-void sma_init()
+static void sma_init()
 {
     for (int i = 0; i < SMA_CPU_COUNT; i++) {
         grp.sma_sum[i] = -1;
@@ -587,7 +574,7 @@ void sma_init()
     grp.sma_pos = -1;
 }
 
-int do_sum(int *sam, int len)
+static int do_sum(int *sam, int len)
 {
     int sum = 0;
     for (int i = 0; i < len; i++)
@@ -595,9 +582,7 @@ int do_sum(int *sam, int len)
     return sum;
 }
 
-
-#define SCALE_DECIMAL (100)
-int state_max_avg()
+static int state_max_avg()
 {
     grp.sma_pos += 1;
 
@@ -634,7 +619,7 @@ int state_max_avg()
     return 1;
 }
 
-enum lp_state_idx nearest_supported(enum lp_state_idx from_state, enum lp_state_idx to_state)
+static enum lp_state_idx nearest_supported(enum lp_state_idx from_state, enum lp_state_idx to_state)
 {
     enum lp_state_idx state;
     int operator =    (from_state < to_state) ? (+1) : (-1);
@@ -705,8 +690,6 @@ static int get_state_mapping(enum lp_state_idx state){
     }    
 }
 
-int state_demote = 0;
-int next_proxy_poll = 2000; 
 int prep_state_change(enum lp_state_idx from_state, enum lp_state_idx to_state,
               int reset)
 {
@@ -780,7 +763,7 @@ int staytime_to_staycount(enum lp_state_idx state)
     return stay_count;
 }
 
-int prepare_deomote_bypass(enum lp_state_idx to_state, int epp_high)
+static int prepare_deomote_bypass(enum lp_state_idx to_state, int epp_high)
 {
 #ifdef __REMOVE__
     if (!epp_high) {
@@ -880,7 +863,7 @@ void clamp_to_turbo(enum lp_state_idx for_state)
         }
     }
 }
-
+#ifdef __REMOVE__
 float get_cur_freq(int cpu)
 {
     return perf_stats[cpu].f0;
@@ -890,6 +873,7 @@ float get_cur_scalability(int cpu)
 {
     return perf_stats[cpu].s0;
 }
+#endif
 
 int max_mt_detected(enum lp_state_idx state)
 {
@@ -903,156 +887,8 @@ int max_mt_detected(enum lp_state_idx state)
     return 1;
 }
 
-
 #ifdef __REMOVE__
-uint64_t diff_ms(struct timespec *ts_then, struct timespec *ts_now);
-
-//extern bool plotting;
-float max_Qperf = 1;;
-float max_Wattage = 1;
-float max_QperW = 1;
-
-//static int util_main(enum slider_value sld)
-static int util_main(/*enum slider_value sld*/)
-{
-    int max_util, present_state;
-    int next_freq;
-    float dummy;
-
-    int last_max = get_last_maxutil();
-
-    update_perf_diffs(&dummy, 0);
-    max_util = (int)round(grp.c0_max);
-
-    if (last_max > 0)
-        grp.delta = max_util - last_max;
-    else
-        last_max = 0;
-
-    present_state = get_cur_state();
-    /*
-     * we do not want to track avg util for following cases:
-     * a) bypass mode where the solution temporary bypassed
-     * b) Responsive transit mode (fast poll can flood avg leading to incorrect decisions)
-     */
-    if ((present_state != BYPS_MODE) && (present_state != RESP_MODE))
-        state_max_avg();
-#ifdef __REMOVE__
-    switch (sld) {
-    case performance:
-    case balance_performance:
-        state_machine_perf(present_state);
-        break;
-    case power_saver:
-    case balance_power:
-        state_machine_power(present_state);
-        break;
-    case balanced:
-        state_machine_auto(present_state);
-        break;
-    case unknown:
-    case MAX_SLIDER:
-        exit_state_change();
-        exit(0);
-        break;
-    }
-#else
-    //state_machine_auto(present_state);
-    state_machine_auto1();
-#endif
-
-    if (state_has_ppw(get_cur_state())) {
-        /* 
-         * clamping to higher freq in PPW is needed for following reasons:
-         * - race to halt within the ON portion of idle-inject
-         * - compensates for idle-inject response lag (e.g avoid mouse jitter)
-         * XXX discover some value close to turbo. hardcoded for now. 
-         */
-        next_freq = 24;
-        clamp_to_freq(get_cur_state(), next_freq);
-
-        if (IDLE_INJECT_FEATURE) {
-            if (A_GT_B((max_util + INJ_BUF_PCT), UTIL_NEAR_FULL)) {
-                /* stop idle injection as long has max util exceeds     */
-                inject_update = PAUSE;
-                /* XXX check if freq and inject are already expected state */
-                process_cpu_powerclamp_exit();
-                lpmd_log_debug
-                    (" maxutil:%d poll: %d idle_pct: PAUSED sma: %d\n",
-                     max_util, get_state_poll(max_util,
-                                  get_cur_state()),
-                     grp.sma_avg1);
-            } else {
-                if (inject_update != RUNNING) {
-                    process_cpu_powerclamp_enter
-                        (get_state_poll
-                         (max_util, get_cur_state()) * DURATION_SPILL,
-                         MAX_IDLE_INJECT);
-                    lpmd_log_debug
-                        (" maxutil:%d poll: %d idle_pct: %d sma:%d BACK.\n",
-                         max_util, get_state_poll(max_util,
-                                      get_cur_state
-                                      ()),
-                         MAX_IDLE_INJECT, grp.sma_avg1);
-                }
-                inject_update = RUNNING;
-            }
-        }
-    }
-
-    int spike_rate = get_spike_rate();
-    int poll = get_state_poll(max_util, get_cur_state());
-//    if ((present_state != get_cur_state())
-//        || ( diff_ms(&ts_prev, &ts_start) > 200 ))
-     {
-        if (!(record % RECORDS_PER_HEADER)
-            && (ts_start.tv_sec - ts_prev.tv_sec) > 10) {
-            lpmd_log_info
-                ("\n  time.ms, sldr, state, sma1, sma2, sma3, 1stmax, 2ndmax, 3rdmax, nx_poll, nx_st, Qperf,    Watt,     PPW, min_s0, cpu_s0, SpkRt, Rcnt, brst_pm\n");
-        }
-        lpmd_log_info
-             ("%05ld.%03ld,   %2d,  %4d,  %3d,  %3d,  %3d, %6.2f, %6.2f, %6.2f,  %6d,  %4d, %5.1f,  %6.2f,  %6.2f,   %.2f,    %3d,  %3d,   %3d,  %3d  %d\n",
-             ts_start.tv_sec - ts_init.tv_sec,
-             ts_start.tv_nsec / 1000000, sld, present_state,
-             grp.sma_avg1, grp.sma_avg2, grp.sma_avg3, grp.c0_max,
-             grp.c0_2nd_max, grp.c0_3rd_max, poll,
-             get_cur_state(), dummy / 550, soc_mw / 280,
-             dummy * 10 / soc_mw,
-             grp.worst_stall, grp.worst_stall_cpu,
-             spike_rate,
-             get_stay_count(MDRT3E_MODE),
-             get_stay_count(PERF_MODE),
-             get_burst_rate_per_min());
-
-        record++;
-        /*if (plotting) {
-            float Qperf = dummy/max_Qperf;
-            float Wattage = soc_mw/max_Wattage;
-            float QperW = Qperf/Wattage;
-
-            update_plot(Qperf, QperW, Wattage, grp.c0_max/100, present_state);
-            if (dummy > max_Qperf)
-                max_Qperf = dummy;
-            if (soc_mw > max_Wattage)
-                max_Wattage = soc_mw;
-            if (QperW > max_QperW)
-                max_QperW = QperW;
-        }*/
-        ts_prev = ts_start;
-    }
-
-
-    if (last_max != DEACTIVATED)
-        set_last_maxutil(max_util);
-    set_last_poll(poll);
-
-    /* XXX if there was stage change do re-evaluate max util in new state */
-    return max_util;
-}
-
-#endif
-
-int inject_active()
+static int inject_active()
 {
     switch (inject_update) {
     case ACTIVATED:
@@ -1063,90 +899,9 @@ int inject_active()
         return 0;
     }
 }
+#endif 
 
-
-#ifdef __REMOVE__
-
-#define MSEC_PER_SEC (1000)
-#define NSEC_PER_MSEC (1000000)
-uint64_t diff_ms(struct timespec *ts_then, struct timespec *ts_now)
-{
-    uint64_t ns_sum = 0;
-    int64_t diff = 0;
-    if (ts_now->tv_sec > ts_then->tv_sec) {
-        diff = (ts_now->tv_sec - ts_then->tv_sec) * MSEC_PER_SEC;
-        ns_sum = (ts_then->tv_nsec + ts_now->tv_nsec)/NSEC_PER_MSEC;
-        if (ns_sum < diff) // case where diff is >= 2
-            diff = diff - (ts_then->tv_nsec + ts_now->tv_nsec)/NSEC_PER_MSEC;
-        else // i.e case where diff is < 2
-            diff = (ts_then->tv_nsec + ts_now->tv_nsec)/NSEC_PER_MSEC - diff;
-    } else {
-        diff += (ts_now->tv_nsec - ts_then->tv_nsec)/NSEC_PER_MSEC;
-    }
-    return diff;
-}
-
-
-//extern enum slider_value sld;
-void *state_handler(void)
-{
-    int next_poll;
-    int util_max;
-    enum lp_state_idx next_state;
-//    int latency_ms;
-    clockid_t clk = CLOCK_MONOTONIC;
-
-    initialize_state_mask();
-    sma_init();
-
-    if (!ts_init.tv_sec && (clock_gettime(clk, &ts_init)))
-        perror("clock_gettime init");
-    for (;;) {
-        if (clock_gettime(clk, &ts_start))
-            perror("clock_gettime start");
-
-        //util_max = util_main(sld);
-        util_max = util_main(0);//todo: update slider value 
-
-        if (check_reset_status()) {
-            apply_state_change();
-//                      if (clock_gettime(clk, &ts_end))
-//                                perror("clock_gettime end");
-//                      latency_ms = diff_ns(&ts_start, &ts_end)/1000000;
-//                      printf("latency: %d ms\n", latency_ms);
-        }
-
-        next_state = get_cur_state();
-        if (likely(is_state_valid(next_state))) {
-            next_poll = get_state_poll(util_max, next_state);
-            lpmd_log_debug(" max_util %d next state:%d Poll:%4d \n",
-                  util_max, next_state, next_poll);
-            usleep(next_poll * 1000);
-        } else {
-            lpmd_log_info("unknown state %d", next_state);
-            break;
-        }
-    }
-    return NULL;
-}
-
-void update_state_epp(enum lp_state_idx state)
-{
-    for (int t = 0; t < get_max_online_cpu(); t++) {
-        update_epp(perf_stats[t].dev_msr_fd,
-               (uint64_t) get_state_epp(state));
-    }
-}
-
-void update_state_epb(enum lp_state_idx state)
-{
-    for (int t = 0; t < get_max_online_cpu(); t++) {
-        update_epb(perf_stats[t].dev_msr_fd,
-               (uint64_t) get_state_epb(state));
-    }
-}
-#endif
-
+/* initialize perf_stat structure */
 int perf_stat_init(void)
 {
     int max_cpus = get_max_cpus();
@@ -1173,6 +928,7 @@ int perf_stat_init(void)
     return 1;
 }
 
+/* cleanup perf_stat structure */
 static void perf_stat_uninit(){
     int max_cpus = get_max_cpus();
     if (perf_stats) {
@@ -1184,52 +940,8 @@ static void perf_stat_uninit(){
 
 }
 
-#ifdef __REMOVE__
-/* EP BIAS. XXX switch to sysfs */
-
-static uint32_t update_epb(int fd, uint64_t new_value)
-{
-    uint64_t orig_value;
-    read_msr(fd, (uint32_t) MSR_EPB, &orig_value);
-    write_msr(fd, (uint32_t) MSR_EPB, &new_value);
-    return (uint32_t) orig_value;
-}
-
-static int revert_orig_epb(void)
-{
-    for (int t = 0; t < get_max_cpus(); t++) {
-        if (!is_cpu_online(t))
-            continue;
-        write_msr(perf_stats[t].dev_msr_fd, (uint32_t) MSR_EPB,
-              &perf_stats[t].orig_epb);
-    }
-    return 1;
-}
-
-/* EP Preference. XXX switch to sysfs */
-static uint32_t update_epp(int fd, uint64_t new_value)
-{
-    uint64_t orig_value;
-    read_msr(fd, (uint32_t) MSR_HWP, &orig_value);
-    new_value = (((orig_value << 40) >> 40) | (new_value << 24));
-    write_msr(fd, (uint32_t) MSR_HWP, &new_value);
-    return (uint32_t) orig_value;
-}
-
-static int revert_orig_epp(void)
-{
-    for (int t = 0; t < get_max_cpus(); t++) {
-        if (!is_cpu_online(t))
-            continue;
-        write_msr(perf_stats[t].dev_msr_fd, (uint32_t) MSR_HWP,
-              &perf_stats[t].orig_epp);
-    }
-    return 1;
-}
-
-#endif
-
 /*defined in lpmd_util*/
+/* initialize */
 int util_init_proxy(void)
 {
     float dummy;
@@ -1238,11 +950,13 @@ int util_init_proxy(void)
         lpmd_log_error("\nerror initing cpu proxy\n");
         return -1; 
     }
+    
+#ifdef __REMOVE__
 
     if (IDLE_INJECT_FEATURE)
         check_cpu_powerclamp_support();
     
-#ifdef __REMOVE__
+
     init_all_fd();
 #endif
 
@@ -1262,6 +976,7 @@ int util_init_proxy(void)
     return 0;
 }
 
+/* cleanup */
 void util_uninit_proxy(void) {
     
     exit_state_change();

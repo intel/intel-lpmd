@@ -1,7 +1,7 @@
 /*
- * wlt_proxy_def.c: Intel Low Power Daemon WLT proxy
+ * wlt_proxy_entry.c: Intel Low Power Daemon WLT proxy
  *
- * Copyright (C) 2023 Intel Corporation. All rights reserved.
+ * Copyright (C) 2024 Intel Corporation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -35,7 +35,7 @@ void set_workload_hint(int type) {
     periodic_util_update(lpmd_config, type);
 }
 
-/** Called at the configured interval to take action */
+/** called at the configured interval to take action */
 void wlt_proxy_action_loop(void) {
 
     if (proxy_initialized) {
@@ -54,12 +54,13 @@ int wlt_proxy_init(lpmd_config_t *_lpmd_config) {
         return LPMD_ERROR; 
     }
 
-    /* Check model check and fail */
-    /* TODO */
-    lpmd_config = _lpmd_config;//todo: remove
+    /*todo: check model check and fail */    
+    
+    lpmd_config = _lpmd_config;//cb variable
 
     proxy_initialized = true;
-    next_proxy_poll = 2000; 
+    next_proxy_poll = 2000;
+    
     return LPMD_SUCCESS;
 }
 

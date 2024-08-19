@@ -383,7 +383,9 @@ void exit_state_change(void)
 #ifdef __USE_LPMD_IRQ__
     native_restore_irqs();
 #else
+#ifdef __REMOVE__
     restore_irq_mask();//replace with lpmd_irq function.
+#endif
 #endif
 }
 
@@ -406,7 +408,9 @@ int apply_state_change(void)
 #ifdef __USE_LPMD_IRQ__
         native_update_irqs();
 #else
+#ifdef __REMOVE__
         update_irqs();//replace with lpmd_irq function
+#endif
 #endif
 		irq_rebalance = 0;
 	}

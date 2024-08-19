@@ -18,7 +18,7 @@
 
 #include "wlt_proxy_common.h"
 #include "cpu_group.h"
-#include "lpmd.h"
+#include "lpmd.h" //logs
 
 /*
  * stall scalability refer to non-stallable percentage of utilization.
@@ -41,29 +41,10 @@ extern int state_demote;
 
 int max_util; 
 
-#ifdef _REMOVE_
-static int state_machine_perf(int present_state)
-{
-    if (present_state != INIT_MODE)
-        prep_state_change(present_state, INIT_MODE, 1);
-    return 1;
-}
-
-static int state_machine_power(int present_state)
-{
-    switch (present_state) {
-        /*
-         * TODO start with state_machine_auto and add customs
-         */
-    }
-    return 1;
-}
-#endif
-
-static int state_machine_auto_with_state(int present_state)
-{
+int state_machine_auto() {
     //this used to be part of function util_main
     float dummy;
+    int present_state = get_cur_state();
     update_perf_diffs(&dummy, 0);
     max_util = (int)round(grp.c0_max); //end    
     
@@ -313,8 +294,3 @@ static int state_machine_auto_with_state(int present_state)
     }
     return 1;
 }
-
-int state_machine_auto() {
-     return state_machine_auto_with_state(get_cur_state());
-}
-

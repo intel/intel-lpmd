@@ -50,7 +50,8 @@ static char irq_socket_name[64];
 
 static int irqbalance_pid = -1;
 
-#define MAX_IRQS		128 //todo: revisit 
+#define MAX_IRQS			256
+#define MASK_LEN            (32)
 
 struct info_irq {
 	int irq;
