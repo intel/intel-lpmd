@@ -35,6 +35,7 @@
 
 #define BITMASK_SIZE 32
 #define MAX_FREQ_MAPS (6)
+
 /* Support for CGROUPV2 */
 #define PATH_CGROUP                    "/sys/fs/cgroup"
 #define PATH_CG2_SUBTREE_CONTROL	PATH_CGROUP "/cgroup.subtree_control"
@@ -42,10 +43,13 @@
 #define PATH_CPUMASK "/sys/module/intel_powerclamp/parameters/cpumask"
 #define PATH_MAXIDLE "/sys/module/intel_powerclamp/parameters/max_idle"
 #define PATH_DURATION "/sys/module/intel_powerclamp/parameters/duration"
+
 #define PATH_THERMAL "/sys/class/thermal"
 
+#ifdef __REMOVE__
 #define ENABLE_FREQ_CLAMPING 1
 #define ENABLE_IRQ_REBALANCE 1
+#endif
 
 extern int cpumask_to_hexstr(cpu_set_t *mask, char *str, int size);
 extern int cpumask_to_str(cpu_set_t *mask, char *buf, int length);
@@ -57,6 +61,13 @@ static int topo_max_cpus;
 /* starting 6.5 kernel, cpu0 is assumed to be always online */
 static int max_online_cpu;
 size_t size_cpumask;
+
+struct _fd_cache {
+    int cgroup_partition_fd;
+    int cgroup_isolate_fd;
+};
+
+static struct _fd_cache fd_cache;
 
 struct _lp_state {
 	bool disabled;
@@ -1197,6 +1208,106 @@ static int check_cpu_isolate_support(void)
 	return update_cpusets(NULL, 0);
 }
 
+
+static int open_fd(const char *name, int flags)
+{
+    int fd;
+
+    fd = open(name, flags);
+    if (fd == -1) {
+        lpmd_log_debug("Open %s failed\n", name);
+        return -1;
+    }
+    return fd;
+}
+
+static int _write_str_fd(int fd, const char *str)
+{
+    int ret;
+
+    if (lseek(fd, 0, SEEK_SET))
+        perror("lseek: _write_str_fd");
+    ret = write(fd, str, strlen(str));
+    if (ret <= 0) {
+        perror("write: _write_str_fd");
+        return -1;
+    }
+    return ret;
+}
+
+static int _read_str_fd(int fd, char *str)
+{
+    int ret;
+
+    if (lseek(fd, 0, SEEK_SET))
+        perror("lseek: _read_str_fd");
+    ret = read(fd, str, strlen(str));
+    if (ret <= 0) {
+        perror("read: _read_str_fd");
+        return -1;
+    }
+    return ret;
+}
+
+static int close_fd(int fd)
+{
+    if (fd < 0) {
+        lpmd_log_debug("invalid fd:%d\n", fd);
+        return -1;
+    }
+    close(fd);
+    return 0;
+}
+
+static int init_cgroup_fd(void)
+{
+    int fd_part, fd_set;
+    DIR *dir;
+    int ret;
+
+    dir = opendir("/sys/fs/cgroup/eco");
+    if (!dir) {
+        ret = mkdir("/sys/fs/cgroup/eco", 0744);
+        if (ret) {
+            lpmd_log_debug("Can't create dir:%s errno:%d\n",
+                   "/sys/fs/cgroup/eco", errno);
+            return ret;
+        }
+        lpmd_log_debug("\tCreate %s\n", "/sys/fs/cgroup/eco");
+    } else
+        closedir(dir);
+
+    fd_part = open_fd("/sys/fs/cgroup/eco/cpuset.cpus.partition", O_RDWR);
+    if (fd_part > 0)
+        fd_cache.cgroup_partition_fd = fd_part;
+    else 
+        close_fd(fd_part);
+        
+    fd_set = open_fd("/sys/fs/cgroup/eco/cpuset.cpus", O_RDWR);
+    if (fd_set > 0)
+        fd_cache.cgroup_isolate_fd = fd_set;
+    else 
+        close_fd(fd_set);
+    return 1;
+}
+
+static void uninit_cgroup_fd () {
+    if (fd_cache.cgroup_isolate_fd > 0)
+        close(fd_cache.cgroup_isolate_fd);
+    if (fd_cache.cgroup_partition_fd > 0)
+        close(fd_cache.cgroup_partition_fd);
+}
+
+static int write_cgroup_partition(const char *str)
+{
+    return _write_str_fd(fd_cache.cgroup_partition_fd, str);
+}
+
+static int write_cgroup_isolate(const char *str)
+{
+    return _write_str_fd(fd_cache.cgroup_isolate_fd, str);
+}
+
 int process_cpu_isolate_enter(void)
 {
 	if (write_cgroup_partition("member") < 0)
@@ -1245,6 +1356,8 @@ int init_cpu_proxy(void)
 	init_cgroup_fs();
 
 	perf_stat_init();
+    
+    init_cgroup_fd();
 
 	ret = detect_lp_state();
 
@@ -1255,7 +1368,10 @@ int init_cpu_proxy(void)
 }
 
 void uninit_cpu_proxy(){
+    
 	for (int idx = INIT_MODE + 1; idx < MAX_MODE; idx++) {
         reset_cpus_proxy(idx);
 	}
+    
+    uninit_cgroup_fd();
 }

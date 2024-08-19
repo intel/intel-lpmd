@@ -1131,8 +1131,11 @@ int util_init_proxy(void)
 
     if (IDLE_INJECT_FEATURE)
         check_cpu_powerclamp_support();
-
+    
+#ifdef __REMOVE__
     init_all_fd();
+#endif
+    //cgroup_init();
 
     init_delta_vars(get_max_online_cpu());
 
@@ -1153,4 +1156,5 @@ int util_init_proxy(void)
 void util_uninit_proxy(void) {
     exit_state_change();
     uninit_cpu_proxy();
+    //cgroup_uninit();
 }

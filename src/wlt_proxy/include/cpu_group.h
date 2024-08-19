@@ -22,6 +22,14 @@
 #include <sched.h>
 #include "wlt_proxy_common.h"
 
+/*
+ * If polling is too fast some of the stats (such as util)
+ * could be momentarily high owing to state change disturbances.
+ * avoid unexpected decision due to this as it may not be tied to workload per-se.
+ * any setting below, say 15ms, needs careful assessment.
+ */
+#define MIN_POLL_PERIOD 15
+
 #define MAX_CPUS_NUM        1024
 #define MAX_CPUMASK_SIZE    MAX_CPUS_NUM / 8
 

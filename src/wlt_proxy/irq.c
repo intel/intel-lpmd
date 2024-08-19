@@ -45,6 +45,39 @@ struct info_irqs_proxy info_irqs_proxy;
 /*defined in lpmd_irq*/
 struct info_irqs_proxy *p_info = &info_irqs_proxy;
 
+/* helper functions - todo: move to lpmd_helpers.c?*/
+static FILE *open_fs(const char *name, char *mode)
+{
+    FILE *filep;
+    filep = fopen(name, mode);
+    if (!filep) {
+        return NULL;
+    }
+    return filep;
+}
+
+static int close_fs(FILE * filep)
+{
+    return fclose(filep);
+}
+
+static int write_str_fs(FILE * filep, const char *str)
+{
+    int ret;
+    if (!filep)
+        return -1;
+
+    fseek(filep, 0, SEEK_SET);
+    ret = fwrite((const void *)str, 1, strlen(str), filep);
+    if (ret <= 0) {
+        perror("fwrite: write_str_fs");
+        fclose(filep);
+        return ret;
+    }
+    fflush(filep);
+    return 0;
+}
+
 /* Interrupt Management */
 int restore_irq_mask(void)
 {

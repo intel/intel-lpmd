@@ -66,11 +66,13 @@ int wlt_proxy_init(lpmd_config_t *_lpmd_config) {
 	return LPMD_SUCCESS;
 }
 
-/** make sure all resource are properly released and clsoed */
+/** make sure all resource are properly released and closed */
 void wlt_proxy_uninit(void) {
     
     util_uninit_proxy();
+#ifdef __REMOVE__
     close_all_fd();
+#endif    
     uninit_delta_vars();
     perf_stat_uninit();
 }

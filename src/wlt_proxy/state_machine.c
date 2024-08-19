@@ -23,7 +23,20 @@
 #include "perf_msr.h"
 #include "lpmd.h"
 
+/*
+ * stall scalability refer to non-stallable percentage of utilization.
+ * e.g due to memory or other depenency. If work is reasonably scaling well,
+ * values in 80 to 90+% is expected
+ */
+#define STALL_SCALE_LOWER_MARK    70
+
 #define N_STRIKE	(10)
+
+/* threshold (%) for sustained (avg) utilizations */
+#define SUS_LOWEST               1
+#define SUS_LOWER                2
+#define SUS_LOW_RANGE_START      4
+#define SUS_LOW_RANGE_END       25
 
 extern int burst_count;
 extern struct group_util grp;

@@ -22,21 +22,6 @@
 #include <sched.h>
 #include <stdbool.h>
 
-/*
- * If polling is too fast some of the stats (such as util)
- * could be momentarily high owing to state change disturbances.
- * avoid unexpected decision due to this as it may not be tied to workload per-se.
- * any setting below, say 15ms, needs careful assessment.
- */
-#define MIN_POLL_PERIOD 15
-
-/*
- * stall scalability refer to non-stallable percentage of utilization.
- * e.g due to memory or other depenency. If work is reasonably scaling well,
- * values in 80 to 90+% is expected
- */
-#define STALL_SCALE_LOWER_MARK    70
-
 /* threshold (%) for instantaneous utilizations */
 #define UTIL_LOWEST              1
 #define UTIL_LOWER               2
@@ -46,12 +31,6 @@
 #define UTIL_HALF               50
 #define UTIL_ABOVE_HALF         70
 #define UTIL_NEAR_FULL          90
-
-/* threshold (%) for sustained (avg) utilizations */
-#define SUS_LOWEST               1
-#define SUS_LOWER                2
-#define SUS_LOW_RANGE_START      4
-#define SUS_LOW_RANGE_END       25
 
 /* hold period (ms) before moving to deeper state */
 #define MDRT_MODE_STAY        (15000)
@@ -75,6 +54,7 @@
 #define BASE_POLL_DEEP        1800
 
 #define PPW_EFFICIENCY_FEATURE    (1)
+
 #define IDLE_INJECT_FEATURE       (0)
 #define MAX_UTIL_INJECT           (70)
 #define MAX_IDLE_INJECT           (100 - MAX_UTIL_INJECT)
@@ -91,6 +71,7 @@
  */
 #define DURATION_SPILL        (1.2)
 
+#ifdef __REMOVE__
 #define EPB_AC            (6)
 #define EPB_DC            (8)
 #define POWERSAVE_EPP_PCT    (70)
@@ -99,6 +80,7 @@
 #define BALANCED_EPP         ((uint)ceil(BALANCED_EPP_PCT*256/100))
 #define PERFORMANCE_EPP_PCT    (25)
 #define PERFORMANCE_EPP     ((uint)ceil(PERFORMANCE_EPP_PCT*256/100))
+#endif
 
 /* floating point comparison */
 #define EPSILON    (0.01)
@@ -109,6 +91,7 @@
 
 #define RECORDS_PER_HEADER    (30)
 extern int slider;
+
 #ifdef __REMOVE__
 enum slider_value {
     unknown,
@@ -166,6 +149,7 @@ enum elastic_poll {
 #define ACTIVATED    (2)
 #define PAUSE        (3)
 
+/* cpu group */
 void set_cur_state(enum lp_state_idx);
 int is_state_valid(enum lp_state_idx);
 
@@ -203,44 +187,6 @@ int grp_c0_breach(void);
 //int breach_per_sec(int);
 //int state_toggle_per_sec(int);
 //int grp_c0_breach_fast(void);
-#endif
-
-/* helper */
-void init_all_fd(void);
-void close_all_fd(void);
-
-//only used in irq.c
-FILE *open_fs(const char *, char *);
-int write_str_fs(FILE *, const char *);
-int close_fs(FILE *);
-
-#ifdef __REMOVE__
-long long read_rapl_pkg0(void);
-#endif
-
-int write_cgroup_partition(const char *);
-int write_cgroup_isolate(const char *);
-
-#ifdef __REMOVE__
-
-int fs_open_check(const char *name); //lpmd_open
-int fs_write_int(const char *name, int val); //lpmd_write_int
-int fs_read_int(const char *name, int *val); //lpmd_read_int
-int fs_write_str(const char *name, char *str); //lpmd_write_str
-
-int fs_write_str_append(const char *name, char *str);//lpmd_write_str_append
-int fs_read_str(const char *name, char *val);
-
-int open_fd(const char *name, int flags);//static functions not used anywhere
-int close_fd(int fd);//static functions not used anywhere
-int init_rapl_fd(void);//static functions not used anywhere
-//void close_rapl_fd(void);
-int write_str_fd(int fd, const char *);//static functions not used anywhere
-int read_str_fd(int fd, char *);//static functions not used anywhere
-
-char *get_mode_name(enum lp_state_idx);//static functions not used anywhere
-int get_mode_cpu_count(enum lp_state_idx);//static functions not used anywhere
-int get_mode_max(void);//static functions not used anywhere
 #endif
 
 #endif /* _WLT_PROXY_COMMON_H_ */
