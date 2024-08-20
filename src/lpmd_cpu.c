@@ -50,7 +50,7 @@
 #include <systemd/sd-bus.h>
 #include <cpuid.h>
 #include "lpmd.h"
-#define DISABLE_SOC_ENFORCEMENT 0
+#define DISABLE_SOC_ENFORCEMENT 1
 static int topo_max_cpus;
 static int max_online_cpu;
 static size_t size_cpumask;
@@ -1207,8 +1207,12 @@ static int detect_lpm_cpus(char *cmd_cpus)
 		return 0;
 	}
 	else {
-		lpmd_log_error ("\tNo valid Low Power CPUs detected, exit\n");
-		exit (1);
+#ifdef DISABLE_SOC_ENFORCEMENT        
+		lpmd_log_error ("\tNo valid Low Power CPUs detected, valgrind build continue\n");
+#else
+        lpmd_log_error ("\tNo valid Low Power CPUs detected, exit\n");
+		exit (1);    
+#endif
 	}
 
 end: if (has_cpus (CPUMASK_LPM_DEFAULT))
