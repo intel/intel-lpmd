@@ -37,7 +37,7 @@
 #include "cpu_group.h"
 #include "knobs_common.h"
 
-#define PERF_API 0
+#define PERF_API 1
 
 #ifdef __GNUC__
 #define likely(x)       __builtin_expect(!!(x), 1)
