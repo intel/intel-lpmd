@@ -74,6 +74,7 @@ static int record = 0;
 
 int state_demote = 0;
 int next_proxy_poll = 2000; 
+bool AC_CONNECTED = true;
 
 /* 
  * simple moving average (sma), event count based - not time. 
@@ -636,8 +637,7 @@ static enum lp_state_idx nearest_supported(enum lp_state_idx from_state, enum lp
 
 static int get_state_mapping(enum lp_state_idx state){
     
-    //read the battery connection status, if the last reading is beyond 30 seconds
-    bool AC_CONNECTED = true; 
+    //read the battery connection status, if the last reading is beyond 30 seconds 
     clockid_t clk = CLOCK_MONOTONIC;
     if (!ts_current.tv_sec){ //first time 
         clock_gettime(clk, &ts_current); 
