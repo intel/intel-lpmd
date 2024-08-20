@@ -351,7 +351,7 @@ int is_ac_powered_power_supply_status() {
                             val = trim(str_value);
 
                             if (val){
-                                if (strcmp(val, "discharging") == 0 || strcmp(val, "not charging") == 0){
+                                if (strcmp(val, "discharging") == 0 /*|| strcmp(val, "not charging") == 0*/){
                                     lpmd_log_info("interface exists, value of status is %s, battery powered\n", val); //print for debug purpose
                                     is_power_connected = false;
                                 } else {
@@ -396,7 +396,7 @@ int is_ac_powered_power_supply_status() {
                 val = trim(str_value);
 
                 if (val){
-                    if (strcmp(val, "discharging") == 0 || strcmp(val, "not charging") == 0){
+                    if (strcmp(val, "discharging") == 0 /*|| strcmp(val, "not charging") == 0*/){
                         lpmd_log_info("interface exists, value of status is %s, battery powered\n", val); //print for debug purpose
                         is_power_connected = false;
                     } else {
