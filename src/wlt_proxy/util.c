@@ -37,7 +37,7 @@
 #include "cpu_group.h"
 #include "knobs_common.h"
 
-#define PERF_API 1
+#define PERF_API 0
 
 #ifdef __GNUC__
 #define likely(x)       __builtin_expect(!!(x), 1)
@@ -649,8 +649,7 @@ static int get_state_mapping(enum lp_state_idx state){
             ts_prev = ts_current;
             AC_CONNECTED = is_ac_powered_power_supply_status() == 0  ? false: true; //unknown is considered as ac powered.
         } 
-    }
- 
+    } 
     //bool AC_CONNECTED = is_ac_powered_power_supply_status() == 0  ? false: true; //unknown is considered as ac powered.
     
     switch(state){
@@ -681,7 +680,12 @@ static int get_state_mapping(enum lp_state_idx state){
     //there is no corresponding wlt for INIT_MODE, it goes away quickly.
     //use WLT_SUSTAINED as default type    
     case INIT_MODE:
-        return WLT_SUSTAINED;
+        if (AC_CONNECTED){
+            return WLT_SUSTAINED;
+        }
+        else{
+            return WLT_SUSTAINED_BAT;
+        }
         
     //we don't allow invalid wlt type, flag and use WLT_SUSTAINED        
     default:
