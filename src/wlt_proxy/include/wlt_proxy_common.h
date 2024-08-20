@@ -155,11 +155,13 @@ int is_state_valid(enum lp_state_idx);
 
 #ifndef __USE_LPMD_IRQ__
 /* irq.c */
+#ifdef __REMOVE__
 int init_irq(void);
 int process_irqs_proxy(int);//defined in lpmd
 int dump_interrupts(int);
 int restore_irq_mask(void);
 int update_irqs(void);
+#endif
 #endif
 
 /* util.c */
