@@ -149,10 +149,6 @@ enum elastic_poll {
 #define ACTIVATED    (2)
 #define PAUSE        (3)
 
-/* cpu group */
-void set_cur_state(enum lp_state_idx);
-int is_state_valid(enum lp_state_idx);
-
 #ifndef __USE_LPMD_IRQ__
 /* irq.c */
 #ifdef __REMOVE__
@@ -177,7 +173,9 @@ int update_perf_diffs(float *, int);
 int staytime_to_staycount(enum lp_state_idx);
 int max_mt_detected(enum lp_state_idx);
 
+#ifdef __REMOVE__
 void unclamp_default_freq(enum lp_state_idx);
+#endif 
 
 /* state machine */
 int state_machine_auto();

@@ -674,7 +674,7 @@ static int get_state_mapping(enum lp_state_idx state){
         else {         
             return WLT_BATTERY_LIFE_BAT;
         }    
-    case DEEP_MODE:                            
+    case DEEP_MODE:
         return WLT_IDLE; 
     
     //there is no corresponding wlt for INIT_MODE, it goes away quickly.
@@ -704,13 +704,15 @@ int prep_state_change(enum lp_state_idx from_state, enum lp_state_idx to_state,
         inject_update = ACTIVATED;
     else
         inject_update = PAUSE;
-
+#ifdef __REMOVE__
     /* state entry: p-state ctl if applicable*/
     if (!reset && state_support_freq_ctl(to_state))
         clamp_to_turbo(to_state);
     /* state exit: p-state reset back */
     if (!reset && state_support_freq_ctl(from_state))
         unclamp_default_freq(from_state);
+#endif
+
 #ifdef __REMOVE__
     //epp and epb are updated in the main 
     update_state_epp(to_state);
@@ -786,6 +788,8 @@ static int prepare_deomote_bypass(enum lp_state_idx to_state, int epp_high)
 #endif
     return 1;
 }
+
+#ifdef __REMOVE__
 
 void unclamp_default_freq(enum lp_state_idx for_state)
 {
@@ -867,6 +871,9 @@ void clamp_to_turbo(enum lp_state_idx for_state)
         }
     }
 }
+
+#endif
+
 #ifdef __REMOVE__
 float get_cur_freq(int cpu)
 {
@@ -983,7 +990,7 @@ int util_init_proxy(void)
 /* cleanup */
 void util_uninit_proxy(void) {
     
-    exit_state_change();
+    exit_state_change();    
     uninit_cpu_proxy();
     uninit_delta_vars();
     perf_stat_uninit();

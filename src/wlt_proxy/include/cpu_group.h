@@ -50,39 +50,59 @@ struct _freq_map {
 int is_cpu_online(int);
 int get_max_cpus(void);
 int get_max_online_cpu(void);
+
 int init_cpu_proxy(void);//defined in lpmd.h
 void uninit_cpu_proxy();
+
 cpu_set_t *get_cpu_mask(enum lp_state_idx idx);
 char *get_cpus_hexstr(enum lp_state_idx);
+
+#ifdef __REMOVE__
 int process_cpu_powerclamp_enter(int, int);
 int process_cpu_powerclamp_exit(void);
+#endif
+
 bool is_state_disabled(enum lp_state_idx);
 int apply_state_change(void);
 enum lp_state_idx get_cur_state(void);
+void set_cur_state(enum lp_state_idx);
+int is_state_valid(enum lp_state_idx);
+
 int cpu_applicable(int, enum lp_state_idx);
 int state_has_ppw(enum lp_state_idx);
 void set_state_reset(void);
+
 int get_last_maxutil(void);
 int set_last_maxutil(int);
+
 int set_last_poll(int);
 int get_last_poll(void);
+
 int get_min_freq(int);
 int get_turbo_freq(int);
+
 int get_freq_map(int j, struct _freq_map *fmap);
 int get_freq_map_count(void);
+
 int get_poll_ms(enum lp_state_idx);
 int get_state_poll(int, enum lp_state_idx);
 int get_state_poll_order(enum lp_state_idx state);
+
 int set_stay_count(enum lp_state_idx, int);
 int get_stay_count(enum lp_state_idx);
+
 int do_countdown(enum lp_state_idx);
 void initialize_state_mask(void);
 size_t alloc_cpu_set(cpu_set_t ** cpu_set);
 int check_reset_status(void);
+
 int get_state_epp(enum lp_state_idx);
 int get_state_epb(enum lp_state_idx);
+
 int state_support_freq_ctl(enum lp_state_idx);
 void exit_state_change(void);
+#ifdef __REMOVE__
 int check_cpu_powerclamp_support(void);
+#endif
 
-#endif                /* _CPU_GROUP_H_ */
+#endif /* _CPU_GROUP_H_ */

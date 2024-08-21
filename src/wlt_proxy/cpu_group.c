@@ -373,8 +373,10 @@ void exit_state_change(void)
 {
 	set_cur_state(INIT_MODE);
 	needs_state_reset = 0;
+#ifdef __REMOVE__
 	unclamp_default_freq(INIT_MODE);
 	process_cpu_powerclamp_exit();
+#endif
 	process_cpu_isolate_exit();
 #ifdef __REMOVE__
 	revert_orig_epp();
@@ -1114,7 +1116,7 @@ static int update_cpusets(char *data, int update)
 		ret = 1;
 	return ret ? 1 : 0;
 }
-
+#ifdef __REMOVE__
 int check_cpu_powerclamp_support(void)
 {
 	FILE *filep;
@@ -1205,7 +1207,7 @@ int process_cpu_powerclamp_exit()
 		return 1;
 	return lpmd_write_int(path_powerclamp, 0, -1);
 }
-
+#endif
 static int check_cpu_isolate_support(void)
 {
 	lpmd_write_str(PATH_CG2_SUBTREE_CONTROL, "+cpuset", -1);
@@ -1337,8 +1339,9 @@ int process_cpu_isolate_exit(void)
 static int init_cgroup_fs(void)
 {
 	int ret;
-
+#ifdef __REMOVE__
 	ret = check_cpu_powerclamp_support();
+#endif
 	ret = check_cpu_isolate_support();
 	return ret;
 }
