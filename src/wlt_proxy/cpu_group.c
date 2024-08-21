@@ -62,14 +62,12 @@ static int topo_max_cpus;
 static int max_online_cpu;
 size_t size_cpumask;
 
-#ifdef __REMOVE__
 struct _fd_cache {
     int cgroup_partition_fd;
     int cgroup_isolate_fd;
 };
 
 static struct _fd_cache fd_cache;
-#endif 
 
 struct _lp_state {
 	bool disabled;
@@ -151,11 +149,9 @@ static struct _lp_state lp_state[MAX_MODE] = {
 static enum lp_state_idx cur_state = INIT_MODE;
 static int needs_state_reset = 1;
 
-#ifdef __REMOVE__
 int process_cpu_isolate_enter(void);
 int process_cpu_isolate_exit(void);
 int process_cpu_powerclamp_exit(void);
-#endif
 static int zero_isol_cpu(enum lp_state_idx);
 static char *get_inj_hexstr(enum lp_state_idx idx);
 static char path_powerclamp[MAX_STR_LENGTH * 2];
@@ -380,7 +376,9 @@ void exit_state_change(void)
 #ifdef __REMOVE__
 	unclamp_default_freq(INIT_MODE);
 	process_cpu_powerclamp_exit();
+#endif
 	process_cpu_isolate_exit();
+#ifdef __REMOVE__
 	revert_orig_epp();
 	revert_orig_epb();
 #endif
@@ -419,12 +417,12 @@ int apply_state_change(void)
 		irq_rebalance = 0;
 	}
 
-#ifdef __REMOVE__
 	if ((cur_state == INIT_MODE) || (zero_isol_cpu(get_cur_state())))
 		process_cpu_isolate_exit();
 	else
 		process_cpu_isolate_enter();
 
+#ifdef __REMOVE__
 	if (IDLE_INJECT_FEATURE && (inject_update == ACTIVATED)
 	    && state_has_ppw(get_cur_state())) {
 		process_cpu_powerclamp_enter(DURATION_SPILL *
@@ -1076,7 +1074,6 @@ static int detect_lp_state(void)
 	return 0;
 }
 
-#ifdef __REMOVE__ 
 static int update_cpusets(char *data, int update)
 {
 	DIR *dir;
@@ -1119,7 +1116,7 @@ static int update_cpusets(char *data, int update)
 		ret = 1;
 	return ret ? 1 : 0;
 }
-
+#ifdef __REMOVE__
 int check_cpu_powerclamp_support(void)
 {
 	FILE *filep;
@@ -1210,13 +1207,13 @@ int process_cpu_powerclamp_exit()
 		return 1;
 	return lpmd_write_int(path_powerclamp, 0, -1);
 }
-
+#endif
 static int check_cpu_isolate_support(void)
 {
 	lpmd_write_str(PATH_CG2_SUBTREE_CONTROL, "+cpuset", -1);
 	return update_cpusets(NULL, 0);
 }
-#endif
+
 
 static int open_fd(const char *name, int flags)
 {
@@ -1268,7 +1265,6 @@ static int close_fd(int fd)
     return 0;
 }
 
-#ifdef __REMOVE__
 static int init_cgroup_fd(void)
 {
     int fd_part, fd_set;
@@ -1320,16 +1316,13 @@ static int write_cgroup_isolate(const char *str)
 
 int process_cpu_isolate_enter(void)
 {
-   
 	if (write_cgroup_partition("member") < 0)
 		return -1;
-
 	/* check the case of 0 count in reverse str */
 	if (write_cgroup_isolate(get_cpus_str_reverse(get_cur_state())) < 0)
 		return -1;
-    if (write_cgroup_partition("isolated") < 0)
+	if (write_cgroup_partition("isolated") < 0)
 		return -1;
-  
 	return 1;
 }
 
@@ -1346,12 +1339,12 @@ int process_cpu_isolate_exit(void)
 static int init_cgroup_fs(void)
 {
 	int ret;
-
+#ifdef __REMOVE__
 	ret = check_cpu_powerclamp_support();
+#endif
 	ret = check_cpu_isolate_support();
 	return ret;
 }
-#endif
 
 /*defined in lpmd_cpu -- rename fn.*/
 int init_cpu_proxy(void)
@@ -1367,14 +1360,13 @@ int init_cpu_proxy(void)
 	if (ret)
 		return ret;
 
+	init_cgroup_fs();
+
 	perf_stat_init();
     
-#ifdef __REMOVE__
-	init_cgroup_fs();
     init_cgroup_fd();
-#endif
-	
-    ret = detect_lp_state();
+
+	ret = detect_lp_state();
 
 	if (ret)
 		return ret;
@@ -1388,7 +1380,5 @@ void uninit_cpu_proxy() {
         reset_cpus_proxy(idx);
 	}
     
-#ifdef __REMOVE__    
     uninit_cgroup_fd();
-#endif    
 }
