@@ -429,7 +429,7 @@ int lpmd_get_config(lpmd_config_t *lpmd_config)
 
 	root_element = xmlDocGetRootElement (doc);
 	if (root_element == NULL) {
-		lpmd_log_warn ("error: could not get root element \n");
+		lpmd_log_warn ("error: could not get root element\n");
 		return LPMD_ERROR;
 	}
 
