@@ -202,9 +202,9 @@ int main(int argc, char *argv[])
 	g_option_context_add_main_entries (opt_ctx, options, NULL);
 
 	g_option_context_set_summary (opt_ctx,
-				"Intel Low Power Daemon based on system usage takes action "
-				"to reduce active power of the system.\n\n"
-				"Copyright (c) 2023, Intel Corporation\n"
+				"Intel Energy Optimizer (LPMD) Daemon based on system usage takes action "
+				"to improve energy efficiency the system.\n\n"
+				"Copyright (c) 2024, Intel Corporation\n"
 				"This program comes with ABSOLUTELY NO WARRANTY.\n"
 				"This work is licensed under GPL v2.\n\n"
 				"Use \"man intel_lpmd\" to get more details.");
