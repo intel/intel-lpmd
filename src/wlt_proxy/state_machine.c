@@ -90,7 +90,7 @@ int state_machine_auto() {
          */
         /* promote -- if not high multi-thread trend */
         if (!max_mt_detected(INIT_MODE)) {
-            //lpmd_log_info("INIT_MODE to NORM_MODE\n");            
+            lpmd_log_info("INIT_MODE to PERF_MODE\n");            
             prep_state_change(INIT_MODE, PERF_MODE, 0);
             break;
         }

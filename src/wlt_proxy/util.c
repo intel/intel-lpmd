@@ -636,7 +636,7 @@ static enum lp_state_idx nearest_supported(enum lp_state_idx from_state, enum lp
 }
 
 static int get_state_mapping(enum lp_state_idx state){
-    
+#ifdef __REMOVE__
     //read the battery connection status, if the last reading is beyond 30 seconds 
     clockid_t clk = CLOCK_MONOTONIC;
     if (!ts_current.tv_sec){ //first time 
@@ -651,41 +651,49 @@ static int get_state_mapping(enum lp_state_idx state){
         } 
     } 
     //bool AC_CONNECTED = is_ac_powered_power_supply_status() == 0  ? false: true; //unknown is considered as ac powered.
-    
+#endif
     switch(state){
     case PERF_MODE:
         return WLT_BURSTY;
     
     case RESP_MODE:
+        return WLT_SUSTAINED;  
+#ifdef __REMOVE__
         if (AC_CONNECTED){    
             return WLT_SUSTAINED;
         }
         else{
             return WLT_SUSTAINED_BAT;
         }
-            
+#endif
     case MDRT4E_MODE:
     case MDRT3E_MODE:
     case MDRT2E_MODE:
     case NORM_MODE:
+        return WLT_BATTERY_LIFE;
+#ifdef __REMOVE__
         if (AC_CONNECTED){
             return WLT_BATTERY_LIFE;
         }
         else {         
             return WLT_BATTERY_LIFE_BAT;
-        }    
+        }
+#endif
     case DEEP_MODE:
         return WLT_IDLE; 
     
     //there is no corresponding wlt for INIT_MODE, it goes away quickly.
     //use WLT_SUSTAINED as default type    
     case INIT_MODE:
+        return WLT_SUSTAINED;
+#ifdef __REMOVE__
         if (AC_CONNECTED){
             return WLT_SUSTAINED;
         }
         else{
             return WLT_SUSTAINED_BAT;
         }
+#endif        
         
     //we don't allow invalid wlt type, flag and use WLT_SUSTAINED        
     default:
