@@ -74,6 +74,7 @@ int idle_inject_feature = IDLE_INJECT_FEATURE;
 int inject_update = UNDEFINED;
 int irq_rebalance = 0;
 static int record = 0;
+static int prev_type = -1;
 
 int state_demote = 0;
 int next_proxy_poll = 2000;
@@ -737,9 +738,17 @@ int prep_state_change(enum lp_state_idx from_state, enum lp_state_idx to_state,
     //switch(to_state)
     //do to_state to WLT mapping
     int type = get_state_mapping((int)to_state); 
-    lpmd_log_debug("proxy WLT state value :%d\n", type);
-    set_workload_hint(type);
-
+    lpmd_log_debug("proxy WLT state value :%d, %d\n", type, prev_type);
+    if (prev_type == -1) {//first time
+        set_workload_hint(type);
+        prev_type = type;
+    } else if (prev_type != type) {
+        set_workload_hint(type);
+        prev_type = type;
+    } /*else {
+        //dont call type change
+    }*/
+    
     set_cur_state(to_state);
     set_state_reset();
     set_last_maxutil(DEACTIVATED);
