@@ -442,8 +442,10 @@ int update_perf_diffs(float *sum_norm_perf, int stat_init_only)
     int t, min_s0_cpu = 0, first_pass = 1;
 
     for (t = 0; t < get_max_online_cpu(); t++) {
+#ifdef __REMOVE__ //all cpus available all the time.
         if (!cpu_applicable(t, get_cur_state()))
             continue;
+#endif
 
 #ifdef PERF_API
         /*reading through perf api*/
@@ -590,7 +592,7 @@ static int do_sum(int *sam, int len)
     return sum;
 }
 
-static int state_max_avg()
+int state_max_avg()
 {
     grp.sma_pos += 1;
 
@@ -913,9 +915,14 @@ float get_cur_scalability(int cpu)
 
 int max_mt_detected(enum lp_state_idx state)
 {
+    lpmd_log_debug("no of cpus online: %d\n", get_max_online_cpu());
+    
     for (int t = 0; t < get_max_online_cpu(); t++) {
+#ifdef __REMOVE__ //all cpus are avalialble all the time.
         if (!cpu_applicable(t, state))
             continue;
+#endif
+        
         if A_LTE_B
             (perf_stats[t].l0, (UTIL_LOW))
                 return 0;

@@ -29,7 +29,7 @@
 
 /*
  * stall scalability refer to non-stallable percentage of utilization.
- * e.g due to memory or other depenency. If work is reasonably scaling well,
+ * e.g due to memory or other dependency. If work is reasonably scaling well,
  * values in 80 to 90+% is expected
  */
 #define STALL_SCALE_LOWER_MARK    70
@@ -53,7 +53,22 @@ int state_machine_auto() {
     float dummy;
     int present_state = get_cur_state();
     update_perf_diffs(&dummy, 0);
-    max_util = (int)round(grp.c0_max); //end    
+    max_util = (int)round(grp.c0_max); //end
+#ifdef __REMOVE__
+    int last_max = get_last_maxutil();
+    if (last_max > 0)
+        grp.delta = max_util - last_max;
+    else
+        last_max = 0;
+#endif
+
+    /*
+     * we do not want to track avg util for following cases:
+     * a) bypass mode where the solution temporary bypassed
+     * b) Responsive transit mode (fast poll can flood avg leading to incorrect decisions)
+     */
+    if ((present_state != BYPS_MODE) || (present_state != RESP_MODE))
+        state_max_avg();
     
     int completed_poll = get_last_poll();
     float sum_c0 = grp.c0_max + grp.c0_2nd_max + grp.c0_3rd_max;
@@ -149,9 +164,15 @@ int state_machine_auto() {
         // Stay -- if there were recent burst of spikes
         if (perf_count && burst_rate_breach())
             break;
+        
+        
         // Promote -- all else
-        lpmd_log_info("RESP_MODE to MDRT3E_MODE\n");            
-        prep_state_change(RESP_MODE, MDRT3E_MODE, 0);
+        if (A_LTE_B(grp.worst_stall * 100, STALL_SCALE_LOWER_MARK)) {
+           lpmd_log_info("worst stall is less than STALL_SCALE_LOWER_MARK -- stay here.\n");            
+        } else {
+            lpmd_log_info("RESP_MODE to MDRT3E_MODE\n");            
+            prep_state_change(RESP_MODE, MDRT3E_MODE, 0);
+        }
         break;
     case MDRT4E_MODE:
         if (A_LTE_B(grp.worst_stall * 100, STALL_SCALE_LOWER_MARK)) {
@@ -180,9 +201,12 @@ int state_machine_auto() {
         // stay
         break;
     case MDRT3E_MODE:
+        lpmd_log_info("MDRT3E_MODE worst stall %.2f < %d\n", grp.worst_stall, STALL_SCALE_LOWER_MARK);
+        lpmd_log_info("MDRT3E_MODE c0 max %.2f < %d\n", grp.c0_max, UTIL_NEAR_FULL);
+        lpmd_log_info("MDRT3E_MODE sma avg %d < %d\n", grp.sma_avg1, grp.sma_avg1);
         // Demote -- if mem bound work is stalling but didn't show higher utilization
         if (A_LTE_B(grp.worst_stall * 100, STALL_SCALE_LOWER_MARK)) {
-            lpmd_log_info("MDRT3E_MODE to RESP_MODE %.2f < %d\n", grp.worst_stall, STALL_SCALE_LOWER_MARK);            
+            lpmd_log_info("MDRT3E_MODE to RESP_MODE %.2f < %d\n", grp.worst_stall, STALL_SCALE_LOWER_MARK);
             prep_state_change(MDRT3E_MODE, RESP_MODE, 0);
             break;
         }
@@ -301,5 +325,10 @@ int state_machine_auto() {
 
         break;
     }
+#ifdef __REMOVE__
+    if (last_max != DEACTIVATED)
+        set_last_maxutil(max_util);
+    set_last_poll(poll);
+#endif
     return 1;
 }

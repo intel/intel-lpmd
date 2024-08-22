@@ -165,6 +165,7 @@ void util_uninit_proxy(void);
 
 int perf_stat_init(void);
 //void perf_stat_uninit();
+int state_max_avg();
 
 int prep_state_change(enum lp_state_idx, enum lp_state_idx, int);
 int update_perf_diffs(float *, int);
