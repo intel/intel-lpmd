@@ -882,6 +882,11 @@ static int detect_supported_cpu(lpmd_config_t *lpmd_config)
 	lpmd_log_info("%u CPUID levels; family:model:stepping 0x%x:%x:%x (%u:%u:%u)\n",
 			max_level, family, model, stepping, family, model, stepping);
 
+	if (!do_platform_check()) {
+		lpmd_log_info("Ignore platform check\n");
+		goto end;
+	}
+
 	/* Need CPUID.1A to detect CPU core type */
         if (max_level < 0x1a) {
 		lpmd_log_info("CPUID leaf 0x1a not supported, unable to detect CPU type\n");
@@ -927,6 +932,7 @@ static int detect_supported_cpu(lpmd_config_t *lpmd_config)
 		return -1;
 	}
 
+end:
 	lpmd_config->cpu_family = family;
 	lpmd_config->cpu_model = model;
 
