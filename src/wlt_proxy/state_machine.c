@@ -168,7 +168,7 @@ int state_machine_auto() {
         
         // Promote -- all else
         if (A_LTE_B(grp.worst_stall * 100, STALL_SCALE_LOWER_MARK)) {
-           lpmd_log_info("worst stall is less than STALL_SCALE_LOWER_MARK -- stay here.\n");            
+           lpmd_log_debug("worst stall is less than STALL_SCALE_LOWER_MARK -- stay here.\n");            
         } else {
             lpmd_log_info("RESP_MODE to MDRT3E_MODE\n");            
             prep_state_change(RESP_MODE, MDRT3E_MODE, 0);
@@ -201,9 +201,9 @@ int state_machine_auto() {
         // stay
         break;
     case MDRT3E_MODE:
-        lpmd_log_info("MDRT3E_MODE worst stall %.2f < %d\n", grp.worst_stall, STALL_SCALE_LOWER_MARK);
-        lpmd_log_info("MDRT3E_MODE c0 max %.2f < %d\n", grp.c0_max, UTIL_NEAR_FULL);
-        lpmd_log_info("MDRT3E_MODE sma avg %d < %d\n", grp.sma_avg1, grp.sma_avg1);
+        lpmd_log_debug("MDRT3E_MODE worst stall %.2f and STALL_SCALE_LOWER_MARK %d\n", grp.worst_stall, STALL_SCALE_LOWER_MARK);
+        lpmd_log_debug("MDRT3E_MODE c0 max %.2f and  UTIL_NEAR_FULL %d\n", grp.c0_max, UTIL_NEAR_FULL);
+        lpmd_log_debug("MDRT3E_MODE sma avg 1: %d, 2: %d, 3: %d\n", grp.sma_avg1, grp.sma_avg2, grp.sma_avg3);
         // Demote -- if mem bound work is stalling but didn't show higher utilization
         if (A_LTE_B(grp.worst_stall * 100, STALL_SCALE_LOWER_MARK)) {
             lpmd_log_info("MDRT3E_MODE to RESP_MODE %.2f < %d\n", grp.worst_stall, STALL_SCALE_LOWER_MARK);
@@ -233,7 +233,7 @@ int state_machine_auto() {
             if (!do_countdown(MDRT3E_MODE))
                 break;
             prep_state_change(MDRT3E_MODE, MDRT2E_MODE, 0);
-            lpmd_log_info("MDRT3E_MODE to MDRT2E_MODE %d < %d\n", grp.sma_avg1, MDRT2E_MODE);            
+            lpmd_log_info("MDRT3E_MODE to MDRT2E_MODE\n");            
             break;
         }
         // Promote -- if top three avg util are trending lower.

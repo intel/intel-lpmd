@@ -665,6 +665,8 @@ static int get_state_mapping(enum lp_state_idx state){
     case PERF_MODE:
         return WLT_BURSTY;
     
+    //there is no corresponding wlt for INIT_MODE, use WLT_SUSTAINED as default type    
+    case INIT_MODE:    
     case RESP_MODE:
         return WLT_SUSTAINED;  
 #ifdef __REMOVE__
@@ -691,11 +693,11 @@ static int get_state_mapping(enum lp_state_idx state){
     case DEEP_MODE:
         return WLT_IDLE; 
     
+#ifdef __REMOVE__    
     //there is no corresponding wlt for INIT_MODE, it goes away quickly.
     //use WLT_SUSTAINED as default type    
     case INIT_MODE:
         return WLT_SUSTAINED;
-#ifdef __REMOVE__
         if (AC_CONNECTED){
             return WLT_SUSTAINED;
         }
