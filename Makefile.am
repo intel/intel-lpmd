@@ -61,8 +61,8 @@ intel_lpmd_SOURCES = \
     src/wlt_proxy/wlt_proxy_entry.c \
     src/wlt_proxy/spike_mgmt.c \
     src/wlt_proxy/state_machine.c \
-    src/wlt_proxy/util.c \
-    src/wlt_proxy/cpu_group.c \
+    src/wlt_proxy/state_util.c \
+    src/wlt_proxy/state_manager.c \
     src/knobs/power-supply-status.c \
 	lpmd-resource.c
 

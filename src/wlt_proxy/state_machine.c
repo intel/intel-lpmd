@@ -1,23 +1,30 @@
 /*
- * Copyright (c) 2024, Intel Corporation.
+ * state_machine.c: Intel Low Power Daemon WLT proxy state change handling.
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms and conditions of the GNU General Public License,
- * version 2, as published by the Free Software Foundation.
+ * Copyright (C) 2024 Intel Corporation. All rights reserved.
  *
- * This program is distributed in the hope it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
- * more details.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
- * Author: Noor ul Mubeen <noor.u.mubeen@intel.com>
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+ *
+ * This file contains rules to change state
  */
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <assert.h>
 
 #include "wlt_proxy_common.h"
-#include "cpu_group.h"
+#include "state_manager.h"
 #include "lpmd.h" //logs
 
 /*
@@ -57,8 +64,10 @@ int state_machine_auto() {
     mdrt_count = get_stay_count(MDRT3E_MODE);
     int sr = get_spike_rate();
 
+//#ifdef __REMOVE__
     //todo: handle exception
     assert(!is_state_disabled(present_state));
+//#endif
 
     if (A_LTE_B(grp.c0_max, UTIL_NEAR_FULL)) {
         add_non_spike_time(completed_poll);

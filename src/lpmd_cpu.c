@@ -110,7 +110,7 @@ int get_max_online_cpu(void)
 	return max_online_cpu;
 }
 
-static size_t alloc_cpu_set(cpu_set_t **cpu_set)
+size_t alloc_cpu_set(cpu_set_t **cpu_set)
 {
 	cpu_set_t *_cpu_set;
 	size_t size;
@@ -466,7 +466,7 @@ int set_lpm_cpus(enum cpumask_idx new)
 }
 
 #define BITMASK_SIZE 32
-static int set_max_cpu_num(void)
+int set_max_cpu_num(void)
 {
 	FILE *filep;
 	unsigned long dummy;
@@ -1682,7 +1682,7 @@ static int __process_cpu_isolate_exit(char *name)
 	return 0;
 }
 
-static int check_cpu_isolate_support(void)
+int check_cpu_isolate_support(void)
 {
 	int ret;
 
@@ -1692,7 +1692,7 @@ static int check_cpu_isolate_support(void)
 
 	/* Cleanup previous cgroup setting in case service quits unexpectedly last time */
 	__process_cpu_isolate_exit("lpm");
-	__process_cpu_isolate_exit("eco");
+	//__process_cpu_isolate_exit("eco");
     
     return 0; 
 }

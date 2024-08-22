@@ -13,6 +13,12 @@
  * Author: Noor ul Mubeen <noor.u.mubeen@intel.com>
  */
 #define _GNU_SOURCE
+
+#include <linux/perf_event.h> //pref_event_attr
+#include <asm/unistd.h> //syscall __NR_pref_event_open
+#include <assert.h>
+
+#ifdef __REMOVE__
 #include <stdio.h>
 #include <math.h>
 #include <err.h>
@@ -26,15 +32,12 @@
 #include <sys/time.h>
 #include <sys/stat.h>
 #include <errno.h>
-#include <assert.h>
 #include <stdbool.h>
-#include <linux/perf_event.h>
-#include <asm/unistd.h>
+#endif
 
-#include "lpmd.h"
 #include "wlt_proxy_common.h"
 #include "wlt_proxy.h"
-#include "cpu_group.h"
+#include "state_manager.h"
 #include "knobs_common.h"
 
 #define PERF_API 1
@@ -73,7 +76,8 @@ int irq_rebalance = 0;
 static int record = 0;
 
 int state_demote = 0;
-int next_proxy_poll = 2000; 
+int next_proxy_poll = 2000;
+
 bool AC_CONNECTED = true;
 
 /* 
@@ -709,11 +713,13 @@ int prep_state_change(enum lp_state_idx from_state, enum lp_state_idx to_state,
 {
     if (is_state_disabled(to_state))
         to_state = nearest_supported(from_state, to_state);
-
+#ifdef __REMOVE__
     if (!reset && state_has_ppw(to_state))
         inject_update = ACTIVATED;
     else
         inject_update = PAUSE;
+#endif
+    
 #ifdef __REMOVE__
     /* state entry: p-state ctl if applicable*/
     if (!reset && state_support_freq_ctl(to_state))

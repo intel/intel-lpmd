@@ -17,11 +17,18 @@ PL - Power level.
   * CPU C0 is always on.
 
 # Workload detection algorithm - pseudo code
-   * CPU utilization thresholds predefined
-   * CPU load retrived from system through perf [a, m, p, tsc] readings
+   * CPU utilization thresholds predefined for each state [low, moderate, perf]. 
+        <explain more with math functions.>
+        init -> multi threads detected -> sustained WLT -> 
+        moderate -> battery life WLT -> 
+        performance state ->
+        
+        
+   * CPU load retrived from system through perf MSR (registers) [aperf [average], mperf [maximum], pperf, tsc] readings
    * state machine, based on threshold, buckets system load into a state
    * normalization using spike and burst count detection - continous spikes in a series of back to back samples vs brust now and then.
    * Map state to work load type [WLT].
+        <explain more on mapping>
    * knobs are external user actions that impact WLT proxy calculations.
       * For example Power supply change - impacts the EPB values to set.
    * calculate next poll time and request framework to apply state actions.
@@ -45,8 +52,8 @@ PL - Power level.
    state information definition & management
    state initialization
    polling frequency calculations.
-   CPU topology management - turned on
-   power clamp management - turned on
+   CPU topology management - turned off
+   power clamp management - turned off
    IRQ rebalance - turned off
    idle inject - turned off
    IRQ affinity - turned off

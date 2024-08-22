@@ -19,7 +19,7 @@
 #include <err.h> //perror
 #include <errno.h>
 
-#include "cpu_group.h" //get_cur_state
+#include "state_manager.h" //get_cur_state
 #include "wlt_proxy_common.h"
 
 /*

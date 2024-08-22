@@ -1,5 +1,5 @@
 /*
- * wlt_proxy_entry.c: Intel Low Power Daemon WLT proxy
+ * wlt_proxy_entry.c: Intel LPD WLT proxy
  *
  * Copyright (C) 2024 Intel Corporation. All rights reserved.
  *
