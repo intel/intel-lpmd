@@ -26,6 +26,7 @@ sbin_PROGRAMS = intel_lpmd
 
 intel_lpmd_CPPFLAGS = \
 	-I@top_srcdir@/src \
+        -I@top_srcdir@/src/include \
 	-DTDLOCALEDIR=\"$(datadir)/locale\" \
 	-DGLIB_SUPPORT
 

@@ -143,6 +143,7 @@ static void lpmd_parse_state(xmlDoc *doc, xmlNode *a_node, lpmd_config_state_t *
 					else
 						snprintf (state->active_cpus, sizeof(state->active_cpus), "%s", tmp_value);
 				}
+				xmlFree(tmp_value);
 			}
 		}
 	}
@@ -196,6 +197,9 @@ static void lpmd_parse_states(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_
 					cpu_config[MAX_CONFIG_LEN - 1] = '\0';
 				}
 
+				if (tmp_value)
+					xmlFree (tmp_value);
+
 				if (strncmp ((const char*) cur_node->name, "State", strlen ("State")))
 					continue;
 
@@ -238,14 +242,14 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_co
 							|| lpmd_config->mode < 0)
 						goto err;
 				}
-				else if (!strncmp((const char*)cur_node->name, "HfiLpmEnable", strlen("HfiEnable"))) {
+				else if (!strncmp((const char*)cur_node->name, "HfiLpmEnable", strlen("HfiLpmEnable"))) {
 					errno = 0;
 					lpmd_config->hfi_lpm_enable = strtol (tmp_value, &pos, 10);
 					if (errno || *pos != '\0'
 							|| (lpmd_config->hfi_lpm_enable != 1 && lpmd_config->hfi_lpm_enable != 0))
 						goto err;
 				}
-				else if (!strncmp((const char*)cur_node->name, "HfiSuvEnable", strlen("HfiEnable"))) {
+				else if (!strncmp((const char*)cur_node->name, "HfiSuvEnable", strlen("HfiSuvEnable"))) {
 					errno = 0;
 					lpmd_config->hfi_suv_enable = strtol (tmp_value, &pos, 10);
 					if (errno || *pos != '\0'

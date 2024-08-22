@@ -622,7 +622,7 @@ int init_epp_epb(void)
 	int ret;
 	char path[MAX_STR_LENGTH];
 
-	saved_cpu_info = malloc (sizeof(struct cpu_info) * max_cpus);
+	saved_cpu_info = calloc (sizeof(struct cpu_info), max_cpus);
 
 	for (c = 0; c < max_cpus; c++) {
 		saved_cpu_info[c].epp_str[0] = '\0';
