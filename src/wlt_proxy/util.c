@@ -121,7 +121,9 @@ struct group_util grp;
 static struct timespec ts_start, ts_prev;
 static struct timespec ts_current = { 0, 0 };
 
+#ifdef __REMOVE__//not used.
 void clamp_to_turbo(enum lp_state_idx for_state);
+#endif
 
 #ifdef __REMOVE__//soc_mw used in plotting.
 static float soc_mw;

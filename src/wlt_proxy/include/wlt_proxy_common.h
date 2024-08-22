@@ -88,7 +88,6 @@
 #define A_GTE_B(A,B)    (((A-B) >= EPSILON) ? 1 : 0 )
 #define A_GT_B(A,B)    (((A-B) > EPSILON) ? 1 : 0 )
 
-
 #define RECORDS_PER_HEADER    (30)
 extern int slider;
 

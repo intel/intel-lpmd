@@ -14,6 +14,7 @@
  * Author: Noor ul Mubeen <noor.u.mubeen@intel.com>
  */
 #define _GNU_SOURCE
+#if 0
 #include <stdio.h>
 #include <err.h>
 #include <errno.h>
@@ -24,10 +25,26 @@
 #include <ctype.h>
 #include <limits.h>
 #include <time.h>
+#endif
 
-#include "wlt_proxy_common.h"
+
 #include "cpu_group.h"
 #include "lpmd.h"
+
+/*
+ * If polling is too fast some of the stats (such as util)
+ * could be momentarily high owing to state change disturbances.
+ * avoid unexpected decision due to this as it may not be tied to workload per-se.
+ * any setting below, say 15ms, needs careful assessment.
+ */
+#define MIN_POLL_PERIOD 15
+
+#define MAX_MDRT4E_LP_CPU    (4)
+#define MAX_MDRT3E_LP_CPU    (3)
+#define MAX_MDRT2E_LP_CPU    (2)
+#define MAX_RESP_LP_CPU        (2)
+#define MAX_NORM_LP_CPU        (2)
+#define MAX_DEEP_LP_CPU        (1)
 
 #ifdef __USE_LPMD_IRQ__
 #include "lpmd_irq.h"
@@ -97,6 +114,13 @@ struct _lp_state {
 
 static int common_min_freq;
 static int freq_map_count;
+
+struct _freq_map {
+    int start_cpu;
+    int end_cpu;
+    int turbo_freq_khz;
+    int perf_order;
+};
 static struct _freq_map freq_map[MAX_FREQ_MAPS];
 
 /*
@@ -480,11 +504,14 @@ int get_max_online_cpu(void)
 size_t alloc_cpu_set(cpu_set_t ** cpu_set)
 {
 	cpu_set_t *_cpu_set;
-	size_t size;
+	size_t size = 0;
 
 	_cpu_set = CPU_ALLOC((topo_max_cpus + 1));
-	if (_cpu_set == NULL)
-		err(3, "CPU_ALLOC");
+	if (_cpu_set == NULL) {
+		//err(3, "CPU_ALLOC");//exits application
+        lpmd_log_error("3 CPU_ALLOC\n");
+        return size;
+    }
 	size = CPU_ALLOC_SIZE((topo_max_cpus + 1));
 	CPU_ZERO_S(size, _cpu_set);
 
@@ -597,13 +624,17 @@ static char *get_inj_hexstr(enum lp_state_idx idx)
 		return lp_state[idx].inj_hexstr;
 
 	lp_state[idx].inj_hexstr = calloc(1, MAX_STR_LENGTH);
-	if (!lp_state[idx].inj_hexstr)
-		err(3, "STR_ALLOC");
+	if (!lp_state[idx].inj_hexstr) {
+		//err(3, "STR_ALLOC");
+        lpmd_log_error("3 STR_ALLOC\n");
+        return NULL;
+    }
 
 	ret = cpumask_to_hexstr(lp_state[idx].inj_mask, lp_state[idx].inj_hexstr,
 			  MAX_STR_LENGTH);
 	if(ret == -1) {
 		//todo: handle error
+        return NULL;
 	}
 
 	return lp_state[idx].inj_hexstr;
@@ -622,12 +653,16 @@ static char *get_cpus_str_proxy(enum lp_state_idx idx)
 		return lp_state[idx].str;
 
 	lp_state[idx].str = calloc(1, MAX_STR_LENGTH);
-	if (!lp_state[idx].str)
-		err(3, "STR_ALLOC");
+	if (!lp_state[idx].str) {
+		//err(3, "STR_ALLOC");
+        lpmd_log_error("3 STR_ALLOC\n");
+        return NULL;
+    }
 
 	ret = cpumask_to_str(lp_state[idx].mask, lp_state[idx].str, MAX_STR_LENGTH);
 	if(ret == -1) {
 		//todo: handle error
+        return NULL;
 	}
 	return lp_state[idx].str;
 }
@@ -645,13 +680,17 @@ char *get_cpus_hexstr(enum lp_state_idx idx)
 		return lp_state[idx].hexstr;
 
 	lp_state[idx].hexstr = calloc(1, MAX_STR_LENGTH);
-	if (!lp_state[idx].hexstr)
-		err(3, "STR_ALLOC");
+	if (!lp_state[idx].hexstr) {
+		//err(3, "STR_ALLOC");
+        lpmd_log_error("3 STR_ALLOC\n");
+        return NULL;
+    }
 
 	ret = cpumask_to_hexstr(lp_state[idx].mask, lp_state[idx].hexstr,
 			  MAX_STR_LENGTH);
 	if(ret == -1) {
 		//todo: handle error
+        return NULL;
 	}
 	return lp_state[idx].hexstr;
 }
@@ -676,8 +715,11 @@ static char *get_cpus_str_reverse(enum lp_state_idx idx)
 		return lp_state[idx].str_reverse;
 
 	lp_state[idx].str_reverse = calloc(1, MAX_STR_LENGTH);
-	if (!lp_state[idx].str_reverse)
-		err(3, "STR_ALLOC");
+	if (!lp_state[idx].str_reverse) {
+		//err(3, "STR_ALLOC");
+        lpmd_log_error("3 STR_ALLOC\n");
+        return NULL;
+    }
 
 	alloc_cpu_set(&mask);
 

@@ -68,4 +68,3 @@ int wlt_proxy_init(lpmd_config_t *_lpmd_config) {
 void wlt_proxy_uninit(void) {
     util_uninit_proxy();
 }
-
