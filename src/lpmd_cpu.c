@@ -675,12 +675,12 @@ int process_epp_epb(void)
 
 			snprintf (path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cpufreq/energy_performance_preference", c);
 			ret = set_epp (path, val, saved_cpu_info[c].epp_str);
-			if (!ret) {
+			/*if (!ret) {
 				if (val != -1)
 					lpmd_log_debug ("Set CPU%d EPP to 0x%x\n", c, val);
 				else
 					lpmd_log_debug ("Set CPU%d EPP to %s\n", c, saved_cpu_info[c].epp_str);
-			}
+			}*/
 		}
 
 		if (lp_mode_epb != SETTING_IGNORE) {
@@ -691,8 +691,8 @@ int process_epp_epb(void)
 
 			snprintf (path, MAX_STR_LENGTH, "/sys/devices/system/cpu/cpu%d/power/energy_perf_bias", c);
 			ret = lpmd_write_int(path, val, -1);
-			if (!ret)
-				lpmd_log_debug ("Set CPU%d EPB to 0x%x\n", c, val);
+			/*if (!ret)
+				lpmd_log_debug ("Set CPU%d EPB to 0x%x\n", c, val);*/
 		}
 	}
 	return 0;

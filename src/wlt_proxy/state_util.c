@@ -447,30 +447,29 @@ int update_perf_diffs(float *sum_norm_perf, int stat_init_only)
             continue;
 #endif
 
-#ifdef PERF_API
         /*reading through perf api*/
         struct thread_data tdata;
         read_aperf_mperf_tsc_perf(&tdata , t);
-        lpmd_log_debug("from api pperf_raw %lld\n", tdata.pperf);
+        //lpmd_log_debug("from api pperf_raw %lld\n", tdata.pperf);
         /*perf_stats[t].pperf_diff*/ uint64_t pperf = cpu_get_diff_pperf(tdata.pperf, t);
-        lpmd_log_debug("from api pperf_diff %ld\n", pperf);
+        //lpmd_log_debug("from api pperf_diff %ld\n", pperf);
         perf_stats[t].pperf_diff = pperf;
 
-        lpmd_log_debug("from api aperf_raw %lld\n", tdata.aperf);
+        //lpmd_log_debug("from api aperf_raw %lld\n", tdata.aperf);
         /*perf_stats[t].aperf_diff*/  uint64_t aperf = cpu_get_diff_aperf(tdata.aperf, t);
-        lpmd_log_debug("from api aperf_diff %ld\n", aperf);
+        //lpmd_log_debug("from api aperf_diff %ld\n", aperf);
         perf_stats[t].aperf_diff = aperf;
 
-        lpmd_log_debug("from api mperf_raw %lld\n", tdata.mperf);
+        //lpmd_log_debug("from api mperf_raw %lld\n", tdata.mperf);
         /*perf_stats[t].mperf_diff*/  uint64_t mperf = cpu_get_diff_mperf(tdata.mperf, t);
-        lpmd_log_debug("from api mperf_diff %ld\n", mperf);
+        //lpmd_log_debug("from api mperf_diff %ld\n", mperf);
         perf_stats[t].mperf_diff = mperf;
 
-        lpmd_log_debug("from api tsc_raw %lld\n", tdata.tsc);
+        //lpmd_log_debug("from api tsc_raw %lld\n", tdata.tsc);
         /*perf_stats[t].tsc_diff*/ uint64_t tsc = cpu_get_diff_tsc(tdata.tsc, t);
-        lpmd_log_debug("from api tsc_diff %ld\n\n", tsc);
+        //lpmd_log_debug("from api tsc_diff %ld\n\n", tsc);
         perf_stats[t].tsc_diff = tsc;
-#else        
+#ifdef __REMOVE__
         /* reading through driver*/
         fd = perf_stats[t].dev_msr_fd;
 
@@ -519,6 +518,7 @@ int update_perf_diffs(float *sum_norm_perf, int stat_init_only)
             next_load =
                 (float)100 *perf_stats[t].mperf_diff /
                 perf_stats[t].tsc_diff;
+            //lpmd_log_debug("next_load = perf_stats[t].l0 %0.2f\n", next_load); 
             perf_stats[t].l0 = next_load;
         }
 
@@ -551,6 +551,8 @@ int update_perf_diffs(float *sum_norm_perf, int stat_init_only)
             (void)(min_cpu);
         }
         first_pass = 0;
+        
+        
     }
     if (stat_init_only)
         return 0;
@@ -645,6 +647,7 @@ static enum lp_state_idx nearest_supported(enum lp_state_idx from_state, enum lp
 }
 
 static int get_state_mapping(enum lp_state_idx state){
+
 #ifdef __REMOVE__
     //read the battery connection status, if the last reading is beyond 30 seconds 
     clockid_t clk = CLOCK_MONOTONIC;
@@ -661,63 +664,55 @@ static int get_state_mapping(enum lp_state_idx state){
     } 
     //bool AC_CONNECTED = is_ac_powered_power_supply_status() == 0  ? false: true; //unknown is considered as ac powered.
 #endif
-    switch(state){
-    case PERF_MODE:
-        return WLT_BURSTY;
-    
-    //there is no corresponding wlt for INIT_MODE, use WLT_SUSTAINED as default type    
-    case INIT_MODE:    
-    case RESP_MODE:
-        return WLT_SUSTAINED;  
-#ifdef __REMOVE__
-        if (AC_CONNECTED){    
-            return WLT_SUSTAINED;
-        }
-        else{
-            return WLT_SUSTAINED_BAT;
-        }
-#endif
-    case MDRT4E_MODE:
-    case MDRT3E_MODE:
-    case MDRT2E_MODE:
-    case NORM_MODE:
-        return WLT_BATTERY_LIFE;
-#ifdef __REMOVE__
-        if (AC_CONNECTED){
+
+    switch(state) {
+        case PERF_MODE:
+            return WLT_BURSTY;
+            
+        case RESP_MODE:
+        case NORM_MODE:
             return WLT_BATTERY_LIFE;
-        }
-        else {         
-            return WLT_BATTERY_LIFE_BAT;
-        }
+#ifdef __REMOVE__
+            if (AC_CONNECTED){    
+                return WLT_BATTERY_LIFE;
+            }
+            else{
+                return WLT_BATTERY_LIFE_BAT;
+            }
 #endif
-    case DEEP_MODE:
-        return WLT_IDLE; 
     
-#ifdef __REMOVE__    
-    //there is no corresponding wlt for INIT_MODE, it goes away quickly.
-    //use WLT_SUSTAINED as default type    
-    case INIT_MODE:
-        return WLT_SUSTAINED;
-        if (AC_CONNECTED){
-            return WLT_SUSTAINED;
-        }
-        else{
-            return WLT_SUSTAINED_BAT;
-        }
-#endif        
+        case DEEP_MODE:
+            return WLT_IDLE;
         
-    //we don't allow invalid wlt type, flag and use WLT_SUSTAINED        
-    default:
-        lpmd_log_error("unknown work load type\n");
-        return WLT_SUSTAINED;    
-    }    
+        //there is no corresponding wlt for INIT_MODE, it goes away quickly.
+        //use WLT_SUSTAINED as default type    
+        case INIT_MODE:
+        case MDRT4E_MODE:
+        case MDRT3E_MODE:
+        case MDRT2E_MODE:
+            return WLT_SUSTAINED;
+#ifdef __REMOVE__
+            if (AC_CONNECTED){
+                return WLT_SUSTAINED;
+            }
+            else{
+                return WLT_SUSTAINED_BAT;
+            }
+#endif
+        default:
+            lpmd_log_error("unknown work load type\n");
+            return WLT_IDLE;
+    }
 }
 
 int prep_state_change(enum lp_state_idx from_state, enum lp_state_idx to_state,
               int reset)
 {
-    if (is_state_disabled(to_state))
+#ifdef __REMOVE__
+    if (is_state_disabled(to_state)) 
         to_state = nearest_supported(from_state, to_state);
+#endif
+
 #ifdef __REMOVE__
     if (!reset && state_has_ppw(to_state))
         inject_update = ACTIVATED;
@@ -739,9 +734,10 @@ int prep_state_change(enum lp_state_idx from_state, enum lp_state_idx to_state,
     update_state_epp(to_state);
     update_state_epb(to_state);
 #endif
+
     //switch(to_state)
     //do to_state to WLT mapping
-    int type = get_state_mapping((int)to_state); 
+    int type = get_state_mapping(to_state); 
     lpmd_log_debug("proxy WLT state value :%d, %d\n", type, prev_type);
     if (prev_type == -1) {//first time
         set_workload_hint(type);
@@ -756,7 +752,9 @@ int prep_state_change(enum lp_state_idx from_state, enum lp_state_idx to_state,
     set_cur_state(to_state);
     set_state_reset();
     set_last_maxutil(DEACTIVATED);
+#ifdef __REMOVE__
     irq_rebalance = 1;
+#endif
 
     if (to_state < from_state)
         state_demote = 1;
@@ -789,7 +787,7 @@ int staytime_to_staycount(enum lp_state_idx state)
         case INIT_MODE:
         case NORM_MODE:
         case DEEP_MODE:
-        case BYPS_MODE:
+        //case BYPS_MODE:
         //case MAX_MODE:
             /* undefined */
             assert(0);
@@ -917,7 +915,7 @@ float get_cur_scalability(int cpu)
 
 int max_mt_detected(enum lp_state_idx state)
 {
-    lpmd_log_debug("no of cpus online: %d\n", get_max_online_cpu());
+    //lpmd_log_debug("no of cpus online: %d\n", get_max_online_cpu());
     
     for (int t = 0; t < get_max_online_cpu(); t++) {
 #ifdef __REMOVE__ //all cpus are avalialble all the time.

@@ -20,15 +20,15 @@
 
 #include "lpmd.h"
 
-/* WLT hints parsing */
+/* WLT hints - mapped to configuraiton file WLTtype */
 typedef enum {
-    WLT_IDLE,
-    WLT_BATTERY_LIFE,
-    WLT_SUSTAINED,
-    WLT_BURSTY,
-    WLT_SUSTAINED_BAT,
-    WLT_BATTERY_LIFE_BAT,    
-    WLT_INVALID,
+    WLT_IDLE = 0,
+    WLT_BATTERY_LIFE = 1,
+    WLT_SUSTAINED = 2,
+    WLT_BURSTY = 3,
+    WLT_SUSTAINED_BAT = 4,
+    WLT_BATTERY_LIFE_BAT = 5,
+    WLT_INVALID = 6,
 } wlt_type_t;
 
 void set_workload_hint(int type);

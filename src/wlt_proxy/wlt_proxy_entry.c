@@ -39,9 +39,9 @@ void set_workload_hint(int type) {
 void wlt_proxy_action_loop(void) {
 
     if (proxy_initialized) {
-        lpmd_log_debug("\n\nwlt_proxy_action_loop, proxy initialzied\n");
+        //lpmd_log_debug("\n\nwlt_proxy_action_loop, proxy initialzied\n");
         state_machine_auto();
-        lpmd_log_debug("wlt_proxy_action_loop, handled states\n");        
+        //lpmd_log_debug("wlt_proxy_action_loop, handled states\n");        
     } else {
         lpmd_log_debug("\n internal error \n");
     }
@@ -54,7 +54,7 @@ int wlt_proxy_init(lpmd_config_t *_lpmd_config) {
         return LPMD_ERROR; 
     }
 
-    /*todo: check model check and fail */    
+    /*todo: check model check and fail */
     
     lpmd_config = _lpmd_config;//cb variable
 

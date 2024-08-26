@@ -104,18 +104,16 @@ enum slider_value {
 #endif
 
 enum lp_state_idx {
-    INIT_MODE,    // 0
-    BYPS_MODE,    // 1
-    PERF_MODE,    // 2
-    MDRT4E_MODE,    // 3
-    MDRT3E_MODE,    // 4
-    MDRT2E_MODE,    // 5
-    RESP_MODE,    // 6
-    NORM_MODE,    // 7
-    DEEP_MODE    // 8
-//    MAX_MODE,    // 9
+    INIT_MODE,    //BYPS_MODE,
+    PERF_MODE,
+    MDRT4E_MODE,
+    MDRT3E_MODE,
+    MDRT2E_MODE,
+    RESP_MODE,
+    NORM_MODE,
+    DEEP_MODE
 };
-#define    MAX_MODE 9
+#define    MAX_MODE 8
 
 struct group_util {
     /* top 3 max utils and last (min) util */

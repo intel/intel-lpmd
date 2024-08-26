@@ -105,45 +105,11 @@ struct _freq_map {
 };
 static struct _freq_map freq_map[MAX_FREQ_MAPS];
 
-/*
- * ppw is not tested. disabled for now.
- */
-/*static struct _lp_state lp_state[MAX_MODE] = {
-    [INIT_MODE] = {.name = "Avail cpu: P/E/L",.poll = BASE_POLL_MT,.epp =
-               PERFORMANCE_EPP,.epb = EPB_AC,.stay_scalar = 1,
-               .poll_order = ZEROTH,.freq_ctl = 1},
-    [PERF_MODE] = {.name = "Perf:non-soc cpu",.poll = BASE_POLL_PERF,.epp =
-               PERFORMANCE_EPP,.epb = EPB_AC,.stay_scalar = 1,
-               .poll_order = ZEROTH,.freq_ctl = 1},
-    [BYPS_MODE] = {.name = "bypass mode     ",.poll = BASE_POLL_PERF,.epp =
-               POWERSAVE_EPP,.epb = EPB_DC,.stay_scalar = 1,
-               .poll_order = ZEROTH},
-    [MDRT2E_MODE] = {.name = "Moderate 2E     ",.poll =
-            BASE_POLL_MDRT2E,.epp = POWERSAVE_EPP,.epb =
-            EPB_DC,.stay_scalar = 1,
-            .poll_order = LINEAR},
-    [MDRT3E_MODE] = {.name = "Moderate 3E     ",.poll = BASE_POLL_MDRT3E,.epp =
-               POWERSAVE_EPP,.epb = EPB_DC,.stay_scalar = 1,
-               .poll_order = LINEAR},
-    [MDRT4E_MODE] = {.name = "Moderate 4E     ",.poll =
-            BASE_POLL_MDRT4E,.epp = POWERSAVE_EPP,.epb =
-            EPB_DC,.stay_scalar = 1,
-            .poll_order = LINEAR},
-    [RESP_MODE] = {.name = "Responsive 2L   ",.poll = BASE_POLL_RESP,.epp =
-               PERFORMANCE_EPP,.epb = EPB_AC,.stay_scalar = 1,
-               .poll_order = CUBIC,.freq_ctl = 1},
-    [NORM_MODE] = {.name = "Normal LP 2L    ",.poll = BASE_POLL_NORM,.epp =
-               POWERSAVE_EPP,.epb = EPB_DC,.stay_scalar = 1,
-               .poll_order = QUADRATIC},
-    [DEEP_MODE] = {.name = "Deep LP 1L      ",.poll = BASE_POLL_DEEP,.epp =
-               POWERSAVE_EPP,.epb = EPB_DC,.stay_scalar = 1,
-               .poll_order = CUBIC},
-};*/
+//[BYPS_MODE] = {.name =   "bypass mode",.poll = BASE_POLL_PERF,.poll_order = ZEROTH},
 
 static struct _lp_state lp_state[MAX_MODE] = {
     [INIT_MODE] = {.name =   "Avail cpu: P/E/L",.poll = BASE_POLL_MT,.poll_order = ZEROTH},
     [PERF_MODE] = {.name =   "Perf:non-soc cpu",.poll = BASE_POLL_PERF,.poll_order = ZEROTH},
-    [BYPS_MODE] = {.name =   "bypass mode",.poll = BASE_POLL_PERF,.poll_order = ZEROTH},
     [MDRT2E_MODE] = {.name = "Moderate 2E",.poll =    BASE_POLL_MDRT2E,.poll_order = LINEAR},
     [MDRT3E_MODE] = {.name = "Moderate 3E",.poll = BASE_POLL_MDRT3E,.poll_order = LINEAR},
     [MDRT4E_MODE] = {.name = "Moderate 4E",.poll =    BASE_POLL_MDRT4E, .poll_order = LINEAR},
@@ -585,7 +551,8 @@ int cpumask_to_hexstr(cpu_set_t * mask, char *str, int size)
 
 void initialize_state_mask(void)
 {
-    set_cur_state(INIT_MODE);
+    //set_cur_state(INIT_MODE);
+    set_cur_state(NORM_MODE);    
     set_state_reset();
 }
 

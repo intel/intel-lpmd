@@ -47,6 +47,7 @@ extern struct group_util grp;
 extern int state_demote;
 
 int max_util; 
+int only_once = 0;
 
 int state_machine_auto() {
     //this used to be part of function util_main
@@ -67,7 +68,7 @@ int state_machine_auto() {
      * a) bypass mode where the solution temporary bypassed
      * b) Responsive transit mode (fast poll can flood avg leading to incorrect decisions)
      */
-    if ((present_state != BYPS_MODE) || (present_state != RESP_MODE))
+    if (/*(present_state != BYPS_MODE) || */(present_state != RESP_MODE))
         state_max_avg();
     
     int completed_poll = get_last_poll();
@@ -79,10 +80,10 @@ int state_machine_auto() {
     mdrt_count = get_stay_count(MDRT3E_MODE);
     int sr = get_spike_rate();
 
-//#ifdef __REMOVE__
+#ifdef __REMOVE__
     //todo: handle exception
     assert(!is_state_disabled(present_state));
-//#endif
+#endif
 
     if (A_LTE_B(grp.c0_max, UTIL_NEAR_FULL)) {
         add_non_spike_time(completed_poll);
@@ -100,6 +101,22 @@ int state_machine_auto() {
         set_stay_count(MDRT3E_MODE, staytime_to_staycount(MDRT3E_MODE));
 
     state_demote = 0;
+    int isMT = !max_mt_detected(INIT_MODE);
+    
+    if(only_once == 0) {
+        lpmd_log_debug("present_state, isMT, C0_max, C0_2ndMax, sum_c0, sma avg1, sma avg2, sma avg3, worst_stall\n");
+        only_once = 1;
+    }
+    lpmd_log_debug("%d, %d,     %.2f,       %.2f,   %.2f,       %d,      %d,        %d,        %.2f \n", \
+        present_state, \
+        isMT, \
+        grp.c0_max, \
+        grp.c0_2nd_max, \
+        sum_c0, \
+        grp.sma_avg1, \
+        grp.sma_avg2, \
+        grp.sma_avg3, \
+        grp.worst_stall);
 
     switch (present_state) {
         /*
@@ -114,7 +131,7 @@ int state_machine_auto() {
          */
         /* promote -- if not high multi-thread trend */
         if (!max_mt_detected(INIT_MODE)) {
-            lpmd_log_info("INIT_MODE to PERF_MODE\n");
+            lpmd_log_debug("INIT_MODE to PERF_MODE\n");            
             prep_state_change(INIT_MODE, PERF_MODE, 0);
             break;
         }
@@ -122,22 +139,23 @@ int state_machine_auto() {
         break;
 
     case PERF_MODE:
+        //lpmd_log_debug("PERF_MODE sum_c0 = %.2f < 20, grp.sma_avg1 %d < 70\n", sum_c0, grp.sma_avg1);
         // Demote -- if highly MT
         if (max_mt_detected(PERF_MODE)) {
-            lpmd_log_info("PERF_MODE to INIT_MODE\n");
+            lpmd_log_debug("PERF_MODE to INIT_MODE = mt detected.\n");    
             prep_state_change(PERF_MODE, INIT_MODE, 0);
             break;
         }
         // Stay -- if there was recent perf/resp bursts
         //if (get_burst_rate_per_min() > BURST_COUNT_THRESHOLD)
         if (burst_count > 0 && !do_countdown(PERF_MODE)){
-            //lpmd_log_info("burst_count is %d && !do_countdown\n", burst_count);
+            lpmd_log_debug("PERF_MODE: burst_count is %d > 0 && !do_countdown\n", burst_count);
             break;
         }            
         // Promote but through responsive watch -- if top sampled util and their avg are receeding.
         if (A_LTE_B(sum_c0, (2 * UTIL_LOW)) &&
             A_LTE_B(grp.sma_avg1, UTIL_ABOVE_HALF)) {
-            lpmd_log_info("PERF_MODE to RESP_MODE\n");
+            lpmd_log_debug("PERF_MODE to RESP_MODE\n");
             prep_state_change(PERF_MODE, RESP_MODE, 0);
             break;
         }
@@ -145,7 +163,7 @@ int state_machine_auto() {
         if (!burst_rate_breach() && A_LTE_B(grp.c0_max, UTIL_LOW))    // && A_LTE_B(sum_avg, UTIL_BELOW_HALF))
         {
             set_stay_count(MDRT3E_MODE, 0);
-            lpmd_log_info("PERF_MODE to MDRT3E_MODE\n");
+            lpmd_log_debug("PERF_MODE to MDRT3E_MODE\n");
             prep_state_change(PERF_MODE, MDRT3E_MODE, 0);
             break;
         }                
@@ -157,26 +175,25 @@ int state_machine_auto() {
         // Demote -- if ST above halfway mark and avg trending higher
         if (A_GT_B(grp.c0_max, UTIL_ABOVE_HALF)
             && A_GT_B(grp.sma_avg1, UTIL_BELOW_HALF)) {
-            lpmd_log_info("RESP_MODE to PERF_MODE\n");
+            lpmd_log_debug("RESP_MODE to PERF_MODE\n");
             prep_state_change(RESP_MODE, PERF_MODE, 0);
             break;
         }
         // Stay -- if there were recent burst of spikes
         if (perf_count && burst_rate_breach())
-            break;
-        
+            break;        
         
         // Promote -- all else
         if (A_LTE_B(grp.worst_stall * 100, STALL_SCALE_LOWER_MARK)) {
            lpmd_log_debug("worst stall is less than STALL_SCALE_LOWER_MARK -- stay here.\n");            
         } else {
-            lpmd_log_info("RESP_MODE to MDRT3E_MODE\n");
+            lpmd_log_debug("RESP_MODE to MDRT3E_MODE\n");            
             prep_state_change(RESP_MODE, MDRT3E_MODE, 0);
         }
         break;
     case MDRT4E_MODE:
         if (A_LTE_B(grp.worst_stall * 100, STALL_SCALE_LOWER_MARK)) {
-            lpmd_log_info("MDRT4E_MODE to RESP_MODE\n");
+            lpmd_log_debug("MDRT4E_MODE to RESP_MODE\n");
             prep_state_change(MDRT4E_MODE, RESP_MODE, 0);
             break;
         }
@@ -184,7 +201,7 @@ int state_machine_auto() {
         if (A_GT_B(grp.c0_max, UTIL_NEAR_FULL)) {
             if (!burst_rate_breach() && strikeout_once(N_STRIKE))
                 break;
-            lpmd_log_info("MDRT4E_MODE to PERF_MODE\n");
+            lpmd_log_debug("MDRT4E_MODE to PERF_MODE\n");
             prep_state_change(MDRT4E_MODE, PERF_MODE, 0);
             break;
         }
@@ -194,34 +211,34 @@ int state_machine_auto() {
             A_LTE_B(sum_c0, UTIL_HALF)) {
             if (!do_countdown(MDRT4E_MODE))
                 break;
-            lpmd_log_info("MDRT4E_MODE to NORM_MODE\n");
+            lpmd_log_debug("MDRT4E_MODE to NORM_MODE\n");
             prep_state_change(MDRT4E_MODE, NORM_MODE, 0);
             break;
         }
         // stay
         break;
     case MDRT3E_MODE:
-        lpmd_log_debug("MDRT3E_MODE worst stall %.2f and STALL_SCALE_LOWER_MARK %d\n", grp.worst_stall, STALL_SCALE_LOWER_MARK);
-        lpmd_log_debug("MDRT3E_MODE c0 max %.2f and  UTIL_NEAR_FULL %d\n", grp.c0_max, UTIL_NEAR_FULL);
-        lpmd_log_debug("MDRT3E_MODE sma avg 1: %d, 2: %d, 3: %d\n", grp.sma_avg1, grp.sma_avg2, grp.sma_avg3);
         // Demote -- if mem bound work is stalling but didn't show higher utilization
         if (A_LTE_B(grp.worst_stall * 100, STALL_SCALE_LOWER_MARK)) {
-            lpmd_log_info("MDRT3E_MODE to RESP_MODE %.2f < %d\n", grp.worst_stall, STALL_SCALE_LOWER_MARK);
+            lpmd_log_debug("MDRT3E_MODE to RESP_MODE %.2f < %d\n", grp.worst_stall, STALL_SCALE_LOWER_MARK);
             prep_state_change(MDRT3E_MODE, RESP_MODE, 0);
             break;
         }
         // Demote to perf
         if (A_GT_B(grp.c0_max, UTIL_NEAR_FULL)) {
-            if (!burst_rate_breach() && strikeout_once(N_STRIKE))
+            if (!burst_rate_breach() && strikeout_once(N_STRIKE)) {
+                lpmd_log_debug("MDRT3E_MODE: burst_rate_breach AND strikeout_once - not met\n");
                 break;
-            lpmd_log_info("MDRT3E_MODE to PERF_MODE %.2f > %d\n", grp.c0_max, UTIL_NEAR_FULL);
+            }
+            lpmd_log_debug("MDRT3E_MODE to PERF_MODE\n");
             prep_state_change(MDRT3E_MODE, PERF_MODE, 0);
             break;
         }
+        
         // Demote to 4 thread sustained
         if (A_GTE_B(grp.sma_avg1, SUS_LOW_RANGE_END) &&
             A_GTE_B(grp.sma_avg2, (SUS_LOW_RANGE_END - 5))) {
-            lpmd_log_info("MDRT3E_MODE to MDRT4E_MODE %d > %d\n", grp.sma_avg1, SUS_LOW_RANGE_END);
+            lpmd_log_debug("MDRT3E_MODE to MDRT4E_MODE %d > %d\n", grp.sma_avg1, SUS_LOW_RANGE_END);
             prep_state_change(MDRT3E_MODE, MDRT4E_MODE, 0);
             break;
         }
@@ -230,10 +247,12 @@ int state_machine_auto() {
              A_LTE_B(grp.sma_avg1, SUS_LOW_RANGE_END)) &&
             (A_GT_B(grp.sma_avg2, SUS_LOW_RANGE_START) &&
              A_LTE_B(grp.sma_avg2, SUS_LOW_RANGE_END))) {
-            if (!do_countdown(MDRT3E_MODE))
+            if (!do_countdown(MDRT3E_MODE)) {
+                lpmd_log_debug("MDRT3E_MODE: do countdown not met\n");
                 break;
-            lpmd_log_info("MDRT3E_MODE to MDRT2E_MODE\n");
-            prep_state_change(MDRT3E_MODE, MDRT2E_MODE, 0);
+            }
+            lpmd_log_debug("MDRT3E_MODE to MDRT2E_MODE %d < %d\n", grp.sma_avg1, MDRT2E_MODE);            
+            prep_state_change(MDRT3E_MODE, MDRT2E_MODE, 0);            
             break;
         }
         // Promote -- if top three avg util are trending lower.
@@ -242,18 +261,18 @@ int state_machine_auto() {
              A_LTE_B(grp.sma_avg3, SUS_LOWER))) {
             if (!do_countdown(MDRT3E_MODE))
                 break;
-            lpmd_log_info("MDRT3E_MODE to NORM_MODE\n");
+            lpmd_log_debug("MDRT3E_MODE to NORM_MODE\n");
             prep_state_change(MDRT3E_MODE, NORM_MODE, 0);
             break;
         }
-        // stay
-        lpmd_log_debug("***********no change state:  MDRT3E_MODE\n");        
+
+        lpmd_log_debug("MDRT3E_MODE: stay\n");        
         break;
 
     case MDRT2E_MODE:
         // Demote -- if mem bound work is stalling but didn't show higher utilization
         if (A_LTE_B(grp.worst_stall * 100, STALL_SCALE_LOWER_MARK)) {
-            lpmd_log_info("MDRT2E_MODE to RESP_MODE\n");
+            lpmd_log_debug("MDRT2E_MODE to RESP_MODE\n");
             prep_state_change(MDRT2E_MODE, RESP_MODE, 0);
             break;
         }
@@ -263,7 +282,7 @@ int state_machine_auto() {
              A_GTE_B(grp.sma_avg2, SUS_LOW_RANGE_END - 10))) {
             if (!burst_rate_breach() && strikeout_once(N_STRIKE))
                 break;
-            lpmd_log_info("MDRT2E_MODE to MDRT3E_MODE\n");
+            lpmd_log_debug("MDRT2E_MODE to MDRT3E_MODE\n");
             prep_state_change(MDRT2E_MODE, MDRT3E_MODE, 0);
             break;
         }
@@ -274,7 +293,7 @@ int state_machine_auto() {
             if (!do_countdown(MDRT2E_MODE)) {
                 break;
             }
-            lpmd_log_info("MDRT2E_MODE to NORM_MODE\n");
+            lpmd_log_debug("MDRT2E_MODE to NORM_MODE\n");
             prep_state_change(MDRT2E_MODE, NORM_MODE, 0);
             break;
         }
@@ -283,7 +302,7 @@ int state_machine_auto() {
     case NORM_MODE:
         // Demote -- if mem bound work is stalling but didn't show higher utilization
         if (A_LTE_B(grp.worst_stall * 100, STALL_SCALE_LOWER_MARK)) {
-            lpmd_log_info("NORM_MODE to RESP_MODE\n");
+            lpmd_log_debug("NORM_MODE to RESP_MODE\n");
             prep_state_change(NORM_MODE, RESP_MODE, 0);
             break;
         }
@@ -293,7 +312,7 @@ int state_machine_auto() {
             /* In this state its better to absorb few spike (noise) before reacting */
             if (!burst_rate_breach() && strikeout_once(N_STRIKE))
                 break;
-            lpmd_log_info("NORM_MODE to MDRT2E_MODE\n");
+            lpmd_log_debug("NORM_MODE to MDRT2E_MODE\n");
             prep_state_change(NORM_MODE, MDRT2E_MODE, 0);
             break;
         }
@@ -304,7 +323,7 @@ int state_machine_auto() {
             /* its better to absorb few dips before reacting out of a steady-state */
             if (!do_countdown(NORM_MODE))
                 break;
-            lpmd_log_info("NORM_MODE to DEEP_MODE\n");
+            lpmd_log_debug("NORM_MODE to DEEP_MODE\n");
             prep_state_change(NORM_MODE, DEEP_MODE, 0);
             break;
         }
@@ -312,13 +331,13 @@ int state_machine_auto() {
     case DEEP_MODE:
         // Demote -- if mem bound work is stalling but didn't show higher util.
         if (A_LTE_B(grp.worst_stall * 100, STALL_SCALE_LOWER_MARK)) {
-            lpmd_log_info("DEEP_MODE to RESP_MODE\n");
+            lpmd_log_debug("DEEP_MODE to RESP_MODE\n");
             prep_state_change(DEEP_MODE, RESP_MODE, 0);
             break;
         }
         // Demote -- if there are early signs of instantaneous utilization build-up.
         if (A_GT_B(grp.c0_max, UTIL_FILL_START)) {
-            lpmd_log_info("DEEP_MODE to NORM_MODE\n");
+            lpmd_log_debug("DEEP_MODE to NORM_MODE\n");
             prep_state_change(DEEP_MODE, NORM_MODE, 0);
             break;
         }
