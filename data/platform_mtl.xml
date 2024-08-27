@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 
 <!--
-Specifies the configuration data
-for Intel Energy Optimizer (LPMD) daemon
+Specifies the configuration data [MTL platform with 
+Proxy WLT enabled] for Intel Energy Optimizer (LPMD) daemon
 -->
 
 <Configuration>
@@ -42,15 +42,7 @@ for Intel Energy Optimizer (LPMD) daemon
          0: auto. (opportunistic Low Power Mode enter/exit)
     -->
     <PowersaverDef>-1</PowersaverDef>
-    
-    <!--
-        Default behavior when Power supply is battery and discharging
-        -1: force off. (Never enter Low Power Mode)
-         1: force on. (Always stay in Low Power Mode)
-         0: ignore. (opportunistic Low Power Mode enter/exit)
-    -->
-    <!-- <PowerSupplyBATDischargeDef>-1</PowerSupplyBATDischargeDef> -->
-
+   
     <!--
         Use HFI LPM hints
         0 : No
@@ -63,14 +55,13 @@ for Intel Energy Optimizer (LPMD) daemon
         0 : No
         1 : Yes
     -->
-    
     <WLTHintEnable>1</WLTHintEnable>
+    
     <!--
-        Use WLT Proxy hints
+        Use WLT software proxy hints
         0 : No
         1 : Yes
-    -->
-    
+    -->    
     <WLTProxyEnable>1</WLTProxyEnable>
     
     <!--
@@ -147,9 +138,9 @@ for Intel Energy Optimizer (LPMD) daemon
             <CPUModel> 170 </CPUModel>
             <CPUConfig> * </CPUConfig>
         <State>
-            <ID> 1 </ID> <!-- no significance number can be anything -->
+            <ID> 1 </ID> <!-- no significance. number can be anything -->
             <Name> WLT_IDLE </Name>
-            <WLTType> 0 </WLTType>
+            <WLTType> 0 </WLTType> <!-- Type mapped to Name -->
             <EPP> 255 </EPP>
             <EPB> 15 </EPB>
             <MinPollInterval>2000</MinPollInterval>
@@ -161,7 +152,7 @@ for Intel Energy Optimizer (LPMD) daemon
             <Name> WLT_BATTERY_LIFE </Name>
             <WLTType> 1 </WLTType>
             <EPP> 178 </EPP>
-            <EPB> 6 </EPB> <!-- 8 -->
+            <EPB> 6 </EPB>
             <MinPollInterval>2000</MinPollInterval>
             <ITMTState> -1 </ITMTState>
             <IRQMigrate> -1 </IRQMigrate>
