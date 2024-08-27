@@ -877,6 +877,11 @@ static int detect_supported_cpu(lpmd_config_t *lpmd_config)
 	lpmd_log_info("%u CPUID levels; family:model:stepping 0x%x:%x:%x (%u:%u:%u)\n",
 			max_level, family, model, stepping, family, model, stepping);
 
+	if (!do_platform_check()) {
+		lpmd_log_info("Ignore platform check\n");
+		goto end;
+	}
+
 	val = 0;
 	while (id_table[val].family) {
 		if (id_table[val].family == family && id_table[val].model == model)
@@ -894,6 +899,7 @@ static int detect_supported_cpu(lpmd_config_t *lpmd_config)
 #endif		
         }
 
+end:
 	lpmd_config->cpu_family = family;
 	lpmd_config->cpu_model = model;
 
