@@ -40,20 +40,8 @@
 #define PATH_CGROUP                    "/sys/fs/cgroup"
 #define PATH_CG2_SUBTREE_CONTROL    PATH_CGROUP "/cgroup.subtree_control"
 
-#ifdef __REMOVE__
-#define PATH_CPUMASK "/sys/module/intel_powerclamp/parameters/cpumask"
-#define PATH_MAXIDLE "/sys/module/intel_powerclamp/parameters/max_idle"
-#define PATH_DURATION "/sys/module/intel_powerclamp/parameters/duration"
-
-#define PATH_THERMAL "/sys/class/thermal"
-#endif
-
 extern int cpumask_to_hexstr(cpu_set_t *mask, char *str, int size);
 extern int cpumask_to_str(cpu_set_t *mask, char *buf, int length);
-//#ifdef __REMOVE__
-extern int irq_rebalance;
-extern int inject_update;
-//#endif 
 extern struct group_util grp;
 
 //static int topo_max_cpus;
@@ -126,12 +114,6 @@ int process_cpu_isolate_exit(void);
 
 static int zero_isol_cpu(enum lp_state_idx);
 static char *get_inj_hexstr(enum lp_state_idx idx);
-
-#ifdef __REMOVE__
-static char path_powerclamp[MAX_STR_LENGTH * 2];
-int process_cpu_powerclamp_exit(void);
-static int default_dur = -1;
-#endif
 
 int get_freq_map_count()
 {
@@ -349,21 +331,11 @@ void exit_state_change(void)
 {
     set_cur_state(INIT_MODE);
     needs_state_reset = 0;
-#ifdef __REMOVE__
-    unclamp_default_freq(INIT_MODE);
-    process_cpu_powerclamp_exit();
-#endif
+
     process_cpu_isolate_exit();
-#ifdef __REMOVE__
-    revert_orig_epp();
-    revert_orig_epb();
-#endif
+
 #ifdef __USE_LPMD_IRQ__
     native_restore_irqs();
-#else
-#ifdef __REMOVE__
-    restore_irq_mask();//replace with lpmd_irq function.
-#endif
 #endif
 }
 
@@ -373,22 +345,11 @@ int apply_state_change(void)
 
     if (!needs_state_reset)
         return 0;
-#ifdef __REMOVE__
-    // reset idle inject to 0 every state change
-    if (IDLE_INJECT_FEATURE
-        && ((inject_update == DEACTIVATED) || (inject_update == PAUSE))) {
-        process_cpu_powerclamp_exit();
-    }
-#endif
-
+    
     if (irq_rebalance) {
         //lpmd_log_error("ECO irq active -- revisit\n");
 #ifdef __USE_LPMD_IRQ__
         native_update_irqs();
-#else
-#ifdef __REMOVE__
-        update_irqs();//replace with lpmd_irq function
-#endif
 #endif
         irq_rebalance = 0;
     }
@@ -397,17 +358,6 @@ int apply_state_change(void)
         process_cpu_isolate_exit();
     else
         process_cpu_isolate_enter();
-
-#ifdef __REMOVE__
-    if (IDLE_INJECT_FEATURE && (inject_update == ACTIVATED)
-        && state_has_ppw(get_cur_state())) {
-        process_cpu_powerclamp_enter(DURATION_SPILL *
-                         get_state_poll(grp.c0_max,
-                                get_cur_state()),
-                         (100 - INJ_BUF_PCT - grp.c0_max));
-        inject_update = RUNNING;
-    }
-#endif
 
     update_perf_diffs(&test, 1);
 
@@ -737,80 +687,6 @@ static void reset_cpus_proxy(enum lp_state_idx idx)
     cur_state = INIT_MODE;
 }
 
-#ifdef __REMOVE__ //defined in lpmd_cpu
-/* Parse CPU topology */
-static int set_max_cpu_num(void)
-{
-    FILE *filep=NULL;
-    unsigned long dummy;
-    int i;
-
-    topo_max_cpus = 0;
-    for (i = 0; i < 256; ++i) {
-        char path[MAX_STR_LENGTH];
-
-        snprintf(path, sizeof(path),
-             "/sys/devices/system/cpu/cpu%d/topology/thread_siblings",
-             i);
-
-        filep = fopen(path, "r");
-        if (filep)
-            break;
-    }
-
-    if (!filep) {
-        lpmd_log_error("Can't get max cpu number\n");
-        return -1;
-    }
-
-    while (fscanf(filep, "%lx,", &dummy) == 1)
-        topo_max_cpus += BITMASK_SIZE;
-    fclose(filep);
-
-    lpmd_log_debug("\t%d CPUs supported in maximum\n", topo_max_cpus);
-    return 0;
-}
-#endif
-
-#ifdef __REMOVE___
-int parse_cpu_topology(void)
-{
-    FILE *filep = NULL;
-    int i,ret;
-    char path[MAX_STR_LENGTH] = "";
-
-    reset_cpus_proxy(INIT_MODE);
-    /* kenrel 6.5 cpu0 is considered always online */
-    add_cpu_proxy(0, INIT_MODE);
-    max_online_cpu++;
-
-    for (i = 1; i < get_max_cpus(); i++) {
-        char online[8]= "";
-
-        snprintf(path, sizeof(path),
-             "/sys/devices/system/cpu/cpu%d/online", i);
-        filep = fopen(path, "r");
-        if (filep) {
-            ret = fread(&online, sizeof(online), 1, filep);
-            if (!ret) {
-                lpmd_log_debug("unable to read cpu %d online status\n", i);            
-            }
-            fclose(filep);
-        } else
-            break;
-
-        online[sizeof(online) - 1] = '\0';
-        if (!atoi(online))
-            continue;
-
-        max_online_cpu++;
-        add_cpu_proxy(i, INIT_MODE);
-    }
-    lpmd_log_info("cpu topology\n\tonline mask: 0x%s\n\tonline count: %d\n",
-           get_cpus_hexstr(INIT_MODE), max_online_cpu);
-    return 0;
-}
-#endif
 
 /*defined in lpmd_cpu*/
 /*
@@ -876,353 +752,6 @@ int parse_cpu_str_proxy(char *buf, enum lp_state_idx idx)
     return -1;
 }
 
-#ifdef __REMOVE__
-static int detect_lp_state_actual(void)
-{
-    char path[MAX_STR_LENGTH];
-    int i;
-    int tmp, tmp_min = INT_MAX, tmp_max = 0;
-    enum lp_state_idx idx;
-    int j = 0, actual_freq_buckets;
-    int prev_turbo = 0;
-
-    for (idx = INIT_MODE + 1; idx < MAX_MODE; idx++) {
-        if (!alloc_cpu_set(&lp_state[idx].mask))
-            lpmd_log_error("aloc fail");
-    }
-
-    /* 
-     * based on cpu advertized max turbo frequncies
-     * bucket the cpu into groups (MAX_FREQ_MAPS)
-     * there after map them to state's mask etc.
-     * XXX: need to handle corner cases in this logic.
-     */
-
-    for (i = 0; i < get_max_online_cpu(); i++) {
-
-        if (!is_cpu_online(i)) {
-            continue;
-        }
-
-        snprintf(path, sizeof(path),
-             "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_max_freq",
-             i);
-        lpmd_read_int(path, &tmp, -1);
-
-        if (!prev_turbo) {
-            /* max turbo freq */
-            freq_map[j].start_cpu = i;
-            freq_map[j].turbo_freq_khz = tmp;
-        } else if (prev_turbo != tmp) {
-            freq_map[j].end_cpu = i - 1;    // fix me for i-1 not online
-            j++;
-            freq_map[j].start_cpu = i;
-            freq_map[j].turbo_freq_khz = tmp;
-        }
-        prev_turbo = tmp;
-
-        if (tmp < tmp_min)
-            tmp_min = tmp;
-        else if (tmp > tmp_max)
-            tmp_max = tmp;
-
-        /* min freq */
-        snprintf(path, sizeof(path),
-             "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_min_freq",
-             i);
-        lpmd_read_int(path, &tmp, -1);
-
-        if ((common_min_freq == 0) || (common_min_freq == tmp))
-            common_min_freq = tmp;
-        else if (common_min_freq == -1)
-            continue;
-        else
-            common_min_freq = -1;
-    }
-    freq_map[j].end_cpu = i - 1;
-    actual_freq_buckets = j + 1;
-
-    lpmd_log_debug("Freq buckets [%d]\n\tbucket turbo cpu-range", actual_freq_buckets);
-    for (j = 0; j <= actual_freq_buckets - 1; j++) {
-        freq_map_count++;
-        lpmd_log_info("\n\t [%d]  %dMHz  %d-%d", j,
-               freq_map[j].turbo_freq_khz / 1000, freq_map[j].start_cpu,
-               freq_map[j].end_cpu);
-    }
-
-    for (i = get_max_cpus() - 1; i >= 0; i--) {
-        if (!is_cpu_online(i))
-            continue;
-        snprintf(path, sizeof(path),
-             "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_max_freq",
-             i);
-        lpmd_read_int(path, &tmp, -1);
-        /* TBD: address the favoured core system with 1 or 2 top bin cpu */
-        if (tmp == tmp_max) {
-            /* for PERF mode need all cpu other than LP */
-            if (actual_freq_buckets > 1)
-                CPU_SET_S(i, size_cpumask,
-                      lp_state[PERF_MODE].mask);
-            CPU_SET_S(i, size_cpumask, lp_state[BYPS_MODE].mask);
-        }
-        /* fix me for case of favourd cores */
-        if ((tmp > tmp_min) || ((freq_map_count == 1) && (tmp == tmp_min))) {
-            /* for moderate2 mode 4 cpu are sufficient */
-            if (CPU_COUNT_S(size_cpumask, lp_state[MDRT4E_MODE].mask)
-                >= MAX_MDRT4E_LP_CPU)
-                continue;
-            CPU_SET_S(i, size_cpumask, lp_state[MDRT4E_MODE].mask);
-
-            /* for moderate mode 3 cpu are sufficient */
-            if (CPU_COUNT_S(size_cpumask, lp_state[MDRT3E_MODE].mask)
-                >= MAX_MDRT3E_LP_CPU)
-                continue;
-            CPU_SET_S(i, size_cpumask, lp_state[MDRT3E_MODE].mask);
-
-            /* for moderate0 mode  cpu are sufficient */
-            if (CPU_COUNT_S(size_cpumask, lp_state[MDRT2E_MODE].mask)
-                >= MAX_MDRT2E_LP_CPU)
-                continue;
-            CPU_SET_S(i, size_cpumask, lp_state[MDRT2E_MODE].mask);
-        }
-        if (tmp == tmp_min) {
-            if (CPU_COUNT_S(size_cpumask, lp_state[RESP_MODE].mask)
-                >= MAX_RESP_LP_CPU)
-                continue;
-            CPU_SET_S(i, size_cpumask, lp_state[RESP_MODE].mask);
-
-            /* for LP mode 2 cpu are sufficient */
-            /* fixme: club the "continue" statement correctly */
-
-            if (CPU_COUNT_S(size_cpumask, lp_state[NORM_MODE].mask)
-                >= MAX_NORM_LP_CPU)
-                continue;
-            CPU_SET_S(i, size_cpumask, lp_state[NORM_MODE].mask);
-
-            if (CPU_COUNT_S(size_cpumask, lp_state[DEEP_MODE].mask)
-                >= MAX_DEEP_LP_CPU)
-                continue;
-            CPU_SET_S(i, size_cpumask, lp_state[DEEP_MODE].mask);
-        }
-    }
-
-    for (i = 0; i < get_max_cpus(); i++) {
-        if (!is_cpu_online(i))
-            continue;
-        snprintf(path, sizeof(path),
-             "/sys/devices/system/cpu/cpu%d/cache/index3/level", i);
-        if (!lpmd_open(path, -1)) {
-            CPU_SET_S(i, size_cpumask, lp_state[PERF_MODE].mask);
-            CPU_SET_S(i, size_cpumask, lp_state[BYPS_MODE].mask);
-        }
-    }
-
-    /* bypass mode TBD. any strange workloads can be let to run bypass */
-    lp_state[BYPS_MODE].disabled = true;
-    /* MDRT with 2 cores is not know to be beneficial comapred. simplyfy */
-    lp_state[MDRT2E_MODE].disabled = true;
-    if (get_max_online_cpu() <= 4) {
-        lpmd_log_error("too few CPU: %d", get_max_online_cpu());
-        //exit(1);
-        return -1; 
-    } else if (get_max_online_cpu() <= 8) {
-        lp_state[MDRT2E_MODE].disabled = true;
-        lp_state[MDRT4E_MODE].disabled = true;
-    }
-
-    int cpu_count;
-    for (idx = INIT_MODE; idx < MAX_MODE; idx++) {
-        cpu_count = CPU_COUNT_S(size_cpumask, lp_state[idx].mask);
-        if (!lp_state[idx].disabled && cpu_count) {
-            if (state_has_ppw(idx)) {
-                if (!lp_state[idx].inj_mask) 
-                    alloc_cpu_set(&lp_state[idx].inj_mask);
-                and_into_injmask(INIT_MODE, idx, idx);
-            }
-            lpmd_log_info("\t[%d] %s [0x%s] cpu count: %2d\n", idx,
-                   lp_state[idx].name, get_cpus_hexstr(idx),
-                   cpu_count);
-        }
-    }
-    for (idx = INIT_MODE; idx < MAX_MODE; idx++) {
-        cpu_count = CPU_COUNT_S(size_cpumask, lp_state[idx].mask);
-        if (lp_state[idx].disabled || !cpu_count) {
-            lpmd_log_info("\t[%d] %s [0x%s] cpu count: %2d\n", idx,
-                   lp_state[idx].name, get_cpus_hexstr(idx),
-                   cpu_count);
-        }
-    }
-
-    return 1;
-}
-
-static int detect_lp_state(void)
-{
-    int ret;
-
-    ret = detect_lp_state_actual();
-
-    if (ret <= 0) {
-        lpmd_log_error("\tNo valid Low Power CPUs detected, exit\n");
-        //exit(1);
-        return -1; 
-    } else {
-
-    }
-
-    if (has_cpus_proxy(INIT_MODE))
-        lpmd_log_debug("\tUse CPU %s as Default Low Power CPUs\n",
-              get_cpus_str_proxy(INIT_MODE));
-
-    return 0;
-}
-#endif
-
-#ifdef __REMOVE__
-static int update_cpusets(char *data, int update)
-{
-    DIR *dir;
-    struct dirent *entry;
-    char path[MAX_STR_LENGTH * 2];
-    int processed = 0;
-    int ret = 0;
-
-    if ((dir = opendir(PATH_CGROUP)) == NULL) {
-        perror("opendir() error");
-        return 1;
-    }
-
-    while ((entry = readdir(dir)) != NULL) {
-        if (entry->d_name[0] != '.') {
-            char *str;
-
-            str = strchr(entry->d_name, '.');
-            if (str) {
-                if (!strncmp(str, ".slice", strlen(".slice"))) {
-                    snprintf(path, MAX_STR_LENGTH * 2,
-                         "%s/%s/cpuset.cpus",
-                         PATH_CGROUP, entry->d_name);
-                    if (update)
-                        ret = lpmd_write_str(path, data, -1);
-                    else
-                        ret = lpmd_open(path, -1);
-                    if (ret)
-                        goto closedir;
-                    processed = 1;
-                }
-            }
-        }
-    }
-
- closedir:
-    closedir(dir);
-
-    if (!processed)
-        ret = 1;
-    return ret ? 1 : 0;
-}
-#endif
-
-#ifdef __REMOVE__
-int check_cpu_powerclamp_support(void)
-{
-    FILE *filep;
-    DIR *dir;
-    struct dirent *entry;
-    char *name = "intel_powerclamp";
-    char str[20];
-    int ret;
-
-    if (lpmd_open(PATH_CPUMASK , -1))
-        return 1;
-
-    if ((dir = opendir(PATH_THERMAL)) == NULL) {
-        perror("opendir() error");
-        return 1;
-    }
-
-    while ((entry = readdir(dir)) != NULL) {
-        if (strlen(entry->d_name) > 100)
-            continue;
-        snprintf(path_powerclamp, MAX_STR_LENGTH * 2, "%s/%s/type",
-             PATH_THERMAL, entry->d_name);
-        filep = fopen(path_powerclamp, "r");
-        if (!filep)
-            continue;
-
-        ret = fread(str, strlen(name), 1, filep);
-        fclose(filep);
-
-        if (ret != 1)
-            continue;
-
-        if (!strncmp(str, name, strlen(name))) {
-            snprintf(path_powerclamp, MAX_STR_LENGTH * 2,
-                 "%s/%s/cur_state", PATH_THERMAL,
-                 entry->d_name);
-            break;
-        }
-    }
-    closedir(dir);
-
-    if (path_powerclamp[0] == '\0')
-        return 1;
-
-    lpmd_log_debug("\tFound %s device at %s\n", name, path_powerclamp);
-    return 0;
-}
-
-int process_cpu_powerclamp_update(int dur, int idl)
-{
-    if (lpmd_write_int(PATH_DURATION, dur, -1))
-        return 1;
-
-    if (lpmd_write_int(PATH_MAXIDLE, idl, -1))
-        return 1;
-
-    if (lpmd_write_int(path_powerclamp, idl, -1))
-        return 1;
-
-    return 0;
-}
-
-int process_cpu_powerclamp_enter(int dur, int idl)
-{
-    if (lpmd_write_str(PATH_CPUMASK, get_inj_hexstr(cur_state), -1))
-        return 1;
-
-    if (dur > 0) {
-        if (lpmd_read_int(PATH_DURATION, &default_dur, -1))
-            return 1;
-
-        if (lpmd_write_int(PATH_DURATION, dur, -1))
-            return 1;
-    }
-
-    if (lpmd_write_int(PATH_MAXIDLE, idl, -1))
-        return 1;
-
-    if (lpmd_write_int(path_powerclamp, idl, -1))
-        return 1;
-
-    return 0;
-}
-
-int process_cpu_powerclamp_exit()
-{
-    if (lpmd_write_int(PATH_DURATION, default_dur, -1))
-        return 1;
-    return lpmd_write_int(path_powerclamp, 0, -1);
-}
-#endif
-
-#ifdef __REMOVE__ //use from lpmd_cpu
-static int check_cpu_isolate_support(void)
-{
-    lpmd_write_str(PATH_CG2_SUBTREE_CONTROL, "+cpuset", -1);
-    return update_cpusets(NULL, 0);
-}
-#endif
 
 /**********************Marked for REmoval - begin ************************/
 
@@ -1362,9 +891,7 @@ int process_cpu_isolate_exit(void)
 static int init_cgroup_fs(void)
 {
     int ret;
-#ifdef __REMOVE__
-    ret = check_cpu_powerclamp_support();
-#endif
+
     ret = check_cpu_isolate_support();
     return ret;
 }
@@ -1380,12 +907,6 @@ int init_cpu_proxy(void)
     if (ret)
         return ret;
 
-#ifdef __REMOVE__ //lpmd doing this in check_cpu_capability fn
-    lpmd_log_debug("Detecting CPUs ...\n");
-    ret = parse_cpu_topology();
-    if (ret)
-        return ret;
-#endif
     //init_cgroup_fs();
     ret = check_cpu_isolate_support();
     if (ret)
@@ -1394,13 +915,6 @@ int init_cpu_proxy(void)
     perf_stat_init();
     
     //init_cgroup_fd();
-
-#ifdef __REMOVE__ //detects which cpus to turn on/off in different states.
-    ret = detect_lp_state();
-
-    if (ret)
-        return ret;    
-#endif
 
     return 0;
 }

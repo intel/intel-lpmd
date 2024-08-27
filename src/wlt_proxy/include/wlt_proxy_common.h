@@ -71,17 +71,6 @@
  */
 #define DURATION_SPILL        (1.2)
 
-#ifdef __REMOVE__
-#define EPB_AC            (6)
-#define EPB_DC            (8)
-#define POWERSAVE_EPP_PCT    (70)
-#define POWERSAVE_EPP         ((uint)ceil(POWERSAVE_EPP_PCT*256/100))
-#define BALANCED_EPP_PCT    (50)
-#define BALANCED_EPP         ((uint)ceil(BALANCED_EPP_PCT*256/100))
-#define PERFORMANCE_EPP_PCT    (25)
-#define PERFORMANCE_EPP     ((uint)ceil(PERFORMANCE_EPP_PCT*256/100))
-#endif
-
 /* floating point comparison */
 #define EPSILON    (0.01)
 #define A_LTE_B(A,B)    (((B-A) >= EPSILON) ? 1 : 0 )
@@ -90,18 +79,6 @@
 
 #define RECORDS_PER_HEADER    (30)
 extern int slider;
-
-#ifdef __REMOVE__
-enum slider_value {
-    unknown,
-    performance,
-    balance_performance,
-    balance_power,
-    balanced,
-    power_saver,
-    MAX_SLIDER,
-};
-#endif
 
 enum lp_state_idx {
     INIT_MODE,    //BYPS_MODE,
@@ -148,13 +125,6 @@ enum elastic_poll {
 
 #ifndef __USE_LPMD_IRQ__
 /* irq.c */
-#ifdef __REMOVE__
-int init_irq(void);
-int process_irqs_proxy(int);//defined in lpmd
-int dump_interrupts(int);
-int restore_irq_mask(void);
-int update_irqs(void);
-#endif
 #endif
 
 /* util.c */
@@ -170,10 +140,6 @@ int update_perf_diffs(float *, int);
 
 int staytime_to_staycount(enum lp_state_idx);
 int max_mt_detected(enum lp_state_idx);
-
-#ifdef __REMOVE__
-void unclamp_default_freq(enum lp_state_idx);
-#endif 
 
 /* state machine */
 int state_machine_auto();

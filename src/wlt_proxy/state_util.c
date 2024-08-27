@@ -18,23 +18,6 @@
 #include <asm/unistd.h> //syscall __NR_pref_event_open
 #include <assert.h>
 
-#ifdef __REMOVE__
-#include <stdio.h>
-#include <math.h>
-#include <err.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <time.h>
-#include <fcntl.h>
-#include <sys/file.h>
-#include <sys/types.h>
-#include <sys/time.h>
-#include <sys/stat.h>
-#include <errno.h>
-#include <stdbool.h>
-#endif
-
 #include "wlt_proxy_common.h"
 #include "wlt_proxy.h"
 #include "state_manager.h"
@@ -125,14 +108,6 @@ struct group_util grp;
 
 static struct timespec ts_start, ts_prev;
 static struct timespec ts_current = { 0, 0 };
-
-#ifdef __REMOVE__//not used.
-void clamp_to_turbo(enum lp_state_idx for_state);
-#endif
-
-#ifdef __REMOVE__//soc_mw used in plotting.
-static float soc_mw;
-#endif
 
 struct thread_data {
     unsigned long long tsc;
@@ -442,10 +417,6 @@ int update_perf_diffs(float *sum_norm_perf, int stat_init_only)
     int t, min_s0_cpu = 0, first_pass = 1;
 
     for (t = 0; t < get_max_online_cpu(); t++) {
-#ifdef __REMOVE__ //all cpus available all the time.
-        if (!cpu_applicable(t, get_cur_state()))
-            continue;
-#endif
 
         /*reading through perf api*/
         struct thread_data tdata;
@@ -469,31 +440,6 @@ int update_perf_diffs(float *sum_norm_perf, int stat_init_only)
         /*perf_stats[t].tsc_diff*/ uint64_t tsc = cpu_get_diff_tsc(tdata.tsc, t);
         //lpmd_log_debug("from api tsc_diff %ld\n\n", tsc);
         perf_stats[t].tsc_diff = tsc;
-#ifdef __REMOVE__
-        /* reading through driver*/
-        fd = perf_stats[t].dev_msr_fd;
-
-        read_msr(fd, (uint32_t) MSR_IA32_PPERF, &pperf_raw);
-        read_msr(fd, (uint32_t) MSR_IA32_APERF, &aperf_raw);
-        read_msr(fd, (uint32_t) MSR_IA32_MPERF, &mperf_raw);
-        read_msr(fd, (uint32_t) MSR_IA32_TSC, &tsc_raw);         
-
-        lpmd_log_debug("from driver pperf_raw %ld\n", pperf_raw);
-        perf_stats[t].pperf_diff = cpu_get_diff_pperf(pperf_raw, t);
-        lpmd_log_debug("****from driver pperf_diff %ld\n", perf_stats[t].pperf_diff);
-
-        lpmd_log_debug("from driver aperf_raw %ld\n", aperf_raw);
-        perf_stats[t].aperf_diff = cpu_get_diff_aperf(aperf_raw, t);
-        lpmd_log_debug("****from driver aperf_diff %ld\n", perf_stats[t].aperf_diff);
-
-        lpmd_log_debug("from driver mperf_raw %ld\n", mperf_raw);
-        perf_stats[t].mperf_diff = cpu_get_diff_mperf(mperf_raw, t);
-        lpmd_log_debug("****from driver mperf_diff %ld\n", perf_stats[t].mperf_diff);
-
-        lpmd_log_debug("from driver tsc_raw %ld\n", tsc_raw);
-        perf_stats[t].tsc_diff = cpu_get_diff_tsc(tsc_raw, t);
-        lpmd_log_debug("****from driver tsc_diff %ld\n\n", perf_stats[t].tsc_diff);*/
-#endif
 
         if (stat_init_only)
             continue;
@@ -568,10 +514,6 @@ int update_perf_diffs(float *sum_norm_perf, int stat_init_only)
     grp.c0_3rd_max = max_3rd_load;
     grp.c0_min = min_load;
     *sum_norm_perf = _sum_nperf;
-#ifdef __REMOVE__//soc_mw used in plotting.
-    if (poll_cpu_us != 0)
-        soc_mw = (float)rapl_ediff_pkg0(read_rapl_pkg0()) * 1000 / poll_cpu_us;
-#endif
 
     return maxed_cpu;
 }
@@ -648,23 +590,6 @@ static enum lp_state_idx nearest_supported(enum lp_state_idx from_state, enum lp
 
 static int get_state_mapping(enum lp_state_idx state){
 
-#ifdef __REMOVE__
-    //read the battery connection status, if the last reading is beyond 30 seconds 
-    clockid_t clk = CLOCK_MONOTONIC;
-    if (!ts_current.tv_sec){ //first time 
-        clock_gettime(clk, &ts_current); 
-        AC_CONNECTED = is_ac_powered_power_supply_status() == 0  ? false: true; //unknown is considered as ac powered.
-        ts_prev = ts_current; 
-    } else {
-        clock_gettime(clk, &ts_current); //get current time 
-        if (ts_current.tv_sec - ts_prev.tv_sec > 30){
-            ts_prev = ts_current;
-            AC_CONNECTED = is_ac_powered_power_supply_status() == 0  ? false: true; //unknown is considered as ac powered.
-        } 
-    } 
-    //bool AC_CONNECTED = is_ac_powered_power_supply_status() == 0  ? false: true; //unknown is considered as ac powered.
-#endif
-
     switch(state) {
         case PERF_MODE:
             return WLT_BURSTY;
@@ -672,15 +597,7 @@ static int get_state_mapping(enum lp_state_idx state){
         case RESP_MODE:
         case NORM_MODE:
             return WLT_BATTERY_LIFE;
-#ifdef __REMOVE__
-            if (AC_CONNECTED){    
-                return WLT_BATTERY_LIFE;
-            }
-            else{
-                return WLT_BATTERY_LIFE_BAT;
-            }
-#endif
-    
+            
         case DEEP_MODE:
             return WLT_IDLE;
         
@@ -691,14 +608,7 @@ static int get_state_mapping(enum lp_state_idx state){
         case MDRT3E_MODE:
         case MDRT2E_MODE:
             return WLT_SUSTAINED;
-#ifdef __REMOVE__
-            if (AC_CONNECTED){
-                return WLT_SUSTAINED;
-            }
-            else{
-                return WLT_SUSTAINED_BAT;
-            }
-#endif
+
         default:
             lpmd_log_error("unknown work load type\n");
             return WLT_IDLE;
@@ -708,33 +618,6 @@ static int get_state_mapping(enum lp_state_idx state){
 int prep_state_change(enum lp_state_idx from_state, enum lp_state_idx to_state,
               int reset)
 {
-#ifdef __REMOVE__
-    if (is_state_disabled(to_state)) 
-        to_state = nearest_supported(from_state, to_state);
-#endif
-
-#ifdef __REMOVE__
-    if (!reset && state_has_ppw(to_state))
-        inject_update = ACTIVATED;
-    else
-        inject_update = PAUSE;
-#endif
-    
-#ifdef __REMOVE__
-    /* state entry: p-state ctl if applicable*/
-    if (!reset && state_support_freq_ctl(to_state))
-        clamp_to_turbo(to_state);
-    /* state exit: p-state reset back */
-    if (!reset && state_support_freq_ctl(from_state))
-        unclamp_default_freq(from_state);
-#endif
-
-#ifdef __REMOVE__
-    //epp and epb are updated in the main 
-    update_state_epp(to_state);
-    update_state_epb(to_state);
-#endif
-
     //switch(to_state)
     //do to_state to WLT mapping
     int type = get_state_mapping(to_state); 
@@ -752,9 +635,7 @@ int prep_state_change(enum lp_state_idx from_state, enum lp_state_idx to_state,
     set_cur_state(to_state);
     set_state_reset();
     set_last_maxutil(DEACTIVATED);
-#ifdef __REMOVE__
-    irq_rebalance = 1;
-#endif
+    
 
     if (to_state < from_state)
         state_demote = 1;
@@ -796,132 +677,12 @@ int staytime_to_staycount(enum lp_state_idx state)
     return stay_count;
 }
 
-static int prepare_deomote_bypass(enum lp_state_idx to_state, int epp_high)
-{
-#ifdef __REMOVE__
-    if (!epp_high) {
-        update_state_epp(NORM_MODE);
-        update_state_epb(NORM_MODE);
-    } else {
-        update_state_epp(PERF_MODE);
-        update_state_epb(PERF_MODE);
-    }
-#endif
-    set_cur_state(to_state);
-    set_state_reset();
-    set_last_maxutil(DEACTIVATED);
-#ifdef __REMOVE__
-    irq_rebalance = 1;
-#endif
-    return 1;
-}
-
-#ifdef __REMOVE__
-
-void unclamp_default_freq(enum lp_state_idx for_state)
-{
-    char path[MAX_STR_LENGTH];
-    int min_freq, max_freq;
-
-    for (int i = 0; i < get_max_online_cpu(); i++) {
-        if (cpu_applicable(i, for_state)) {
-            min_freq = get_min_freq(i);
-            if (min_freq == -1) {
-                snprintf(path, sizeof(path),
-                     "/sys/devices/system/cpu/cpufreq/policy%d/cpuinfo_min_freq",
-                     i);
-                lpmd_read_int(path, &min_freq, -1);
-            }
-
-            max_freq = get_turbo_freq(i);
-            snprintf(path, sizeof(path),
-                 "/sys/devices/system/cpu/cpufreq/policy%d/scaling_max_freq",
-                 i);
-            lpmd_write_int(path, max_freq, -1);
-            snprintf(path, sizeof(path),
-                 "/sys/devices/system/cpu/cpufreq/policy%d/scaling_min_freq",
-                 i);
-            lpmd_write_int(path, min_freq, -1);
-        }
-    }
-}
-
-void clamp_to_freq(enum lp_state_idx for_state, int to_freq)
-{
-    char path_min[MAX_STR_LENGTH];
-    char path_max[MAX_STR_LENGTH];
-    to_freq = to_freq * 100000;
-    int cur_max_freq;
-    if (!state_support_freq_ctl(for_state))
-        return;
-    for (int i = 0; i < get_max_online_cpu(); i++) {
-        if (cpu_applicable(i, for_state)) {
-            if (to_freq > get_turbo_freq(i))
-                lpmd_log_error("cpu%d reqested freq %d > turbo %d\n",
-                    i, to_freq, get_turbo_freq(i));
-            snprintf(path_max, sizeof(path_max),
-                 "/sys/devices/system/cpu/cpufreq/policy%d/scaling_max_freq",
-                 i);
-            snprintf(path_min, sizeof(path_min),
-                 "/sys/devices/system/cpu/cpufreq/policy%d/scaling_min_freq",
-                 i);
-
-            lpmd_read_int(path_max, &cur_max_freq, -1);
-
-            if (cur_max_freq > to_freq) {
-                /* reducing max freq. so, ok to set min first */
-                lpmd_write_int(path_min, to_freq, -1);
-                lpmd_write_int(path_max, to_freq, -1);
-            } else {
-                lpmd_write_int(path_max, to_freq, -1);
-                lpmd_write_int(path_min, to_freq, -1);
-            }
-        }
-    }
-}
-
-void clamp_to_turbo(enum lp_state_idx for_state)
-{
-    char path[MAX_STR_LENGTH];
-    int turbo_freq;
-    for (int i = 0; i < get_max_online_cpu(); i++) {
-        if (cpu_applicable(i, for_state)) {
-            turbo_freq = get_turbo_freq(i);
-            snprintf(path, sizeof(path),
-                 "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_max_freq",
-                 i);
-            lpmd_write_int(path, turbo_freq, -1);
-            snprintf(path, sizeof(path),
-                 "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_min_freq",
-                 i);
-            lpmd_write_int(path, turbo_freq, -1);
-        }
-    }
-}
-
-#endif
-
-#ifdef __REMOVE__
-float get_cur_freq(int cpu)
-{
-    return perf_stats[cpu].f0;
-}
-
-float get_cur_scalability(int cpu)
-{
-    return perf_stats[cpu].s0;
-}
-#endif
 
 int max_mt_detected(enum lp_state_idx state)
 {
     //lpmd_log_debug("no of cpus online: %d\n", get_max_online_cpu());
     
     for (int t = 0; t < get_max_online_cpu(); t++) {
-#ifdef __REMOVE__ //all cpus are avalialble all the time.
-        if (!cpu_applicable(t, state))
-            continue;
-#endif
         
         if A_LTE_B
             (perf_stats[t].l0, (UTIL_LOW))
@@ -930,19 +691,6 @@ int max_mt_detected(enum lp_state_idx state)
     return 1;
 }
 
-#ifdef __REMOVE__
-static int inject_active()
-{
-    switch (inject_update) {
-    case ACTIVATED:
-    case RUNNING:
-        return 1;
-        break;
-    default:
-        return 0;
-    }
-}
-#endif 
 
 /* initialize perf_stat structure */
 int perf_stat_init(void)
@@ -960,13 +708,6 @@ int perf_stat_init(void)
         
         perf_stats[t].cpu = t;
         perf_stats[t].dev_msr_fd = initialize_dev_msr(t);
-#ifdef __REMOVE__ //dont store the orignial epp/epb
-        perf_stats[t].orig_epp =
-            update_epp(perf_stats[t].dev_msr_fd,
-                   (uint64_t) PERFORMANCE_EPP);
-        perf_stats[t].orig_epb =
-            update_epb(perf_stats[t].dev_msr_fd, (uint64_t) EPB_AC);
-#endif
     }
     return 1;
 }
@@ -994,24 +735,12 @@ int util_init_proxy(void)
         return -1; 
     }
     
-#ifdef __REMOVE__
-
-    if (IDLE_INJECT_FEATURE)
-        check_cpu_powerclamp_support();
-    
-
-    init_all_fd();
-#endif
-
     init_delta_vars(get_max_online_cpu());
 
     update_perf_diffs(&dummy, 1);
 
     initialize_cpu_hfm_mhz(perf_stats[0].dev_msr_fd);
 
-#ifdef __REMOVE__
-    //state_handler();
-#endif
     initialize_state_mask();
     sma_init();
 

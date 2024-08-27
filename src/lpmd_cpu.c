@@ -50,7 +50,6 @@
 #include <systemd/sd-bus.h>
 #include <cpuid.h>
 #include "lpmd.h"
-#define DISABLE_SOC_ENFORCEMENT 0
 static int topo_max_cpus;
 static int max_online_cpu;
 static size_t size_cpumask;
@@ -887,17 +886,13 @@ static int detect_supported_cpu(lpmd_config_t *lpmd_config)
 		if (id_table[val].family == family && id_table[val].model == model)
 			break;
 		val++;
-        }
+    }
 
 	/* Unsupported model */
-        if (!id_table[val].family || max_level < 0x1a) {
-		lpmd_log_info("Unsupported platform\n");
-#ifdef DISABLE_SOC_ENFORCEMENT
-		lpmd_log_info("valgrind build only, continue\n");
-#else		
-		return -1;
-#endif		
-        }
+    if (!id_table[val].family || max_level < 0x1a) {
+        lpmd_log_info("Unsupported platform\n");
+        return -1;
+    }
 
 end:
 	lpmd_config->cpu_family = family;
@@ -1213,12 +1208,8 @@ static int detect_lpm_cpus(char *cmd_cpus)
 		return 0;
 	}
 	else {
-#ifdef DISABLE_SOC_ENFORCEMENT        
-		lpmd_log_error ("\tNo valid Low Power CPUs detected, valgrind build continue\n");
-#else
         lpmd_log_error ("\tNo valid Low Power CPUs detected, exit\n");
 		exit (1);    
-#endif
 	}
 
 end: if (has_cpus (CPUMASK_LPM_DEFAULT))
@@ -1863,11 +1854,7 @@ int check_cpu_capability(lpmd_config_t *lpmd_config)
 	ret = detect_supported_cpu(lpmd_config);
 	if (ret) {
 		lpmd_log_info("Unsupported CPU type\n");
-#ifdef DISABLE_SOC_ENFORCEMENT
-		lpmd_log_info("valgrind build only, continue\n");
-#else
 		return ret;
-#endif		
 	}
 
 	ret = set_max_cpu_num ();

@@ -38,9 +38,6 @@ static void lpmd_dump_config(lpmd_config_t *lpmd_config)
 	lpmd_log_info ("HFI SUV Enable:%d\n", lpmd_config->hfi_suv_enable);
 	lpmd_log_info ("WLT Hint Enable:%d\n", lpmd_config->wlt_hint_enable);
 	lpmd_log_info ("WLT Proxy Enable:%d\n", lpmd_config->wlt_proxy_enable);
-#ifdef __REMOVE__
-	lpmd_log_info ("WLT Proxy interval:%d\n", lpmd_config->wlt_proxy_interval);
-#endif
 	lpmd_log_info ("Util entry threshold:%d\n", lpmd_config->util_entry_threshold);
 	lpmd_log_info ("Util exit threshold:%d\n", lpmd_config->util_exit_threshold);
 	lpmd_log_info ("Util LP Mode CPUs:%s\n", lpmd_config->lp_mode_cpus);
@@ -267,14 +264,6 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_co
 							|| (lpmd_config->wlt_hint_enable != 1 && lpmd_config->wlt_hint_enable != 0))
 						goto err;
 				}
-#ifdef __REMOVE__
-				else if (!strncmp((const char*)cur_node->name, "WLTProxyInterval", strlen("WLTProxyInterval"))) {
-					errno = 0;
-					lpmd_config->wlt_proxy_interval = strtol (tmp_value, &pos, 10);
-					if (errno || *pos != '\0' || lpmd_config->wlt_proxy_interval <= 0 || lpmd_config->wlt_proxy_interval > 2000)
-						goto err;
-				}
-#endif
 				else if (!strncmp((const char*)cur_node->name, "WLTProxyEnable", strlen("WLTProxyEnable"))) {
 					errno = 0;
 					lpmd_config->wlt_proxy_enable = strtol (tmp_value, &pos, 10);

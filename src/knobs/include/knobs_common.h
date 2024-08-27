@@ -34,24 +34,4 @@ void PSS_deinit();
 /** return 1 if ac powered; -1 unknown; 0 if not */
 int is_ac_powered_power_supply_status();
 
-#ifdef __REMOVE__
-//Hardware WLT hint support status
- 
-/** [Optional] acquire resources. returns 0 if supported. */
-int HWS_init();
-  
-/** 0 if available. */
-int HWS_is_available();
- 
-/** [Optional] free up resources */
-void HWS_deinit();
-
-
-// power profile status
-
-/** 1 if true. */
-int PPS_is_performance_governer();
-
-#endif
-
 #endif /*_KNOBS_COMMON_H_*/

@@ -46,7 +46,7 @@ extern int burst_count;
 extern struct group_util grp;
 extern int state_demote;
 
-int max_util; 
+//int max_util; 
 int only_once = 0;
 
 int state_machine_auto() {
@@ -54,14 +54,7 @@ int state_machine_auto() {
     float dummy;
     int present_state = get_cur_state();
     update_perf_diffs(&dummy, 0);
-    max_util = (int)round(grp.c0_max); //end
-#ifdef __REMOVE__
-    int last_max = get_last_maxutil();
-    if (last_max > 0)
-        grp.delta = max_util - last_max;
-    else
-        last_max = 0;
-#endif
+    //max_util = (int)round(grp.c0_max); //end
 
     /*
      * we do not want to track avg util for following cases:
@@ -79,11 +72,6 @@ int state_machine_auto() {
     initial_burst_count = get_burst_rate_per_min();
     mdrt_count = get_stay_count(MDRT3E_MODE);
     int sr = get_spike_rate();
-
-#ifdef __REMOVE__
-    //todo: handle exception
-    assert(!is_state_disabled(present_state));
-#endif
 
     if (A_LTE_B(grp.c0_max, UTIL_NEAR_FULL)) {
         add_non_spike_time(completed_poll);
@@ -344,10 +332,6 @@ int state_machine_auto() {
 
         break;
     }
-#ifdef __REMOVE__
-    if (last_max != DEACTIVATED)
-        set_last_maxutil(max_util);
-    set_last_poll(poll);
-#endif
+
     return 1;
 }

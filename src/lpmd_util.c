@@ -422,11 +422,8 @@ static int process_next_config_state(lpmd_config_t *config, int wlt_index)
 	get_epp_epb(&epp, epp_str, 32, &epb);
 
 	if (config->wlt_proxy_enable){
-#ifdef __REMOVE__
-		interval = config->wlt_proxy_interval;
-#else
     	interval = 2000;
-#endif
+
 		//gets interval of different states 
 		if (interval != next_proxy_poll && next_proxy_poll > 0)
 			interval = next_proxy_poll;
