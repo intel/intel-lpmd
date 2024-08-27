@@ -1397,10 +1397,10 @@ int init_cpu_proxy(void)
 
 #ifdef __REMOVE__ //detects which cpus to turn on/off in different states.
     ret = detect_lp_state();
-#endif
 
     if (ret)
-        return ret;
+        return ret;    
+#endif
 
     return 0;
 }
