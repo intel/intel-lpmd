@@ -42,6 +42,7 @@
 
 extern int cpumask_to_hexstr(cpu_set_t *mask, char *str, int size);
 extern int cpumask_to_str(cpu_set_t *mask, char *buf, int length);
+extern int irq_rebalance;
 extern struct group_util grp;
 
 //static int topo_max_cpus;
