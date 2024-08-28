@@ -19,7 +19,6 @@
 #include <err.h> //perror
 #include <errno.h>
 
-#include "state_manager.h" //get_cur_state
 #include "wlt_proxy_common.h"
 
 /*
@@ -195,6 +194,7 @@ int add_non_spike_time(int duration)
     return 1;
 }
 
+/*decrement strike count*/
 int strikeout_once(int n)
 {
     if (!strike_count)

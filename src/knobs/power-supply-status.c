@@ -46,6 +46,8 @@
 #include <sys/stat.h>
 #include <ctype.h>
 
+//#define _ENABLE_UEVENT_
+
 #ifdef _ENABLE_UEVENT_
 //#include <glib-object.h>
 #include <gudev/gudev.h> //gudev-1.0; upower-glib

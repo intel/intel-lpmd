@@ -44,6 +44,7 @@
  */
 #define DELTA_THRESHOLD        (70.0)
 
+#ifdef __REMOVE__
 #define BASE_POLL_RESP          96
 #define BASE_POLL_MT           100
 #define BASE_POLL_PERF         280
@@ -52,6 +53,7 @@
 #define BASE_POLL_MDRT2E      1000    // e.g., 2E cores of a module
 #define BASE_POLL_NORM        1200
 #define BASE_POLL_DEEP        1800
+#endif
 
 #define PPW_EFFICIENCY_FEATURE    (1)
 
@@ -81,7 +83,7 @@
 extern int slider;
 
 enum lp_state_idx {
-    INIT_MODE,    //BYPS_MODE,
+    INIT_MODE,
     PERF_MODE,
     MDRT4E_MODE,
     MDRT3E_MODE,
@@ -123,16 +125,37 @@ enum elastic_poll {
 #define ACTIVATED    (2)
 #define PAUSE        (3)
 
-#ifndef __USE_LPMD_IRQ__
-/* irq.c */
-#endif
+/* state_manager.c */
+int init_state_manager(void);
+void uninit_state_manager(void);
 
-/* util.c */
+bool is_state_disabled(enum lp_state_idx);
+int apply_state_change(void);
+
+enum lp_state_idx get_cur_state(void);
+
+void set_cur_state(enum lp_state_idx);
+int is_state_valid(enum lp_state_idx);
+
+int cpu_applicable(int, enum lp_state_idx);
+
+void set_state_reset(void);
+int set_last_maxutil(int);
+
+int get_last_poll(void);
+int get_poll_ms(enum lp_state_idx);
+int get_state_poll(int, enum lp_state_idx);
+
+int set_stay_count(enum lp_state_idx, int);
+int get_stay_count(enum lp_state_idx);
+
+int do_countdown(enum lp_state_idx);
+
+/* state_util.c */
 int util_init_proxy(void);//defined in lpmd_util
 void util_uninit_proxy(void);
 
 int perf_stat_init(void);
-//void perf_stat_uninit();
 int state_max_avg();
 
 int prep_state_change(enum lp_state_idx, enum lp_state_idx, int);
@@ -141,10 +164,10 @@ int update_perf_diffs(float *, int);
 int staytime_to_staycount(enum lp_state_idx);
 int max_mt_detected(enum lp_state_idx);
 
-/* state machine */
+/* state_machine.c */
 int state_machine_auto();
 
-/* spike managament */
+/* spike_mgmt.c */
 int add_spike_time(int);
 int add_non_spike_time(int);
 int get_spike_rate(void);

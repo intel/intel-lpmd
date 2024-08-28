@@ -24,7 +24,6 @@
 #include <assert.h>
 
 #include "wlt_proxy_common.h"
-#include "state_manager.h"
 #include "lpmd.h" //logs
 
 /*

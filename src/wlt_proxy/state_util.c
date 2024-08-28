@@ -20,7 +20,6 @@
 
 #include "wlt_proxy_common.h"
 #include "wlt_proxy.h"
-#include "state_manager.h"
 #include "knobs_common.h"
 
 #define PERF_API 1
@@ -145,11 +144,7 @@ uint64_t cpu_get_diff_##scope(uint64_t cur_value, int instance)               \
     return diff;                                          \
 }
 
-cpu_generate_msr_diff(aperf);
-cpu_generate_msr_diff(mperf);
-cpu_generate_msr_diff(pperf);
-cpu_generate_msr_diff(tsc);
-
+/********************Platform info - begin *****************************************/
 static int read_msr(int fd, uint32_t reg, uint64_t * data)
 {
     if (pread(fd, data, sizeof(*data), reg) != sizeof(*data)) {
@@ -159,14 +154,32 @@ static int read_msr(int fd, uint32_t reg, uint64_t * data)
     return 0;
 }
 
-static int write_msr(int fd, uint32_t reg, uint64_t * data)
+//todo : replace with lpmd function
+int initialize_cpu_hfm_mhz(int fd)
 {
-    if (pwrite(fd, data, sizeof(*data), reg) != sizeof(*data)) {
-        perror("wrmsr fail");
+    uint64_t msr_val;
+    int ret;
+
+    ret = read_msr(fd, (uint32_t) MSR_PLATFORM_INFO, &msr_val);
+    if (ret != -1) {
+        /* most x86 platform have BaseCLK as 100MHz */
+        cpu_hfm_mhz = ((msr_val >> 8) & 0xffUll) * 100;
+    } else {
+        lpmd_log_info("***can't read MSR_PLATFORM_INFO***\n");
         return -1;
     }
+    
     return 0;
 }
+
+/********************Platform info - end *****************************************/
+
+/********************Perf calculation - begin *****************************************/
+
+cpu_generate_msr_diff(aperf);
+cpu_generate_msr_diff(mperf);
+cpu_generate_msr_diff(pperf);
+cpu_generate_msr_diff(tsc);
 
 static int init_delta_vars(int n)
 {
@@ -201,29 +214,14 @@ static int initialize_dev_msr(int c)
     sprintf(msr_file, "/dev/cpu/%d/msr", c);
     fd = open(msr_file, O_RDWR);
     if (fd < 0) {
-        perror("rdmsr: open");
+        //perror("rdmsr: open");
+        lpmd_log_error("rdmsr: open\n");
         return -1;
     }
     return fd;
 }
 
-int initialize_cpu_hfm_mhz(int fd)
-{
-    uint64_t msr_val;
-    int ret;
-
-    ret = read_msr(fd, (uint32_t) MSR_PLATFORM_INFO, &msr_val);
-    if (ret != -1) {
-        /* most x86 platform have BaseCLK as 100MHz */
-        cpu_hfm_mhz = ((msr_val >> 8) & 0xffUll) * 100;
-    } else {
-        lpmd_log_info("***can't read MSR_PLATFORM_INFO***\n");
-        return -1;
-    }
-    
-    return 0;
-}
-
+/*helper - ppref reading */
 static int read_perf_counter_info(const char *const path, const char *const parse_format, void *value_ptr)
 {
     int fdmt;
@@ -264,6 +262,7 @@ cleanup_and_exit:
     return ret;
 }
 
+/*helper - ppref reading */
 static unsigned int read_perf_counter_info_n(const char *const path, const char *const parse_format)
 {
     unsigned int v;
@@ -276,6 +275,7 @@ static unsigned int read_perf_counter_info_n(const char *const path, const char 
     return v;
 }
 
+/*helper - ppref reading */
 int read_pperf_config(void)
 {
     const char *const path = "/sys/bus/event_source/devices/msr/events/pperf";
@@ -284,6 +284,7 @@ int read_pperf_config(void)
     return read_perf_counter_info_n(path, format);
 }
 
+/*helper - ppref reading */
 unsigned int read_aperf_config(void)
 {
     const char *const path = "/sys/bus/event_source/devices/msr/events/aperf";
@@ -292,6 +293,7 @@ unsigned int read_aperf_config(void)
     return read_perf_counter_info_n(path, format);    
 }
 
+/*helper - ppref reading */
 unsigned int read_mperf_config(void)
 {
     const char *const path = "/sys/bus/event_source/devices/msr/events/mperf";
@@ -308,6 +310,7 @@ unsigned int read_tsc_config(void)
     return read_perf_counter_info_n(path, format);
 }
 
+/*helper - ppref reading */
 static unsigned int read_msr_type(void)
 {
     const char *const path = "/sys/bus/event_source/devices/msr/type";
@@ -316,11 +319,13 @@ static unsigned int read_msr_type(void)
     return read_perf_counter_info_n(path, format);
 }
 
+/*helper - ppref reading */
 static long perf_event_open(struct perf_event_attr *hw_event, pid_t pid, int cpu, int group_fd, unsigned long flags)
 {
     return syscall(__NR_perf_event_open, hw_event, pid, cpu, group_fd, flags);
 }
 
+/*helper - ppref reading */
 static long open_perf_counter(int cpu, unsigned int type, unsigned int config, int group_fd, __u64 read_format)
 {
     struct perf_event_attr attr;
@@ -341,7 +346,8 @@ static long open_perf_counter(int cpu, unsigned int type, unsigned int config, i
     return fd;
 }
 
-void open_amperf_fd(int cpu)
+/*helper - ppref reading */
+static void open_amperf_fd(int cpu)
 {
     const unsigned int msr_type = read_msr_type();
     const unsigned int aperf_config = read_aperf_config();
@@ -353,7 +359,8 @@ void open_amperf_fd(int cpu)
     perf_stats[cpu].pperf_fd = open_perf_counter(cpu, msr_type, pperf_config, perf_stats[cpu].aperf_fd, PERF_FORMAT_GROUP);    
 }
 
-int get_amperf_fd(int cpu)
+/*helper - ppref reading */
+static int get_amperf_fd(int cpu)
 {
     if (perf_stats[cpu].aperf_fd)
         return perf_stats[cpu].aperf_fd;
@@ -363,7 +370,8 @@ int get_amperf_fd(int cpu)
     return perf_stats[cpu].aperf_fd;
 }
 
-unsigned long long rdtsc(void)
+/*helper - ppref reading */
+static unsigned long long rdtsc(void)
 {
     unsigned int low, high;
 
@@ -372,8 +380,8 @@ unsigned long long rdtsc(void)
     return low | ((unsigned long long)high) << 32;
 }
 
-/* Read APERF, MPERF and TSC using the perf API. */
-int read_aperf_mperf_tsc_perf(struct thread_data *t, int cpu)
+/* Helper for - Reading APERF, MPERF and TSC using the perf API. Calc perf [cpu utilization per core] difference from MSR registers  */
+static int read_aperf_mperf_tsc_perf(struct thread_data *t, int cpu)
 {
     union {
         struct {
@@ -406,6 +414,7 @@ int read_aperf_mperf_tsc_perf(struct thread_data *t, int cpu)
     return 0;
 }
 
+/*Calc perf [cpu utilization per core] difference from MSR registers */
 int update_perf_diffs(float *sum_norm_perf, int stat_init_only)
 {
     int fd, min_cpu, maxed_cpu = -1;
@@ -517,7 +526,12 @@ int update_perf_diffs(float *sum_norm_perf, int stat_init_only)
 
     return maxed_cpu;
 }
+/********************Pref calculation - end *****************************************/
 
+
+/********************CPU Avg Util calculation - begin *****************************************/
+
+/* initialize avg calculation variables */
 static void sma_init()
 {
     for (int i = 0; i < SMA_CPU_COUNT; i++) {
@@ -528,6 +542,7 @@ static void sma_init()
     grp.sma_pos = -1;
 }
 
+/* Helper avg calculation */
 static int do_sum(int *sam, int len)
 {
     int sum = 0;
@@ -536,6 +551,7 @@ static int do_sum(int *sam, int len)
     return sum;
 }
 
+/* average cpu usage */
 int state_max_avg()
 {
     grp.sma_pos += 1;
@@ -573,21 +589,9 @@ int state_max_avg()
     return 1;
 }
 
-static enum lp_state_idx nearest_supported(enum lp_state_idx from_state, enum lp_state_idx to_state)
-{
-    enum lp_state_idx state;
-    int operator =    (from_state < to_state) ? (+1) : (-1);
-    for (state = to_state; (state >= 0) && (state < MAX_MODE); state = state + operator) {
-        /* RESP mode is special and not good idea to step into as backup state */
-        if (state == RESP_MODE)
-            continue;
-        if (is_state_valid(state))
-            return state;
-    }
-    assert(0);
+/********************CPU Avg Util calculation - end *****************************************/
 
-}
-
+/* Internal state to WLT mapping*/
 static int get_state_mapping(enum lp_state_idx state){
 
     switch(state) {
@@ -615,10 +619,23 @@ static int get_state_mapping(enum lp_state_idx state){
     }
 }
 
+/* prepare for state change */
 int prep_state_change(enum lp_state_idx from_state, enum lp_state_idx to_state,
               int reset)
 {
-    //switch(to_state)
+    set_cur_state(to_state);
+    set_state_reset();
+    set_last_maxutil(DEACTIVATED);
+
+    if (to_state < from_state)
+        state_demote = 1;
+    
+    //proxy: apply state change and get poll of different states
+    apply_state_change();
+    if (likely(is_state_valid(to_state))) {
+        next_proxy_poll = get_state_poll(max_util, to_state);
+    }
+    
     //do to_state to WLT mapping
     int type = get_state_mapping(to_state); 
     lpmd_log_debug("proxy WLT state value :%d, %d\n", type, prev_type);
@@ -631,53 +648,30 @@ int prep_state_change(enum lp_state_idx from_state, enum lp_state_idx to_state,
     } /*else {
         //dont call type change
     }*/
-    
-    set_cur_state(to_state);
-    set_state_reset();
-    set_last_maxutil(DEACTIVATED);
-    
-
-    if (to_state < from_state)
-        state_demote = 1;
-    
-    //proxy: apply state change and get poll of different states
-    apply_state_change(); 
-    if (likely(is_state_valid(to_state))) {
-        next_proxy_poll = get_state_poll(max_util, to_state);
-    }//proxy: change end
 
     return 1;
 }
 
+/* returns staycount for the state */
+//todo: return constant value; place with #define
 int staytime_to_staycount(enum lp_state_idx state)
 {
     int stay_count = 0;
-    if (unlikely((state < 0) || (state >= MAX_MODE)))
-        assert(0);
-    switch (state)
-    {
+    
+    switch (state) {
         case MDRT2E_MODE:
         case MDRT3E_MODE:
         case MDRT4E_MODE:
-            stay_count = (int)MDRT_MODE_STAY/get_poll_ms(MDRT3E_MODE);
+            stay_count = (int)MDRT_MODE_STAY/get_poll_ms(MDRT3E_MODE);//todo: should this be state?
             break;
         case PERF_MODE:
             stay_count = (int)PERF_MODE_STAY/get_poll_ms(PERF_MODE);
-            break;
-        case RESP_MODE:
-        case INIT_MODE:
-        case NORM_MODE:
-        case DEEP_MODE:
-        //case BYPS_MODE:
-        //case MAX_MODE:
-            /* undefined */
-            assert(0);
             break;
     }
     return stay_count;
 }
 
-
+/* return multi threaded false if atleast one cpu is under utilizied */
 int max_mt_detected(enum lp_state_idx state)
 {
     //lpmd_log_debug("no of cpus online: %d\n", get_max_online_cpu());
@@ -690,7 +684,6 @@ int max_mt_detected(enum lp_state_idx state)
     }
     return 1;
 }
-
 
 /* initialize perf_stat structure */
 int perf_stat_init(void)
@@ -724,13 +717,12 @@ static void perf_stat_uninit(){
 
 }
 
-/*defined in lpmd_util*/
 /* initialize */
 int util_init_proxy(void)
 {
     float dummy;
     
-    if (init_cpu_proxy()) {
+    if (init_state_manager()) {
         lpmd_log_error("\nerror initing cpu proxy\n");
         return -1; 
     }
@@ -741,18 +733,15 @@ int util_init_proxy(void)
 
     initialize_cpu_hfm_mhz(perf_stats[0].dev_msr_fd);
 
-    initialize_state_mask();
     sma_init();
-
-    //close_all_fd();
+    
     return 0;
 }
 
 /* cleanup */
 void util_uninit_proxy(void) {
-    
-    exit_state_change();    
-    uninit_cpu_proxy();
-    uninit_delta_vars();
+  
     perf_stat_uninit();
+    uninit_delta_vars();
+    uninit_state_manager();
 }

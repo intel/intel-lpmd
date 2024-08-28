@@ -28,6 +28,9 @@ sudo apt -y -- install libsystemd-dev
 #docs
 sudo apt -y -- install gtk-doc-tools
 
+#upower & udev event handling
+#sudo apt install libupower-glib-dev libglib2.0-dev libevdev-dev
+
 #cmake build
 sudo apt install -y cmake
 
