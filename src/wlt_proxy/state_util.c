@@ -66,7 +66,7 @@ static int record = 0;
 static int prev_type = -1;
 
 int state_demote = 0;
-int next_proxy_poll = 2000;
+int next_proxy_poll = 1000;
 
 bool AC_CONNECTED = true;
 
@@ -513,9 +513,8 @@ int update_perf_diffs(float *sum_norm_perf, int stat_init_only)
             (void)(min_cpu);
         }
         first_pass = 0;
-        
-        
     }
+    
     if (stat_init_only)
         return 0;
     if (perf_stats[maxed_cpu].mperf_diff)

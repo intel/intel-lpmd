@@ -19,6 +19,8 @@
  *
  * This file contains the proxy workload type detection - state machine set/get functions.
  */
+#define _GNU_SOURCE
+#include <sched.h>
 
 #include "lpmd.h" //logs
 #include "state_common.h"
@@ -31,14 +33,19 @@
  */
 #define MIN_POLL_PERIOD 15
 
-#ifdef __REMOVE__
 #define MAX_MDRT4E_LP_CPU    (4)
 #define MAX_MDRT3E_LP_CPU    (3)
 #define MAX_MDRT2E_LP_CPU    (2)
 #define MAX_RESP_LP_CPU        (2)
 #define MAX_NORM_LP_CPU        (2)
 #define MAX_DEEP_LP_CPU        (1)
-#endif
+
+struct _freq_map {
+    int start_cpu;
+    int end_cpu;
+    int turbo_freq_khz;
+    int perf_order;
+};
 
 #define BASE_POLL_RESP          96
 #define BASE_POLL_MT           100
@@ -76,7 +83,33 @@ struct _lp_state {
     int freq_ctl; //enable freq clamping
 };
 
+static int common_min_freq;
+static int freq_map_count;
+int get_freq_map_count()
+{
+    return freq_map_count;
+}
+
+#define MAX_FREQ_MAPS (6)
+static struct _freq_map freq_map[MAX_FREQ_MAPS];
+
+int get_freq_map(int j, struct _freq_map *fmap)
+{
+    *fmap = freq_map[j];
+    return 1;
+}
 static struct _lp_state lp_state[MAX_MODE] = {
+    [INIT_MODE] = {.name =   "Avail cpu: P/E/L",.poll = BASE_POLL_MT,.poll_order = LINEAR},
+    [PERF_MODE] = {.name =   "Perf:non-soc cpu",.poll = BASE_POLL_PERF,.poll_order = LINEAR},
+    [MDRT2E_MODE] = {.name = "Moderate 2E",.poll =    BASE_POLL_MDRT2E,.poll_order = QUADRATIC},
+    [MDRT3E_MODE] = {.name = "Moderate 3E",.poll = BASE_POLL_MDRT3E,.poll_order = QUADRATIC},
+    [MDRT4E_MODE] = {.name = "Moderate 4E",.poll =    BASE_POLL_MDRT4E, .poll_order = QUADRATIC},
+    [RESP_MODE] = {.name =   "Responsive 2L",.poll = BASE_POLL_RESP, .poll_order = CUBIC},
+    [NORM_MODE] = {.name =   "Normal LP 2L",.poll = BASE_POLL_NORM, .poll_order = CUBIC},
+    [DEEP_MODE] = {.name =   "Deep LP 1L",.poll = BASE_POLL_DEEP, .poll_order = CUBIC},
+};
+
+/*
     [INIT_MODE] = {.name =   "Avail cpu: P/E/L",.poll = BASE_POLL_MT,.poll_order = ZEROTH},
     [PERF_MODE] = {.name =   "Perf:non-soc cpu",.poll = BASE_POLL_PERF,.poll_order = ZEROTH},
     [MDRT2E_MODE] = {.name = "Moderate 2E",.poll =    BASE_POLL_MDRT2E,.poll_order = LINEAR},
@@ -85,7 +118,8 @@ static struct _lp_state lp_state[MAX_MODE] = {
     [RESP_MODE] = {.name =   "Responsive 2L",.poll = BASE_POLL_RESP, .poll_order = CUBIC},
     [NORM_MODE] = {.name =   "Normal LP 2L",.poll = BASE_POLL_NORM, .poll_order = QUADRATIC},
     [DEEP_MODE] = {.name =   "Deep LP 1L",.poll = BASE_POLL_DEEP, .poll_order = CUBIC},
-};
+*/
+
 
 /* start current state as NORM_MODE */
 static enum lp_state_idx cur_state = NORM_MODE;
@@ -306,6 +340,275 @@ static void reset_cpus_proxy(enum lp_state_idx idx)
     }    
 }
 
+static char to_hexchar(int val)
+{
+    if (val <= 9)
+        return val + '0';
+    if (val >= 16)
+        return -1;
+    return val - 10 + 'a';
+}
+
+void and_into_injmask(enum lp_state_idx idx1, enum lp_state_idx idx2,
+              enum lp_state_idx inj_idx)
+{
+    if (!lp_state[inj_idx].inj_mask)
+        return;
+
+    CPU_AND_S(size_cpumask, lp_state[inj_idx].inj_mask,
+          lp_state[idx1].mask, lp_state[idx2].mask);
+}
+
+char* get_cpus_hexstr(enum lp_state_idx idx)
+{
+    int ret;
+    if (!lp_state[idx].mask)
+        return NULL;
+
+    if (!CPU_COUNT_S(size_cpumask, lp_state[idx].mask))
+        return NULL;
+
+    if (lp_state[idx].hexstr)
+        return lp_state[idx].hexstr;
+
+    lp_state[idx].hexstr = calloc(1, MAX_STR_LENGTH);
+    if (!lp_state[idx].hexstr)
+        lpmd_log_error("3, STR_ALLOC\n");
+
+    ret = cpumask_to_hexstr(lp_state[idx].mask, lp_state[idx].hexstr,
+              MAX_STR_LENGTH);
+    if(ret == -1) {
+        //todo: handle error
+    }
+    return lp_state[idx].hexstr;
+}
+
+
+//todo: check lpmd_has it?
+static int fs_read_int(const char *name, int *val)
+{
+    FILE *filep;
+    int t, ret;
+
+    filep = fopen(name, "r");
+    if (!filep) {
+        lpmd_log_error("fs_read_int: Open %s failed\n", name);
+        return 1;
+    }
+
+    ret = fscanf(filep, "%d", &t);
+    if (ret != 1) {
+        lpmd_log_error("fs_read_int: Read %s failed, ret %d\n", name, ret);
+        fclose(filep);
+        return 1;
+    }
+
+    fclose(filep);
+
+    *val = t;
+
+    return 0;
+
+}
+
+//todo: check lpmd_has it?
+static int fs_open_check(const char *name)
+{
+    FILE *filep;
+
+    filep = fopen(name, "r");
+    if (!filep) {
+        lpmd_log_debug("Open %s failed\n", name);
+        return 1;
+    }
+
+    fclose(filep);
+    return 0;
+}
+
+static int detect_lp_state_actual(void)
+{
+    char path[MAX_STR_LENGTH];
+    int i;
+    int tmp, tmp_min = INT_MAX, tmp_max = 0;
+    enum lp_state_idx idx;
+    int j = 0, actual_freq_buckets;
+    int prev_turbo = 0;
+    
+    lpmd_log_debug("detect_lp_state_actual/n");
+
+    for (idx = INIT_MODE; idx < MAX_MODE; idx++) {
+        if (!alloc_cpu_set(&lp_state[idx].mask)) {
+            lpmd_log_error("aloc fail");
+        }
+    }
+
+    /* 
+     * based on cpu advertized max turbo frequncies
+     * bucket the cpu into groups (MAX_FREQ_MAPS)
+     * there after map them to state's mask etc.
+     * XXX: need to handle corner cases in this logic.
+     */
+
+    for (i = 0; i < get_max_online_cpu(); i++) {
+
+        if (!is_cpu_online(i)) {
+            continue;
+        }
+        
+        snprintf(path, sizeof(path),
+             "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_max_freq",
+             i);
+        fs_read_int(path, &tmp);
+
+        if (!prev_turbo) {
+            /* max turbo freq */
+            freq_map[j].start_cpu = i;
+            freq_map[j].turbo_freq_khz = tmp;
+        } else if (prev_turbo != tmp) {
+            freq_map[j].end_cpu = i - 1;    // fix me for i-1 not online
+            j++;
+            freq_map[j].start_cpu = i;
+            freq_map[j].turbo_freq_khz = tmp;
+        }
+        prev_turbo = tmp;
+
+        if (tmp < tmp_min)
+            tmp_min = tmp;
+        else if (tmp > tmp_max)
+            tmp_max = tmp;
+
+        /* min freq */
+        snprintf(path, sizeof(path),
+             "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_min_freq",
+             i);
+        fs_read_int(path, &tmp);
+
+        if ((common_min_freq == 0) || (common_min_freq == tmp))
+            common_min_freq = tmp;
+        else if (common_min_freq == -1)
+            continue;
+        else
+            common_min_freq = -1;
+
+    }
+
+    freq_map[j].end_cpu = i - 1;
+    actual_freq_buckets = j + 1;
+
+    lpmd_log_debug("Freq buckets [%d]\n\tbucket turbo cpu-range", actual_freq_buckets);
+    for (j = 0; j <= actual_freq_buckets - 1; j++) {
+        freq_map_count++;
+        lpmd_log_info("\n\t [%d]  %dMHz  %d-%d", j,
+               freq_map[j].turbo_freq_khz / 1000, freq_map[j].start_cpu,
+               freq_map[j].end_cpu);
+    }
+
+    for (i = get_max_cpus() - 1; i >= 0; i--) {
+        if (!is_cpu_online(i))
+            continue;
+        snprintf(path, sizeof(path),
+             "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_max_freq",
+             i);
+        fs_read_int(path, &tmp);
+        /* TBD: address the favoured core system with 1 or 2 top bin cpu */
+        if (tmp == tmp_max) {
+            /* for PERF mode need all cpu other than LP */
+            if (actual_freq_buckets > 1)
+                CPU_SET_S(i, size_cpumask,
+                      lp_state[PERF_MODE].mask);
+            //CPU_SET_S(i, size_cpumask, lp_state[BYPS_MODE].mask);
+        }
+        /* fix me for case of favourd cores */
+        if ((tmp > tmp_min) || ((freq_map_count == 1) && (tmp == tmp_min))) {
+            /* for moderate2 mode 4 cpu are sufficient */
+            if (CPU_COUNT_S(size_cpumask, lp_state[MDRT4E_MODE].mask)
+                >= MAX_MDRT4E_LP_CPU)
+                continue;
+            CPU_SET_S(i, size_cpumask, lp_state[MDRT4E_MODE].mask);
+
+            /* for moderate mode 3 cpu are sufficient */
+            if (CPU_COUNT_S(size_cpumask, lp_state[MDRT3E_MODE].mask)
+                >= MAX_MDRT3E_LP_CPU)
+                continue;
+            CPU_SET_S(i, size_cpumask, lp_state[MDRT3E_MODE].mask);
+
+            /* for moderate0 mode  cpu are sufficient */
+            if (CPU_COUNT_S(size_cpumask, lp_state[MDRT2E_MODE].mask)
+                >= MAX_MDRT2E_LP_CPU)
+                continue;
+            CPU_SET_S(i, size_cpumask, lp_state[MDRT2E_MODE].mask);
+        }
+        if (tmp == tmp_min) {
+            if (CPU_COUNT_S(size_cpumask, lp_state[RESP_MODE].mask)
+                >= MAX_RESP_LP_CPU)
+                continue;
+            CPU_SET_S(i, size_cpumask, lp_state[RESP_MODE].mask);
+
+            /* for LP mode 2 cpu are sufficient */
+            /* fixme: club the "continue" statement correctly */
+
+            if (CPU_COUNT_S(size_cpumask, lp_state[NORM_MODE].mask)
+                >= MAX_NORM_LP_CPU)
+                continue;
+            CPU_SET_S(i, size_cpumask, lp_state[NORM_MODE].mask);
+
+            if (CPU_COUNT_S(size_cpumask, lp_state[DEEP_MODE].mask)
+                >= MAX_DEEP_LP_CPU)
+                continue;
+            CPU_SET_S(i, size_cpumask, lp_state[DEEP_MODE].mask);
+        }
+    }
+
+    for (i = 0; i < get_max_cpus(); i++) {
+        if (!is_cpu_online(i))
+            continue;
+        snprintf(path, sizeof(path),
+             "/sys/devices/system/cpu/cpu%d/cache/index3/level", i);
+        if (!fs_open_check(path)) {
+            CPU_SET_S(i, size_cpumask, lp_state[PERF_MODE].mask);
+            //CPU_SET_S(i, size_cpumask, lp_state[BYPS_MODE].mask);
+        }
+    }
+
+    /* bypass mode TBD. any strange workloads can be let to run bypass */
+    //lp_state[BYPS_MODE].disabled = true;
+    /* MDRT with 2 cores is not know to be beneficial comapred. simplyfy */
+    lp_state[MDRT2E_MODE].disabled = true;
+    if (get_max_online_cpu() <= 4) {
+        lpmd_log_info("too few CPU: %d", get_max_online_cpu());
+        exit(1);
+    } else if (get_max_online_cpu() <= 8) {
+        lp_state[MDRT2E_MODE].disabled = true;
+        lp_state[MDRT4E_MODE].disabled = true;
+    }
+
+    int cpu_count;
+    for (idx = INIT_MODE; idx < MAX_MODE; idx++) {
+        cpu_count = CPU_COUNT_S(size_cpumask, lp_state[idx].mask);
+        if (!lp_state[idx].disabled && cpu_count) {
+            if (state_has_ppw(idx)) {
+                if (!lp_state[idx].inj_mask)
+                    alloc_cpu_set(&lp_state[idx].inj_mask);
+                and_into_injmask(INIT_MODE, idx, idx);
+            }
+            lpmd_log_info("\t[%d] %s [0x%s] cpu count: %2d\n", idx, \
+                   lp_state[idx].name, get_cpus_hexstr(idx), \
+                   cpu_count);
+        }
+    }
+    for (idx = INIT_MODE; idx < MAX_MODE; idx++) {
+        cpu_count = CPU_COUNT_S(size_cpumask, lp_state[idx].mask);
+        if (lp_state[idx].disabled || !cpu_count) {
+            lpmd_log_info("\t[%d] %s [0x%s] cpu count: %2d\n", idx,
+                   lp_state[idx].name, get_cpus_hexstr(idx),
+                   cpu_count);
+        }
+    }
+
+    return 1;
+}
+
 /*initialize*/
 int init_state_manager(void)
 {
@@ -314,13 +617,21 @@ int init_state_manager(void)
     ret = set_max_cpu_num();
     if (ret)
         return ret;
+    
+    //detecting cpus
+    //ret = parse_cpu_topology();
 
-    ret = check_cpu_isolate_support();
+    /*ret = check_cpu_isolate_support();
     if (ret)
-        return ret;
+        return ret;*/
+    
 
     perf_stat_init();
 
+    ret = detect_lp_state_actual();
+    if (ret)
+        return ret;
+    
     return 0;
 }
 
@@ -328,7 +639,7 @@ int init_state_manager(void)
 void uninit_state_manager() {
     
     exit_state_change();
-    for (int idx = INIT_MODE + 1; idx < MAX_MODE; idx++) {
+    for (int idx = INIT_MODE; idx < MAX_MODE; idx++) {
         reset_cpus_proxy(idx);
     }
 }
