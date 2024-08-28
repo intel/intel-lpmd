@@ -1,5 +1,5 @@
 /*
- * wlt_proxy_entry.c: Intel LPD WLT proxy
+ * wlt_proxy.c: Intel Linux Energy Optimier WLT proxy
  *
  * Copyright (C) 2024 Intel Corporation. All rights reserved.
  *
@@ -17,12 +17,11 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  *
- * This file contains the Workload type detection proxy. This file logic
- * is specific to a CPU model and can be customized.
+ * This file contains the Workload type detection proxy entry and callback functions.
  */
 
 #include "lpmd.h"
-#include "wlt_proxy_common.h"
+#include "state_common.h"
 #include "wlt_proxy.h"
 
 static bool proxy_initialized = false;
@@ -37,7 +36,6 @@ void set_workload_hint(int type) {
 
 /** called at the configured interval to take action */
 void wlt_proxy_action_loop(void) {
-
     if (proxy_initialized) {
         //lpmd_log_debug("\n\nwlt_proxy_action_loop, proxy initialzied\n");
         state_machine_auto();
@@ -57,9 +55,8 @@ int wlt_proxy_init(lpmd_config_t *_lpmd_config) {
     /*todo: check model check and fail */
     
     lpmd_config = _lpmd_config;//cb variable
-
     proxy_initialized = true;
-    next_proxy_poll = 2000;
+    next_proxy_poll = 1000;//set to call wlt_proxy_action_loop asap [1sec]
     
     return LPMD_SUCCESS;
 }

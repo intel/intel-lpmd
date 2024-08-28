@@ -17,13 +17,13 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  *
- * This file contains rules to change state
+ * This file contains condition checks for state switch.
  */
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <assert.h>
 
-#include "wlt_proxy_common.h"
+#include "state_common.h"
 #include "lpmd.h" //logs
 
 /*
@@ -48,6 +48,7 @@ extern int state_demote;
 int max_util; 
 int only_once = 0;
 
+/* function checks conditions for state switch */
 int state_machine_auto() {
     //this used to be part of function util_main
     float dummy;
