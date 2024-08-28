@@ -1,3 +1,32 @@
+8/27/2024
+pkg.OPT.ILEO release notes
+package name: pkg.OPT.ILEO-0.15.240827-x86_64
+tag: pkg-ileo-0.15.240827
+ww: 35.2
+
+Support Ubuntu distro 22.04 and 24.04
+Sanity checks completed on 24.04
+
+-improved state algorithm
+-fix the mapping between internal state and work load type
+-adjust EPP/EPB value for idle & bursty states
+-remove unused code 
+-improved logging  
+-remove the check of AC connection status 
+-disable power clamp
+
+There is no seperate build for valgrind check: please use the following command to add the parameter --ignore-platform-check
+sudo valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose --log-file=valgrind-out.txt /sbin/intel_lpmd --loglevel=info --no-daemon --ignore-platform-check
+
+
+List of all bugs Fixed: 
+https://jira.devtools.intel.com/browse/LNUX-7843
+https://jira.devtools.intel.com/browse/LNUX-7833
+https://jira.devtools.intel.com/browse/LNUX-7794
+
+****************************************************************************
+
+
 8/17/2024
 pkg.OPT.ILEO release notes
 package name: pkg.OPT.ILEO-0.13.240817-x86_64

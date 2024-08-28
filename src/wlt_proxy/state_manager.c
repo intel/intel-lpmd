@@ -606,7 +606,7 @@ static int detect_lp_state_actual(void)
         }
     }
 
-    return 1;
+    return 0;
 }
 
 /*initialize*/

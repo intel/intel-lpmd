@@ -728,7 +728,7 @@ int util_init_proxy(void)
 {
     float dummy;
     
-    if (init_state_manager()) {
+    if (!init_state_manager()) {
         lpmd_log_error("\nerror initing cpu proxy\n");
         return -1; 
     }
