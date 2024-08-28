@@ -47,6 +47,7 @@ else
 fi
 echo "Target folder: $SOURCEFOLDER"
 
+
 #build source code 
 BUILDSCRIPT_PATH=$BUNDLEDIR/../buildScript
 if [ -d "$BUILDSCRIPT_PATH" ]; then

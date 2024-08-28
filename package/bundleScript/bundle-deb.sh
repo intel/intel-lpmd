@@ -35,6 +35,7 @@ BUILD_DATE=$(date +'%y%m%d')
 #VERSION=$MAJOR.$MINOR.$BUILD_DATE-$DISTRO_CODENAME
 VERSION=$MAJOR.$MINOR.$BUILD_DATE
 
+
 FILENAME="$BASE-$VERSION-$ARCH"
 
 if [ $(uname -r | sed -n 's/.*\( *Microsoft *\).*/\1/ip') ];
