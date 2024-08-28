@@ -46,7 +46,7 @@ extern int burst_count;
 extern struct group_util grp;
 extern int state_demote;
 
-//int max_util; 
+int max_util; 
 int only_once = 0;
 
 int state_machine_auto() {
@@ -54,7 +54,7 @@ int state_machine_auto() {
     float dummy;
     int present_state = get_cur_state();
     update_perf_diffs(&dummy, 0);
-    //max_util = (int)round(grp.c0_max); //end
+    max_util = (int)round(grp.c0_max); //end
 
     /*
      * we do not want to track avg util for following cases:
