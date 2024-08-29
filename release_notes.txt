@@ -1,3 +1,26 @@
+8/29/2024
+pkg.OPT.ILEO release notes
+package name: pkg.OPT.ILEO-0.16.240829-x86_64
+tag: pkg-ileo-0.16.240829
+ww: 35.4
+
+Support Ubuntu distro 22.04 and 24.04
+Sanity checks completed on 24.04
+
+-improved state switch algorithm
+-increase minimum poll period
+-reduce the countdown for moderate nd perf mode
+-modify cpu applicability logic
+
+There is no seperate build for valgrind check: please use the following command to add the parameter --ignore-platform-check.  Please not the valgrind run will not have the full state switching due to the unsupported cpu types, however you can still get memory report.
+sudo valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose --log-file=valgrind-out.txt /sbin/intel_lpmd --loglevel=info --no-daemon --ignore-platform-check
+
+List of all bugs Fixed: 
+https://jira.devtools.intel.com/browse/LNUX-7918
+https://jira.devtools.intel.com/browse/LNUX-7917
+
+
+****************************************************************************
 8/27/2024
 pkg.OPT.ILEO release notes
 package name: pkg.OPT.ILEO-0.15.240827-x86_64
