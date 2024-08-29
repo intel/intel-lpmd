@@ -50,8 +50,9 @@
  *   SPIKE_TIME_BIAS macro will bias this to be longer or shorter based on
  *   recent history (i.e more prominent the spiking, the longer it will be remembered)
  */
-#define MAX_TRACKED_SPIKE_TIME 1000
-#define MAX_BURST_COUNT 1000
+#define MAX_TRACKED_SPIKE_TIME  1000
+#define MAX_BURST_COUNT         1000
+#define BURST_COUNT_THRESHOLD   3
 
 //shorten time by 50% if spike rate was as low as 0. No change if spike rate was 100
 #define SPIKE_TIME_BIAS(avg, min) ((100 - avg) * min/(2 * 100))

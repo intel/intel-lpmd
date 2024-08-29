@@ -37,28 +37,12 @@
 #define UTIL_ABOVE_HALF         70
 #define UTIL_NEAR_FULL          90
 
-/* hold period (ms) before moving to deeper state */
-#define MDRT_MODE_STAY        (15000)
-#define PERF_MODE_STAY        (300000)
-
-#define BURST_COUNT_THRESHOLD    3
 /* 
  * DELTA_THRESHOLD is extent of spike that exits low-power mode 
  * too small - means we exit too often 
  * too large - means we may take a hit on legit responsiveness
  */
 #define DELTA_THRESHOLD        (70.0)
-
-#ifdef __REMOVE__
-#define BASE_POLL_RESP          96
-#define BASE_POLL_MT           100
-#define BASE_POLL_PERF         280
-#define BASE_POLL_MDRT4E       600    // e.g., 4E cores of a module
-#define BASE_POLL_MDRT3E       800    // e.g., 3E cores of a module
-#define BASE_POLL_MDRT2E      1000    // e.g., 2E cores of a module
-#define BASE_POLL_NORM        1200
-#define BASE_POLL_DEEP        1800
-#endif
 
 #define PPW_EFFICIENCY_FEATURE    (1)
 
@@ -159,8 +143,6 @@ int do_countdown(enum lp_state_idx);
 /* state_util.c */
 int util_init_proxy(void);//defined in lpmd_util
 void util_uninit_proxy(void);
-
-int cpu_applicable(int, enum lp_state_idx);
 
 int perf_stat_init(void);
 int state_max_avg();

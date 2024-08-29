@@ -205,6 +205,12 @@ enum cpumask_idx {
 #define UTIL_HYST_MAX		10000
 
 #define cpuid(leaf, eax, ebx, ecx, edx)		\
+	__cpuid(leaf, eax, ebx, ecx, edx);
+
+#define cpuid_count(leaf, subleaf, eax, ebx, ecx, edx)		\
+	__cpuid_count(leaf, subleaf, eax, ebx, ecx, edx);
+/*
+#define cpuid(leaf, eax, ebx, ecx, edx)		\
 	__cpuid(leaf, eax, ebx, ecx, edx);	\
 	lpmd_log_debug("CPUID 0x%08x: eax = 0x%08x ebx = 0x%08x ecx = 0x%08x edx = 0x%08x\n",	\
 			leaf, eax, ebx, ecx, edx);
@@ -213,6 +219,7 @@ enum cpumask_idx {
 	__cpuid_count(leaf, subleaf, eax, ebx, ecx, edx);	\
 	lpmd_log_debug("CPUID 0x%08x subleaf 0x%08x: eax = 0x%08x ebx = 0x%08x ecx = 0x%08x"	\
 			"edx = 0x%08x\n", leaf, subleaf, eax, ebx, ecx, edx);
+*/  
 
 #define SETTING_RESTORE	-2
 #define SETTING_IGNORE	-1
@@ -287,6 +294,10 @@ int init_cpu(char *cmd_cpus, enum lpm_cpu_process_mode mode, int lp_mode_epp);
 int process_cpus(int enter, enum lpm_cpu_process_mode mode);
 int parse_cpu_str(char *buf, enum cpumask_idx idx);
 void uninit_cpu(); 
+
+int is_cpu_lcore(int cpu);
+int is_cpu_ecore(int cpu);
+int is_cpu_pcore(int cpu);
 
 /* cpu.c: helpers */
 int is_cpu_online(int cpu);

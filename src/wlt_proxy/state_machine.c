@@ -26,12 +26,15 @@
 #include "state_common.h"
 #include "lpmd.h" //logs
 
+extern int next_proxy_poll;
+
 /*
  * stall scalability refer to non-stallable percentage of utilization.
  * e.g due to memory or other dependency. If work is reasonably scaling well,
  * values in 80 to 90+% is expected
  */
-#define STALL_SCALE_LOWER_MARK    70
+//#define STALL_SCALE_LOWER_MARK    70
+#define STALL_SCALE_LOWER_MARK    40
 
 #define N_STRIKE    (10)
 
@@ -50,7 +53,7 @@ int only_once = 0;
 
 /* function checks conditions for state switch */
 int state_machine_auto() {
-    //this used to be part of function util_main
+
     float dummy;
     int present_state = get_cur_state();
     update_perf_diffs(&dummy, 0);
@@ -92,10 +95,10 @@ int state_machine_auto() {
     int isMT = !max_mt_detected(INIT_MODE);
     
     if(only_once == 0) {
-        lpmd_log_debug("present_state, isMT, C0_max, C0_2ndMax, sum_c0, sma avg1, sma avg2, sma avg3, worst_stall\n");
+        lpmd_log_debug("present_state, isMT, C0_max, C0_2ndMax, sum_c0, sma avg1, sma avg2, sma avg3, worst_stall, next_proxy_poll\n");
         only_once = 1;
     }
-    lpmd_log_debug("%d, %d,     %.2f,       %.2f,   %.2f,       %d,      %d,        %d,        %.2f \n", \
+    lpmd_log_debug("%d, %d,     %.2f,       %.2f,   %.2f,       %d,      %d,        %d,        %.2f, %d\n", \
         present_state, \
         isMT, \
         grp.c0_max, \
@@ -104,7 +107,8 @@ int state_machine_auto() {
         grp.sma_avg1, \
         grp.sma_avg2, \
         grp.sma_avg3, \
-        grp.worst_stall);
+        grp.worst_stall, \
+        next_proxy_poll);
 
     switch (present_state) {
         /*
@@ -236,7 +240,7 @@ int state_machine_auto() {
             (A_GT_B(grp.sma_avg2, SUS_LOW_RANGE_START) &&
              A_LTE_B(grp.sma_avg2, SUS_LOW_RANGE_END))) {
             if (!do_countdown(MDRT3E_MODE)) {
-                lpmd_log_debug("MDRT3E_MODE: do countdown not met\n");
+                lpmd_log_debug("MDRT3E_MODE: to MDRT2E_MODE - do countdown not met\n");
                 break;
             }
             lpmd_log_debug("MDRT3E_MODE to MDRT2E_MODE %d < %d\n", grp.sma_avg1, MDRT2E_MODE);            
@@ -244,11 +248,13 @@ int state_machine_auto() {
             break;
         }
         // Promote -- if top three avg util are trending lower.
-        if (A_LTE_B(grp.sma_avg1, SUS_LOW_RANGE_START) &&
+        if (A_LTE_B(grp.sma_avg1, SUS_LOW_RANGE_END) &&
             (A_LTE_B(grp.sma_avg2, SUS_LOWER) &&
              A_LTE_B(grp.sma_avg3, SUS_LOWER))) {
-            if (!do_countdown(MDRT3E_MODE))
+            if (!do_countdown(MDRT3E_MODE)) {
+                lpmd_log_debug("MDRT3E_MODE: to NORM_MODE - do countdown not met\n");
                 break;
+            }
             lpmd_log_debug("MDRT3E_MODE to NORM_MODE\n");
             prep_state_change(MDRT3E_MODE, NORM_MODE, 0);
             break;

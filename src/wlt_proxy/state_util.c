@@ -37,6 +37,12 @@
 #define unlikely(x)     (x)
 #endif
 
+/* hold period (ms) before moving to deeper state */
+//#define MDRT_MODE_STAY        (15000)
+//#define PERF_MODE_STAY        (300000)
+#define MDRT_MODE_STAY        (4000) //4 sec
+#define PERF_MODE_STAY        (10000) //10 sec
+
 /*
 #define PERF_API 1
 #ifndef PERF_API
@@ -432,10 +438,14 @@ int update_perf_diffs(float *sum_norm_perf, int stat_init_only)
 
     int t, min_s0_cpu = 0, first_pass = 1;
 
+    //lpmd_log_debug("cpu applicable in curr state: %d, ", get_cur_state());
+    
     for (t = 0; t < get_max_online_cpu(); t++) {
-
-        if (!cpu_applicable(t, get_cur_state()))
+        if (!cpu_applicable(t, get_cur_state())) {
+            //lpmd_log_debug("%d cpu not applicable in curr state: %d\n", t, get_cur_state());
             continue;
+        }
+        //lpmd_log_debug("%d ", t);
         
         /*reading through perf api*/
         struct thread_data tdata;
@@ -517,6 +527,7 @@ int update_perf_diffs(float *sum_norm_perf, int stat_init_only)
         }
         first_pass = 0;
     }
+    //lpmd_log_debug("\n");
     
     if (stat_init_only)
         return 0;
@@ -686,9 +697,10 @@ int max_mt_detected(enum lp_state_idx state)
     //lpmd_log_debug("no of cpus online: %d\n", get_max_online_cpu());
     
     for (int t = 0; t < get_max_online_cpu(); t++) {
+        
         if (!cpu_applicable(t, state))
             continue;
-        
+       
         if A_LTE_B
             (perf_stats[t].l0, (UTIL_LOW))
                 return 0;
@@ -733,8 +745,8 @@ int util_init_proxy(void)
 {
     float dummy;
     
-    if (!init_state_manager()) {
-        lpmd_log_error("\nerror initing cpu proxy\n");
+    if (init_state_manager()) {
+        lpmd_log_error("\nerror initiating cpu proxy\n");
         return -1; 
     }
     

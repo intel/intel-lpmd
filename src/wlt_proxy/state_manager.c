@@ -31,7 +31,8 @@
  * avoid unexpected decision due to this as it may not be tied to workload per-se.
  * any setting below, say 15ms, needs careful assessment.
  */
-#define MIN_POLL_PERIOD 15
+//#define MIN_POLL_PERIOD 15
+#define MIN_POLL_PERIOD 100
 
 #define MAX_MDRT4E_LP_CPU    (4)
 #define MAX_MDRT3E_LP_CPU    (3)
@@ -99,17 +100,15 @@ int get_freq_map(int j, struct _freq_map *fmap)
     return 1;
 }
 static struct _lp_state lp_state[MAX_MODE] = {
-    [INIT_MODE] = {.name =   "Avail cpu: P/E/L",.poll = BASE_POLL_MT,.poll_order = LINEAR},
+    /*[INIT_MODE] = {.name =   "Avail cpu: P/E/L",.poll = BASE_POLL_MT,.poll_order = LINEAR},
     [PERF_MODE] = {.name =   "Perf:non-soc cpu",.poll = BASE_POLL_PERF,.poll_order = LINEAR},
     [MDRT2E_MODE] = {.name = "Moderate 2E",.poll =    BASE_POLL_MDRT2E,.poll_order = QUADRATIC},
     [MDRT3E_MODE] = {.name = "Moderate 3E",.poll = BASE_POLL_MDRT3E,.poll_order = QUADRATIC},
     [MDRT4E_MODE] = {.name = "Moderate 4E",.poll =    BASE_POLL_MDRT4E, .poll_order = QUADRATIC},
     [RESP_MODE] = {.name =   "Responsive 2L",.poll = BASE_POLL_RESP, .poll_order = CUBIC},
     [NORM_MODE] = {.name =   "Normal LP 2L",.poll = BASE_POLL_NORM, .poll_order = CUBIC},
-    [DEEP_MODE] = {.name =   "Deep LP 1L",.poll = BASE_POLL_DEEP, .poll_order = CUBIC},
-};
+    [DEEP_MODE] = {.name =   "Deep LP 1L",.poll = BASE_POLL_DEEP, .poll_order = CUBIC},*/
 
-/*
     [INIT_MODE] = {.name =   "Avail cpu: P/E/L",.poll = BASE_POLL_MT,.poll_order = ZEROTH},
     [PERF_MODE] = {.name =   "Perf:non-soc cpu",.poll = BASE_POLL_PERF,.poll_order = ZEROTH},
     [MDRT2E_MODE] = {.name = "Moderate 2E",.poll =    BASE_POLL_MDRT2E,.poll_order = LINEAR},
@@ -118,8 +117,8 @@ static struct _lp_state lp_state[MAX_MODE] = {
     [RESP_MODE] = {.name =   "Responsive 2L",.poll = BASE_POLL_RESP, .poll_order = CUBIC},
     [NORM_MODE] = {.name =   "Normal LP 2L",.poll = BASE_POLL_NORM, .poll_order = QUADRATIC},
     [DEEP_MODE] = {.name =   "Deep LP 1L",.poll = BASE_POLL_DEEP, .poll_order = CUBIC},
-*/
 
+};
 
 /* start current state as NORM_MODE */
 static enum lp_state_idx cur_state = NORM_MODE;
@@ -319,10 +318,62 @@ int apply_state_change(void)
 /*Is cpu applicable for the given state*/
 int cpu_applicable(int cpu, enum lp_state_idx state)
 {
+    #if 0
 	if (!lp_state[state].mask)
 		return 0;
 
 	return !!CPU_ISSET_S(cpu, size_cpumask, lp_state[state].mask);
+    #endif
+    /*
+    switch (state) {
+        case INIT_MODE:
+            //for INIT mode need all cores [P,E,L]
+            return 1;
+        case NORM_MODE: // 2 L cores
+        case DEEP_MODE: // 1 L core
+        case RESP_MODE: // all L core
+            //for NORM/DEEP/RESP mode need only L cores
+            if (is_cpu_lcore(cpu)){
+                return 1;
+            }     
+            break;
+        case MDRT2E_MODE: // 2 E cores
+        case MDRT3E_MODE: // 3 E cores
+        case MDRT4E_MODE: // 4 E cores
+            //for MDRT mode need only E cores
+            if (is_cpu_ecore(cpu)){
+                return 1;
+            }
+            break;
+        case PERF_MODE:
+            //for PERF mode need all cpu other than LP
+            if (is_cpu_pcore(cpu) || is_cpu_ecore(cpu)){
+                return 1;
+            }
+        default:
+            return 0;
+    }
+    */
+    //reverse
+    switch (state) {
+        case INIT_MODE:
+            //for INIT mode need all cores [P,E,L]
+            return 1;
+        case NORM_MODE: // 2 L cores
+        case DEEP_MODE: // 1 L core
+        case RESP_MODE: // all L core
+        case MDRT2E_MODE: // 2 E cores
+        case MDRT3E_MODE: // 3 E cores
+        case MDRT4E_MODE: // 4 E cores            
+        case PERF_MODE:
+            if (is_cpu_pcore(cpu) || is_cpu_ecore(cpu)){
+                return 1;
+            }
+        default:
+            return 0;
+    }
+    
+    return 0;
 }
 
 /*clean state struct*/
@@ -459,6 +510,8 @@ static int detect_lp_state_actual(void)
      * there after map them to state's mask etc.
      * XXX: need to handle corner cases in this logic.
      */
+     
+     lpmd_log_debug("List down all p cores, e cores, l cores\n");
 
     for (i = 0; i < get_max_online_cpu(); i++) {
 
@@ -466,6 +519,7 @@ static int detect_lp_state_actual(void)
             continue;
         }
         
+        lpmd_log_debug("get max freq of %d\n", i);
         snprintf(path, sizeof(path),
              "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_max_freq",
              i);
@@ -488,6 +542,7 @@ static int detect_lp_state_actual(void)
         else if (tmp > tmp_max)
             tmp_max = tmp;
 
+        
         /* min freq */
         snprintf(path, sizeof(path),
              "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_min_freq",
@@ -500,19 +555,22 @@ static int detect_lp_state_actual(void)
             continue;
         else
             common_min_freq = -1;
-
+        
+        lpmd_log_debug("get min freq of %d, tmp_max= %d, tmp_min = %d, common_min_freq = %d\n", i, tmp_max , tmp_min, common_min_freq);
     }
 
     freq_map[j].end_cpu = i - 1;
     actual_freq_buckets = j + 1;
 
     lpmd_log_debug("Freq buckets [%d]\n\tbucket turbo cpu-range", actual_freq_buckets);
+    
     for (j = 0; j <= actual_freq_buckets - 1; j++) {
         freq_map_count++;
-        lpmd_log_info("\n\t [%d]  %dMHz  %d-%d", j,
+        lpmd_log_debug("\n\t [%d]  %dMHz  %d-%d", j,
                freq_map[j].turbo_freq_khz / 1000, freq_map[j].start_cpu,
                freq_map[j].end_cpu);
     }
+    lpmd_log_debug("\n\t");
 
     for (i = get_max_cpus() - 1; i >= 0; i--) {
         if (!is_cpu_online(i))
@@ -529,21 +587,21 @@ static int detect_lp_state_actual(void)
                       lp_state[PERF_MODE].mask);
             //CPU_SET_S(i, size_cpumask, lp_state[BYPS_MODE].mask);
         }
-        /* fix me for case of favourd cores */
+        /* fix me for case of favoured cores */
         if ((tmp > tmp_min) || ((freq_map_count == 1) && (tmp == tmp_min))) {
-            /* for moderate2 mode 4 cpu are sufficient */
+            /* for moderate4 mode 4 cpu are sufficient */
             if (CPU_COUNT_S(size_cpumask, lp_state[MDRT4E_MODE].mask)
                 >= MAX_MDRT4E_LP_CPU)
                 continue;
             CPU_SET_S(i, size_cpumask, lp_state[MDRT4E_MODE].mask);
 
-            /* for moderate mode 3 cpu are sufficient */
+            /* for moderate3 mode 3 cpu are sufficient */
             if (CPU_COUNT_S(size_cpumask, lp_state[MDRT3E_MODE].mask)
                 >= MAX_MDRT3E_LP_CPU)
                 continue;
             CPU_SET_S(i, size_cpumask, lp_state[MDRT3E_MODE].mask);
 
-            /* for moderate0 mode  cpu are sufficient */
+            /* for moderate2  mode  2 cpu are sufficient */
             if (CPU_COUNT_S(size_cpumask, lp_state[MDRT2E_MODE].mask)
                 >= MAX_MDRT2E_LP_CPU)
                 continue;
@@ -569,7 +627,8 @@ static int detect_lp_state_actual(void)
             CPU_SET_S(i, size_cpumask, lp_state[DEEP_MODE].mask);
         }
     }
-
+    lpmd_log_debug("cpu mask set for all states/n");
+#ifdef __REMOVE__ //sysfs path not exist
     for (i = 0; i < get_max_cpus(); i++) {
         if (!is_cpu_online(i))
             continue;
@@ -578,16 +637,20 @@ static int detect_lp_state_actual(void)
         if (!fs_open_check(path)) {
             CPU_SET_S(i, size_cpumask, lp_state[PERF_MODE].mask);
             //CPU_SET_S(i, size_cpumask, lp_state[BYPS_MODE].mask);
+        } else {
+            
+            break;
         }
     }
+#endif
 
     /* bypass mode TBD. any strange workloads can be let to run bypass */
     //lp_state[BYPS_MODE].disabled = true;
-    /* MDRT with 2 cores is not know to be beneficial comapred. simplyfy */
+    /* MDRT with 2 cores is not know to be beneficial compared. simplyfy */
     lp_state[MDRT2E_MODE].disabled = true;
     if (get_max_online_cpu() <= 4) {
-        lpmd_log_info("too few CPU: %d", get_max_online_cpu());
-        exit(1);
+        lpmd_log_error("too few CPU: %d/n", get_max_online_cpu());
+        return 1;//exit(1);
     } else if (get_max_online_cpu() <= 8) {
         lp_state[MDRT2E_MODE].disabled = true;
         lp_state[MDRT4E_MODE].disabled = true;
@@ -602,7 +665,7 @@ static int detect_lp_state_actual(void)
                     alloc_cpu_set(&lp_state[idx].inj_mask);
                 and_into_injmask(INIT_MODE, idx, idx);
             }
-            lpmd_log_info("\t[%d] %s [0x%s] cpu count: %2d\n", idx, \
+            lpmd_log_info("detect_lp_state_actual: \t[%d] %s [0x%s] cpu count: %2d\n", idx, \
                    lp_state[idx].name, get_cpus_hexstr(idx), \
                    cpu_count);
         }
@@ -610,11 +673,13 @@ static int detect_lp_state_actual(void)
     for (idx = INIT_MODE; idx < MAX_MODE; idx++) {
         cpu_count = CPU_COUNT_S(size_cpumask, lp_state[idx].mask);
         if (lp_state[idx].disabled || !cpu_count) {
-            lpmd_log_info("\t[%d] %s [0x%s] cpu count: %2d\n", idx,
+            lpmd_log_info("detect_lp_state_actual: \t[%d] %s [0x%s] cpu count: %2d\n", idx,
                    lp_state[idx].name, get_cpus_hexstr(idx),
                    cpu_count);
         }
     }
+    
+    lpmd_log_debug("detect_lp_state_actual - exit /n");
 
     return 0;
 }
@@ -622,25 +687,29 @@ static int detect_lp_state_actual(void)
 /*initialize*/
 int init_state_manager(void)
 {
-    int ret;
+    /*int ret;
 
     ret = set_max_cpu_num();
     if (ret)
-        return ret;
+        return ret;*/
     
-    //detecting cpus
-    //ret = parse_cpu_topology();
+    /*if (get_max_online_cpu() <= 8) {
+        lp_state[MDRT2E_MODE].disabled = true;
+        lp_state[MDRT4E_MODE].disabled = true;
+    } else if (get_max_online_cpu() <= 4) {
+        lp_state[MDRT2E_MODE].disabled = true;
+        lp_state[MDRT4E_MODE].disabled = true;
+    }*/
 
     /*ret = check_cpu_isolate_support();
     if (ret)
         return ret;*/
     
-
     perf_stat_init();
 
-    ret = detect_lp_state_actual();
+    /*ret = detect_lp_state_actual();
     if (ret)
-        return ret;
+        return ret;*/
     
     return 0;
 }
