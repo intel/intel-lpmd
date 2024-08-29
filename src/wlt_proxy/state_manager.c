@@ -1,5 +1,5 @@
 /*
- * state_manager.c: Intel Linux Energy Optimier proxy detection state manager
+ * state_manager.c: Intel Linux Energy Optimizer proxy detection state manager
  *
  * Copyright (C) 2024 Intel Corporation. All rights reserved.
  *
@@ -316,6 +316,16 @@ int apply_state_change(void)
     return 1;
 }
 
+/*Is cpu applicable for the given state*/
+int cpu_applicable(int cpu, enum lp_state_idx state)
+{
+	if (!lp_state[state].mask)
+		return 0;
+
+	return !!CPU_ISSET_S(cpu, size_cpumask, lp_state[state].mask);
+}
+
+/*clean state struct*/
 static void reset_cpus_proxy(enum lp_state_idx idx)
 {
 

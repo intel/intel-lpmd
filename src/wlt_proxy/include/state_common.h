@@ -1,18 +1,23 @@
 /*
- * Copyright (c) 2024, Intel Corporation.
+ * state_common.h: Intel Linux Energy Optimizer proxy detection common header file
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms and conditions of the GNU General Public License,
- * version 2, as published by the Free Software Foundation.
+ * Copyright (C) 2023 Intel Corporation. All rights reserved.
  *
- * This program is distributed in the hope it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
- * more details.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
- * Author: Noor ul Mubeen <noor.u.mubeen@intel.com>
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
-
+ 
 #ifndef _WLT_PROXY_COMMON_H_
 #define _WLT_PROXY_COMMON_H_
 
@@ -154,6 +159,8 @@ int do_countdown(enum lp_state_idx);
 /* state_util.c */
 int util_init_proxy(void);//defined in lpmd_util
 void util_uninit_proxy(void);
+
+int cpu_applicable(int, enum lp_state_idx);
 
 int perf_stat_init(void);
 int state_max_avg();

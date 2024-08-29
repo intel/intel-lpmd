@@ -29,8 +29,6 @@
 #include "wlt_proxy.h"
 #include "knobs_common.h"
 
-#define PERF_API 1
-
 #ifdef __GNUC__
 #define likely(x)       __builtin_expect(!!(x), 1)
 #define unlikely(x)     __builtin_expect(!!(x), 0)
@@ -39,6 +37,8 @@
 #define unlikely(x)     (x)
 #endif
 
+/*
+#define PERF_API 1
 #ifndef PERF_API
 #define MSR_IA32_MPERF        0xe7
 #define MSR_IA32_APERF        0xe8
@@ -47,20 +47,20 @@
 #define MSR_PERF_STATUS       0x198
 #define MSR_PERF_CTL          0x1fc
 #endif 
+*/
 
+//todo: hardcoded MSRs info? should we get it from config file?
 #define MSR_HWP            0x774
 #define MSR_EPB            0x1b0
-
-//todo: hardcoded platform info? should we get it from config file?
-#define MSR_PLATFORM_INFO	0xce
+#define MSR_PLATFORM_INFO  0xce
 
 #define SCALE_DECIMAL (100)
 
 #define MAX_INJECT    (90)
 #define LIMIT_INJECT(i)    (i > MAX_INJECT ? MAX_INJECT:(i < 0 ? 1 : i))
-
 int idle_inject_feature = IDLE_INJECT_FEATURE;
 int inject_update = UNDEFINED;
+
 int irq_rebalance = 0;
 static int record = 0;
 static int prev_type = -1;
@@ -434,6 +434,9 @@ int update_perf_diffs(float *sum_norm_perf, int stat_init_only)
 
     for (t = 0; t < get_max_online_cpu(); t++) {
 
+        if (!cpu_applicable(t, get_cur_state()))
+            continue;
+        
         /*reading through perf api*/
         struct thread_data tdata;
         read_aperf_mperf_tsc_perf(&tdata , t);
@@ -683,6 +686,8 @@ int max_mt_detected(enum lp_state_idx state)
     //lpmd_log_debug("no of cpus online: %d\n", get_max_online_cpu());
     
     for (int t = 0; t < get_max_online_cpu(); t++) {
+        if (!cpu_applicable(t, state))
+            continue;
         
         if A_LTE_B
             (perf_stats[t].l0, (UTIL_LOW))
