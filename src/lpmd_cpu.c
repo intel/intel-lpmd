@@ -890,8 +890,12 @@ static int detect_supported_cpu(lpmd_config_t *lpmd_config)
 
 	/* Unsupported model */
     if (!id_table[val].family || max_level < 0x1a) {
-        lpmd_log_info("Unsupported platform\n");
-        return -1;
+        if (!do_platform_check()) {
+            lpmd_log_info("Unsupported platform\n");
+            return -1;
+        }
+        else 
+            lpmd_log_info("Unsupported platform, ignore platform check is on, continue\n");
     }
 
 end:
@@ -1208,8 +1212,13 @@ static int detect_lpm_cpus(char *cmd_cpus)
 		return 0;
 	}
 	else {
-        lpmd_log_error ("\tNo valid Low Power CPUs detected, exit\n");
-		exit (1);    
+        if (!do_platform_check()) {
+            lpmd_log_error ("\tNo valid Low Power CPUs detected, ignore paltform check is on, continue\n");
+
+        } else {
+            lpmd_log_error ("\tNo valid Low Power CPUs detected, exit\n");
+            exit (1);
+        }
 	}
 
 end: if (has_cpus (CPUMASK_LPM_DEFAULT))
@@ -1853,8 +1862,12 @@ int check_cpu_capability(lpmd_config_t *lpmd_config)
 
 	ret = detect_supported_cpu(lpmd_config);
 	if (ret) {
-		lpmd_log_info("Unsupported CPU type\n");
-		return ret;
+        if (!do_platform_check()) {
+            lpmd_log_info("Unsupported CPU type, ignore platform check is on, continue\n");
+        } else {
+            lpmd_log_info("Unsupported CPU type\n");
+            return ret;
+        }
 	}
 
 	ret = set_max_cpu_num ();
