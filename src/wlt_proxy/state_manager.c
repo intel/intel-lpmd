@@ -17,7 +17,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  *
- * This file contains the proxy workload type detection - state machine set/get functions.
+ * This file contains the proxy workload type detection - state definition, initialization and set/get functions.
  */
 #define _GNU_SOURCE
 #include <sched.h>
@@ -34,20 +34,6 @@
 //#define MIN_POLL_PERIOD 15
 #define MIN_POLL_PERIOD 100
 
-#define MAX_MDRT4E_LP_CPU    (4)
-#define MAX_MDRT3E_LP_CPU    (3)
-#define MAX_MDRT2E_LP_CPU    (2)
-#define MAX_RESP_LP_CPU        (2)
-#define MAX_NORM_LP_CPU        (2)
-#define MAX_DEEP_LP_CPU        (1)
-
-struct _freq_map {
-    int start_cpu;
-    int end_cpu;
-    int turbo_freq_khz;
-    int perf_order;
-};
-
 #define BASE_POLL_RESP          96
 #define BASE_POLL_MT           100
 #define BASE_POLL_PERF         280
@@ -56,8 +42,6 @@ struct _freq_map {
 #define BASE_POLL_MDRT2E      1000    // e.g., 2E cores of a module
 #define BASE_POLL_NORM        1200
 #define BASE_POLL_DEEP        1800
-
-static size_t size_cpumask;
 
 struct _lp_state {
     bool disabled;
@@ -84,6 +68,24 @@ struct _lp_state {
     int freq_ctl; //enable freq clamping
 };
 
+#ifdef __REMOVE__
+
+#define MAX_MDRT4E_LP_CPU    (4)
+#define MAX_MDRT3E_LP_CPU    (3)
+#define MAX_MDRT2E_LP_CPU    (2)
+#define MAX_RESP_LP_CPU      (2)
+#define MAX_NORM_LP_CPU      (2)
+#define MAX_DEEP_LP_CPU      (1)
+
+struct _freq_map {
+    int start_cpu;
+    int end_cpu;
+    int turbo_freq_khz;
+    int perf_order;
+};
+
+static size_t size_cpumask;
+
 static int common_min_freq;
 static int freq_map_count;
 int get_freq_map_count()
@@ -99,16 +101,9 @@ int get_freq_map(int j, struct _freq_map *fmap)
     *fmap = freq_map[j];
     return 1;
 }
-static struct _lp_state lp_state[MAX_MODE] = {
-    /*[INIT_MODE] = {.name =   "Avail cpu: P/E/L",.poll = BASE_POLL_MT,.poll_order = LINEAR},
-    [PERF_MODE] = {.name =   "Perf:non-soc cpu",.poll = BASE_POLL_PERF,.poll_order = LINEAR},
-    [MDRT2E_MODE] = {.name = "Moderate 2E",.poll =    BASE_POLL_MDRT2E,.poll_order = QUADRATIC},
-    [MDRT3E_MODE] = {.name = "Moderate 3E",.poll = BASE_POLL_MDRT3E,.poll_order = QUADRATIC},
-    [MDRT4E_MODE] = {.name = "Moderate 4E",.poll =    BASE_POLL_MDRT4E, .poll_order = QUADRATIC},
-    [RESP_MODE] = {.name =   "Responsive 2L",.poll = BASE_POLL_RESP, .poll_order = CUBIC},
-    [NORM_MODE] = {.name =   "Normal LP 2L",.poll = BASE_POLL_NORM, .poll_order = CUBIC},
-    [DEEP_MODE] = {.name =   "Deep LP 1L",.poll = BASE_POLL_DEEP, .poll_order = CUBIC},*/
+#endif 
 
+static struct _lp_state lp_state[MAX_MODE] = {
     [INIT_MODE] = {.name =   "Avail cpu: P/E/L",.poll = BASE_POLL_MT,.poll_order = ZEROTH},
     [PERF_MODE] = {.name =   "Perf:non-soc cpu",.poll = BASE_POLL_PERF,.poll_order = ZEROTH},
     [MDRT2E_MODE] = {.name = "Moderate 2E",.poll =    BASE_POLL_MDRT2E,.poll_order = LINEAR},
@@ -165,7 +160,7 @@ int is_state_valid(enum lp_state_idx state)
         && !lp_state[state].disabled);
 }
 
-int get_state_epp(enum lp_state_idx state)
+/*int get_state_epp(enum lp_state_idx state)
 {
     return lp_state[state].epp;
 }
@@ -178,7 +173,7 @@ int get_state_epb(enum lp_state_idx state)
 int state_support_freq_ctl(enum lp_state_idx state)
 {
     return lp_state[state].freq_ctl;
-}
+}*/
 
 int state_has_ppw(enum lp_state_idx state)
 {
@@ -286,21 +281,24 @@ int get_last_poll(void)
     return lp_state[cur_state].last_poll;
 }
 
+#ifdef __REMOVE__
 int check_reset_status(void)
 {
     return needs_state_reset;
 }
+#endif
 
 static void exit_state_change(void)
 {
-    set_cur_state(NORM_MODE);
-    needs_state_reset = 0;
+    //set_cur_state(INIT_MODE);
+    //needs_state_reset = 0;
 
 #ifdef __USE_LPMD_IRQ__
     native_restore_irqs();
 #endif
 }
 
+/** initiate state change */
 int apply_state_change(void)
 {
     float test;
@@ -315,7 +313,7 @@ int apply_state_change(void)
     return 1;
 }
 
-/*Is cpu applicable for the given state*/
+/** Is cpu applicable for the given state*/
 int cpu_applicable(int cpu, enum lp_state_idx state)
 {
     #if 0
@@ -376,11 +374,10 @@ int cpu_applicable(int cpu, enum lp_state_idx state)
     return 0;
 }
 
-/*clean state struct*/
+/** clean state struct*/
 static void reset_cpus_proxy(enum lp_state_idx idx)
 {
-
-    if(lp_state[idx].str != NULL) { 
+    if(lp_state[idx].str != NULL) {
         free(lp_state[idx].str);
         lp_state[idx].str = NULL;
     }
@@ -401,6 +398,8 @@ static void reset_cpus_proxy(enum lp_state_idx idx)
     }    
 }
 
+#ifdef __REMOVE__
+/** int to hex */
 static char to_hexchar(int val)
 {
     if (val <= 9)
@@ -683,6 +682,7 @@ static int detect_lp_state_actual(void)
 
     return 0;
 }
+#endif
 
 /*initialize*/
 int init_state_manager(void)
@@ -718,6 +718,7 @@ int init_state_manager(void)
 void uninit_state_manager() {
     
     exit_state_change();
+    
     for (int idx = INIT_MODE; idx < MAX_MODE; idx++) {
         reset_cpus_proxy(idx);
     }
