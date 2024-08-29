@@ -180,7 +180,8 @@ if [[ "$is_ppd_active" -eq 0 ]]; then
     tuned-adm active
 else 
     echo "**************** start lpmd service ***************************"
-    sudo systemctl start intel_lpmd.service    
+    sudo systemctl start intel_lpmd.service
+    sudo systemctl enable intel_lpmd.service     
 fi
 
 echo "**************** done ***************************"
