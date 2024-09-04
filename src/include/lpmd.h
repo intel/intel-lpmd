@@ -150,6 +150,7 @@ typedef struct {
 	int hfi_lpm_enable;
 	int hfi_suv_enable;
 	int wlt_hint_enable;
+	int wlt_proxy_enable;
 	int util_enable;
 	int util_entry_threshold;
 	int util_exit_threshold;
