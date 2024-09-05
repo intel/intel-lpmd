@@ -105,7 +105,7 @@ typedef struct {
 
 #define MAX_STR_LENGTH		256
 #define MAX_CONFIG_STATES	10
-#define MAX_STATE_NAME		16
+#define MAX_STATE_NAME		32
 #define MAX_CONFIG_LEN		64
 
 typedef struct {
