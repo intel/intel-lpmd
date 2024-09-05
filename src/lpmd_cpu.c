@@ -1091,19 +1091,19 @@ static int is_cpu_in_l3(int cpu)
 	return 0;
 }
 
-static int is_cpu_pcore(int cpu)
+int is_cpu_pcore(int cpu)
 {
 	return !is_cpu_atom(cpu);
 }
 
-static int is_cpu_ecore(int cpu)
+int is_cpu_ecore(int cpu)
 {
 	if (!is_cpu_atom(cpu))
 		return 0;
 	return is_cpu_in_l3(cpu);
 }
 
-static int is_cpu_lcore(int cpu)
+int is_cpu_lcore(int cpu)
 {
 	if (!is_cpu_atom(cpu))
 		return 0;

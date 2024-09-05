@@ -291,6 +291,9 @@ int init_cpu(char *cmd_cpus, enum lpm_cpu_process_mode mode, int lp_mode_epp);
 int process_cpus(int enter, enum lpm_cpu_process_mode mode);
 int parse_cpu_str(char *buf, enum cpumask_idx idx);
 
+int is_cpu_lcore(int cpu);
+int is_cpu_ecore(int cpu);
+int is_cpu_pcore(int cpu);
 /* cpu.c: helpers */
 int is_cpu_online(int cpu);
 int is_cpu_for_lpm(int cpu);
