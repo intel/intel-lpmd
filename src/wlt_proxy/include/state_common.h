@@ -21,6 +21,22 @@
 #ifndef _WLT_PROXY_COMMON_H_
 #define _WLT_PROXY_COMMON_H_
 
+/* threshold (%) for instantaneous utilizations */
+#define UTIL_LOWEST              1
+#define UTIL_LOWER               2
+#define UTIL_LOW                10
+#define UTIL_FILL_START         35
+#define UTIL_BELOW_HALF         40
+#define UTIL_HALF               50
+#define UTIL_ABOVE_HALF         70
+#define UTIL_NEAR_FULL          90
+
+/* floating point comparison */
+#define EPSILON    (0.01)
+#define A_LTE_B(A,B)    (((B-A) >= EPSILON) ? 1 : 0 )
+#define A_GTE_B(A,B)    (((A-B) >= EPSILON) ? 1 : 0 )
+#define A_GT_B(A,B)    (((A-B) > EPSILON) ? 1 : 0 )
+
 /* state indexs for  WLT proxy detection based cpu usage high to low */
 enum state_idx {
     INIT_MODE,
@@ -33,6 +49,33 @@ enum state_idx {
     DEEP_MODE
 };
 #define    MAX_MODE 8
+
+struct group_util {
+    /* top 3 max utils and last (min) util */
+    float c0_max;
+    float c0_min;
+    float worst_stall;
+    int worst_stall_cpu;
+    float c0_2nd_max;
+    float c0_3rd_max;
+    int delta;
+
+    /* simple moving average for top 3 utils */
+    int sma_sum[3];
+    int sma_avg1;
+    int sma_avg2;
+    int sma_avg3;
+    int sma_pos;
+};
+
+/* state_util.c */
+int util_init_proxy(void);
+void util_uninit_proxy(void);
+
+int state_max_avg();
+int update_perf_diffs(float *, int);
+
+int max_mt_detected(enum state_idx);
 
 /* spike_mgmt.c */
 int add_spike_time(int);

@@ -27,7 +27,8 @@ sbin_PROGRAMS = intel_lpmd
 
 intel_lpmd_CPPFLAGS = \
 	-I@top_srcdir@/src \
-        -I@top_srcdir@/src/include \
+	-I@top_srcdir@/src/include \
+	-I@top_srcdir@/src/wlt_proxy/include \
 	-DTDLOCALEDIR=\"$(datadir)/locale\" \
 	-DGLIB_SUPPORT
 
@@ -36,6 +37,7 @@ intel_lpmd_LDADD = \
 	$(GLIB_LIBS) \
 	$(LIBNL_LIBS) \
 	$(LIBM) \
+	-lm \
 	$(LIBDL) \
 	$(XML_LIBS) \
 	$(UPOWER_LIBS) \
@@ -57,6 +59,7 @@ intel_lpmd_SOURCES = \
 	src/lpmd_socket.c \
 	src/lpmd_util.c \
 	src/wlt_proxy/spike_mgmt.c \
+	src/wlt_proxy/state_util.c \
 	lpmd-resource.c
 
 man8_MANS = man/intel_lpmd.8
