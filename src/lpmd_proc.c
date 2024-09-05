@@ -600,15 +600,6 @@ static int idx_hfi_fd = -1;
 static int wlt_fd;
 static int idx_wlt_fd = -1;
 
-/* WLT hints parsing */
-typedef enum {
-	WLT_IDLE,
-	WLT_BATTERY_LIFE,
-	WLT_SUSTAINED,
-	WLT_BURSTY,
-	WLT_INVALID,
-} wlt_type_t;
-
 // Workload type classification
 #define WORKLOAD_NOTIFICATION_DELAY_ATTRIBUTE "/sys/bus/pci/devices/0000:00:04.0/workload_hint/notification_delay_ms"
 #define WORKLOAD_ENABLE_ATTRIBUTE "/sys/bus/pci/devices/0000:00:04.0/workload_hint/workload_hint_enable"

@@ -212,6 +212,15 @@ enum cpumask_idx {
 #define SETTING_RESTORE	-2
 #define SETTING_IGNORE	-1
 
+/* WLT hints parsing */
+typedef enum {
+	WLT_IDLE = 0,
+	WLT_BATTERY_LIFE = 1,
+	WLT_SUSTAINED = 2,
+	WLT_BURSTY = 3,
+	WLT_INVALID = 4,
+} wlt_type_t;
+
 /* Helpers for entering LPMode */
 void set_lpm_epp(int val);
 int get_lpm_epp(void);
