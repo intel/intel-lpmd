@@ -101,6 +101,9 @@ int update_perf_diffs(float *, int);
 
 int max_mt_detected(enum state_idx);
 
+/* state_machine.c */
+int state_machine_auto();
+
 /* spike_mgmt.c */
 int add_spike_time(int);
 int add_non_spike_time(int);

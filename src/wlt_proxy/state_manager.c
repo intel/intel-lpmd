@@ -24,6 +24,7 @@
 
 #include "lpmd.h" //logs
 #include "state_common.h"
+#include "wlt_proxy.h" //set_workload_hint
 
 #ifdef __GNUC__
 #define likely(x)       __builtin_expect(!!(x), 1)
@@ -95,12 +96,11 @@ static struct _stState state_info[MAX_MODE] = {
 
 static enum state_idx cur_state = NORM_MODE;
 static int needs_state_reset = 1;
-
-static int prev_type = -1;
+extern int wlt_type;
 
 int state_demote = 0;
-int next_proxy_poll = 0;
-int max_util = 100;
+extern int next_proxy_poll;
+extern int max_util;
 
 static void set_state_reset(void)
 {
@@ -266,11 +266,7 @@ int prep_state_change(enum state_idx from_state, enum state_idx to_state,
         next_proxy_poll = get_state_poll(max_util, to_state);
     }
 
-    int type = get_state_mapping(to_state);
-    lpmd_log_debug("proxy WLT state value :%d, %d\n", type, prev_type);
-    if (prev_type != type) {
-        prev_type = type;
-    } /*else { same.}*/
+    wlt_type = get_state_mapping(to_state);
 
     return 1;
 }

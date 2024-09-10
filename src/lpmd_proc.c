@@ -23,6 +23,7 @@
 
 #include "lpmd.h"
 #include <upower.h>
+#include "wlt_proxy.h"
 
 static lpmd_config_t lpmd_config;
 
@@ -553,6 +554,10 @@ static void lpmd_send_message(message_name_t msg_id, int size, unsigned char *ms
 
 void lpmd_terminate(void)
 {
+	if (lpmd_config.wlt_proxy_enable) {
+		wlt_proxy_uninit();
+	}
+
 	lpmd_send_message (TERMINATE, 0, NULL);
 	sleep (1);
 	if (upower_client)
@@ -904,8 +909,14 @@ static void* lpmd_core_main_loop(void *arg)
 		}
 
 		/* Time out, need to choose next util state and interval */
-		if (n == 0 && interval > 0)
-			interval = periodic_util_update (&lpmd_config, -1);
+		if (n == 0 && interval > 0) {
+			if (lpmd_config.wlt_proxy_enable) {
+				int wlt_proxy_type = read_wlt_proxy(&interval);
+				periodic_util_update (&lpmd_config, wlt_proxy_type);
+			} else {
+				interval = periodic_util_update (&lpmd_config, -1);
+			}
+		}
 
 		if (idx_pipe_fd >= 0 && (poll_fds[idx_pipe_fd].revents & POLLIN)) {
 //			 process message written on pipe here
@@ -1068,9 +1079,17 @@ int lpmd_main(void)
 	}
 
 	if (lpmd_config.wlt_hint_enable) {
+		if (lpmd_config.wlt_proxy_enable) {
+			if (wlt_proxy_init() != LPMD_SUCCESS) {
+				lpmd_config.wlt_proxy_enable = 0;
+				lpmd_log_error ("Error setting up WLT Proxy. wlt_proxy_enable disabled\n");
+			}
+		}
 		if (!lpmd_config.hfi_lpm_enable && !lpmd_config.hfi_suv_enable) {
 			lpmd_config.util_enable = 0;
-			poll_for_wlt(1);
+			if (!lpmd_config.wlt_proxy_enable) {
+				poll_for_wlt(1);
+			}
 		}
 	}
 
