@@ -60,6 +60,7 @@ intel_lpmd_SOURCES = \
 	src/lpmd_util.c \
 	src/wlt_proxy/spike_mgmt.c \
 	src/wlt_proxy/state_util.c \
+	src/wlt_proxy/state_manager.c \
 	lpmd-resource.c
 
 man8_MANS = man/intel_lpmd.8

@@ -68,6 +68,30 @@ struct group_util {
     int sma_pos;
 };
 
+/* feature states */
+#define DEACTIVATED  (-1)
+#define UNDEFINED    (0)
+#define RUNNING      (1)
+#define ACTIVATED    (2)
+#define PAUSE        (3)
+
+/* state_manager.c */
+void uninit_state_manager(void);
+
+enum state_idx get_cur_state(void);
+
+int get_last_poll(void);
+int get_poll_ms(enum state_idx);
+int get_state_poll(int, enum state_idx);
+
+int set_stay_count(enum state_idx, int);
+int get_stay_count(enum state_idx);
+
+int staytime_to_staycount(enum state_idx state);
+int prep_state_change(enum state_idx, enum state_idx, int);
+
+int do_countdown(enum state_idx);
+
 /* state_util.c */
 int util_init_proxy(void);
 void util_uninit_proxy(void);

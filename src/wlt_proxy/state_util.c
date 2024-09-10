@@ -388,6 +388,10 @@ int update_perf_diffs(float *sum_norm_perf, int stat_init_only) {
     int t, min_s0_cpu = 0, first_pass = 1;
 
     for (t = 0; t < get_max_online_cpu(); t++) {
+        if (!cpu_applicable(t, get_cur_state())) {
+            continue;
+        }
+
         /*reading through perf api*/
         struct thread_data tdata;
         if(read_aperf_mperf_tsc_perf(&tdata , t) != LPMD_SUCCESS) {
@@ -586,4 +590,5 @@ int util_init_proxy(void) {
 /* cleanup */
 void util_uninit_proxy(void) {
     uninit_perf_calculations();
+    uninit_state_manager();
 }

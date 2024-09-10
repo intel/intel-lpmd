@@ -58,7 +58,7 @@
 //shorten time by 50% if spike rate was as low as 0. No change if spike rate was 100
 #define SPIKE_TIME_BIAS(avg, min) ((100 - avg) * min/(2 * 100))
 
-int state_demote;
+extern int state_demote;
 int burst_count = 0;
 
 /*local variables*/
@@ -71,13 +71,6 @@ static bool spike_burst_flag = false;
 static float bc_reset_min = 90.0;
 static int once_flag;
 static int strike_count;
-
-enum state_idx cur_state = NORM_MODE;
-
-enum state_idx get_cur_state(void)
-{
-    return cur_state;
-}
 
 /** increment avg spike rate */
 int update_spike_rate_avg(int sr) {
