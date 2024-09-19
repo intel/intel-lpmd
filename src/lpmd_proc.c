@@ -22,6 +22,7 @@
  */
 
 #include "lpmd.h"
+#include <upower.h>
 
 static lpmd_config_t lpmd_config;
 
@@ -36,6 +37,8 @@ char *lpm_cmd_str[LPM_CMD_MAX] = {
 };
 
 static int in_low_power_mode = 0;
+
+static UpClient *upower_client;
 
 static pthread_mutex_t lpmd_mutex;
 
@@ -552,6 +555,8 @@ void lpmd_terminate(void)
 {
 	lpmd_send_message (TERMINATE, 0, NULL);
 	sleep (1);
+	if (upower_client)
+		g_clear_object(&upower_client);
 }
 
 void lpmd_force_on(void)
@@ -779,6 +784,43 @@ static void connect_to_power_profile_daemon(void)
 	}
 }
 
+static int battery_mode;
+
+int is_on_battery(void)
+{
+	return battery_mode;
+}
+
+static void upower_daemon_cb (UpClient *client, GParamSpec *pspec, gpointer user_data)
+{
+	battery_mode = up_client_get_on_battery(upower_client);
+	lpmd_log_info("upower event: on-battery: %d\n", battery_mode);
+}
+
+static void connect_to_upower_daemon(void)
+{
+	GError *error = NULL;
+	GPtrArray *devices;
+	int i;
+
+	upower_client = up_client_new_full (NULL, &error);
+	if (upower_client == NULL) {
+		g_warning ("Cannot connect to upowerd: %s", error->message);
+		g_error_free (error);
+		return;
+	}
+
+	lpmd_log_info("connected to upower daemon\n");
+	g_signal_connect (upower_client, "notify", G_CALLBACK (upower_daemon_cb), NULL);
+
+	devices = up_client_get_devices2 (upower_client);
+	for (i=0; i < devices->len; i++) {
+		UpDevice *device;
+		device = g_ptr_array_index (devices, i);
+		g_signal_connect (device, "notify", G_CALLBACK (upower_daemon_cb), NULL);
+	}
+}
+
 /* Poll time out default */
 #define POLL_TIMEOUT_DEFAULT_SECONDS	1
 
@@ -971,6 +1013,7 @@ int lpmd_main(void)
 	if (ret)
 		return ret;
 
+	connect_to_upower_daemon();
 //	 Pipe is used for communication between two processes
 	ret = pipe (wake_fds);
 	if (ret) {

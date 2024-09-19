@@ -271,6 +271,8 @@ void lpmd_suv_enter(void);
 void lpmd_suv_exit(void);
 void lpmd_notify_hfi_event(void);
 
+int is_on_battery(void);
+
 /* lpmd_proc.c: init func */
 int lpmd_main(void);
 

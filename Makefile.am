@@ -12,6 +12,7 @@ AM_CFLAGS = \
 	$(XML_CFLAGS) \
 	-DTDRUNDIR=\"$(lpmd_rundir)\" \
 	-DTDCONFDIR=\"$(lpmd_confdir)\" \
+	$(UPOWER_CFLAGS) \
 	$(CFLAGS) \
 	$(libnl30_CFLAGS)\
 	$(libnlgenl30_CFLAGS) \
@@ -37,6 +38,7 @@ intel_lpmd_LDADD = \
 	$(LIBM) \
 	$(LIBDL) \
 	$(XML_LIBS) \
+	$(UPOWER_LIBS) \
 	$(libnlgenl30_LIBS) \
 	$(SYSTEMD_LIBS)
 
