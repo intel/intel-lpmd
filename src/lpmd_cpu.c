@@ -1917,6 +1917,8 @@ int check_cpu_capability(lpmd_config_t *lpmd_config)
 	lpmd_log_info("Detected %d Pcores, %d Ecores, %d Lcores, TDP %dW\n", pcores, ecores, lcores, tdp);
 	ret = snprintf(lpmd_config->cpu_config, MAX_CONFIG_LEN - 1, " %dP%dE%dL-%dW ", pcores, ecores, lcores, tdp);
 
+	lpmd_config->tdp = tdp;
+
 	return 0;
 }
 

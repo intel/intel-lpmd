@@ -165,6 +165,7 @@ typedef struct {
 	int cpu_model;
 	char cpu_config[MAX_CONFIG_LEN];
 	int config_state_count;
+	int tdp;
 	lpmd_config_state_t config_states[MAX_CONFIG_STATES];
 } lpmd_config_t;
 
