@@ -686,18 +686,26 @@ int process_epp_epb(void)
 
 	for (c = 0; c < max_cpus; c++) {
 		int val;
+		char *str = NULL;
 
 		if (!is_cpu_online (c))
 			continue;
 
 		if (lp_mode_epp != SETTING_IGNORE) {
-			if (lp_mode_epp == SETTING_RESTORE)
-				val = saved_cpu_info[c].epp;
-			else
+			if (lp_mode_epp == SETTING_RESTORE) {
+				val = -1;
+				str = get_ppd_default_epp();
+				if (!str) {
+					/* Fallback to cached EPP */
+					val = saved_cpu_info[c].epp;
+					str = saved_cpu_info[c].epp_str;
+				}
+			} else {
 				val = lp_mode_epp;
+			}
 
 			snprintf (path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cpufreq/energy_performance_preference", c);
-			ret = set_epp (path, val, saved_cpu_info[c].epp_str);
+			ret = set_epp (path, val, str);
 			if (!ret) {
 				if (val != -1)
 					lpmd_log_debug ("Set CPU%d EPP to 0x%x\n", c, val);
