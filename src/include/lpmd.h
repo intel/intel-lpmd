@@ -222,6 +222,13 @@ typedef enum {
 	WLT_INVALID = 4,
 } wlt_type_t;
 
+enum power_profile_daemon_mode {
+	PPD_PERFORMANCE,
+	PPD_BALANCED,
+	PPD_POWERSAVER,
+	PPD_INVALID
+};
+
 /* Helpers for entering LPMode */
 void set_lpm_epp(int val);
 int get_lpm_epp(void);
@@ -272,6 +279,7 @@ void lpmd_suv_exit(void);
 void lpmd_notify_hfi_event(void);
 
 int is_on_battery(void);
+int get_ppd_mode(void);
 
 /* lpmd_proc.c: init func */
 int lpmd_main(void);

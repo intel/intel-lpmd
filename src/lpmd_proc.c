@@ -734,6 +734,13 @@ static void poll_for_wlt(int enable)
 
 static GDBusProxy *power_profiles_daemon;
 
+static enum power_profile_daemon_mode ppd_mode = PPD_INVALID;
+
+int get_ppd_mode(void)
+{
+	return ppd_mode;
+}
+
 static void power_profiles_changed_cb(void)
 {
 	g_autoptr (GVariant)
@@ -746,14 +753,18 @@ static void power_profiles_changed_cb(void)
 
 		lpmd_log_debug ("power_profiles_changed_cb: %s\n", active_profile);
 
-		if (strcmp (active_profile, "power-saver") == 0)
+		if (strcmp (active_profile, "power-saver") == 0) {
+			ppd_mode = PPD_POWERSAVER;
 			lpmd_send_message (lpmd_config.powersaver_def, 0, NULL);
-		else if (strcmp (active_profile, "performance") == 0)
+		} else if (strcmp (active_profile, "performance") == 0) {
+			ppd_mode = PPD_PERFORMANCE;
 			lpmd_send_message (lpmd_config.performance_def, 0, NULL);
-		else if (strcmp (active_profile, "balanced") == 0)
+		} else if (strcmp (active_profile, "balanced") == 0) {
+			ppd_mode = PPD_BALANCED;
 			lpmd_send_message (lpmd_config.balanced_def, 0, NULL);
-		else
+		} else {
 			lpmd_log_warn("Ignore unsupported power profile: %s\n", active_profile);
+		}
 	}
 }
 
