@@ -594,6 +594,25 @@ int set_epp(char *path, int val, char *str)
 	return !(ret > 0);
 }
 
+static char *get_ppd_default_epp(void)
+{
+	int ppd_mode = get_ppd_mode();
+
+	if (ppd_mode == PPD_INVALID)
+		return NULL;
+
+	if (ppd_mode == PPD_PERFORMANCE)
+		return "performance";
+
+	if (ppd_mode == PPD_POWERSAVER)
+		return "power";
+
+	if (is_on_battery())
+		return "balance_power";
+
+	return "balance_performance";
+}
+
 int get_epp_epb(int *epp, char *epp_str, int size, int *epb)
 {
 	int c;
