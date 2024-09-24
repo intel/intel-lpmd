@@ -576,7 +576,7 @@ int set_epp(char *path, int val, char *str)
 
 	if (val >= 0)
 		ret = fprintf (filep, "%d", val);
-	else if (str[0] != '\0')
+	else if (str && str[0] != '\0')
 		ret = fprintf (filep, "%s", str);
 	else {
 		fclose (filep);
