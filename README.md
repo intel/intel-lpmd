@@ -21,6 +21,7 @@ dnf install libxml2-devel
 dnf install libnl3-devel
 dnf install systemd-devel
 dnf install gtk-doc
+dnf install upower-devel
 TBD
 </code></pre>
 
@@ -60,6 +61,7 @@ sudo apt install libxml2-dev
 sudo apt install libnl-3-dev libnl-genl-3-dev
 sudo apt install libsystemd-dev
 sudo apt install gtk-doc-tools
+sudo apt install libupower-glib-dev
 </code></pre></p>
 
 <p>For build and run, follow the same procedure as Fedora.</p>
