@@ -28,7 +28,8 @@ dbusservice_DATA = org.freedesktop.intel_lpmd.conf
 
 lpmd_configdir = $(lpmd_confdir)
 lpmd_config_DATA = \
-	  intel_lpmd_config.xml
+	  intel_lpmd_config.xml \
+	  intel_lpmd_config_F6_M170.xml
 
 EXTRA_DIST = \
 	intel_lpmd.service.in \
