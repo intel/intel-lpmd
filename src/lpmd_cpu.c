@@ -576,7 +576,7 @@ int set_epp(char *path, int val, char *str)
 
 	if (val >= 0)
 		ret = fprintf (filep, "%d", val);
-	else if (str[0] != '\0')
+	else if (str && str[0] != '\0')
 		ret = fprintf (filep, "%s", str);
 	else {
 		fclose (filep);
@@ -592,6 +592,25 @@ int set_epp(char *path, int val, char *str)
 			lpmd_log_error ("Write \"%s\" to %s failed, ret %d\n", str, path, ret);
 	}
 	return !(ret > 0);
+}
+
+static char *get_ppd_default_epp(void)
+{
+	int ppd_mode = get_ppd_mode();
+
+	if (ppd_mode == PPD_INVALID)
+		return NULL;
+
+	if (ppd_mode == PPD_PERFORMANCE)
+		return "performance";
+
+	if (ppd_mode == PPD_POWERSAVER)
+		return "power";
+
+	if (is_on_battery())
+		return "balance_power";
+
+	return "balance_performance";
 }
 
 int get_epp_epb(int *epp, char *epp_str, int size, int *epb)
@@ -667,18 +686,26 @@ int process_epp_epb(void)
 
 	for (c = 0; c < max_cpus; c++) {
 		int val;
+		char *str = NULL;
 
 		if (!is_cpu_online (c))
 			continue;
 
 		if (lp_mode_epp != SETTING_IGNORE) {
-			if (lp_mode_epp == SETTING_RESTORE)
-				val = saved_cpu_info[c].epp;
-			else
+			if (lp_mode_epp == SETTING_RESTORE) {
+				val = -1;
+				str = get_ppd_default_epp();
+				if (!str) {
+					/* Fallback to cached EPP */
+					val = saved_cpu_info[c].epp;
+					str = saved_cpu_info[c].epp_str;
+				}
+			} else {
 				val = lp_mode_epp;
+			}
 
 			snprintf (path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cpufreq/energy_performance_preference", c);
-			ret = set_epp (path, val, saved_cpu_info[c].epp_str);
+			ret = set_epp (path, val, str);
 			if (!ret) {
 				if (val != -1)
 					lpmd_log_debug ("Set CPU%d EPP to 0x%x\n", c, val);
@@ -1091,19 +1118,19 @@ static int is_cpu_in_l3(int cpu)
 	return 0;
 }
 
-static int is_cpu_pcore(int cpu)
+int is_cpu_pcore(int cpu)
 {
 	return !is_cpu_atom(cpu);
 }
 
-static int is_cpu_ecore(int cpu)
+int is_cpu_ecore(int cpu)
 {
 	if (!is_cpu_atom(cpu))
 		return 0;
 	return is_cpu_in_l3(cpu);
 }
 
-static int is_cpu_lcore(int cpu)
+int is_cpu_lcore(int cpu)
 {
 	if (!is_cpu_atom(cpu))
 		return 0;
@@ -1916,6 +1943,8 @@ int check_cpu_capability(lpmd_config_t *lpmd_config)
 	tdp = get_tdp();
 	lpmd_log_info("Detected %d Pcores, %d Ecores, %d Lcores, TDP %dW\n", pcores, ecores, lcores, tdp);
 	ret = snprintf(lpmd_config->cpu_config, MAX_CONFIG_LEN - 1, " %dP%dE%dL-%dW ", pcores, ecores, lcores, tdp);
+
+	lpmd_config->tdp = tdp;
 
 	return 0;
 }

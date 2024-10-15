@@ -105,7 +105,7 @@ typedef struct {
 
 #define MAX_STR_LENGTH		256
 #define MAX_CONFIG_STATES	10
-#define MAX_STATE_NAME		16
+#define MAX_STATE_NAME		32
 #define MAX_CONFIG_LEN		64
 
 typedef struct {
@@ -150,6 +150,7 @@ typedef struct {
 	int hfi_lpm_enable;
 	int hfi_suv_enable;
 	int wlt_hint_enable;
+	int wlt_proxy_enable;
 	int util_enable;
 	int util_entry_threshold;
 	int util_exit_threshold;
@@ -164,6 +165,7 @@ typedef struct {
 	int cpu_model;
 	char cpu_config[MAX_CONFIG_LEN];
 	int config_state_count;
+	int tdp;
 	lpmd_config_state_t config_states[MAX_CONFIG_STATES];
 } lpmd_config_t;
 
@@ -210,6 +212,22 @@ enum cpumask_idx {
 
 #define SETTING_RESTORE	-2
 #define SETTING_IGNORE	-1
+
+/* WLT hints parsing */
+typedef enum {
+	WLT_IDLE = 0,
+	WLT_BATTERY_LIFE = 1,
+	WLT_SUSTAINED = 2,
+	WLT_BURSTY = 3,
+	WLT_INVALID = 4,
+} wlt_type_t;
+
+enum power_profile_daemon_mode {
+	PPD_PERFORMANCE,
+	PPD_BALANCED,
+	PPD_POWERSAVER,
+	PPD_INVALID
+};
 
 /* Helpers for entering LPMode */
 void set_lpm_epp(int val);
@@ -260,6 +278,9 @@ void lpmd_suv_enter(void);
 void lpmd_suv_exit(void);
 void lpmd_notify_hfi_event(void);
 
+int is_on_battery(void);
+int get_ppd_mode(void);
+
 /* lpmd_proc.c: init func */
 int lpmd_main(void);
 
@@ -281,6 +302,9 @@ int init_cpu(char *cmd_cpus, enum lpm_cpu_process_mode mode, int lp_mode_epp);
 int process_cpus(int enter, enum lpm_cpu_process_mode mode);
 int parse_cpu_str(char *buf, enum cpumask_idx idx);
 
+int is_cpu_lcore(int cpu);
+int is_cpu_ecore(int cpu);
+int is_cpu_pcore(int cpu);
 /* cpu.c: helpers */
 int is_cpu_online(int cpu);
 int is_cpu_for_lpm(int cpu);

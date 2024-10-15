@@ -71,6 +71,8 @@ PKG_CHECK_MODULES([SYSTEMD], [libsystemd], [],
       [PKG_CHECK_MODULES([SYSTEMD], [libsystemd-daemon], [],
        AC_MSG_ERROR([libsystemd support requested but found]))])
 
+PKG_CHECK_MODULES(UPOWER, upower-glib)
+
 AC_PATH_PROG([GDBUS_CODEGEN],[gdbus-codegen])
 
 AC_PROG_CC

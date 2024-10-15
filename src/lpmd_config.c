@@ -37,6 +37,7 @@ static void lpmd_dump_config(lpmd_config_t *lpmd_config)
 	lpmd_log_info ("HFI LPM Enable:%d\n", lpmd_config->hfi_lpm_enable);
 	lpmd_log_info ("HFI SUV Enable:%d\n", lpmd_config->hfi_suv_enable);
 	lpmd_log_info ("WLT Hint Enable:%d\n", lpmd_config->wlt_hint_enable);
+	lpmd_log_info ("WLT Proxy Enable:%d\n", lpmd_config->wlt_proxy_enable);
 	lpmd_log_info ("Util entry threshold:%d\n", lpmd_config->util_entry_threshold);
 	lpmd_log_info ("Util exit threshold:%d\n", lpmd_config->util_exit_threshold);
 	lpmd_log_info ("Util LP Mode CPUs:%s\n", lpmd_config->lp_mode_cpus);
@@ -151,8 +152,8 @@ static void lpmd_parse_state(xmlDoc *doc, xmlNode *a_node, lpmd_config_state_t *
 
 static int validate_config_state(lpmd_config_t *lpmd_config, lpmd_config_state_t *state)
 {
-	if (lpmd_config->wlt_hint_enable) {
-		if (state->wlt_type >=0 && state->wlt_type <= 3)
+	if (lpmd_config->wlt_hint_enable || lpmd_config->wlt_proxy_enable) {
+		if (state->wlt_type >=0 && state->wlt_type < WLT_INVALID)
 			state->valid = 1;
 	} else {
 		if ((state->enter_cpu_load_thres > 0 && state->enter_cpu_load_thres <= 100) ||
@@ -261,6 +262,13 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_co
 					lpmd_config->wlt_hint_enable = strtol (tmp_value, &pos, 10);
 					if (errno || *pos != '\0'
 							|| (lpmd_config->wlt_hint_enable != 1 && lpmd_config->wlt_hint_enable != 0))
+						goto err;
+				}
+				else if (!strncmp((const char*)cur_node->name, "WLTProxyEnable", strlen("WLTProxyEnable"))) {
+					errno = 0;
+					lpmd_config->wlt_proxy_enable = strtol (tmp_value, &pos, 10);
+					if (errno || *pos != '\0'
+							|| (lpmd_config->wlt_proxy_enable != 1 && lpmd_config->wlt_proxy_enable != 0))
 						goto err;
 				}
 				else if (!strncmp((const char*)cur_node->name, "EntryDelayMS", strlen ("EntryDelayMS"))) {
@@ -416,6 +424,20 @@ int lpmd_get_config(lpmd_config_t *lpmd_config)
 	if (!lpmd_config)
 		return LPMD_ERROR;
 
+
+	snprintf(file_name, MAX_FILE_NAME_PATH, "%s/intel_lpmd_config_F%d_M%d_T%d.xml",
+			 TDCONFDIR, lpmd_config->cpu_family, lpmd_config->cpu_model, lpmd_config->tdp);
+
+	lpmd_log_msg ("Looking for config file %s\n", file_name);
+	if (!stat (file_name, &s))
+		goto process_xml;
+
+	snprintf(file_name, MAX_FILE_NAME_PATH, "%s/intel_lpmd_config_F%d_M%d.xml",
+			 TDCONFDIR, lpmd_config->cpu_family, lpmd_config->cpu_model);
+	lpmd_log_msg ("Looking for config file %s\n", file_name);
+	if (!stat (file_name, &s))
+		goto process_xml;
+
 	snprintf (file_name, MAX_FILE_NAME_PATH, "%s/%s", TDCONFDIR, CONFIG_FILE_NAME);
 
 	lpmd_log_msg ("Reading configuration file %s\n", file_name);
@@ -425,6 +447,7 @@ int lpmd_get_config(lpmd_config_t *lpmd_config)
 		return LPMD_ERROR;
 	}
 
+process_xml:
 	doc = xmlReadFile (file_name, NULL, 0);
 	if (doc == NULL) {
 		lpmd_log_msg ("error: could not parse file %s\n", file_name);

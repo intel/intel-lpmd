@@ -22,6 +22,8 @@
  */
 
 #include "lpmd.h"
+#include <upower.h>
+#include "wlt_proxy.h"
 
 static lpmd_config_t lpmd_config;
 
@@ -36,6 +38,8 @@ char *lpm_cmd_str[LPM_CMD_MAX] = {
 };
 
 static int in_low_power_mode = 0;
+
+static UpClient *upower_client;
 
 static pthread_mutex_t lpmd_mutex;
 
@@ -550,8 +554,14 @@ static void lpmd_send_message(message_name_t msg_id, int size, unsigned char *ms
 
 void lpmd_terminate(void)
 {
+	if (lpmd_config.wlt_proxy_enable) {
+		wlt_proxy_uninit();
+	}
+
 	lpmd_send_message (TERMINATE, 0, NULL);
 	sleep (1);
+	if (upower_client)
+		g_clear_object(&upower_client);
 }
 
 void lpmd_force_on(void)
@@ -599,15 +609,6 @@ static int idx_hfi_fd = -1;
 
 static int wlt_fd;
 static int idx_wlt_fd = -1;
-
-/* WLT hints parsing */
-typedef enum {
-	WLT_IDLE,
-	WLT_BATTERY_LIFE,
-	WLT_SUSTAINED,
-	WLT_BURSTY,
-	WLT_INVALID,
-} wlt_type_t;
 
 // Workload type classification
 #define WORKLOAD_NOTIFICATION_DELAY_ATTRIBUTE "/sys/bus/pci/devices/0000:00:04.0/workload_hint/notification_delay_ms"
@@ -738,6 +739,13 @@ static void poll_for_wlt(int enable)
 
 static GDBusProxy *power_profiles_daemon;
 
+static enum power_profile_daemon_mode ppd_mode = PPD_INVALID;
+
+int get_ppd_mode(void)
+{
+	return ppd_mode;
+}
+
 static void power_profiles_changed_cb(void)
 {
 	g_autoptr (GVariant)
@@ -750,14 +758,18 @@ static void power_profiles_changed_cb(void)
 
 		lpmd_log_debug ("power_profiles_changed_cb: %s\n", active_profile);
 
-		if (strcmp (active_profile, "power-saver") == 0)
+		if (strcmp (active_profile, "power-saver") == 0) {
+			ppd_mode = PPD_POWERSAVER;
 			lpmd_send_message (lpmd_config.powersaver_def, 0, NULL);
-		else if (strcmp (active_profile, "performance") == 0)
+		} else if (strcmp (active_profile, "performance") == 0) {
+			ppd_mode = PPD_PERFORMANCE;
 			lpmd_send_message (lpmd_config.performance_def, 0, NULL);
-		else if (strcmp (active_profile, "balanced") == 0)
+		} else if (strcmp (active_profile, "balanced") == 0) {
+			ppd_mode = PPD_BALANCED;
 			lpmd_send_message (lpmd_config.balanced_def, 0, NULL);
-		else
+		} else {
 			lpmd_log_warn("Ignore unsupported power profile: %s\n", active_profile);
+		}
 	}
 }
 
@@ -785,6 +797,43 @@ static void connect_to_power_profile_daemon(void)
 		else {
 			lpmd_log_info ("Could not setup DBus watch for power-profiles-daemon");
 		}
+	}
+}
+
+static int battery_mode;
+
+int is_on_battery(void)
+{
+	return battery_mode;
+}
+
+static void upower_daemon_cb (UpClient *client, GParamSpec *pspec, gpointer user_data)
+{
+	battery_mode = up_client_get_on_battery(upower_client);
+	lpmd_log_info("upower event: on-battery: %d\n", battery_mode);
+}
+
+static void connect_to_upower_daemon(void)
+{
+	GError *error = NULL;
+	GPtrArray *devices;
+	int i;
+
+	upower_client = up_client_new_full (NULL, &error);
+	if (upower_client == NULL) {
+		g_warning ("Cannot connect to upowerd: %s", error->message);
+		g_error_free (error);
+		return;
+	}
+
+	lpmd_log_info("connected to upower daemon\n");
+	g_signal_connect (upower_client, "notify", G_CALLBACK (upower_daemon_cb), NULL);
+
+	devices = up_client_get_devices2 (upower_client);
+	for (i=0; i < devices->len; i++) {
+		UpDevice *device;
+		device = g_ptr_array_index (devices, i);
+		g_signal_connect (device, "notify", G_CALLBACK (upower_daemon_cb), NULL);
 	}
 }
 
@@ -860,8 +909,14 @@ static void* lpmd_core_main_loop(void *arg)
 		}
 
 		/* Time out, need to choose next util state and interval */
-		if (n == 0 && interval > 0)
-			interval = periodic_util_update (&lpmd_config, -1);
+		if (n == 0 && interval > 0) {
+			if (lpmd_config.wlt_proxy_enable) {
+				int wlt_proxy_type = read_wlt_proxy(&interval);
+				periodic_util_update (&lpmd_config, wlt_proxy_type);
+			} else {
+				interval = periodic_util_update (&lpmd_config, -1);
+			}
+		}
 
 		if (idx_pipe_fd >= 0 && (poll_fds[idx_pipe_fd].revents & POLLIN)) {
 //			 process message written on pipe here
@@ -980,6 +1035,7 @@ int lpmd_main(void)
 	if (ret)
 		return ret;
 
+	connect_to_upower_daemon();
 //	 Pipe is used for communication between two processes
 	ret = pipe (wake_fds);
 	if (ret) {
@@ -1023,9 +1079,17 @@ int lpmd_main(void)
 	}
 
 	if (lpmd_config.wlt_hint_enable) {
+		if (lpmd_config.wlt_proxy_enable) {
+			if (wlt_proxy_init() != LPMD_SUCCESS) {
+				lpmd_config.wlt_proxy_enable = 0;
+				lpmd_log_error ("Error setting up WLT Proxy. wlt_proxy_enable disabled\n");
+			}
+		}
 		if (!lpmd_config.hfi_lpm_enable && !lpmd_config.hfi_suv_enable) {
 			lpmd_config.util_enable = 0;
-			poll_for_wlt(1);
+			if (!lpmd_config.wlt_proxy_enable) {
+				poll_for_wlt(1);
+			}
 		}
 	}
 

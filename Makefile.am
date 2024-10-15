@@ -12,6 +12,7 @@ AM_CFLAGS = \
 	$(XML_CFLAGS) \
 	-DTDRUNDIR=\"$(lpmd_rundir)\" \
 	-DTDCONFDIR=\"$(lpmd_confdir)\" \
+	$(UPOWER_CFLAGS) \
 	$(CFLAGS) \
 	$(libnl30_CFLAGS)\
 	$(libnlgenl30_CFLAGS) \
@@ -26,7 +27,8 @@ sbin_PROGRAMS = intel_lpmd
 
 intel_lpmd_CPPFLAGS = \
 	-I@top_srcdir@/src \
-        -I@top_srcdir@/src/include \
+	-I@top_srcdir@/src/include \
+	-I@top_srcdir@/src/wlt_proxy/include \
 	-DTDLOCALEDIR=\"$(datadir)/locale\" \
 	-DGLIB_SUPPORT
 
@@ -35,8 +37,10 @@ intel_lpmd_LDADD = \
 	$(GLIB_LIBS) \
 	$(LIBNL_LIBS) \
 	$(LIBM) \
+	-lm \
 	$(LIBDL) \
 	$(XML_LIBS) \
+	$(UPOWER_LIBS) \
 	$(libnlgenl30_LIBS) \
 	$(SYSTEMD_LIBS)
 
@@ -53,7 +57,12 @@ intel_lpmd_SOURCES = \
 	src/lpmd_hfi.c \
 	src/lpmd_irq.c \
 	src/lpmd_socket.c \
-	src/lpmd_util.c	\
+	src/lpmd_util.c \
+	src/wlt_proxy/wlt_proxy.c \
+	src/wlt_proxy/spike_mgmt.c \
+	src/wlt_proxy/state_machine.c \
+	src/wlt_proxy/state_util.c \
+	src/wlt_proxy/state_manager.c \
 	lpmd-resource.c
 
 man8_MANS = man/intel_lpmd.8
