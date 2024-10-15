@@ -80,7 +80,53 @@ sudo apt install libupower-glib-dev
 
 <p>Releases</p>
 
-## Release 0.0.1
+Release 0.0.7
+- Change lpmd description from "Low Power Mode Daemon" to "Energy
+  Optimizer (lpmd)" because it covers more scenarios.
+- Fix invalid cgroup setting during probe, in case lpmd doesn't quit
+  smoothly and cleanups are not done properly in the previous run.
+- Introduce a new parameter "--ignore-platform-check".
+- Provide more detailed information when lpmd failed to probe on an
+  unvalidated platform.
+- Various of fixes for array bound check, potential memory leak, etc.
+- Autotool improvements.
+
+Release 0.0.6
+- removes the automake and autoconf improvements because a regression is
+  found.
+- deprecates the dbus-glib dependency.
+
+Release 0.0.5
+- Fix compiling errors with -Wall.
+- Remove unintended default config file change to keep it unchanged
+  since v0.0.3.
+
+Release 0.0.4
+- Enhance HFI monitor so that it can handle back-to-back HFI LPM
+  hints.
+- Enhance HFI monitor to handle HFI hints for banned CPUs.
+- Introduce support for multiple Low Power states.
+- Introduce support for work load type hint.
+- Allow change EPP during Low Power modes transition.
+- Minor fixes and cleanups.
+
+Release 0.0.3
+- Conversion from glib-dbus to GDBus.
+- Add handling for CPU hotplug.
+- Use strict CPU model check to allow intel_lpmd running on
+  - validated platforms only. Including ADL/RPL/MTL for now.
+  - CPUID.7 Hybrid bit is set
+  - /sys/firmware/acpi/pm_profile returns 2 (mobile platform)
+- Use cpuid() to detect Lcores instead of using cache sysfs.
+- Enhance Ecore module detection
+- Fix pthread error handling, suggested by ColinIanKing.
+- Werror Fixes from aekoroglu.
+
+Release 0.0.2
+- Various of fixes and cleanups.
+
+Release 0.0.1
+- Add initial lpmd support.
 
 ## Security
 
