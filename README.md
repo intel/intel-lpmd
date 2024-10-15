@@ -80,6 +80,14 @@ sudo apt install libupower-glib-dev
 
 <p>Releases</p>
 
+Release 0.0.8
+- Introduce workload type proxy support.
+- Add support for model/sku specific config file.
+- Add detection for AC/DC status.
+- Honor power profile daemon default EPP when restoring.
+- Introduce MeteorLake-P platform specific config file.
+- Minor fixes and cleanups.
+
 Release 0.0.7
 - Change lpmd description from "Low Power Mode Daemon" to "Energy
   Optimizer (lpmd)" because it covers more scenarios.
