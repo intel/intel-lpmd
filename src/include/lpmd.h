@@ -251,6 +251,7 @@ int lpmd_unlock(void);
 int in_lpm(void);
 int in_hfi_lpm(void);
 int in_suv_lpm(void);
+int in_auto_mode(void);
 int get_idle_percentage(void);
 int get_idle_duration(void);
 int get_cpu_mode(void);

@@ -208,6 +208,11 @@ int in_suv_lpm(void)
 	return lpm_state & LPM_SUV_ON;
 }
 
+int in_auto_mode()
+{
+	return !(lpm_state & (LPM_USER_ON | LPM_USER_OFF));
+}
+
 /*
  * 1: request valid and already satisfied. 0: respond valid and need to continue to process. -1: request invalid
  */

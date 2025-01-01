@@ -223,8 +223,10 @@ static void process_one_event(int first, int last, int nr)
 
 	if (has_cpus (CPUMASK_HFI)) {
 		/* Ignore duplicate event */
-		if (is_equal (CPUMASK_HFI_LAST, CPUMASK_HFI ))
+		if (is_equal (CPUMASK_HFI_LAST, CPUMASK_HFI )) {
+			lpmd_log_debug ("\tDuplicated HFI LPM hints ignored\n\n");
 			return;
+		}
 		if (in_hfi_lpm ()) {
 			lpmd_log_debug ("\tUpdate HFI LPM event\n\n");
 		}
@@ -248,8 +250,10 @@ static void process_one_event(int first, int last, int nr)
 	else if (has_cpus (CPUMASK_HFI_BANNED)) {
 		copy_cpu_mask_exclude(CPUMASK_ONLINE, CPUMASK_HFI, CPUMASK_HFI_BANNED);
 		/* Ignore duplicate event */
-		if (is_equal (CPUMASK_HFI_LAST, CPUMASK_HFI ))
+		if (is_equal (CPUMASK_HFI_LAST, CPUMASK_HFI )) {
+			lpmd_log_debug ("\tDuplicated HFI BANNED hints ignored\n\n");
 			return;
+		}
 		if (in_hfi_lpm ()) {
 			lpmd_log_debug ("\tUpdate HFI LPM event with banned CPUs\n\n");
 		}
@@ -264,6 +268,7 @@ static void process_one_event(int first, int last, int nr)
 		lpmd_log_debug ("\tHFI LPM recover\n");
 //		 Don't override the DETECT_LPM_CPU_DEFAULT so it is auto recovered
 		process_lpm (HFI_EXIT);
+		reset_cpus (CPUMASK_HFI_LAST);
 	}
 	else if (in_suv_lpm ()) {
 		lpmd_log_debug ("\tHFI SUV recover\n");
@@ -285,6 +290,9 @@ static int handle_event(struct nl_msg *n, void *arg)
 	int first_cpu = -1, last_cpu = -1, nr_cpus = 0;
 	int j, index = 0, offset = 0;
 	char buf[MAX_STR_LENGTH];
+
+	if (!in_auto_mode())
+		return 0;
 
 	if (genlhdr->cmd != THERMAL_GENL_EVENT_CAPACITY_CHANGE)
 		return 0;
