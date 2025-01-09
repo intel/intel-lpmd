@@ -1044,10 +1044,14 @@ int lpmd_main(void)
 	}
 	if (fcntl (wake_fds[0], F_SETFL, O_NONBLOCK) < 0) {
 		lpmd_log_error ("Cannot set non-blocking on pipe: %s\n", strerror (errno));
+		(void)close(wake_fds[0]);
+		(void)close(wake_fds[1]);
 		return LPMD_FATAL_ERROR;
 	}
 	if (fcntl (wake_fds[1], F_SETFL, O_NONBLOCK) < 0) {
 		lpmd_log_error ("Cannot set non-blocking on pipe: %s\n", strerror (errno));
+		(void)close(wake_fds[0]);
+		(void)close(wake_fds[1]);
 		return LPMD_FATAL_ERROR;
 	}
 	write_pipe_fd = wake_fds[1];

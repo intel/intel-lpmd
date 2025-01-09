@@ -244,7 +244,7 @@ lpmd_dbus_on_bus_acquired(GDBusConnection *connection,
 
 	introspection_data = lpmd_dbus_load_introspection("src/intel_lpmd_dbus_interface.xml",
 							 &error);
-	if (error != NULL) {
+	if (introspection_data == NULL || error != NULL) {
 		lpmd_log_error("Couldn't create introspection data: %s:\n",
 			      error->message);
 		return;

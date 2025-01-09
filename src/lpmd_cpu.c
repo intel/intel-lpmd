@@ -164,7 +164,8 @@ int cpumask_to_str(cpu_set_t *mask, char *buf, int length)
 		}
 		offset += snprintf (buf + offset, length - 1 - offset, "%d,", i);
 	}
-	buf[offset - 1] = '\0';
+	if (offset)
+		buf[offset - 1] = '\0';
 	return 0;
 }
 
@@ -223,7 +224,7 @@ char* get_cpus_str(enum cpumask_idx idx)
 	if (cpumasks[idx].str)
 		return cpumasks[idx].str;
 
-	cpumasks[idx].str = calloc (1, MAX_STR_LENGTH);
+	cpumasks[idx].str = calloc (MAX_STR_LENGTH, 1);
 	if (!cpumasks[idx].str)
 		err (3, "STR_ALLOC");
 
@@ -242,7 +243,7 @@ static char* get_cpus_hexstr(enum cpumask_idx idx)
 	if (cpumasks[idx].hexstr)
 		return cpumasks[idx].hexstr;
 
-	cpumasks[idx].hexstr = calloc (1, MAX_STR_LENGTH);
+	cpumasks[idx].hexstr = calloc (MAX_STR_LENGTH, 1);
 	if (!cpumasks[idx].hexstr)
 		err (3, "STR_ALLOC");
 
@@ -268,7 +269,7 @@ static char* get_cpus_hexstr_reverse(enum cpumask_idx idx)
 	if (cpumasks[idx].hexstr_reverse)
 		return cpumasks[idx].hexstr_reverse;
 
-	cpumasks[idx].hexstr_reverse = calloc (1, MAX_STR_LENGTH);
+	cpumasks[idx].hexstr_reverse = calloc (MAX_STR_LENGTH, 1);
 	if (!cpumasks[idx].hexstr_reverse)
 		err (3, "STR_ALLOC");
 
@@ -305,7 +306,7 @@ static char* get_cpus_str_reverse(enum cpumask_idx idx)
 	if (cpumasks[idx].str_reverse)
 		return cpumasks[idx].str_reverse;
 
-	cpumasks[idx].str_reverse = calloc (1, MAX_STR_LENGTH);
+	cpumasks[idx].str_reverse = calloc (MAX_STR_LENGTH, 1);
 	if (!cpumasks[idx].str_reverse)
 		err (3, "STR_ALLOC");
 
@@ -641,7 +642,7 @@ int init_epp_epb(void)
 	int ret;
 	char path[MAX_STR_LENGTH];
 
-	saved_cpu_info = calloc (sizeof(struct cpu_info), max_cpus);
+	saved_cpu_info = calloc (max_cpus, sizeof(struct cpu_info));
 
 	for (c = 0; c < max_cpus; c++) {
 		saved_cpu_info[c].epp_str[0] = '\0';
@@ -1429,6 +1430,8 @@ static int restore_systemd_cgroup()
 	uint8_t *vals;
 
 	vals = calloc (size, 1);
+	if (!vals)
+		return -1;
 	get_cpus_hexvals (CPUMASK_ONLINE, vals, size);
 
 	update_allowed_cpus ("system.slice", vals, size);
@@ -1445,6 +1448,8 @@ static int update_systemd_cgroup()
 	int ret;
 
 	vals = calloc (size, 1);
+	if (!vals)
+		return -1;
 	get_cpus_hexvals (lpm_cpus_cur, vals, size);
 
 	ret = update_allowed_cpus ("system.slice", vals, size);
