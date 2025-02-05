@@ -108,8 +108,18 @@ static int parse_proc_stat(void)
 
 	if (!proc_stat_prev)
 		proc_stat_prev = calloc(sizeof(struct proc_stat_info), count);
+
+	if (!proc_stat_prev)
+		return 1;
+
 	if (!proc_stat_cur)
 		proc_stat_cur = calloc(sizeof(struct proc_stat_info), count);
+
+	if (!proc_stat_cur) {
+		free(proc_stat_prev);
+		proc_stat_prev = NULL;
+		return 1;
+	}
 
 	memcpy (proc_stat_prev, proc_stat_cur, size);
 	memset (proc_stat_cur, 0, size);
