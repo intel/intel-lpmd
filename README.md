@@ -9,45 +9,18 @@ man intel_lpmd_config.xml</code></pre></p>
 
 <p>Prerequisites: Prefers kernel start with TBD</p>
 
-### Building and executing on Fedora
-<p>1. Install</p>
+### Fedora
 
-<pre><code>dnf install automake
-dnf install autoconf-archive
-dnf install gcc
-dnf install glib-devel
-dnf install dbus-glib-devel
-dnf install libxml2-devel
-dnf install libnl3-devel
-dnf install systemd-devel
-dnf install gtk-doc
-dnf install upower-devel
-TBD
-</code></pre>
+<strong>intel-lpmd</strong> is available on Fedora. To install it, run
 
-<p>2. Build</p>
+<pre><code>sudo dnf install intel-lpmd</code></pre>
 
-<pre><code>./autogen.sh prefix=/
-make
-sudo make install
-</code></pre>
-
-<p>The prefix value depends on the distribution version.
-This can be "/" or "/usr". So please check existing
-path of intel_lpmd install, if present to update and
-add appropriate prefix.</p>
-
-<p>3. Run</p>
-<p>- start service</p>
-
-<pre><code>sudo systemctl start intel_lpmd.service</code></pre>
-<p>- Get status</p>
-<pre><code>sudo systemctl status intel_lpmd.service</code></pre>
-<p>- Stop service</p>
-<pre><code>sudo systemctl stop intel_lpmd.service</code></pre>
-
-<p>- Terminate using DBUS I/F</p>
-<pre><code>sudo test/lpm_test_interface.sh 1</code></pre></p>
+<p>To start the service</p>
+<pre><code>sudo systemctl start intel_lpmd</code></pre>
+<p>To check the status</p>
+<pre><code>sudo systemctl status intel_lpmd</code></pre>
+<p>To stop the service</p>
+<pre><code>sudo systemctl stop intel_lpmd</code></pre>
 
 ### Building on Ubuntu
 <p>1. Install</p>
