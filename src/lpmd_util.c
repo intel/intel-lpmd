@@ -76,6 +76,132 @@ static int busy_sys = -1;
 static int busy_cpu = -1;
 static int busy_gfx = -1;
 
+char *path_gfx_rc6;
+char *path_sam_mc6;
+
+static int probe_gfx_util_sysfs(void)
+{
+	FILE *fp;
+	char buf[8];
+	bool gt0_is_gt;
+
+	if (access("/sys/class/drm/card0/device/tile0/gt0/gtidle/idle_residency_ms", R_OK))
+		return 1;
+
+	fp = fopen("/sys/class/drm/card0/device/tile0/gt0/gtidle/name", "r");
+	if (!fp)
+		return 1;
+
+	if (!fread(buf, sizeof(char), 7, fp)) {
+		fclose(fp);
+		return 1;
+	}
+
+	fclose(fp);
+
+	if (!strncmp(buf, "gt0-rc", strlen("gt0-rc"))) {
+		if (!access("/sys/class/drm/card0/device/tile0/gt0/gtidle/idle_residency_ms", R_OK))
+			path_gfx_rc6 = "/sys/class/drm/card0/device/tile0/gt0/gtidle/idle_residency_ms";
+		if (!access("/sys/class/drm/card0/device/tile0/gt1/gtidle/idle_residency_ms", R_OK))
+			path_sam_mc6 = "/sys/class/drm/card0/device/tile0/gt1/gtidle/idle_residency_ms";
+	} else if (!strncmp(buf, "gt0-mc", strlen("gt0-mc"))) {
+		if (!access("/sys/class/drm/card0/device/tile0/gt1/gtidle/idle_residency_ms", R_OK))
+			path_gfx_rc6 = "/sys/class/drm/card0/device/tile0/gt1/gtidle/idle_residency_ms";
+		if (!access("/sys/class/drm/card0/device/tile0/gt0/gtidle/idle_residency_ms", R_OK))
+			path_sam_mc6 = "/sys/class/drm/card0/device/tile0/gt0/gtidle/idle_residency_ms";
+	}
+	lpmd_log_debug("Use %s for gfx rc6\n", path_gfx_rc6);
+	lpmd_log_debug("Use %s for sam mc6\n", path_sam_mc6);
+	return 0;
+}
+
+static int get_gfx_util_sysfs(unsigned long long time_ms)
+{
+	static unsigned long long gfx_rc6_prev = ULLONG_MAX, sam_mc6_prev = ULLONG_MAX;
+	unsigned long long gfx_rc6, sam_mc6;
+	unsigned long long val;
+	FILE *fp;
+	int gfx_util, sam_util;
+	int ret;
+	int i;
+
+	gfx_util = sam_util = -1;
+
+	fp = fopen(path_gfx_rc6, "r");
+	if (fp) {
+		ret = fscanf(fp, "%lld", &gfx_rc6);
+		if (ret != 1)
+			gfx_rc6 = ULLONG_MAX;
+		fclose(fp);
+	}
+
+	fp = fopen(path_sam_mc6, "r");
+	if (fp) {
+		ret = fscanf(fp, "%lld", &sam_mc6);
+		if (ret != 1)
+			sam_mc6 = ULLONG_MAX;
+		fclose(fp);
+	}
+
+	if (gfx_rc6 == ULLONG_MAX && sam_mc6 == ULLONG_MAX)
+		return -1;
+
+	if (gfx_rc6 != ULLONG_MAX) {
+		if (gfx_rc6_prev != ULLONG_MAX)
+			gfx_util = 10000 - (gfx_rc6 - gfx_rc6_prev) * 10000 / time_ms;
+		gfx_rc6_prev = gfx_rc6;
+		lpmd_log_debug("GFX Utilization: %d.%d\n", gfx_util / 100, gfx_util % 100);
+	}
+
+	if (sam_mc6 != ULLONG_MAX) {
+		if (sam_mc6_prev != ULLONG_MAX)
+			sam_util = 10000 - (sam_mc6 - sam_mc6_prev) * 10000 / time_ms;
+		sam_mc6_prev = sam_mc6;
+		lpmd_log_debug("SAM Utilization: %d.%d\n", sam_util / 100, sam_util % 100);
+	}
+
+	return gfx_util > sam_util ? gfx_util : sam_util;
+}
+
+/* Get GFX_RC6 and SAM_MC6 from sysfs and calculate gfx util based on this */
+static int parse_gfx_util_sysfs(void)
+{
+	static int gfx_sysfs_available = 1;
+	static struct timespec ts_prev;
+	struct timespec ts_cur;
+	unsigned long time_ms;
+	int ret;
+
+	busy_gfx = -1;
+
+	if (!gfx_sysfs_available)
+		return 1;
+
+	clock_gettime (CLOCK_MONOTONIC, &ts_cur);
+
+	if (!ts_prev.tv_sec && !ts_prev.tv_nsec) {
+		ret = probe_gfx_util_sysfs();
+		if (ret) {
+			gfx_sysfs_available = 0;
+			return 1;
+		}
+		ts_prev = ts_cur;
+		return 0;
+	}
+
+	time_ms = (ts_cur.tv_sec - ts_prev.tv_sec) * 1000 + (ts_cur.tv_nsec - ts_prev.tv_nsec) / 1000000;
+
+	ts_prev = ts_cur;
+	busy_gfx = get_gfx_util_sysfs(time_ms);
+
+	return 0;
+}
+
+static int parse_gfx_util(void)
+{
+	return parse_gfx_util_sysfs();
+}
+
 static int calculate_busypct(struct proc_stat_info *cur, struct proc_stat_info *prev)
 {
 	int idx;
@@ -492,6 +618,7 @@ int periodic_util_update(lpmd_config_t *lpmd_config, int wlt_index)
 	}
 
 	parse_proc_stat ();
+	parse_gfx_util();
 
 	if (!lpmd_config->config_state_count || !use_config_state) {
 		sys_stat = get_sys_stat ();
