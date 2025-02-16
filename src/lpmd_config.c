@@ -60,6 +60,8 @@ static void lpmd_dump_config(lpmd_config_t *lpmd_config)
 		lpmd_log_info ("\texit_system_load_hyst:%d\n", state->exit_system_load_hyst);
 		lpmd_log_info ("\tentry_cpu_load_thres:%d\n", state->enter_cpu_load_thres);
 		lpmd_log_info ("\texit_cpu_load_thres:%d\n", state->exit_cpu_load_thres);
+		lpmd_log_info ("\tentry_gfx_load_thres:%d\n", state->enter_gfx_load_thres);
+		lpmd_log_info ("\texit_gfx_load_thres:%d\n", state->exit_gfx_load_thres);
 		lpmd_log_info ("\tWLT Type:%d\n", state->wlt_type);
 		lpmd_log_info ("\tmin_poll_interval:%d\n", state->min_poll_interval);
 		lpmd_log_info ("\tmax_poll_interval:%d\n", state->max_poll_interval);
@@ -93,6 +95,8 @@ static void lpmd_init_config_state(lpmd_config_state_t *state)
 	state->exit_system_load_hyst = 0;
 	state->enter_cpu_load_thres = 0;
 	state->exit_cpu_load_thres = 0;
+	state->enter_gfx_load_thres = 0;
+	state->exit_gfx_load_thres = 0;
 
 	state->min_poll_interval = 0;
 	state->max_poll_interval = 0;
@@ -149,6 +153,10 @@ static void lpmd_parse_state(xmlDoc *doc, xmlNode *a_node, lpmd_config_state_t *
 					state->enter_cpu_load_thres = strtol (tmp_value, &pos, 10);
 				if (!strncmp((const char*)cur_node->name, "ExitCPULoadThres", strlen("ExitCPULoadThres")))
 					state->exit_cpu_load_thres = strtol (tmp_value, &pos, 10);
+				if (!strncmp((const char*)cur_node->name, "EnterGFXLoadThres", strlen("EnterGFXLoadThres")))
+					state->enter_gfx_load_thres = strtol (tmp_value, &pos, 10);
+				if (!strncmp((const char*)cur_node->name, "ExitGFXLoadThres", strlen("ExitGFXLoadThres")))
+					state->exit_gfx_load_thres = strtol (tmp_value, &pos, 10);
 				if (!strncmp((const char*)cur_node->name, "MinPollInterval", strlen("MinPollInterval")))
 					state->min_poll_interval = strtol (tmp_value, &pos, 10);
 				if (!strncmp((const char*)cur_node->name, "MaxPollInterval", strlen("MaxPollInterval")))
@@ -194,7 +202,8 @@ static int validate_config_state(lpmd_config_t *lpmd_config, lpmd_config_state_t
 			state->valid = 1;
 	} else {
 		if ((state->enter_cpu_load_thres > 0 && state->enter_cpu_load_thres <= 100) ||
-		    (state->entry_system_load_thres > 0 && state->entry_system_load_thres <= 100))
+		    (state->entry_system_load_thres > 0 && state->entry_system_load_thres <= 100) ||
+		    (state->enter_gfx_load_thres > 0 && state->enter_gfx_load_thres <= 100))
 			state->valid = 1;
 	}
 	return 0;

@@ -542,6 +542,7 @@ int util_init(lpmd_config_t *lpmd_config)
 		state->entry_system_load_thres *= 100;
 		state->enter_cpu_load_thres *= 100;
 		state->exit_cpu_load_thres *= 100;
+		state->enter_gfx_load_thres *= 100;
 
 		nr_state++;
 	}

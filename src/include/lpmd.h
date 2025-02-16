@@ -118,6 +118,8 @@ typedef struct {
 	int exit_system_load_hyst;
 	int enter_cpu_load_thres;
 	int exit_cpu_load_thres;
+	int enter_gfx_load_thres;
+	int exit_gfx_load_thres;
 	int min_poll_interval;
 	int max_poll_interval;
 	int poll_interval_increment;
