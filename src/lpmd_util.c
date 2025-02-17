@@ -74,6 +74,7 @@ struct proc_stat_info *proc_stat_cur;
 
 static int busy_sys = -1;
 static int busy_cpu = -1;
+static int busy_gfx = -1;
 
 static int calculate_busypct(struct proc_stat_info *cur, struct proc_stat_info *prev)
 {
@@ -316,7 +317,7 @@ static int get_util_interval(void)
 	return interval;
 }
 
-static int state_match(lpmd_config_state_t *state, int bsys, int bcpu, int wlt_index)
+static int state_match(lpmd_config_state_t *state, int bsys, int bcpu, int bgfx, int wlt_index)
 {
 	if (!state->valid)
 		return 0;
@@ -329,8 +330,19 @@ static int state_match(lpmd_config_state_t *state, int bsys, int bcpu, int wlt_i
 		return 0;
 	}
 
+	/* No need to dump utilization info if no threshold specified */
+	if (!state->enter_cpu_load_thres && !state->entry_system_load_thres && !state->enter_gfx_load_thres)
+		return 1;
+
 	if (state->enter_cpu_load_thres) {
 		if (bcpu > state->enter_cpu_load_thres)
+			goto unmatch;
+	}
+
+	if (state->enter_gfx_load_thres) {
+		if (bgfx == -1)
+			lpmd_log_debug("Graphics utilization not available, ignore graphics threshold\n");
+		else if (bgfx > state->enter_gfx_load_thres)
 			goto unmatch;
 	}
 
@@ -345,10 +357,10 @@ static int state_match(lpmd_config_state_t *state, int bsys, int bcpu, int wlt_i
 		}
 	}
 
-	lpmd_log_debug("Match  %12s: sys_thres %3d cpu_thres %3d hyst %3d\n", state->name, state->entry_system_load_thres, state->enter_cpu_load_thres, state->exit_system_load_hyst);
+	lpmd_log_debug("Match  %12s: sys_thres %3d cpu_thres %3d gfx_thres %3d hyst %3d\n", state->name, state->entry_system_load_thres, state->enter_cpu_load_thres, state->enter_gfx_load_thres, state->exit_system_load_hyst);
 	return 1;
 unmatch:
-	lpmd_log_debug("Ignore %12s: sys_thres %3d cpu_thres %3d hyst %3d\n", state->name, state->entry_system_load_thres, state->enter_cpu_load_thres, state->exit_system_load_hyst);
+	lpmd_log_debug("Ignore %12s: sys_thres %3d cpu_thres %3d gfx_thres %3d hyst %3d\n", state->name, state->entry_system_load_thres, state->enter_cpu_load_thres, state->enter_gfx_load_thres, state->exit_system_load_hyst);
 	return 0;
 }
 
@@ -419,7 +431,7 @@ static int process_next_config_state(lpmd_config_t *config, int wlt_index)
 	// Check for new state
 	for (i = 0; i < config->config_state_count; ++i) {
 		state = &config->config_states[i];
-		if (state_match(state, busy_sys, busy_cpu, wlt_index)) {
+		if (state_match(state, busy_sys, busy_cpu, busy_gfx, wlt_index)) {
 			interval = enter_state(state, busy_sys, busy_cpu);
 			break;
 		}
@@ -431,16 +443,18 @@ static int process_next_config_state(lpmd_config_t *config, int wlt_index)
 	get_epp_epb(&epp, epp_str, 32, &epb);
 	if (epp >= 0)
 		lpmd_log_info(
-				"[%d/%d] %12s: bsys: %3d.%02d, bcpu: %3d.%02d, epp %20d, epb %3d, itmt %2d, interval %4d\n",
+				"[%d/%d] %12s: bsys: %3d.%02d, bcpu: %3d.%02d, bgfx: %3d.%02d, epp %20d, epb %3d, itmt %2d, interval %4d\n",
 				current_state->id, config->config_state_count,
 				current_state->name, busy_sys / 100, busy_sys % 100,
-				busy_cpu / 100, busy_cpu % 100, epp, epb, get_itmt(), interval);
+				busy_cpu / 100, busy_cpu % 100, busy_gfx / 100, busy_gfx % 100,
+				epp, epb, get_itmt(), interval);
 	else
 		lpmd_log_info(
-				"[%d/%d] %12s: bsys: %3d.%02d, bcpu: %3d.%02d, epp %20s, epb %3d, itmt %2d, interval %4d\n",
+				"[%d/%d] %12s: bsys: %3d.%02d, bcpu: %3d.%02d, bgfx: %3d.%02d, epp %20s, epb %3d, itmt %2d, interval %4d\n",
 				current_state->id, config->config_state_count,
 				current_state->name, busy_sys / 100, busy_sys % 100,
-				busy_cpu / 100, busy_cpu % 100, epp_str, epb, get_itmt(),
+				busy_cpu / 100, busy_cpu % 100, busy_gfx / 100, busy_gfx % 100,
+				epp_str, epb, get_itmt(),
 				interval);
 
 	return interval;
