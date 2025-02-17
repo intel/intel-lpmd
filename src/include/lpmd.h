@@ -26,6 +26,7 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <signal.h>
 #include <pthread.h>
 #include <unistd.h>
@@ -364,5 +365,5 @@ int lpmd_read_int(const char *name, int *val, int print_level);
 char* get_time(void);
 void time_start(void);
 char* time_delta(void);
-
+uint64_t read_msr(int cpu, uint32_t msr);
 #endif

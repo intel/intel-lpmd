@@ -197,9 +197,53 @@ static int parse_gfx_util_sysfs(void)
 	return 0;
 }
 
+#define MSR_TSC			0x10
+#define MSR_PKG_ANY_GFXE_C0_RES	0x65A
+static int parse_gfx_util_msr(void)
+{
+	static uint64_t val_prev;
+	uint64_t val;
+	static uint64_t tsc_prev;
+	uint64_t tsc;
+	int cpu;
+
+	cpu = sched_getcpu();
+	tsc = read_msr(cpu, MSR_TSC);
+	if (tsc == UINT64_MAX)
+		goto err;
+
+	val = read_msr(cpu, MSR_PKG_ANY_GFXE_C0_RES);
+	if (val == UINT64_MAX)
+		goto err;
+
+	if (!tsc_prev || !val_prev) {
+		tsc_prev = tsc;
+		val_prev = val;
+		busy_gfx = -1;
+		return 0;
+	}
+
+	busy_gfx = (val - val_prev) * 10000 / (tsc - tsc_prev);
+	tsc_prev = tsc;
+	val_prev = val;
+	return 0;
+err:
+	lpmd_log_debug("parse_gfx_util_msr failed\n");
+	busy_gfx = -1;
+	return 1;
+}
+
 static int parse_gfx_util(void)
 {
-	return parse_gfx_util_sysfs();
+	int ret;
+
+	/* Prefer to get graphics utilization from GFX/SAM RC6 sysfs */
+	ret = parse_gfx_util_sysfs();
+	if (!ret)
+		return 0;
+
+	/* Fallback to MSR */
+	return parse_gfx_util_msr();
 }
 
 static int calculate_busypct(struct proc_stat_info *cur, struct proc_stat_info *prev)
