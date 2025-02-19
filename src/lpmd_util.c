@@ -590,13 +590,65 @@ static int enter_state(lpmd_config_state_t *state, int bsys, int bcpu)
 	return interval;
 }
 
+static void dump_system_status(lpmd_config_t *config, int interval)
+{
+	int epp, epb;
+	char epp_str[32] = "";
+	char buf[MAX_STR_LENGTH * 2];
+	int offset;
+	int size;
+
+	offset = 0;
+	size = MAX_STR_LENGTH * 2;
+
+	offset += snprintf(buf, size, "[%d/%d] %12s: ",
+		current_state->id, config->config_state_count, current_state->name);
+	size = MAX_STR_LENGTH * 2 - offset;
+
+	if (busy_sys == -1)
+		offset += snprintf(buf + offset, size, "bsys     na, ");
+	else
+		offset += snprintf(buf + offset, size, "bsys %3d.%02d, ", busy_sys / 100, busy_sys % 100);
+	size = MAX_STR_LENGTH * 2 - offset;
+
+	if (busy_cpu == -1)
+		offset += snprintf(buf + offset, size, "bcpu     na, ");
+	else
+		offset += snprintf(buf + offset, size, "bcpu %3d.%02d, ", busy_cpu / 100, busy_cpu % 100);
+	size = MAX_STR_LENGTH * 2 - offset;
+
+	if (busy_gfx == -1)
+		offset += snprintf(buf + offset, size, "bgfx     na, ");
+	else
+		offset += snprintf(buf + offset, size, "bgfx %3d.%02d, ", busy_gfx / 100, busy_gfx % 100);
+	size = MAX_STR_LENGTH * 2 - offset;
+
+	get_epp_epb(&epp, epp_str, 32, &epb);
+
+	if (epp >= 0)
+		offset += snprintf(buf + offset, size, "epp %3d, ", epp);
+	else
+		offset += snprintf(buf + offset, size, "epp %s, ", epp_str);
+	size = MAX_STR_LENGTH * 2 - offset;
+
+	offset += snprintf(buf + offset, size, "epb %3d, ", epb);
+	size = MAX_STR_LENGTH * 2 - offset;
+
+	if (current_state->itmt_state != SETTING_IGNORE)
+		offset += snprintf(buf + offset, size, "itmt %2d, ", get_itmt());
+
+	size = MAX_STR_LENGTH * 2 - offset;
+
+	snprintf(buf + offset, size, "interval %4d", interval);
+
+	lpmd_log_info("%s\n", buf);
+}
+
 static int process_next_config_state(lpmd_config_t *config, int wlt_index)
 {
 	lpmd_config_state_t *state = NULL;
 	int i = 0;
 	int interval = -1;
-	int epp, epb;
-	char epp_str[32] = "";
 
 	// Check for new state
 	for (i = 0; i < config->config_state_count; ++i) {
@@ -610,22 +662,7 @@ static int process_next_config_state(lpmd_config_t *config, int wlt_index)
 	if (!current_state)
 		return interval;
 
-	get_epp_epb(&epp, epp_str, 32, &epb);
-	if (epp >= 0)
-		lpmd_log_info(
-				"[%d/%d] %12s: bsys: %3d.%02d, bcpu: %3d.%02d, bgfx: %3d.%02d, epp %20d, epb %3d, itmt %2d, interval %4d\n",
-				current_state->id, config->config_state_count,
-				current_state->name, busy_sys / 100, busy_sys % 100,
-				busy_cpu / 100, busy_cpu % 100, busy_gfx / 100, busy_gfx % 100,
-				epp, epb, get_itmt(), interval);
-	else
-		lpmd_log_info(
-				"[%d/%d] %12s: bsys: %3d.%02d, bcpu: %3d.%02d, bgfx: %3d.%02d, epp %20s, epb %3d, itmt %2d, interval %4d\n",
-				current_state->id, config->config_state_count,
-				current_state->name, busy_sys / 100, busy_sys % 100,
-				busy_cpu / 100, busy_cpu % 100, busy_gfx / 100, busy_gfx % 100,
-				epp_str, epb, get_itmt(),
-				interval);
+	dump_system_status(config, interval);
 
 	return interval;
 }
