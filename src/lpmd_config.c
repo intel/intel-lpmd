@@ -200,6 +200,18 @@ static int validate_config_state(lpmd_config_t *lpmd_config, lpmd_config_state_t
 	return 0;
 }
 
+static int is_wildcard(char *str)
+{
+	if (!str)
+		return 1;
+	if (strncmp(str, "*", strlen("*")))
+		return 1;
+	if (strncmp(str, " * ", strlen(" * ")))
+		return 1;
+
+	return 0;
+}
+
 static void lpmd_parse_states(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_config)
 {
 	xmlNode *cur_node = NULL;
@@ -223,15 +235,26 @@ static void lpmd_parse_states(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_
 			if (cur_node->name) {
 
 				tmp_value = (char*) xmlNodeListGetString (doc, cur_node->xmlChildrenNode, 1);
+				if (!strncmp ((const char*) cur_node->name, "CPUFamily", strlen ("CPUFamily"))) {
+					if (is_wildcard(tmp_value))
+						cpu_family = lpmd_config->cpu_family;
+					else
+						cpu_family = strtol (tmp_value, &pos, 10);
+				}
 
-				if (!strncmp ((const char*) cur_node->name, "CPUFamily", strlen ("CPUFamily")))
-					cpu_family = strtol (tmp_value, &pos, 10);
-
-				if (!strncmp ((const char*) cur_node->name, "CPUModel", strlen ("CPUModel")))
-					cpu_model = strtol (tmp_value, &pos, 10);
+				if (!strncmp ((const char*) cur_node->name, "CPUModel", strlen ("CPUModel"))) {
+					if (is_wildcard(tmp_value))
+						cpu_model = lpmd_config->cpu_model;
+					else
+						cpu_model = strtol (tmp_value, &pos, 10);
+				}
 
 				if (!strncmp ((const char*) cur_node->name, "CPUConfig", strlen ("CPUConfig"))) {
-					snprintf (cpu_config, MAX_CONFIG_LEN - 1, "%s", tmp_value);
+					if (is_wildcard(tmp_value)) {
+						strncpy(cpu_config, lpmd_config->cpu_config, MAX_CONFIG_LEN);
+					} else {
+						snprintf (cpu_config, MAX_CONFIG_LEN - 1, "%s", tmp_value);
+					}
 					cpu_config[MAX_CONFIG_LEN - 1] = '\0';
 				}
 
@@ -242,7 +265,7 @@ static void lpmd_parse_states(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_
 					continue;
 
 				/* Must check cpu family/model/config first to make sure the states applies */
-				if (cpu_family != lpmd_config->cpu_family || cpu_model != lpmd_config->cpu_model || (strncmp(cpu_config, lpmd_config->cpu_config, MAX_CONFIG_LEN) && strncmp(cpu_config, " * ", strlen(" * ")))) {
+				if (cpu_family != lpmd_config->cpu_family || cpu_model != lpmd_config->cpu_model || strncmp(cpu_config, lpmd_config->cpu_config, MAX_CONFIG_LEN)) {
 					lpmd_log_info("Ignore unsupported states for CPU family:%d,model%d,config:%s\n", cpu_family, cpu_model, cpu_config);
 					return;
 				}
