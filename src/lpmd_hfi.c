@@ -183,7 +183,7 @@ static int suv_bit_set(void)
 }
 
 /*
- * Detect differernt kinds of CPU HFI hint
+ * Detect different kinds of CPU HFI hint
  * "LPM". EFF == 255
  * "SUV". PERF == EFF == 0, suv bit set.
  * "BAN". PERF == EFF == 0, suv bit not set.

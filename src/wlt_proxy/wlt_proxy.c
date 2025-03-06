@@ -1,5 +1,5 @@
 /*
- * wlt_proxy.c: Intel Linux Energy Optimier WLT proxy
+ * wlt_proxy.c: Intel Linux Energy Optimizer WLT proxy
  *
  * Copyright (C) 2024 Intel Corporation. All rights reserved.
  *

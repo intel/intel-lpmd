@@ -134,7 +134,7 @@ int state_machine_auto() {
             lpmd_log_debug("PERF_MODE: burst_count is %d > 0 && !do_countdown\n", burst_count);
             break;
         }
-        // Promote but through responsive watch -- if top sampled util and their avg are receeding.
+        // Promote but through responsive watch -- if top sampled util and their avg are receding.
         if (A_LTE_B(sum_c0, (2 * UTIL_LOW)) &&
             A_LTE_B(grp.sma_avg1, UTIL_ABOVE_HALF)) {
             lpmd_log_debug("PERF_MODE to RESP_MODE\n");
