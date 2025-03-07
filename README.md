@@ -8,6 +8,7 @@ Refer to the man pages for command line arguments and XML configurations:
 
 ```sh
 man intel_lpmd
+man intel_lpmd_control
 man intel_lpmd_config.xml
 ```
 

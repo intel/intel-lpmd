@@ -1,5 +1,6 @@
 [Unit]
 Description= Intel Linux Energy Optimizer (lpmd) Service
+Documentation=man:intel_lpmd(8)
 ConditionVirtualization=no
 StartLimitInterval=200
 StartLimitBurst=5

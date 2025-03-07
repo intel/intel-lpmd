@@ -65,11 +65,14 @@ intel_lpmd_SOURCES = \
 	src/wlt_proxy/state_manager.c \
 	lpmd-resource.c
 
-man8_MANS = man/intel_lpmd.8
+man8_MANS = man/intel_lpmd.8 man/intel_lpmd_control.8
 man5_MANS = man/intel_lpmd_config.xml.5
 
 lpmd-resource.c: $(top_srcdir)/lpmd-resource.gresource.xml
 	$(AM_V_GEN) glib-compile-resources --generate-source lpmd-resource.gresource.xml
 
+install-data-hook:
+	gzip -f -k "$(DESTDIR)$(mandir)/man8/intel_lpmd.8";
+	mandb || true
 
 CLEANFILES = $(BUILT_SOURCES)
