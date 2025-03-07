@@ -36,7 +36,6 @@
 #include <sys/un.h>
 #include <errno.h>
 #include <getopt.h>
-#include <cpuid.h>
 #include <sched.h>
 #include <dirent.h>
 #include <ctype.h>
