@@ -929,6 +929,10 @@ static void* lpmd_core_main_loop(void *arg)
 			if (lpmd_config.wlt_proxy_enable) {
 				int wlt_proxy_type = read_wlt_proxy(&interval);
 				periodic_util_update (&lpmd_config, wlt_proxy_type);
+			} else if (lpmd_config.wlt_hint_enable && lpmd_config.wlt_hint_poll_enable) {
+				int wlt_type = read_wlt(wlt_fd);
+
+				interval = periodic_util_update (&lpmd_config, wlt_type);
 			} else {
 				interval = periodic_util_update (&lpmd_config, -1);
 			}
