@@ -716,6 +716,8 @@ static void poll_for_wlt(int enable)
 {
 	static int wlt_enabled_once = 0;
 
+	lpmd_log_info("%s enable:%d\n", __func__, enable);
+
 	if (wlt_fd <= 0) {
 		if (enable) {
 			wlt_fd = init_wlt();

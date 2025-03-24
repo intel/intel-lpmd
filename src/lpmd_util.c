@@ -493,11 +493,14 @@ static int state_match(lpmd_config_state_t *state, int bsys, int bcpu, int bgfx,
 		return 0;
 
 	if (state->wlt_type != -1) {
-		if (state->wlt_type == wlt_index) {
-			lpmd_log_debug("Match  %12s: WLT index:%d\n", state->name, wlt_index);
+		/* wlt hint must match */
+		if (state->wlt_type != wlt_index)
+			return 0;
+
+		/* return match directly if no util threshold specified */
+		if (!state->enter_gfx_load_thres)
 			return 1;
-		}
-		return 0;
+		/* leverage below logic to handle util threshold */
 	}
 
 	/* No need to dump utilization info if no threshold specified */
@@ -680,8 +683,14 @@ int periodic_util_update(lpmd_config_t *lpmd_config, int wlt_index)
 	static int initialized;
 
 	if (wlt_index >= 0) {
-		process_next_config_state(lpmd_config, wlt_index);
-		return -1;
+		if (lpmd_config->wlt_hint_poll_enable) {
+			parse_gfx_util();
+			interval = process_next_config_state(lpmd_config, wlt_index);
+		} else {
+			process_next_config_state(lpmd_config, wlt_index);
+			interval = -1;
+		}
+		return interval;
 	}
 
 //	 poll() timeout should be -1 when util monitor not enabled
