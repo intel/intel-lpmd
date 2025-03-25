@@ -891,6 +891,15 @@ static int proc_message(message_capsul_t *msg)
 	return ret;
 }
 
+static void dump_poll_results(int ret)
+{
+	int i;
+
+	lpmd_log_debug("poll_fds[]: ret %d, pipe %d, uevent %d, hfi %d, wlt %d\n", ret, idx_pipe_fd, idx_uevent_fd, idx_hfi_fd, idx_wlt_fd);
+	for (i = 0; i < poll_fd_cnt; i++)
+		lpmd_log_debug("poll_fds[%d]: event %d, revent %d\n", i, poll_fds[i].events, poll_fds[i].revents);
+}
+
 // LPMD processing thread. This is callback to pthread lpmd_core_main
 static void* lpmd_core_main_loop(void *arg)
 {
@@ -907,11 +916,13 @@ static void* lpmd_core_main_loop(void *arg)
 		else if (interval == -1)
 			interval = 100;
 
+		lpmd_log_debug("Poll with interval %d\n", interval);
 		n = poll (poll_fds, poll_fd_cnt, interval);
 		if (n < 0) {
 			lpmd_log_warn ("Write to pipe failed\n");
 			continue;
 		}
+		dump_poll_results(n);
 
 		/* Time out, need to choose next util state and interval */
 		if (n == 0 && interval > 0) {
