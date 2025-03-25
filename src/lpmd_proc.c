@@ -962,7 +962,8 @@ static void* lpmd_core_main_loop(void *arg)
 			int wlt_index;
 
 			wlt_index = read_wlt(poll_fds[idx_wlt_fd].fd);
-			interval = periodic_util_update (&lpmd_config, wlt_index);
+			if (in_auto_mode())
+				interval = periodic_util_update (&lpmd_config, wlt_index);
 		}
 
 
