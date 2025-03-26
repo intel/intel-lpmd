@@ -26,6 +26,7 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <signal.h>
 #include <pthread.h>
 #include <unistd.h>
@@ -118,6 +119,8 @@ typedef struct {
 	int exit_system_load_hyst;
 	int enter_cpu_load_thres;
 	int exit_cpu_load_thres;
+	int enter_gfx_load_thres;
+	int exit_gfx_load_thres;
 	int min_poll_interval;
 	int max_poll_interval;
 	int poll_interval_increment;
@@ -150,6 +153,7 @@ typedef struct {
 	int hfi_lpm_enable;
 	int hfi_suv_enable;
 	int wlt_hint_enable;
+	int wlt_hint_poll_enable;
 	int wlt_proxy_enable;
 	int util_enable;
 	int util_entry_threshold;
@@ -251,6 +255,7 @@ int lpmd_unlock(void);
 int in_lpm(void);
 int in_hfi_lpm(void);
 int in_suv_lpm(void);
+int in_auto_mode(void);
 int get_idle_percentage(void);
 int get_idle_duration(void);
 int get_cpu_mode(void);
@@ -361,5 +366,5 @@ int lpmd_read_int(const char *name, int *val, int print_level);
 char* get_time(void);
 void time_start(void);
 char* time_delta(void);
-
+uint64_t read_msr(int cpu, uint32_t msr);
 #endif

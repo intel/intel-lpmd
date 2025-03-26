@@ -38,6 +38,7 @@ static void lpmd_dump_config(lpmd_config_t *lpmd_config)
 	lpmd_log_info ("HFI SUV Enable:%d\n", lpmd_config->hfi_suv_enable);
 	lpmd_log_info ("WLT Hint Enable:%d\n", lpmd_config->wlt_hint_enable);
 	lpmd_log_info ("WLT Proxy Enable:%d\n", lpmd_config->wlt_proxy_enable);
+	lpmd_log_info ("WLT Proxy Enable:%d\n", lpmd_config->wlt_hint_poll_enable);
 	lpmd_log_info ("Util entry threshold:%d\n", lpmd_config->util_entry_threshold);
 	lpmd_log_info ("Util exit threshold:%d\n", lpmd_config->util_exit_threshold);
 	lpmd_log_info ("Util LP Mode CPUs:%s\n", lpmd_config->lp_mode_cpus);
@@ -60,6 +61,8 @@ static void lpmd_dump_config(lpmd_config_t *lpmd_config)
 		lpmd_log_info ("\texit_system_load_hyst:%d\n", state->exit_system_load_hyst);
 		lpmd_log_info ("\tentry_cpu_load_thres:%d\n", state->enter_cpu_load_thres);
 		lpmd_log_info ("\texit_cpu_load_thres:%d\n", state->exit_cpu_load_thres);
+		lpmd_log_info ("\tentry_gfx_load_thres:%d\n", state->enter_gfx_load_thres);
+		lpmd_log_info ("\texit_gfx_load_thres:%d\n", state->exit_gfx_load_thres);
 		lpmd_log_info ("\tWLT Type:%d\n", state->wlt_type);
 		lpmd_log_info ("\tmin_poll_interval:%d\n", state->min_poll_interval);
 		lpmd_log_info ("\tmax_poll_interval:%d\n", state->max_poll_interval);
@@ -93,6 +96,8 @@ static void lpmd_init_config_state(lpmd_config_state_t *state)
 	state->exit_system_load_hyst = 0;
 	state->enter_cpu_load_thres = 0;
 	state->exit_cpu_load_thres = 0;
+	state->enter_gfx_load_thres = 0;
+	state->exit_gfx_load_thres = 0;
 
 	state->min_poll_interval = 0;
 	state->max_poll_interval = 0;
@@ -149,6 +154,10 @@ static void lpmd_parse_state(xmlDoc *doc, xmlNode *a_node, lpmd_config_state_t *
 					state->enter_cpu_load_thres = strtol (tmp_value, &pos, 10);
 				if (!strncmp((const char*)cur_node->name, "ExitCPULoadThres", strlen("ExitCPULoadThres")))
 					state->exit_cpu_load_thres = strtol (tmp_value, &pos, 10);
+				if (!strncmp((const char*)cur_node->name, "EnterGFXLoadThres", strlen("EnterGFXLoadThres")))
+					state->enter_gfx_load_thres = strtol (tmp_value, &pos, 10);
+				if (!strncmp((const char*)cur_node->name, "ExitGFXLoadThres", strlen("ExitGFXLoadThres")))
+					state->exit_gfx_load_thres = strtol (tmp_value, &pos, 10);
 				if (!strncmp((const char*)cur_node->name, "MinPollInterval", strlen("MinPollInterval")))
 					state->min_poll_interval = strtol (tmp_value, &pos, 10);
 				if (!strncmp((const char*)cur_node->name, "MaxPollInterval", strlen("MaxPollInterval")))
@@ -189,14 +198,27 @@ static void lpmd_parse_state(xmlDoc *doc, xmlNode *a_node, lpmd_config_state_t *
 
 static int validate_config_state(lpmd_config_t *lpmd_config, lpmd_config_state_t *state)
 {
-	if (lpmd_config->wlt_hint_enable || lpmd_config->wlt_proxy_enable) {
+	if (!state->enter_gfx_load_thres && (lpmd_config->wlt_hint_enable || lpmd_config->wlt_proxy_enable)) {
 		if (state->wlt_type >=0 && state->wlt_type < WLT_INVALID)
 			state->valid = 1;
 	} else {
 		if ((state->enter_cpu_load_thres > 0 && state->enter_cpu_load_thres <= 100) ||
-		    (state->entry_system_load_thres > 0 && state->entry_system_load_thres <= 100))
+		    (state->entry_system_load_thres > 0 && state->entry_system_load_thres <= 100) ||
+		    (state->enter_gfx_load_thres > 0 && state->enter_gfx_load_thres <= 100))
 			state->valid = 1;
 	}
+	return 0;
+}
+
+static int is_wildcard(char *str)
+{
+	if (!str)
+		return 1;
+	if (strncmp(str, "*", strlen("*")))
+		return 1;
+	if (strncmp(str, " * ", strlen(" * ")))
+		return 1;
+
 	return 0;
 }
 
@@ -223,15 +245,26 @@ static void lpmd_parse_states(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_
 			if (cur_node->name) {
 
 				tmp_value = (char*) xmlNodeListGetString (doc, cur_node->xmlChildrenNode, 1);
+				if (!strncmp ((const char*) cur_node->name, "CPUFamily", strlen ("CPUFamily"))) {
+					if (is_wildcard(tmp_value))
+						cpu_family = lpmd_config->cpu_family;
+					else
+						cpu_family = strtol (tmp_value, &pos, 10);
+				}
 
-				if (!strncmp ((const char*) cur_node->name, "CPUFamily", strlen ("CPUFamily")))
-					cpu_family = strtol (tmp_value, &pos, 10);
-
-				if (!strncmp ((const char*) cur_node->name, "CPUModel", strlen ("CPUModel")))
-					cpu_model = strtol (tmp_value, &pos, 10);
+				if (!strncmp ((const char*) cur_node->name, "CPUModel", strlen ("CPUModel"))) {
+					if (is_wildcard(tmp_value))
+						cpu_model = lpmd_config->cpu_model;
+					else
+						cpu_model = strtol (tmp_value, &pos, 10);
+				}
 
 				if (!strncmp ((const char*) cur_node->name, "CPUConfig", strlen ("CPUConfig"))) {
-					snprintf (cpu_config, MAX_CONFIG_LEN - 1, "%s", tmp_value);
+					if (is_wildcard(tmp_value)) {
+						strncpy(cpu_config, lpmd_config->cpu_config, MAX_CONFIG_LEN);
+					} else {
+						snprintf (cpu_config, MAX_CONFIG_LEN - 1, "%s", tmp_value);
+					}
 					cpu_config[MAX_CONFIG_LEN - 1] = '\0';
 				}
 
@@ -242,7 +275,7 @@ static void lpmd_parse_states(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_
 					continue;
 
 				/* Must check cpu family/model/config first to make sure the states applies */
-				if (cpu_family != lpmd_config->cpu_family || cpu_model != lpmd_config->cpu_model || (strncmp(cpu_config, lpmd_config->cpu_config, MAX_CONFIG_LEN) && strncmp(cpu_config, " * ", strlen(" * ")))) {
+				if (cpu_family != lpmd_config->cpu_family || cpu_model != lpmd_config->cpu_model || strncmp(cpu_config, lpmd_config->cpu_config, MAX_CONFIG_LEN)) {
 					lpmd_log_info("Ignore unsupported states for CPU family:%d,model%d,config:%s\n", cpu_family, cpu_model, cpu_config);
 					return;
 				}
@@ -299,6 +332,13 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_co
 					lpmd_config->wlt_hint_enable = strtol (tmp_value, &pos, 10);
 					if (errno || *pos != '\0'
 							|| (lpmd_config->wlt_hint_enable != 1 && lpmd_config->wlt_hint_enable != 0))
+						goto err;
+				}
+				else if (!strncmp((const char*)cur_node->name, "WLTHintPollEnable", strlen("WLtHintPollEnable"))) {
+					errno = 0;
+					lpmd_config->wlt_hint_poll_enable = strtol (tmp_value, &pos, 10);
+					if (errno || *pos != '\0'
+							|| (lpmd_config->wlt_hint_poll_enable != 1 && lpmd_config->wlt_hint_poll_enable != 0))
 						goto err;
 				}
 				else if (!strncmp((const char*)cur_node->name, "WLTProxyEnable", strlen("WLTProxyEnable"))) {

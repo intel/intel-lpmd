@@ -268,3 +268,24 @@ char* time_delta(void)
 	return time_buf;
 }
 
+uint64_t read_msr(int cpu, uint32_t msr)
+{
+	char msr_file_name[64];
+	int fd;
+	uint64_t value;
+
+	snprintf(msr_file_name, sizeof(msr_file_name), "/dev/cpu/%d/msr", cpu);
+
+	fd = open(msr_file_name, O_RDONLY);
+	if (fd < 0)
+		return UINT64_MAX;
+
+	if (pread(fd, &value, sizeof(value), msr) != sizeof(value)) {
+		close(fd);
+		return UINT64_MAX;
+	}
+
+	close(fd);
+
+	return value;
+}

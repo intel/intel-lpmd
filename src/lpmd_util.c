@@ -74,6 +74,177 @@ struct proc_stat_info *proc_stat_cur;
 
 static int busy_sys = -1;
 static int busy_cpu = -1;
+static int busy_gfx = -1;
+
+char *path_gfx_rc6;
+char *path_sam_mc6;
+
+static int probe_gfx_util_sysfs(void)
+{
+	FILE *fp;
+	char buf[8];
+	bool gt0_is_gt;
+
+	if (access("/sys/class/drm/card0/device/tile0/gt0/gtidle/idle_residency_ms", R_OK))
+		return 1;
+
+	fp = fopen("/sys/class/drm/card0/device/tile0/gt0/gtidle/name", "r");
+	if (!fp)
+		return 1;
+
+	if (!fread(buf, sizeof(char), 7, fp)) {
+		fclose(fp);
+		return 1;
+	}
+
+	fclose(fp);
+
+	if (!strncmp(buf, "gt0-rc", strlen("gt0-rc"))) {
+		if (!access("/sys/class/drm/card0/device/tile0/gt0/gtidle/idle_residency_ms", R_OK))
+			path_gfx_rc6 = "/sys/class/drm/card0/device/tile0/gt0/gtidle/idle_residency_ms";
+		if (!access("/sys/class/drm/card0/device/tile0/gt1/gtidle/idle_residency_ms", R_OK))
+			path_sam_mc6 = "/sys/class/drm/card0/device/tile0/gt1/gtidle/idle_residency_ms";
+	} else if (!strncmp(buf, "gt0-mc", strlen("gt0-mc"))) {
+		if (!access("/sys/class/drm/card0/device/tile0/gt1/gtidle/idle_residency_ms", R_OK))
+			path_gfx_rc6 = "/sys/class/drm/card0/device/tile0/gt1/gtidle/idle_residency_ms";
+		if (!access("/sys/class/drm/card0/device/tile0/gt0/gtidle/idle_residency_ms", R_OK))
+			path_sam_mc6 = "/sys/class/drm/card0/device/tile0/gt0/gtidle/idle_residency_ms";
+	}
+	lpmd_log_debug("Use %s for gfx rc6\n", path_gfx_rc6);
+	lpmd_log_debug("Use %s for sam mc6\n", path_sam_mc6);
+	return 0;
+}
+
+static int get_gfx_util_sysfs(unsigned long long time_ms)
+{
+	static unsigned long long gfx_rc6_prev = ULLONG_MAX, sam_mc6_prev = ULLONG_MAX;
+	unsigned long long gfx_rc6, sam_mc6;
+	unsigned long long val;
+	FILE *fp;
+	int gfx_util, sam_util;
+	int ret;
+	int i;
+
+	gfx_util = sam_util = -1;
+
+	fp = fopen(path_gfx_rc6, "r");
+	if (fp) {
+		ret = fscanf(fp, "%lld", &gfx_rc6);
+		if (ret != 1)
+			gfx_rc6 = ULLONG_MAX;
+		fclose(fp);
+	}
+
+	fp = fopen(path_sam_mc6, "r");
+	if (fp) {
+		ret = fscanf(fp, "%lld", &sam_mc6);
+		if (ret != 1)
+			sam_mc6 = ULLONG_MAX;
+		fclose(fp);
+	}
+
+	if (gfx_rc6 == ULLONG_MAX && sam_mc6 == ULLONG_MAX)
+		return -1;
+
+	if (gfx_rc6 != ULLONG_MAX) {
+		if (gfx_rc6_prev != ULLONG_MAX)
+			gfx_util = 10000 - (gfx_rc6 - gfx_rc6_prev) * 10000 / time_ms;
+		gfx_rc6_prev = gfx_rc6;
+		lpmd_log_debug("GFX Utilization: %d.%d\n", gfx_util / 100, gfx_util % 100);
+	}
+
+	if (sam_mc6 != ULLONG_MAX) {
+		if (sam_mc6_prev != ULLONG_MAX)
+			sam_util = 10000 - (sam_mc6 - sam_mc6_prev) * 10000 / time_ms;
+		sam_mc6_prev = sam_mc6;
+		lpmd_log_debug("SAM Utilization: %d.%d\n", sam_util / 100, sam_util % 100);
+	}
+
+	return gfx_util > sam_util ? gfx_util : sam_util;
+}
+
+/* Get GFX_RC6 and SAM_MC6 from sysfs and calculate gfx util based on this */
+static int parse_gfx_util_sysfs(void)
+{
+	static int gfx_sysfs_available = 1;
+	static struct timespec ts_prev;
+	struct timespec ts_cur;
+	unsigned long time_ms;
+	int ret;
+
+	busy_gfx = -1;
+
+	if (!gfx_sysfs_available)
+		return 1;
+
+	clock_gettime (CLOCK_MONOTONIC, &ts_cur);
+
+	if (!ts_prev.tv_sec && !ts_prev.tv_nsec) {
+		ret = probe_gfx_util_sysfs();
+		if (ret) {
+			gfx_sysfs_available = 0;
+			return 1;
+		}
+		ts_prev = ts_cur;
+		return 0;
+	}
+
+	time_ms = (ts_cur.tv_sec - ts_prev.tv_sec) * 1000 + (ts_cur.tv_nsec - ts_prev.tv_nsec) / 1000000;
+
+	ts_prev = ts_cur;
+	busy_gfx = get_gfx_util_sysfs(time_ms);
+
+	return 0;
+}
+
+#define MSR_TSC			0x10
+#define MSR_PKG_ANY_GFXE_C0_RES	0x65A
+static int parse_gfx_util_msr(void)
+{
+	static uint64_t val_prev;
+	uint64_t val;
+	static uint64_t tsc_prev;
+	uint64_t tsc;
+	int cpu;
+
+	cpu = sched_getcpu();
+	tsc = read_msr(cpu, MSR_TSC);
+	if (tsc == UINT64_MAX)
+		goto err;
+
+	val = read_msr(cpu, MSR_PKG_ANY_GFXE_C0_RES);
+	if (val == UINT64_MAX)
+		goto err;
+
+	if (!tsc_prev || !val_prev) {
+		tsc_prev = tsc;
+		val_prev = val;
+		busy_gfx = -1;
+		return 0;
+	}
+
+	busy_gfx = (val - val_prev) * 10000 / (tsc - tsc_prev);
+	tsc_prev = tsc;
+	val_prev = val;
+	return 0;
+err:
+	lpmd_log_debug("parse_gfx_util_msr failed\n");
+	busy_gfx = -1;
+	return 1;
+}
+
+static int parse_gfx_util(void)
+{
+	int ret;
+
+	/* Prefer to get graphics utilization from GFX/SAM RC6 sysfs */
+	ret = parse_gfx_util_sysfs();
+	if (!ret)
+		return 0;
+
+	/* Fallback to MSR */
+	return parse_gfx_util_msr();
+}
 
 static int calculate_busypct(struct proc_stat_info *cur, struct proc_stat_info *prev)
 {
@@ -319,21 +490,35 @@ static int get_util_interval(void)
 	return interval;
 }
 
-static int state_match(lpmd_config_state_t *state, int bsys, int bcpu, int wlt_index)
+static int state_match(lpmd_config_state_t *state, int bsys, int bcpu, int bgfx, int wlt_index)
 {
 	if (!state->valid)
 		return 0;
 
 	if (state->wlt_type != -1) {
-		if (state->wlt_type == wlt_index) {
-			lpmd_log_debug("Match  %12s: WLT index:%d\n", state->name, wlt_index);
+		/* wlt hint must match */
+		if (state->wlt_type != wlt_index)
+			return 0;
+
+		/* return match directly if no util threshold specified */
+		if (!state->enter_gfx_load_thres)
 			return 1;
-		}
-		return 0;
+		/* leverage below logic to handle util threshold */
 	}
+
+	/* No need to dump utilization info if no threshold specified */
+	if (!state->enter_cpu_load_thres && !state->entry_system_load_thres && !state->enter_gfx_load_thres)
+		return 1;
 
 	if (state->enter_cpu_load_thres) {
 		if (bcpu > state->enter_cpu_load_thres)
+			goto unmatch;
+	}
+
+	if (state->enter_gfx_load_thres) {
+		if (bgfx == -1)
+			lpmd_log_debug("Graphics utilization not available, ignore graphics threshold\n");
+		else if (bgfx > state->enter_gfx_load_thres)
 			goto unmatch;
 	}
 
@@ -348,10 +533,10 @@ static int state_match(lpmd_config_state_t *state, int bsys, int bcpu, int wlt_i
 		}
 	}
 
-	lpmd_log_debug("Match  %12s: sys_thres %3d cpu_thres %3d hyst %3d\n", state->name, state->entry_system_load_thres, state->enter_cpu_load_thres, state->exit_system_load_hyst);
+	lpmd_log_debug("Match  %12s: sys_thres %3d cpu_thres %3d gfx_thres %3d hyst %3d\n", state->name, state->entry_system_load_thres, state->enter_cpu_load_thres, state->enter_gfx_load_thres, state->exit_system_load_hyst);
 	return 1;
 unmatch:
-	lpmd_log_debug("Ignore %12s: sys_thres %3d cpu_thres %3d hyst %3d\n", state->name, state->entry_system_load_thres, state->enter_cpu_load_thres, state->exit_system_load_hyst);
+	lpmd_log_debug("Ignore %12s: sys_thres %3d cpu_thres %3d gfx_thres %3d hyst %3d\n", state->name, state->entry_system_load_thres, state->enter_cpu_load_thres, state->enter_gfx_load_thres, state->exit_system_load_hyst);
 	return 0;
 }
 
@@ -411,18 +596,70 @@ static int enter_state(lpmd_config_state_t *state, int bsys, int bcpu)
 	return interval;
 }
 
+static void dump_system_status(lpmd_config_t *config, int interval)
+{
+	int epp, epb;
+	char epp_str[32] = "";
+	char buf[MAX_STR_LENGTH * 2];
+	int offset;
+	int size;
+
+	offset = 0;
+	size = MAX_STR_LENGTH * 2;
+
+	offset += snprintf(buf, size, "[%d/%d] %12s: ",
+		current_state->id, config->config_state_count, current_state->name);
+	size = MAX_STR_LENGTH * 2 - offset;
+
+	if (busy_sys == -1)
+		offset += snprintf(buf + offset, size, "bsys     na, ");
+	else
+		offset += snprintf(buf + offset, size, "bsys %3d.%02d, ", busy_sys / 100, busy_sys % 100);
+	size = MAX_STR_LENGTH * 2 - offset;
+
+	if (busy_cpu == -1)
+		offset += snprintf(buf + offset, size, "bcpu     na, ");
+	else
+		offset += snprintf(buf + offset, size, "bcpu %3d.%02d, ", busy_cpu / 100, busy_cpu % 100);
+	size = MAX_STR_LENGTH * 2 - offset;
+
+	if (busy_gfx == -1)
+		offset += snprintf(buf + offset, size, "bgfx     na, ");
+	else
+		offset += snprintf(buf + offset, size, "bgfx %3d.%02d, ", busy_gfx / 100, busy_gfx % 100);
+	size = MAX_STR_LENGTH * 2 - offset;
+
+	get_epp_epb(&epp, epp_str, 32, &epb);
+
+	if (epp >= 0)
+		offset += snprintf(buf + offset, size, "epp %3d, ", epp);
+	else
+		offset += snprintf(buf + offset, size, "epp %s, ", epp_str);
+	size = MAX_STR_LENGTH * 2 - offset;
+
+	offset += snprintf(buf + offset, size, "epb %3d, ", epb);
+	size = MAX_STR_LENGTH * 2 - offset;
+
+	if (current_state->itmt_state != SETTING_IGNORE)
+		offset += snprintf(buf + offset, size, "itmt %2d, ", get_itmt());
+
+	size = MAX_STR_LENGTH * 2 - offset;
+
+	snprintf(buf + offset, size, "interval %4d", interval);
+
+	lpmd_log_info("%s\n", buf);
+}
+
 static int process_next_config_state(lpmd_config_t *config, int wlt_index)
 {
 	lpmd_config_state_t *state = NULL;
 	int i = 0;
 	int interval = -1;
-	int epp, epb;
-	char epp_str[32] = "";
 
 	// Check for new state
 	for (i = 0; i < config->config_state_count; ++i) {
 		state = &config->config_states[i];
-		if (state_match(state, busy_sys, busy_cpu, wlt_index)) {
+		if (state_match(state, busy_sys, busy_cpu, busy_gfx, wlt_index)) {
 			interval = enter_state(state, busy_sys, busy_cpu);
 			break;
 		}
@@ -431,20 +668,7 @@ static int process_next_config_state(lpmd_config_t *config, int wlt_index)
 	if (!current_state)
 		return interval;
 
-	get_epp_epb(&epp, epp_str, 32, &epb);
-	if (epp >= 0)
-		lpmd_log_info(
-				"[%d/%d] %12s: bsys: %3d.%02d, bcpu: %3d.%02d, epp %20d, epb %3d, itmt %2d, interval %4d\n",
-				current_state->id, config->config_state_count,
-				current_state->name, busy_sys / 100, busy_sys % 100,
-				busy_cpu / 100, busy_cpu % 100, epp, epb, get_itmt(), interval);
-	else
-		lpmd_log_info(
-				"[%d/%d] %12s: bsys: %3d.%02d, bcpu: %3d.%02d, epp %20s, epb %3d, itmt %2d, interval %4d\n",
-				current_state->id, config->config_state_count,
-				current_state->name, busy_sys / 100, busy_sys % 100,
-				busy_cpu / 100, busy_cpu % 100, epp_str, epb, get_itmt(),
-				interval);
+	dump_system_status(config, interval);
 
 	return interval;
 }
@@ -462,8 +686,14 @@ int periodic_util_update(lpmd_config_t *lpmd_config, int wlt_index)
 	static int initialized;
 
 	if (wlt_index >= 0) {
-		process_next_config_state(lpmd_config, wlt_index);
-		return -1;
+		if (lpmd_config->wlt_hint_poll_enable) {
+			parse_gfx_util();
+			interval = process_next_config_state(lpmd_config, wlt_index);
+		} else {
+			process_next_config_state(lpmd_config, wlt_index);
+			interval = -1;
+		}
+		return interval;
 	}
 
 //	 poll() timeout should be -1 when util monitor not enabled
@@ -481,6 +711,7 @@ int periodic_util_update(lpmd_config_t *lpmd_config, int wlt_index)
 	}
 
 	parse_proc_stat ();
+	parse_gfx_util();
 
 	if (!lpmd_config->config_state_count || !use_config_state) {
 		sys_stat = get_sys_stat ();
@@ -545,6 +776,7 @@ int util_init(lpmd_config_t *lpmd_config)
 		state->entry_system_load_thres *= 100;
 		state->enter_cpu_load_thres *= 100;
 		state->exit_cpu_load_thres *= 100;
+		state->enter_gfx_load_thres *= 100;
 
 		nr_state++;
 	}

@@ -208,6 +208,11 @@ int in_suv_lpm(void)
 	return lpm_state & LPM_SUV_ON;
 }
 
+int in_auto_mode()
+{
+	return !(lpm_state & (LPM_USER_ON | LPM_USER_OFF));
+}
+
 /*
  * 1: request valid and already satisfied. 0: respond valid and need to continue to process. -1: request invalid
  */
@@ -711,6 +716,8 @@ static void poll_for_wlt(int enable)
 {
 	static int wlt_enabled_once = 0;
 
+	lpmd_log_info("%s enable:%d\n", __func__, enable);
+
 	if (wlt_fd <= 0) {
 		if (enable) {
 			wlt_fd = init_wlt();
@@ -886,6 +893,15 @@ static int proc_message(message_capsul_t *msg)
 	return ret;
 }
 
+static void dump_poll_results(int ret)
+{
+	int i;
+
+	lpmd_log_debug("poll_fds[]: ret %d, pipe %d, uevent %d, hfi %d, wlt %d\n", ret, idx_pipe_fd, idx_uevent_fd, idx_hfi_fd, idx_wlt_fd);
+	for (i = 0; i < poll_fd_cnt; i++)
+		lpmd_log_debug("poll_fds[%d]: event %d, revent %d\n", i, poll_fds[i].events, poll_fds[i].revents);
+}
+
 // LPMD processing thread. This is callback to pthread lpmd_core_main
 static void* lpmd_core_main_loop(void *arg)
 {
@@ -902,17 +918,23 @@ static void* lpmd_core_main_loop(void *arg)
 		else if (interval == -1)
 			interval = 100;
 
+		lpmd_log_debug("Poll with interval %d\n", interval);
 		n = poll (poll_fds, poll_fd_cnt, interval);
 		if (n < 0) {
 			lpmd_log_warn ("Write to pipe failed\n");
 			continue;
 		}
+		dump_poll_results(n);
 
 		/* Time out, need to choose next util state and interval */
 		if (n == 0 && interval > 0) {
 			if (lpmd_config.wlt_proxy_enable) {
 				int wlt_proxy_type = read_wlt_proxy(&interval);
 				periodic_util_update (&lpmd_config, wlt_proxy_type);
+			} else if (lpmd_config.wlt_hint_enable && lpmd_config.wlt_hint_poll_enable) {
+				int wlt_type = read_wlt(wlt_fd);
+
+				interval = periodic_util_update (&lpmd_config, wlt_type);
 			} else {
 				interval = periodic_util_update (&lpmd_config, -1);
 			}
@@ -946,7 +968,8 @@ static void* lpmd_core_main_loop(void *arg)
 			int wlt_index;
 
 			wlt_index = read_wlt(poll_fds[idx_wlt_fd].fd);
-			interval = periodic_util_update (&lpmd_config, wlt_index);
+			if (in_auto_mode())
+				interval = periodic_util_update (&lpmd_config, wlt_index);
 		}
 
 
