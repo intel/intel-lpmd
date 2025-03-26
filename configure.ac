@@ -1,7 +1,7 @@
 AC_PREREQ(1.0)
 
 m4_define([lpmd_major_version], [0])
-m4_define([lpmd_minor_version], [0.8])
+m4_define([lpmd_minor_version], [0.9])
 m4_define([lpmd_version],
           [lpmd_major_version.lpmd_minor_version])
 
