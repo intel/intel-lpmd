@@ -92,6 +92,15 @@ Run a workload and monitor `lpmd` to ensure it puts the system in the appropriat
 
 ## Releases
 
+### Release 0.0.9
+
+- Fix lpmd from processing HFI/WLT updates when it is not in auto mode.
+- Improve README and other documents.
+- Add support for graphics utilization detection.
+- Add support for config states based on both WLT and graphics utilization.
+- Introduce LunarLake platform specific config file.
+- Minor fixes and cleanups.
+
 ### Release 0.0.8
 
 - Introduce workload type proxy support.
