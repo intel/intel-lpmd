@@ -557,7 +557,7 @@ int state_max_avg() {
 
 /********************SMA calculation - end *****************************************/
 
-/* return multi threaded false if atleast one cpu is under utilizied */
+/* return multi threaded false if at least one cpu is under utilizied */
 int max_mt_detected(enum state_idx state) {
     for (int t = 0; t < get_max_online_cpu(); t++) {
 

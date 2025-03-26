@@ -86,7 +86,7 @@ int clear_spike_rate_avg() {
 }
 
 /**
- * burst count determines number of bursts occured in recent past (1 min)
+ * burst count determines number of bursts occurred in recent past (1 min)
  * arg real_spike specifies if invoked to update actual spike (1) or
  * just a refresh to burst_count (0)
  * burst count is decremented if no spikes in last 1 min

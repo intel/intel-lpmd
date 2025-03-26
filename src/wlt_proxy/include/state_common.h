@@ -37,7 +37,7 @@
 #define A_GTE_B(A,B)    (((A-B) >= EPSILON) ? 1 : 0 )
 #define A_GT_B(A,B)    (((A-B) > EPSILON) ? 1 : 0 )
 
-/* state indexs for  WLT proxy detection based cpu usage high to low */
+/* state indexes for  WLT proxy detection based cpu usage high to low */
 enum state_idx {
     INIT_MODE,
     PERF_MODE,

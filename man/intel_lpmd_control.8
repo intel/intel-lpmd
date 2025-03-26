@@ -1,0 +1,62 @@
+.\" intel_lpmd_control (8) manual page
+.\"
+.\" This is free documentation; you can redistribute it and/or
+.\" modify it under the terms of the GNU General Public License as
+.\" published by the Free Software Foundation; either version 2 of
+.\" the License, or (at your option) any later version.
+.\"
+.\" The GNU General Public License's references to "object code"
+.\" and "executables" are to be interpreted as the output of any
+.\" document formatting or typesetting system, including
+.\" intermediate and printed output.
+.\"
+.\" This manual is distributed in the hope that it will be useful,
+.\" but WITHOUT ANY WARRANTY; without even the implied warranty of
+.\" MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+.\" GNU General Public License for more details.
+.\"
+.\" You should have received a copy of the GNU General Public Licence along
+.\" with this manual; if not, write to the Free Software Foundation, Inc.,
+.\" 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+.\"
+.\" Copyright (C) 2025 Intel Corporation. All rights reserved.
+.\"
+.TH intel_lpmd_control "8" "7 Mar 2025"
+
+.SH NAME
+intel_lpmd_control \- Control utility for the Intel Low Power Mode Daemon (LPMD)
+.SH SYNOPSIS
+.B intel_lpmd_control
+.RI " [ " OPTIONS " ]
+
+.SH DESCRIPTION
+.B intel_lpmd_control
+is a command-line utility used to control the Intel Low Power Mode Daemon (LPMD). It allows users to enable, disable, or set the daemon to automatic mode based on system utilization.
+
+.SH OPTIONS
+.TP
+.B ON
+Enables low power mode operation.
+.TP
+.B OFF
+Disables low power mode operation.
+.TP
+.B AUTO
+Enables low power mode operation in automatic mode, allowing system utilization to determine low power state activation.
+
+.SH EXAMPLES
+.TP
+.B intel_lpmd_control ON
+Turns on low power mode operation.
+.TP
+.B intel_lpmd_control OFF
+Turns off low power mode operation.
+.TP
+.B intel_lpmd_control AUTO
+Turns on low power mode operation in automatic mode.
+
+.SH SEE ALSO
+.B intel_lpmd(8)
+
+.SH AUTHOR
+Written by Deepak Sundar <deepak.sundar@intel.com>

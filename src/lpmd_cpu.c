@@ -941,7 +941,7 @@ static int detect_supported_cpu(lpmd_config_t *lpmd_config)
 		return -1;
 	}
 
-	/* Platform meets all the criterias for lpmd to run, check the allow list */
+	/* Platform meets all the criteria for lpmd to run, check the allow list */
 	val = 0;
 	while (id_table[val].family) {
 		if (id_table[val].family == family && id_table[val].model == model)
