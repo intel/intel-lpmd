@@ -12,6 +12,7 @@ BusName=org.freedesktop.intel_lpmd
 ExecStart=@sbindir@/intel_lpmd --systemd --dbus-enable
 Restart=on-failure
 RestartSec=30
+PrivateTmp=yes
 
 [Install]
 WantedBy=multi-user.target
