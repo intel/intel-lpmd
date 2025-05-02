@@ -269,14 +269,6 @@ static unsigned int read_mperf_config(void) {
 }
 
 /*helper - pperf reading */
-static unsigned int read_tsc_config(void) {
-    const char *const path = "/sys/bus/event_source/devices/msr/events/tsc";
-    const char *const format = "event=%x";
-
-    return read_perf_counter_info_n(path, format);
-}
-
-/*helper - pperf reading */
 static unsigned int read_msr_type(void) {
     const char *const path = "/sys/bus/event_source/devices/msr/type";
     const char *const format = "%u";
