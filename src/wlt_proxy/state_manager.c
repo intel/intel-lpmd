@@ -285,6 +285,8 @@ int staytime_to_staycount(enum state_idx state)
         case PERF_MODE:
             stay_count = (int)PERF_MODE_STAY/get_poll_ms(PERF_MODE);
             break;
+	default:
+	    break;
     }
     return stay_count;
 }
