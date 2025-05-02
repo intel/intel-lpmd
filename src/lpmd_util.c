@@ -83,7 +83,6 @@ static int probe_gfx_util_sysfs(void)
 {
 	FILE *fp;
 	char buf[8];
-	bool gt0_is_gt;
 
 	if (access("/sys/class/drm/card0/device/tile0/gt0/gtidle/idle_residency_ms", R_OK))
 		return 1;
@@ -119,11 +118,9 @@ static int get_gfx_util_sysfs(unsigned long long time_ms)
 {
 	static unsigned long long gfx_rc6_prev = ULLONG_MAX, sam_mc6_prev = ULLONG_MAX;
 	unsigned long long gfx_rc6, sam_mc6;
-	unsigned long long val;
 	FILE *fp;
 	int gfx_util, sam_util;
 	int ret;
-	int i;
 
 	gfx_util = sam_util = -1;
 
