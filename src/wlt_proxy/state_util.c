@@ -381,10 +381,9 @@ static int read_aperf_mperf_tsc_perf(struct thread_data *t, int cpu) {
 /*Calc perf [cpu utilization per core] difference from MSR registers */
 int update_perf_diffs(float *sum_norm_perf, int stat_init_only) {
 
-    int fd, maxed_cpu = -1;
+    int maxed_cpu = -1;
     float min_load = 100.0, min_s0 = 1.0, next_s0 = 1.0;
     float max_load = 0, max_2nd_load = 0, max_3rd_load = 0, next_load = 0;
-    uint64_t aperf_raw, mperf_raw, pperf_raw, tsc_raw, poll_cpu_us = 0;
     int t, min_s0_cpu = 0, first_pass = 1;
 
     for (t = 0; t < get_max_online_cpu(); t++) {
