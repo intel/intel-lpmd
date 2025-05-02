@@ -290,6 +290,16 @@ static void lpmd_parse_states(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_
 	lpmd_config->config_state_count = config_state_count;
 }
 
+static void lpmd_init_config(lpmd_config_t *config)
+{
+	config->performance_def = config->balanced_def = config->powersaver_def = LPM_FORCE_OFF;
+	config->lp_mode_epp = -1;
+	config->data.util_sys = -1;
+	config->data.util_cpu = -1;
+	config->data.util_gfx = -1;
+	config->data.wlt_hint = -1;
+}
+
 static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_config)
 {
 	xmlNode *cur_node = NULL;
@@ -299,8 +309,8 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_co
 	if (!doc || !a_node || !lpmd_config)
 		return LPMD_ERROR;
 
-	lpmd_config->performance_def = lpmd_config->balanced_def = lpmd_config->powersaver_def = LPM_FORCE_OFF;
-	lpmd_config->lp_mode_epp = -1;
+	lpmd_init_config(lpmd_config);
+
 	for (cur_node = a_node; cur_node; cur_node = cur_node->next) {
 		if (cur_node->type == XML_ELEMENT_NODE) {
 			tmp_value = (char*) xmlNodeListGetString (doc, cur_node->xmlChildrenNode, 1);

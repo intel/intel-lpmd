@@ -110,6 +110,14 @@ typedef struct {
 #define MAX_CONFIG_LEN		64
 
 typedef struct {
+	int util_cpu;	/* From Util monitor */
+	int util_sys;	/* From Util monitor */
+	int util_gfx;	/* From Util monitor */
+	int wlt_hint;	/* From WLT monitor */
+	/* active_cpus from HFI monitor but we can leverage CPUMASK_HFI for now */
+}lpmd_data_t;
+
+typedef struct {
 	int id;
 	int valid;
 	char name[MAX_STATE_NAME];
@@ -170,6 +178,7 @@ typedef struct {
 	int config_state_count;
 	int tdp;
 	lpmd_config_state_t config_states[MAX_CONFIG_STATES];
+	lpmd_data_t data;
 } lpmd_config_t;
 
 enum lpm_cpu_process_mode {
