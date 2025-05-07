@@ -780,7 +780,7 @@ static void power_profiles_changed_cb(void)
 	}
 }
 
-static void connect_to_power_profile_daemon(void)
+static int connect_to_power_profile_daemon(void)
 {
 	g_autoptr (GDBusConnection)
 	bus = NULL;
@@ -800,11 +800,13 @@ static void connect_to_power_profile_daemon(void)
 										(GCallback) power_profiles_changed_cb,
 										NULL);
 			power_profiles_changed_cb ();
+			return 0;
 		}
 		else {
 			lpmd_log_info ("Could not setup DBus watch for power-profiles-daemon");
 		}
 	}
+	return 1;
 }
 
 static int battery_mode;
@@ -1123,7 +1125,9 @@ int lpmd_main(void)
 	pthread_attr_init (&lpmd_attr);
 	pthread_attr_setdetachstate (&lpmd_attr, PTHREAD_CREATE_DETACHED);
 
-	connect_to_power_profile_daemon ();
+	/* Enable lpmd auto run when power profile daemon is not connected */
+	if (connect_to_power_profile_daemon ())
+		lpmd_set_auto();
 	/*
 	 * lpmd_core_main_loop: is the thread where all LPMD actions take place.
 	 * All other thread send message via pipe to trigger processing
