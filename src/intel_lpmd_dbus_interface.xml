@@ -19,11 +19,5 @@
 		<method name="LPM_AUTO">
 		</method>
 
-		<method name="SUV_MODE_ENTER">
-		</method>
-
-		<method name="SUV_MODE_EXIT">
-		</method>
-
 	</interface>
 </node>

@@ -101,11 +101,6 @@ int has_hfi_lpm_monitor(void)
 	return !!lpmd_config.hfi_lpm_enable;
 }
 
-int has_hfi_suv_monitor(void)
-{
-	return !!lpmd_config.hfi_suv_enable;
-}
-
 int has_util_monitor(void)
 {
 	return !!lpmd_config.util_enable;
@@ -190,7 +185,6 @@ static int process_itmt(void)
 enum lpm_state {
 	LPM_USER_ON = 1 << 0,
 	LPM_USER_OFF = 1 << 1,
-	LPM_SUV_ON = 1 << 2,
 	LPM_HFI_ON = 1 << 3,
 	LPM_UTIL_ON = 1 << 4,
 };
@@ -201,11 +195,6 @@ int lpm_state = LPM_USER_OFF;
 int in_hfi_lpm(void)
 {
 	return lpm_state & LPM_HFI_ON;
-}
-
-int in_suv_lpm(void)
-{
-	return lpm_state & LPM_SUV_ON;
 }
 
 int in_auto_mode()
@@ -223,17 +212,10 @@ static int lpm_can_process(enum lpm_command cmd)
 			lpm_state &= ~LPM_USER_OFF;
 			lpm_state |= LPM_USER_ON;
 
-			/* Set the flag but do not proceed when in SUV mode */
-			if (lpm_state & LPM_SUV_ON)
-				return 0;
 			return 1;
 		case USER_EXIT:
 			lpm_state &= ~LPM_USER_ON;
 			lpm_state |= LPM_USER_OFF;
-
-			/* Set the flag but do not proceed when in SUV mode */
-			if (lpm_state & LPM_SUV_ON)
-				return 0;
 
 			return 1;
 		case USER_AUTO:
@@ -249,10 +231,6 @@ static int lpm_can_process(enum lpm_command cmd)
 			if (lpm_state & (LPM_USER_OFF | LPM_USER_ON))
 				return 0;
 
-			/* Ignore HFI LPM hints when in SUV mode */
-			if (lpm_state & LPM_SUV_ON)
-				return 0;
-
 			lpm_state |= LPM_HFI_ON;
 			return 1;
 		case HFI_EXIT:
@@ -261,17 +239,9 @@ static int lpm_can_process(enum lpm_command cmd)
 			if (lpm_state & LPM_USER_ON)
 				return 0;
 
-			/* Do not proceed when in SUV mode */
-			if (lpm_state & LPM_SUV_ON)
-				return 0;
-
 			return 1;
 		case UTIL_ENTER:
 			if (lpm_state & (LPM_USER_OFF))
-				return 0;
-
-			/* Do not proceed when in SUV mode */
-			if (lpm_state & LPM_SUV_ON)
 				return 0;
 
 			return 1;
@@ -279,31 +249,10 @@ static int lpm_can_process(enum lpm_command cmd)
 			if (lpm_state & LPM_USER_ON)
 				return 0;
 
-			/* Do not proceed when in SUV mode */
-			if (lpm_state & LPM_SUV_ON)
-				return 0;
-
 			/* Trust HFI LPM hints over utilization monitor */
 			if (lpm_state & LPM_HFI_ON)
 				return 0;
 			return 1;
-
-			/* Quit LPM because of SUV mode */
-		case HFI_SUV_ENTER:
-			lpm_state &= ~LPM_HFI_ON; /* HFI SUV hints means LPM hints is invalid */
-			/* Fallthrough */
-		case DBUS_SUV_ENTER:
-			lpm_state |= LPM_SUV_ON;
-			return 1;
-			/* Re-enter LPM when quitting SUV mode */
-		case HFI_SUV_EXIT:
-		case DBUS_SUV_EXIT:
-			lpm_state &= ~LPM_SUV_ON;
-			/* Re-enter LPM because it is forced by user */
-			if (lpm_state & LPM_USER_ON)
-				return 1;
-			/* Do oppoturnistic LPM based on util/hfi requests */
-			return 0;
 		default:
 			return 1;
 	}
@@ -422,15 +371,6 @@ int process_lpm_unlock(enum lpm_command cmd)
 			set_lpm_cpus (CPUMASK_LPM_DEFAULT);
 			ret = enter_lpm (cmd);
 			break;
-		case HFI_SUV_EXIT:
-		case DBUS_SUV_EXIT:
-			set_lpm_epp (SETTING_IGNORE);
-			set_lpm_epb (SETTING_IGNORE);
-			set_lpm_itmt (SETTING_IGNORE);
-			set_lpm_irq(NULL, SETTING_IGNORE);	/* SUV ignores IRQ */
-			set_lpm_cpus (CPUMASK_HFI_SUV);
-			ret = enter_lpm (cmd);
-			break;
 		case HFI_ENTER:
 			set_lpm_epp (lpmd_config.lp_mode_epp);
 			set_lpm_epb (SETTING_IGNORE);
@@ -447,14 +387,6 @@ int process_lpm_unlock(enum lpm_command cmd)
 			set_lpm_epb (SETTING_RESTORE);
 			set_lpm_itmt (SETTING_RESTORE);
 			set_lpm_irq(NULL, SETTING_RESTORE);
-			ret = exit_lpm (cmd);
-			break;
-		case HFI_SUV_ENTER:
-		case DBUS_SUV_ENTER:
-			set_lpm_epp (SETTING_IGNORE);
-			set_lpm_epb (SETTING_IGNORE);
-			set_lpm_itmt (SETTING_IGNORE);
-			set_lpm_irq(NULL, SETTING_IGNORE);
 			ret = exit_lpm (cmd);
 			break;
 		case HFI_EXIT:
@@ -582,16 +514,6 @@ void lpmd_force_off(void)
 void lpmd_set_auto(void)
 {
 	lpmd_send_message (LPM_AUTO, 0, NULL);
-}
-
-void lpmd_suv_enter(void)
-{
-	lpmd_send_message (SUV_MODE_ENTER, 0, NULL);
-}
-
-void lpmd_suv_exit(void)
-{
-	lpmd_send_message (SUV_MODE_EXIT, 0, NULL);
 }
 
 void lpmd_notify_hfi_event(void)
@@ -877,14 +799,6 @@ static int proc_message(message_capsul_t *msg)
 			// Enable oppotunistic LPM
 			process_lpm (USER_AUTO);
 			break;
-		case SUV_MODE_ENTER:
-			// Call function to enter SUV mode
-			process_suv_mode (DBUS_SUV_ENTER);
-			break;
-		case SUV_MODE_EXIT:
-			// Call function to exit SUV mode
-			process_suv_mode (DBUS_SUV_EXIT);
-			break;
 		case HFI_EVENT:
 			// Call the HFI callback from here
 			break;
@@ -915,7 +829,7 @@ static void* lpmd_core_main_loop(void *arg)
 			break;
 
 //		 Opportunistic LPM is disabled in below cases
-		if ((lpm_state & (LPM_USER_ON | LPM_USER_OFF | LPM_SUV_ON)) | has_hfi_lpm_monitor ())
+		if ((lpm_state & (LPM_USER_ON | LPM_USER_OFF)) | has_hfi_lpm_monitor ())
 			interval = -1;
 		else if (interval == -1)
 			interval = 100;
@@ -1045,9 +959,6 @@ int lpmd_main(void)
 
 	init_itmt();
 
-	if (!has_suv_support () && lpmd_config.hfi_suv_enable)
-		lpmd_config.hfi_suv_enable = 0;
-
 	if (!has_hfi_capability ())
 		lpmd_config.hfi_lpm_enable = 0;
 
@@ -1097,7 +1008,7 @@ int lpmd_main(void)
 		poll_fd_cnt++;
 	}
 
-	if (lpmd_config.hfi_lpm_enable || lpmd_config.hfi_suv_enable) {
+	if (lpmd_config.hfi_lpm_enable) {
 		poll_fds[poll_fd_cnt].fd = hfi_init ();
 		if (poll_fds[poll_fd_cnt].fd > 0) {
 			idx_hfi_fd = poll_fd_cnt;
@@ -1114,7 +1025,7 @@ int lpmd_main(void)
 				lpmd_log_error ("Error setting up WLT Proxy. wlt_proxy_enable disabled\n");
 			}
 		}
-		if (!lpmd_config.hfi_lpm_enable && !lpmd_config.hfi_suv_enable) {
+		if (!lpmd_config.hfi_lpm_enable) {
 			lpmd_config.util_enable = 0;
 			if (!lpmd_config.wlt_proxy_enable) {
 				poll_for_wlt(1);

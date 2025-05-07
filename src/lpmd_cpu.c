@@ -69,7 +69,6 @@ static struct lpm_cpus cpumasks[CPUMASK_MAX] = {
 		[CPUMASK_ONLINE] = { .name = "Online", },
 		[CPUMASK_HFI] = { .name = "HFI Low Power", },
 		[CPUMASK_HFI_BANNED] = { .name = "HFI BANNED", },
-		[CPUMASK_HFI_SUV] = { .name = "HFI SUV", },
 		[CPUMASK_HFI_LAST] = { .name = "HFI LAST", },
 };
 
@@ -400,7 +399,7 @@ int add_cpu(int cpu, enum cpumask_idx idx)
 
 	_add_cpu (cpu, idx);
 
-	if (idx & (CPUMASK_HFI | CPUMASK_HFI_SUV | CPUMASK_HFI_BANNED))
+	if (idx & (CPUMASK_HFI | CPUMASK_HFI_BANNED))
 		return 0;
 
 	if (idx == CPUMASK_LPM_DEFAULT) {
@@ -461,10 +460,6 @@ int set_lpm_cpus(enum cpumask_idx new)
 {
 	if (lpm_cpus_cur == new)
 		return 0;
-
-	if (new == CPUMASK_HFI_SUV)
-		CPU_XOR_S(size_cpumask, cpumasks[new].mask, cpumasks[CPUMASK_ONLINE].mask,
-					cpumasks[new].mask);
 
 	lpm_cpus_cur = new;
 	return 0;
@@ -1251,7 +1246,7 @@ static int detect_lpm_cpus(char *cmd_cpus)
 		goto end;
 	}
 
-	if (has_hfi_lpm_monitor () || has_hfi_suv_monitor ()) {
+	if (has_hfi_lpm_monitor ()) {
 		lpmd_log_info (
 				"\tNo valid Low Power CPUs detected, use dynamic Low Power CPUs from HFI hints\n");
 		return 0;
@@ -1611,103 +1606,6 @@ static int process_cpu_powerclamp(int enter)
 		return process_cpu_powerclamp_exit ();
 }
 
-// Support for SUV mode, which uses powerclamp
-#define SUV_IDLE_PCT	50
-static int in_suv;
-
-static int enter_suv_mode(enum lpm_command cmd)
-{
-	int ret;
-	char *cpumask_str;
-	char *name;
-
-//	 in_suv can either be HFI_SUV or DBUS_SUV, can not be both
-	if (in_suv)
-		return 0;
-
-	if (cmd == HFI_SUV_ENTER) {
-		cpumask_str = get_cpus_hexstr (CPUMASK_HFI_SUV);
-		name = "HFI";
-	}
-	else {
-		cpumask_str = get_cpus_hexstr (CPUMASK_ONLINE);
-		name = "DBUS";
-	}
-
-	/*
-	 * When system is in LPM and it uses idle injection for LPM,
-	 * we need to exit LPM first because we need to reset the cpumask
-	 * of the intel_powerclamp sysfs I/F.
-	 *
-	 * In order to make the logic simpler, always exit LPM when Idle
-	 * injection is used for LPM.
-	 * The downside is that we need to do an extra LPM exit but this
-	 * should be rare because it is abnormal to get an SUV request when
-	 * system is already in LPM.
-	 */
-	if (get_cpu_mode () == LPM_CPU_POWERCLAMP)
-		process_lpm_unlock (cmd);
-
-	lpmd_log_info ("------ Enter %s Survivability Mode ---\n", name);
-	ret = _process_cpu_powerclamp_enter (cpumask_str, SUV_IDLE_PCT, -1);
-	if (!ret)
-		in_suv = cmd;
-	return ret;
-}
-
-static int exit_suv_mode(enum lpm_command cmd)
-{
-	int cmd_enter;
-	char *name;
-
-//	 If SUV mode is disabled or exited
-	if (in_suv == -1 || in_suv == 0)
-		return 0;
-
-	if (cmd == HFI_SUV_EXIT) {
-		cmd_enter = HFI_SUV_ENTER;
-		name = "HFI";
-	}
-	else {
-		cmd_enter = DBUS_SUV_ENTER;
-		name = "DBUS";
-	}
-
-	if (in_suv != cmd_enter)
-		return 0;
-
-	lpmd_log_info ("------ Exit %s Survivability Mode ---\n", name);
-
-	process_cpu_powerclamp_exit ();
-
-//	 Try to re-enter in case it was FORCED ON
-	if (get_cpu_mode () == LPM_CPU_POWERCLAMP)
-		process_lpm_unlock (cmd);
-	in_suv = 0;
-
-	return LPMD_SUCCESS;
-}
-
-int process_suv_mode(enum lpm_command cmd)
-{
-	int ret;
-
-	lpmd_lock ();
-	if (cmd == HFI_SUV_ENTER || cmd == DBUS_SUV_ENTER)
-		ret = enter_suv_mode (cmd);
-	else if (cmd == HFI_SUV_EXIT || cmd == DBUS_SUV_EXIT)
-		ret = exit_suv_mode (cmd);
-	else
-		ret = -1;
-	lpmd_unlock ();
-	return ret;
-}
-
-int has_suv_support(void)
-{
-	return !(in_suv == -1);
-}
-
 static int __process_cpu_isolate_exit(char *name)
 {
 	char path[MAX_STR_LENGTH];
@@ -1813,14 +1711,6 @@ static int check_cpu_mode_support(enum lpm_cpu_process_mode mode)
 	if (ret) {
 		lpmd_log_error ("Mode %d not supported\n", mode);
 		return ret;
-	}
-
-//	 Extra checks for SUV mode support
-	if (mode != LPM_CPU_POWERCLAMP) {
-		if (check_cpu_powerclamp_support ()) {
-			in_suv = -1;
-			lpmd_log_info ("Idle injection interface not detected, disable SUV mode support\n");
-		}
 	}
 
 	return ret;

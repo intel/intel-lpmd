@@ -176,16 +176,10 @@ struct perf_cap {
 	int eff;
 };
 
-static int suv_bit_set(void)
-{
-//	Depends on kernel patch to export kernel knobs for this
-	return 0;
-}
-
 /*
  * Detect different kinds of CPU HFI hint
  * "LPM". EFF == 255
- * "SUV". PERF == EFF == 0, suv bit set.
+ * "SUV". PERF == EFF == 0, suv bit set. Not supported for now.
  * "BAN". PERF == EFF == 0, suv bit not set.
  * "NOR".
  */
@@ -202,10 +196,6 @@ static char *update_one_cpu(struct perf_cap *perf_cap)
 	if (perf_cap->eff == 255 * 4 && has_hfi_lpm_monitor ()) {
 		add_cpu (perf_cap->cpu, CPUMASK_HFI);
 		return "LPM";
-	}
-	if (!perf_cap->perf && !perf_cap->eff && has_hfi_suv_monitor () && suv_bit_set ()) {
-		add_cpu (perf_cap->cpu, CPUMASK_HFI_SUV);
-		return "SUV";
 	}
 	if (!perf_cap->perf && !perf_cap->eff) {
 		add_cpu (perf_cap->cpu, CPUMASK_HFI_BANNED);
@@ -236,16 +226,6 @@ static void process_one_event(int first, int last, int nr)
 		reset_cpus (CPUMASK_HFI_LAST);
 		copy_cpu_mask(CPUMASK_HFI, CPUMASK_HFI_LAST);
 	}
-	else if (has_cpus (CPUMASK_HFI_SUV)) {
-		if (in_suv_lpm ()) {
-			lpmd_log_debug ("\tUpdate HFI SUV event\n\n");
-		}
-		else {
-			lpmd_log_debug ("\tDetect HFI SUV event\n");
-		}
-//		 TODO: SUV re-enter is not supported for now
-		process_suv_mode (HFI_SUV_ENTER);
-	}
 	else if (has_cpus (CPUMASK_HFI_BANNED)) {
 		copy_cpu_mask_exclude(CPUMASK_ONLINE, CPUMASK_HFI, CPUMASK_HFI_BANNED);
 		/* Ignore duplicate event */
@@ -268,11 +248,6 @@ static void process_one_event(int first, int last, int nr)
 //		 Don't override the DETECT_LPM_CPU_DEFAULT so it is auto recovered
 		process_lpm (HFI_EXIT);
 		reset_cpus (CPUMASK_HFI_LAST);
-	}
-	else if (in_suv_lpm ()) {
-		lpmd_log_debug ("\tHFI SUV recover\n");
-//		 Don't override the DETECT_LPM_CPU_DEFAULT so it is auto recovered
-		process_suv_mode (HFI_SUV_EXIT);
 	}
 	else {
 		lpmd_log_info ("\t\t\tUnsupported HFI event ignored\n");

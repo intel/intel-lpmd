@@ -35,7 +35,6 @@ static void lpmd_dump_config(lpmd_config_t *lpmd_config)
 
 	lpmd_log_info ("Mode:%d\n", lpmd_config->mode);
 	lpmd_log_info ("HFI LPM Enable:%d\n", lpmd_config->hfi_lpm_enable);
-	lpmd_log_info ("HFI SUV Enable:%d\n", lpmd_config->hfi_suv_enable);
 	lpmd_log_info ("WLT Hint Enable:%d\n", lpmd_config->wlt_hint_enable);
 	lpmd_log_info ("WLT Proxy Enable:%d\n", lpmd_config->wlt_proxy_enable);
 	lpmd_log_info ("WLT Proxy Enable:%d\n", lpmd_config->wlt_hint_poll_enable);
@@ -320,13 +319,6 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_co
 							|| (lpmd_config->hfi_lpm_enable != 1 && lpmd_config->hfi_lpm_enable != 0))
 						goto err;
 				}
-				else if (!strncmp((const char*)cur_node->name, "HfiSuvEnable", strlen("HfiSuvEnable"))) {
-					errno = 0;
-					lpmd_config->hfi_suv_enable = strtol (tmp_value, &pos, 10);
-					if (errno || *pos != '\0'
-							|| (lpmd_config->hfi_suv_enable != 1 && lpmd_config->hfi_suv_enable != 0))
-						goto err;
-				}
 				else if (!strncmp((const char*)cur_node->name, "WLTHintEnable", strlen("WLtHintEnable"))) {
 					errno = 0;
 					lpmd_config->wlt_hint_enable = strtol (tmp_value, &pos, 10);
@@ -468,8 +460,12 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_co
 					lpmd_parse_states(doc, cur_node->children, lpmd_config);
 				}
 				else {
-					lpmd_log_info ("Invalid configuration data\n");
-					goto err;
+					if (!strncmp((const char*)cur_node->name, "HfiSuvEnable", strlen("HfiSuvEnable"))) {
+						lpmd_log_debug("Ignore deprecated HfiSuvEnable setting\n");
+					} else {
+						lpmd_log_info ("Invalid configuration data\n");
+						goto err;
+					}
 				}
 				xmlFree (tmp_value);
 				continue;

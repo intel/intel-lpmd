@@ -104,29 +104,6 @@ static gboolean dbus_interface_l_pm__au_to(PrefObject *obj, GError **error)
 	return TRUE;
 }
 
-static gboolean dbus_interface_s_uv__mo_de__en_te_r(PrefObject *obj, GError **error)
-{
-	lpmd_log_debug ("intel_lpmd_dbus_interface_suv_enter\n");
-
-	if (!has_suv_support ())
-		return FALSE;
-
-	lpmd_suv_enter ();
-
-	return TRUE;
-}
-
-static gboolean dbus_interface_s_uv__mo_de__ex_it(PrefObject *obj, GError **error)
-{
-	if (!has_suv_support ())
-		return FALSE;
-
-	lpmd_log_debug ("intel_lpmd_dbus_interface_suv_exit\n");
-	lpmd_suv_exit ();
-
-	return TRUE;
-}
-
 #pragma GCC diagnostic push
 
 static GDBusInterfaceVTable interface_vtable;
@@ -182,16 +159,6 @@ lpmd_dbus_handle_method_call(GDBusConnection       *connection,
 	if (g_strcmp0(method_name, "LPM_AUTO") == 0) {
 		g_dbus_method_invocation_return_value(invocation, NULL);
 		dbus_interface_l_pm__au_to(obj, &error);
-		return;
-	}
-	if (g_strcmp0(method_name, "SUV_MODE_ENTER") == 0) {
-		g_dbus_method_invocation_return_value(invocation, NULL);
-		dbus_interface_s_uv__mo_de__en_te_r(obj, &error);
-		return;
-	}
-	if (g_strcmp0(method_name, "SUV_MODE_EXIT") == 0) {
-		g_dbus_method_invocation_return_value(invocation, NULL);
-		dbus_interface_s_uv__mo_de__ex_it(obj, &error);
 		return;
 	}
 

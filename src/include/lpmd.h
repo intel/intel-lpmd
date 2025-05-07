@@ -93,7 +93,7 @@ static int dummy_printf(const char *__restrict __format, ...)
 #define INTEL_LPMD_SERVICE_INTERFACE	"org.freedesktop.intel_lpmd"
 
 typedef enum {
-	TERMINATE, LPM_FORCE_ON, LPM_FORCE_OFF, LPM_AUTO, SUV_MODE_ENTER, SUV_MODE_EXIT, HFI_EVENT,
+	TERMINATE, LPM_FORCE_ON, LPM_FORCE_OFF, LPM_AUTO, HFI_EVENT,
 } message_name_t;
 
 #define MAX_MSG_SIZE		512
@@ -151,7 +151,6 @@ typedef struct {
 	int balanced_def;
 	int powersaver_def;
 	int hfi_lpm_enable;
-	int hfi_suv_enable;
 	int wlt_hint_enable;
 	int wlt_hint_poll_enable;
 	int wlt_proxy_enable;
@@ -187,17 +186,13 @@ enum lpm_command {
 	USER_EXIT, /* Force exit LPM and never enter LPM */
 	HFI_ENTER,
 	HFI_EXIT,
-	HFI_SUV_ENTER,
-	HFI_SUV_EXIT,
-	DBUS_SUV_ENTER,
-	DBUS_SUV_EXIT,
 	UTIL_ENTER,
 	UTIL_EXIT,
 	LPM_CMD_MAX,
 };
 
 enum cpumask_idx {
-	CPUMASK_LPM_DEFAULT, CPUMASK_ONLINE, CPUMASK_HFI, CPUMASK_HFI_BANNED, CPUMASK_HFI_SUV, /* HFI Survivability mode */
+	CPUMASK_LPM_DEFAULT, CPUMASK_ONLINE, CPUMASK_HFI, CPUMASK_HFI_BANNED,
 	CPUMASK_HFI_LAST, CPUMASK_UTIL, CPUMASK_MAX,
 };
 
@@ -254,13 +249,11 @@ int lpmd_lock(void);
 int lpmd_unlock(void);
 int in_lpm(void);
 int in_hfi_lpm(void);
-int in_suv_lpm(void);
 int in_auto_mode(void);
 int get_idle_percentage(void);
 int get_idle_duration(void);
 int get_cpu_mode(void);
 int has_hfi_lpm_monitor(void);
-int has_hfi_suv_monitor(void);
 int has_util_monitor(void);
 int get_util_entry_interval(void);
 int get_util_exit_interval(void);
@@ -279,8 +272,6 @@ void lpmd_terminate(void);
 void lpmd_force_on(void);
 void lpmd_force_off(void);
 void lpmd_set_auto(void);
-void lpmd_suv_enter(void);
-void lpmd_suv_exit(void);
 void lpmd_notify_hfi_event(void);
 
 int is_on_battery(void);
@@ -337,10 +328,6 @@ void reset_cpus(enum cpumask_idx idx);
 int set_lpm_cpus(enum cpumask_idx new);
 int uevent_init(void);
 int check_cpu_hotplug(void);
-
-/* cpu.c : APIs for SUV mode support */
-int process_suv_mode(enum lpm_command cmd);
-int has_suv_support(void);
 
 /* irq.c */
 int init_irq(void);
