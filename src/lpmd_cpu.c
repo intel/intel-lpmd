@@ -1264,42 +1264,6 @@ end: if (has_cpus (CPUMASK_LPM_DEFAULT))
 	return 0;
 }
 
-static int check_cpu_offline_support(void)
-{
-	return lpmd_open ("/sys/devices/system/cpu/cpu0/online", 1);
-}
-
-static int online_cpu(int cpu, int val)
-{
-	char path[MAX_STR_LENGTH];
-
-	snprintf (path, sizeof(path), "/sys/devices/system/cpu/cpu%d/online", cpu);
-
-	return lpmd_write_int (path, val, LPMD_LOG_INFO);
-}
-
-static int process_cpu_offline(int enter)
-{
-	int cpu;
-
-	lpmd_log_info ("\t%s CPUs\n", enter ? "Offline" : "Online");
-	for (cpu = 0; cpu < topo_max_cpus; cpu++) {
-		if (!is_cpu_online (cpu))
-			continue;
-		if (!is_cpu_for_lpm (cpu)) {
-			if (enter)
-				online_cpu (cpu, 0);
-			else
-				online_cpu (cpu, 1);
-		}
-		else {
-			online_cpu (cpu, 1);
-		}
-	}
-
-	return 0;
-}
-
 /* Support for LPM_CPU_CGROUPV2 */
 #define PATH_CGROUP                    "/sys/fs/cgroup"
 #define PATH_CG2_SUBTREE_CONTROL	PATH_CGROUP "/cgroup.subtree_control"
@@ -1587,7 +1551,7 @@ static int check_cpu_mode_support(enum lpm_cpu_process_mode mode)
 
 	switch (mode) {
 		case LPM_CPU_OFFLINE:
-			ret = check_cpu_offline_support ();
+			ret = -1;
 			break;
 		case LPM_CPU_CGROUPV2:
 			ret = check_cpu_cgroupv2_support ();
@@ -1773,7 +1737,7 @@ int process_cpus(int enter, enum lpm_cpu_process_mode mode)
 	lpmd_log_info ("Process CPUs ...\n");
 	switch (mode) {
 		case LPM_CPU_OFFLINE:
-			ret = process_cpu_offline (enter);
+			ret = -1;
 			break;
 		case LPM_CPU_CGROUPV2:
 			ret = process_cpu_cgroupv2 (enter);
