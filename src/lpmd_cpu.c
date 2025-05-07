@@ -1500,112 +1500,6 @@ static int process_cpu_cgroupv2(int enter)
 		return process_cpu_cgroupv2_exit ();
 }
 
-/*
- * Support for LPM_CPU_POWERCLAMP:
- * /sys/module/intel_powerclamp/parameters/cpumask
- * /sys/module/intel_powerclamp/parameters/max_idle
- */
-#define PATH_CPUMASK "/sys/module/intel_powerclamp/parameters/cpumask"
-#define PATH_MAXIDLE "/sys/module/intel_powerclamp/parameters/max_idle"
-#define PATH_DURATION "/sys/module/intel_powerclamp/parameters/duration"
-#define PATH_THERMAL "/sys/class/thermal"
-
-static char path_powerclamp[MAX_STR_LENGTH * 2];
-
-static int check_cpu_powerclamp_support(void)
-{
-	FILE *filep;
-	DIR *dir;
-	struct dirent *entry;
-	char *name = "intel_powerclamp";
-	char str[20];
-	int ret;
-
-	if (lpmd_open (PATH_CPUMASK, 0))
-		return 1;
-
-	if ((dir = opendir (PATH_THERMAL)) == NULL) {
-		perror ("opendir() error");
-		return 1;
-	}
-
-	while ((entry = readdir (dir)) != NULL) {
-		if (strlen (entry->d_name) > 100)
-			continue;
-		snprintf (path_powerclamp, MAX_STR_LENGTH * 2, "%s/%s/type", PATH_THERMAL, entry->d_name);
-		filep = fopen (path_powerclamp, "r");
-		if (!filep)
-			continue;
-
-		ret = fread (str, strlen (name), 1, filep);
-		fclose (filep);
-
-		if (ret != 1)
-			continue;
-
-		if (!strncmp (str, name, strlen (name))) {
-			snprintf (path_powerclamp, MAX_STR_LENGTH * 2, "%s/%s/cur_state", PATH_THERMAL,
-						entry->d_name);
-			lpmd_log_info ("\tFound %s device at %s/%s\n", name, PATH_THERMAL, entry->d_name);
-			break;
-		}
-	}
-	closedir (dir);
-
-	if (path_powerclamp[0] == '\0')
-		return 1;
-
-	return 0;
-}
-
-static int default_dur = -1;
-
-static int _process_cpu_powerclamp_enter(char *cpumask_str, int pct, int dur)
-{
-	if (lpmd_write_str (PATH_CPUMASK, cpumask_str, LPMD_LOG_DEBUG))
-		return 1;
-
-	if (dur > 0) {
-		if (lpmd_read_int (PATH_DURATION, &default_dur, LPMD_LOG_DEBUG))
-			return 1;
-
-		if (lpmd_write_int (PATH_DURATION, dur, LPMD_LOG_DEBUG))
-			return 1;
-	}
-
-	if (lpmd_write_int (PATH_MAXIDLE, pct, LPMD_LOG_DEBUG))
-		return 1;
-
-	if (lpmd_write_int (path_powerclamp, pct, LPMD_LOG_DEBUG))
-		return 1;
-
-	return 0;
-}
-
-static int process_cpu_powerclamp_enter(void)
-{
-	int pct = get_idle_percentage ();
-	int dur = get_idle_duration ();
-
-	return _process_cpu_powerclamp_enter (get_cpus_hexstr_reverse (lpm_cpus_cur), pct, dur);
-}
-
-static int process_cpu_powerclamp_exit()
-{
-	if (lpmd_write_int (PATH_DURATION, default_dur, LPMD_LOG_DEBUG))
-		return 1;
-
-	return lpmd_write_int (path_powerclamp, 0, LPMD_LOG_DEBUG);
-}
-
-static int process_cpu_powerclamp(int enter)
-{
-	if (enter)
-		return process_cpu_powerclamp_enter ();
-	else
-		return process_cpu_powerclamp_exit ();
-}
-
 static int __process_cpu_isolate_exit(char *name)
 {
 	char path[MAX_STR_LENGTH];
@@ -1699,7 +1593,7 @@ static int check_cpu_mode_support(enum lpm_cpu_process_mode mode)
 			ret = check_cpu_cgroupv2_support ();
 			break;
 		case LPM_CPU_POWERCLAMP:
-			ret = check_cpu_powerclamp_support ();
+			ret = -1;
 			break;
 		case LPM_CPU_ISOLATE:
 			ret = check_cpu_isolate_support ();
@@ -1885,7 +1779,7 @@ int process_cpus(int enter, enum lpm_cpu_process_mode mode)
 			ret = process_cpu_cgroupv2 (enter);
 			break;
 		case LPM_CPU_POWERCLAMP:
-			ret = process_cpu_powerclamp (enter);
+			ret = -1;
 			break;
 		case LPM_CPU_ISOLATE:
 			ret = process_cpu_isolate (enter);
