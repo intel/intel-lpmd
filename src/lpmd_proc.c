@@ -838,14 +838,14 @@ static void* lpmd_core_main_loop(void *arg)
 		/* Time out, need to choose next util state and interval */
 		if (n == 0 && interval > 0) {
 			if (lpmd_config.wlt_proxy_enable) {
-				int wlt_proxy_type = read_wlt_proxy(&interval);
-				periodic_util_update (&lpmd_config, wlt_proxy_type);
+				lpmd_config.data.wlt_hint = read_wlt_proxy(&interval);
+				periodic_util_update (&lpmd_config);
 			} else if (lpmd_config.wlt_hint_enable && lpmd_config.wlt_hint_poll_enable) {
-				int wlt_type = read_wlt(wlt_fd);
+				lpmd_config.data.wlt_hint = read_wlt(wlt_fd);
 
-				interval = periodic_util_update (&lpmd_config, wlt_type);
+				interval = periodic_util_update (&lpmd_config);
 			} else {
-				interval = periodic_util_update (&lpmd_config, -1);
+				interval = periodic_util_update (&lpmd_config);
 			}
 		}
 
@@ -874,11 +874,9 @@ static void* lpmd_core_main_loop(void *arg)
 		}
 
 		if (idx_wlt_fd >= 0 && (poll_fds[idx_wlt_fd].revents & POLLPRI)) {
-			int wlt_index;
-
-			wlt_index = read_wlt(poll_fds[idx_wlt_fd].fd);
+			lpmd_config.data.wlt_hint = read_wlt(poll_fds[idx_wlt_fd].fd);
 			if (in_auto_mode())
-				interval = periodic_util_update (&lpmd_config, wlt_index);
+				interval = periodic_util_update (&lpmd_config);
 		}
 
 

@@ -302,7 +302,7 @@ int intel_dbus_server_init(gboolean (*exit_handler)(void));
 int lpmd_get_config(lpmd_config_t *lpmd_config);
 
 /* util.c */
-int periodic_util_update(lpmd_config_t *lpmd_config, int wlt_index);
+int periodic_util_update(lpmd_config_t *lpmd_config);
 int util_init(lpmd_config_t *lpmd_config);
 int use_config_states(void);
 void reset_config_state(void);

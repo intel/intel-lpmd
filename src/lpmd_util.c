@@ -539,7 +539,7 @@ static void dump_system_status(lpmd_config_t *config, int interval)
 	lpmd_log_info("%s\n", buf);
 }
 
-static int process_next_config_state(lpmd_config_t *config, int wlt_index)
+static int process_next_config_state(lpmd_config_t *config)
 {
 	lpmd_config_state_t *state = NULL;
 	int i = 0;
@@ -548,7 +548,7 @@ static int process_next_config_state(lpmd_config_t *config, int wlt_index)
 	// Check for new state
 	for (i = 0; i < config->config_state_count; ++i) {
 		state = &config->config_states[i];
-		if (state_match(state, busy_sys, busy_cpu, busy_gfx, wlt_index)) {
+		if (state_match(state, busy_sys, busy_cpu, busy_gfx, config->data.wlt_hint)) {
 			interval = enter_state(state, busy_sys, busy_cpu);
 			break;
 		}
@@ -562,16 +562,18 @@ static int process_next_config_state(lpmd_config_t *config, int wlt_index)
 	return interval;
 }
 
-int periodic_util_update(lpmd_config_t *lpmd_config, int wlt_index)
+int periodic_util_update(lpmd_config_t *lpmd_config)
 {
 	int interval;
+	static int initialized;
+	int wlt_index = lpmd_config->data.wlt_hint;
 
 	if (wlt_index >= 0) {
 		if (lpmd_config->wlt_hint_poll_enable) {
 			parse_gfx_util();
-			interval = process_next_config_state(lpmd_config, wlt_index);
+			interval = process_next_config_state(lpmd_config);
 		} else {
-			process_next_config_state(lpmd_config, wlt_index);
+			process_next_config_state(lpmd_config);
 			interval = -1;
 		}
 		return interval;
@@ -584,7 +586,7 @@ int periodic_util_update(lpmd_config_t *lpmd_config, int wlt_index)
 	parse_proc_stat ();
 	parse_gfx_util();
 
-	return process_next_config_state(lpmd_config, wlt_index);
+	return process_next_config_state(lpmd_config);
 }
 
 int util_init(lpmd_config_t *lpmd_config)
