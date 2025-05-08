@@ -461,24 +461,7 @@ static int enter_state(lpmd_config_state_t *state, lpmd_data_t *data)
 		return interval;
 	}
 
-	set_lpm_epp(state->epp);
-	set_lpm_epb(state->epb);
-	set_lpm_itmt(state->itmt_state);
-
-	if (state->active_cpus[0] != '\0') {
-		reset_cpus(CPUMASK_UTIL);
-		parse_cpu_str(state->active_cpus, CPUMASK_UTIL);
-		if (state->irq_migrate != SETTING_IGNORE)
-			set_lpm_irq(CPUMASK_UTIL);
-		else
-			set_lpm_irq(SETTING_IGNORE);
-		set_lpm_cpus(CPUMASK_UTIL);
-	} else {
-		set_lpm_irq(SETTING_IGNORE);
-		set_lpm_cpus(CPUMASK_MAX); /* Ignore Task migration */
-	}
-
-	process_lpm(UTIL_ENTER);
+	enter_next_state(state);
 
 	if (state->min_poll_interval)
 		interval = state->min_poll_interval;
@@ -551,7 +534,7 @@ static int process_next_config_state(lpmd_config_t *config)
 	int interval = -1;
 
 	// Check for new state
-	for (i = 0; i < config->config_state_count; ++i) {
+	for (i = CONFIG_STATE_BASE; i < CONFIG_STATE_BASE + config->config_state_count; ++i) {
 		state = &config->config_states[i];
 		if (state_match(state, &config->data)) {
 			interval = enter_state(state, &config->data);
@@ -607,7 +590,12 @@ int util_init(lpmd_config_t *lpmd_config)
 		state = &lpmd_config->config_states[i];
 
 		if (state->active_cpus[0] != '\0') {
-			ret = parse_cpu_str(state->active_cpus, CPUMASK_UTIL);
+			state->cpumask_idx = alloc_cpumask();
+			if (state->cpumask_idx == CPUMASK_NONE) {
+				lpmd_log_error("Cannot alloc CPUMASK\n");
+				return -1;
+			}
+			ret = parse_cpu_str(state->active_cpus, state->cpumask_idx);
 			if (ret <= 0) {
 				state->valid = 0;
 				continue;

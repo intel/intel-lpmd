@@ -216,13 +216,8 @@ static void process_one_event(int first, int last, int nr)
 			lpmd_log_debug ("\tDuplicated HFI LPM hints ignored\n\n");
 			return;
 		}
-		if (in_hfi_lpm ()) {
-			lpmd_log_debug ("\tUpdate HFI LPM event\n\n");
-		}
-		else {
-			lpmd_log_debug ("\tDetect HFI LPM event\n");
-		}
-		process_lpm (HFI_ENTER);
+		lpmd_log_debug ("\tDetect HFI LPM event\n");
+		enter_default_state(DEFAULT_HFI);
 		copy_cpu_mask(CPUMASK_HFI, CPUMASK_HFI_LAST);
 	}
 	else if (has_cpus (CPUMASK_HFI_BANNED)) {
@@ -232,19 +227,15 @@ static void process_one_event(int first, int last, int nr)
 			lpmd_log_debug ("\tDuplicated HFI BANNED hints ignored\n\n");
 			return;
 		}
-		if (in_hfi_lpm ()) {
-			lpmd_log_debug ("\tUpdate HFI LPM event with banned CPUs\n\n");
-		}
-		else {
-			lpmd_log_debug ("\tDetect HFI LPM event with banned CPUs\n");
-		}
-		process_lpm (HFI_ENTER);
+		lpmd_log_debug ("\tDetect HFI LPM event with banned CPUs\n");
+		enter_default_state(DEFAULT_HFI);
 		copy_cpu_mask(CPUMASK_HFI, CPUMASK_HFI_LAST);
 	}
-	else if (in_hfi_lpm ()) {
+	else if (has_cpus (CPUMASK_HFI_LAST)) {
 		lpmd_log_debug ("\tHFI LPM recover\n");
 //		 Don't override the DETECT_LPM_CPU_DEFAULT so it is auto recovered
-		process_lpm (HFI_EXIT);
+		copy_cpu_mask(CPUMASK_ONLINE, CPUMASK_HFI);
+		enter_default_state(DEFAULT_HFI);
 		reset_cpus (CPUMASK_HFI_LAST);
 	}
 	else {

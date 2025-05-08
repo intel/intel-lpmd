@@ -81,8 +81,7 @@ static void lpmd_dump_config(lpmd_config_t *lpmd_config)
 	}
 }
 
-/* Set all of them Some of the operations are redundant, but it is useful to*/
-static void lpmd_init_config_state(lpmd_config_state_t *state)
+void _lpmd_init_config_state(lpmd_config_state_t *state)
 {
 	state->id = -1;
 	state->valid = 0;
@@ -118,6 +117,7 @@ static void lpmd_init_config_state(lpmd_config_state_t *state)
 
 	state->entry_load_sys = 0;
 	state->entry_load_cpu = 0;
+	state->cpumask_idx = CPUMASK_NONE;
 }
 
 static void lpmd_parse_state(xmlDoc *doc, xmlNode *a_node, lpmd_config_state_t *state)

@@ -158,6 +158,7 @@ typedef struct {
 	// Private state variables, not configurable
 	int entry_load_sys;
 	int entry_load_cpu;
+	int cpumask_idx;
 }lpmd_config_state_t;
 
 // lpmd config data
@@ -185,7 +186,7 @@ typedef struct {
 	char cpu_config[MAX_CONFIG_LEN];
 	int config_state_count;
 	int tdp;
-	lpmd_config_state_t config_states[MAX_CONFIG_STATES];
+	lpmd_config_state_t config_states[MAX_STATES];
 	lpmd_data_t data;
 } lpmd_config_t;
 
@@ -201,10 +202,6 @@ enum lpm_command {
 	USER_ENTER, /* Force enter LPM and always stay in LPM */
 	USER_AUTO, /* Allow oppotunistic LPM based on util/hfi request */
 	USER_EXIT, /* Force exit LPM and never enter LPM */
-	HFI_ENTER,
-	HFI_EXIT,
-	UTIL_ENTER,
-	UTIL_EXIT,
 	LPM_CMD_MAX,
 };
 
@@ -270,10 +267,10 @@ int in_debug_mode(void);
 int do_platform_check(void);
 
 /* lpmd_proc.c: interfaces */
+void lpmd_init_config_state(lpmd_config_state_t *state);
 int lpmd_lock(void);
 int lpmd_unlock(void);
 int in_lpm(void);
-int in_hfi_lpm(void);
 int in_auto_mode(void);
 int get_idle_percentage(void);
 int get_idle_duration(void);
@@ -288,6 +285,9 @@ int get_util_entry_hyst(void);
 int get_util_exit_hyst(void);
 void set_ignore_itmt(void);
 
+int enter_next_state(lpmd_config_state_t *state);
+int enter_default_state(enum default_config_state idx);
+
 int process_lpm(enum lpm_command cmd);
 int process_lpm_unlock(enum lpm_command cmd);
 int freeze_lpm(void);
@@ -297,7 +297,6 @@ void lpmd_terminate(void);
 void lpmd_force_on(void);
 void lpmd_force_off(void);
 void lpmd_set_auto(void);
-void lpmd_notify_hfi_event(void);
 
 int is_on_battery(void);
 int get_ppd_mode(void);

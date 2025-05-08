@@ -27,18 +27,6 @@
 
 static lpmd_config_t lpmd_config;
 
-char *lpm_cmd_str[LPM_CMD_MAX] = {
-		[USER_ENTER] = "usr enter",
-		[USER_EXIT] = "usr exit",
-		[USER_AUTO] = "usr auto",
-		[HFI_ENTER] = "hfi enter",
-		[HFI_EXIT] = "hfi exit",
-		[UTIL_ENTER] = "utl enter",
-		[UTIL_EXIT] = "utl exit",
-};
-
-static int in_low_power_mode = 0;
-
 static UpClient *upower_client;
 
 static pthread_mutex_t lpmd_mutex;
@@ -51,20 +39,6 @@ int lpmd_lock(void)
 int lpmd_unlock(void)
 {
 	return pthread_mutex_unlock (&lpmd_mutex);
-}
-
-/*
- * It may take a relatively long time to enter/exit low power mode.
- * Hold lpmd_lock to make sure there is no state change ongoing.
- */
-int in_lpm(void)
-{
-	int ret;
-
-	lpmd_lock ();
-	ret = in_low_power_mode;
-	lpmd_unlock ();
-	return !!ret;
 }
 
 /* Can be configurable */
@@ -182,232 +156,82 @@ static int process_itmt(void)
 
 /* Main functions */
 
-enum lpm_state {
-	LPM_USER_ON = 1 << 0,
-	LPM_USER_OFF = 1 << 1,
-	LPM_HFI_ON = 1 << 3,
-	LPM_UTIL_ON = 1 << 4,
+enum lpmd_states {
+	LPMD_ON,
+	LPMD_AUTO,
+	LPMD_OFF,
 };
 
-/* Force off by default */
-int lpm_state = LPM_USER_OFF;
-
-int in_hfi_lpm(void)
-{
-	return lpm_state & LPM_HFI_ON;
-}
+static int lpmd_state = LPMD_OFF;
+static int saved_lpmd_state = -1;
+static int lpmd_freezed = 0;
 
 int in_auto_mode()
 {
-	return !(lpm_state & (LPM_USER_ON | LPM_USER_OFF));
+	return lpmd_state == LPMD_AUTO;
 }
 
-/*
- * 1: request valid and already satisfied. 0: respond valid and need to continue to process. -1: request invalid
- */
-static int lpm_can_process(enum lpm_command cmd)
+static int update_lpmd_state(enum lpmd_states new)
 {
-	switch (cmd) {
-		case USER_ENTER:
-			lpm_state &= ~LPM_USER_OFF;
-			lpm_state |= LPM_USER_ON;
-
-			return 1;
-		case USER_EXIT:
-			lpm_state &= ~LPM_USER_ON;
-			lpm_state |= LPM_USER_OFF;
-
-			return 1;
-		case USER_AUTO:
-			lpm_state &= ~LPM_USER_ON;
-			lpm_state &= ~LPM_USER_OFF;
-			/* Assume the system is already in HFI_LPM so that we can handle next HFI update whatever it is */
-			if (has_hfi_lpm_monitor()) {
-				lpmd_log_info("Use HFI\n");
-				lpm_state |= LPM_HFI_ON;
-			}
-			return 0;
-		case HFI_ENTER:
-			if (lpm_state & (LPM_USER_OFF | LPM_USER_ON))
-				return 0;
-
-			lpm_state |= LPM_HFI_ON;
-			return 1;
-		case HFI_EXIT:
-			lpm_state &= ~LPM_HFI_ON;
-
-			if (lpm_state & LPM_USER_ON)
-				return 0;
-
-			return 1;
-		case UTIL_ENTER:
-			if (lpm_state & (LPM_USER_OFF))
-				return 0;
-
-			return 1;
-		case UTIL_EXIT:
-			if (lpm_state & LPM_USER_ON)
-				return 0;
-
-			/* Trust HFI LPM hints over utilization monitor */
-			if (lpm_state & LPM_HFI_ON)
-				return 0;
-			return 1;
+	lpmd_state = new;
+	switch (lpmd_state) {
+		case LPMD_ON:
+			enter_default_state(DEFAULT_ON);
+			break;
+		case LPMD_OFF:
+			enter_default_state(DEFAULT_OFF);
+			break;
+		case LPM_AUTO:
+			lpmd_state = LPMD_AUTO;
+			/* TODO: should choose a proper config state and enter */
+			break;
 		default:
-			return 1;
+			return -1;
 	}
+	return 0;
 }
 
-static int dry_run = 0;
-
-/* Must be invoked with lpmd_lock held */
-int enter_lpm(enum lpm_command cmd)
+int enter_next_state(lpmd_config_state_t *state)
 {
-	lpmd_log_debug ("Request %d (%10s). lpm_state 0x%x\n", cmd, lpm_cmd_str[cmd], lpm_state);
+	int ret;
 
-	if (!lpm_can_process (cmd)) {
-		lpmd_log_debug ("Request stopped. lpm_state 0x%x\n", lpm_state);
-		return 1;
-	}
+	lpmd_lock();
 
-	if (in_low_power_mode && cmd != HFI_ENTER && cmd != UTIL_ENTER) {
-		lpmd_log_debug ("Request skipped because the system is already in Low Power Mode ---\n");
+	if (lpmd_freezed)
 		return 0;
-	}
 
-	time_start ();
+	set_lpm_epp(state->epp);
+	set_lpm_epb(state->epb);
+	set_lpm_itmt(state->itmt_state);
 
-	if (cmd != USER_ENTER && cmd != UTIL_ENTER && cmd != HFI_ENTER) {
-			lpmd_log_info ("Unsupported LPM reason %d\n", cmd);
-			return 1;
-	}
+	if (state->cpumask_idx != CPUMASK_NONE) {
+		if (state->irq_migrate != SETTING_IGNORE)
+			set_lpm_irq(state->cpumask_idx);
+		else
+			set_lpm_irq(SETTING_IGNORE);
+		set_lpm_cpus(state->cpumask_idx);
+	} else {
+		set_lpm_irq(SETTING_IGNORE);
+		set_lpm_cpus(CPUMASK_NONE); /* Ignore Task migration */
+        }
 
-	lpmd_log_msg ("------ Enter Low Power Mode (%10s) --- %s", lpm_cmd_str[cmd], get_time ());
+	process_itmt();
 
-	if (dry_run) {
-		lpmd_log_debug ("----- Dry Run -----\n");
-		goto end;
-	}
-
-	process_itmt ();
 	process_irqs (1, get_cpu_mode ());
 
 	process_cpus (1, get_cpu_mode ());
 
-end:
-	lpmd_log_info ("----- Done (%s) ---\n", time_delta ());
-	in_low_power_mode = 1;
-
-	return 0;
-}
-
-/* Must be invoked with lpmd_lock held */
-int exit_lpm(enum lpm_command cmd)
-{
-	lpmd_log_debug ("Request %d (%10s). lpm_state 0x%x\n", cmd, lpm_cmd_str[cmd], lpm_state);
-
-	if (!lpm_can_process (cmd)) {
-		lpmd_log_debug ("Request stopped. lpm_state 0x%x\n", lpm_state);
-		return 1;
-	}
-
-	if (!in_low_power_mode) {
-		lpmd_log_debug (
-				"Request skipped because the system is already out of Low Power Mode ---\n");
-		return 0;
-	}
-
-	time_start ();
-
-	lpmd_log_msg ("------ Exit Low Power Mode (%10s) --- %s", lpm_cmd_str[cmd], get_time ());
-
-	if (dry_run) {
-		lpmd_log_debug ("----- Dry Run -----\n");
-		goto end;
-	}
-
-	process_cpus (0, get_cpu_mode ());
-
-	process_irqs (0, get_cpu_mode ());
-	process_itmt ();
-
-end:
-	lpmd_log_info ("----- Done (%s) ---\n", time_delta ());
-	in_low_power_mode = 0;
-
-	return 0;
-}
-
-static int lpmd_freezed = 0;
-
-/* should be invoked without lock held */
-int process_lpm_unlock(enum lpm_command cmd)
-{
-	int ret;
-
-	if (lpmd_freezed) {
-		lpmd_log_error("lpmd freezed, command (%s) ignored\n", lpm_cmd_str[cmd]);
-		return 0;
-	}
-
-	switch (cmd) {
-		case UTIL_ENTER:
-			ret = enter_lpm (cmd);
-			break;
-		case USER_ENTER:
-		case USER_AUTO:
-			reset_config_state();
-			set_lpm_epp (lpmd_config.lp_mode_epp);
-			set_lpm_epb (SETTING_IGNORE);
-			set_lpm_itmt (lpmd_config.ignore_itmt ? SETTING_IGNORE : 0); /* Disable ITMT */
-			set_lpm_irq(CPUMASK_LPM_DEFAULT);
-			set_lpm_cpus (CPUMASK_LPM_DEFAULT);
-			ret = enter_lpm (cmd);
-			break;
-		case HFI_ENTER:
-			set_lpm_epp (lpmd_config.lp_mode_epp);
-			set_lpm_epb (SETTING_IGNORE);
-			set_lpm_itmt (0);	/* HFI always disables ITMT */
-			set_lpm_irq(SETTING_IGNORE);	/* HFI ignores IRQ */
-			set_lpm_cpus (CPUMASK_HFI);
-			ret = enter_lpm (cmd);
-			break;
-		/* exit_lpm does not require to invoke set_lpm_cpus() */
-		case USER_EXIT:
-		case UTIL_EXIT:
-			reset_config_state();
-			set_lpm_epp (SETTING_RESTORE);
-			set_lpm_epb (SETTING_RESTORE);
-			set_lpm_itmt (SETTING_RESTORE);
-			set_lpm_irq(SETTING_RESTORE);
-			ret = exit_lpm (cmd);
-			break;
-		case HFI_EXIT:
-			set_lpm_epp (lpmd_config.lp_mode_epp == SETTING_IGNORE ? SETTING_IGNORE : SETTING_RESTORE);
-			set_lpm_epb (SETTING_IGNORE);
-			set_lpm_itmt (SETTING_RESTORE); /* Restore ITMT */
-			set_lpm_irq(SETTING_IGNORE);	/* HFI ignores IRQ */
-			ret = exit_lpm (cmd);
-			break;
-		default:
-			ret = -1;
-			break;
-	}
-
+	lpmd_unlock();
 	return ret;
 }
 
-int process_lpm(enum lpm_command cmd)
+int enter_default_state(enum default_config_state idx)
 {
-	int ret;
+	if (idx >= CONFIG_STATE_BASE)
+		return -1;
 
-	lpmd_lock ();
-	ret = process_lpm_unlock (cmd);
-	lpmd_unlock ();
-	return ret;
+	return enter_next_state(&lpmd_config.config_states[idx]);
 }
-
-static int saved_lpm_state = -1;
 
 int freeze_lpm(void)
 {
@@ -416,13 +240,10 @@ int freeze_lpm(void)
 	if (lpmd_freezed)
 		goto end;
 
-	if (saved_lpm_state < 0)
-		saved_lpm_state = lpm_state & (LPM_USER_ON | LPM_USER_OFF);
-
-	process_lpm_unlock (USER_EXIT);
-
-	/* Set lpmd_freezed later to allow process_lpm () */
+	update_lpmd_state(LPMD_OFF);
 	lpmd_freezed = 1;
+	saved_lpmd_state = lpmd_state;
+
 end:
 	lpmd_unlock ();
 	return 0;
@@ -435,26 +256,10 @@ int restore_lpm(void)
 	if (!lpmd_freezed)
 		goto end;
 
-	if (saved_lpm_state >= 0) {
-		lpm_state = saved_lpm_state;
-		saved_lpm_state = -1;
-	}
-
-	/* Clear lpmd_freezed to allow process_lpm () */
 	lpmd_freezed = 0;
 
-	/* Restore previous USER_* cmd */
-	if (lpm_state & LPM_USER_ON) {
-		process_lpm_unlock (USER_ENTER);
-		goto end;
-	}
-
-	if (lpm_state & LPM_USER_OFF) {
-		process_lpm_unlock (USER_EXIT);
-		goto end;
-	}
-
-	process_lpm_unlock (USER_AUTO);
+	update_lpmd_state(saved_lpmd_state);
+	saved_lpmd_state = -1;
 
 end:
 	lpmd_unlock ();
@@ -484,10 +289,6 @@ static void lpmd_send_message(message_name_t msg_id, int size, unsigned char *ms
 
 void lpmd_terminate(void)
 {
-	if (lpmd_config.wlt_proxy_enable) {
-		wlt_proxy_uninit();
-	}
-
 	lpmd_send_message (TERMINATE, 0, NULL);
 	sleep (1);
 	if (upower_client)
@@ -507,12 +308,6 @@ void lpmd_force_off(void)
 void lpmd_set_auto(void)
 {
 	lpmd_send_message (LPM_AUTO, 0, NULL);
-}
-
-void lpmd_notify_hfi_event(void)
-{
-	lpmd_send_message (HFI_EVENT, 0, NULL);
-	sleep (1);
 }
 
 #define LPMD_NUM_OF_POLL_FDS	5
@@ -777,23 +572,22 @@ static int proc_message(message_capsul_t *msg)
 			lpmd_log_msg ("Terminating ...\n");
 			ret = -1;
 			main_loop_terminate = true;
+			if (lpmd_config.wlt_proxy_enable)
+				wlt_proxy_uninit();
 			hfi_kill ();
-			process_lpm (USER_EXIT);
+			update_lpmd_state(LPMD_OFF);
 			break;
 		case LPM_FORCE_ON:
 			// Always stay in LPM mode
-			process_lpm (USER_ENTER);
+			update_lpmd_state(LPMD_ON);
 			break;
 		case LPM_FORCE_OFF:
 			// Never enter LPM mode
-			process_lpm (USER_EXIT);
+			update_lpmd_state(LPMD_OFF);
 			break;
 		case LPM_AUTO:
 			// Enable oppotunistic LPM
-			process_lpm (USER_AUTO);
-			break;
-		case HFI_EVENT:
-			// Call the HFI callback from here
+			update_lpmd_state(LPMD_AUTO);
 			break;
 		default:
 			break;
@@ -822,7 +616,7 @@ static void* lpmd_core_main_loop(void *arg)
 			break;
 
 //		 Opportunistic LPM is disabled in below cases
-		if ((lpm_state & (LPM_USER_ON | LPM_USER_OFF)) | has_hfi_lpm_monitor ())
+		if (lpmd_state != LPMD_AUTO || lpmd_config.config_states[DEFAULT_HFI].valid)
 			interval = -1;
 		else if (interval == -1)
 			interval = 100;
@@ -885,16 +679,102 @@ static void* lpmd_core_main_loop(void *arg)
 	return NULL;
 }
 
+void lpmd_init_config_state(lpmd_config_state_t *state)
+{
+	state->id = -1;
+	state->valid = 0;
+	state->name[0] = '\0';
+
+	state->wlt_type = -1;
+
+	state->entry_system_load_thres = 0;
+	state->exit_system_load_thres = 0;
+	state->exit_system_load_hyst = 0;
+	state->enter_cpu_load_thres = 0;
+	state->exit_cpu_load_thres = 0;
+	state->enter_gfx_load_thres = 0;
+	state->exit_gfx_load_thres = 0;
+
+	state->min_poll_interval = 0;
+	state->max_poll_interval = 0;
+	state->poll_interval_increment = 0;
+
+	state->epp = SETTING_IGNORE;
+	state->epb = SETTING_IGNORE;
+	state->active_cpus[0] = '\0';
+
+	state->island_0_number_p_cores = 0;
+	state->island_0_number_e_cores = 0;
+	state->island_1_number_p_cores = 0;
+	state->island_1_number_e_cores = 0;
+	state->island_2_number_p_cores = 0;
+	state->island_2_number_e_cores = 0;
+
+	state->itmt_state = SETTING_IGNORE;
+	state->irq_migrate = SETTING_IGNORE;
+
+	state->entry_load_sys = 0;
+	state->entry_load_cpu = 0;
+	state->cpumask_idx = CPUMASK_NONE;
+}
+
 static void build_default_config_state(void)
 {
 	lpmd_config_state_t *state;
 
+	state = &lpmd_config.config_states[DEFAULT_ON];
+	lpmd_init_config_state(state);
+	state->id = -1;
+	snprintf(state->name, MAX_STATE_NAME, "DEFAULT_ON");
+	state->itmt_state = SETTING_RESTORE;
+	state->irq_migrate = SETTING_RESTORE;
+	state->epp = SETTING_RESTORE;
+	state->epb = SETTING_RESTORE;
+	state->cpumask_idx = CPUMASK_ONLINE;
+	state->valid = 1;
+
+	state = &lpmd_config.config_states[DEFAULT_OFF];
+	lpmd_init_config_state(state);
+	state->id = -1;
+	snprintf(state->name, MAX_STATE_NAME, "DEFAULT_OFF");
+	state->itmt_state = lpmd_config.ignore_itmt ? SETTING_IGNORE : 0;
+	state->irq_migrate = 1;
+	state->epp = lpmd_config.lp_mode_epp;
+	state->epb = SETTING_RESTORE;
+	state->cpumask_idx = CPUMASK_LPM_DEFAULT;
+	state->valid = 1;
+
 	if (lpmd_config.config_state_count)
 		return;
 
-	state = &lpmd_config.config_states[0];
+	/*
+	 * When HFI monitor is enabled and config states are not used,
+	 * Switch system with different CPU affinity based on HFI hints
+	 */
+	if (lpmd_config.hfi_lpm_enable){
+		state = &lpmd_config.config_states[DEFAULT_HFI];
+		lpmd_init_config_state(state);
+		state->id = -1;
+		snprintf(state->name, MAX_STATE_NAME, "DEFAULT_HFI");
+		state->itmt_state = SETTING_IGNORE;
+		state->irq_migrate = SETTING_IGNORE;
+		state->epp = SETTING_IGNORE;
+		state->epb = SETTING_IGNORE;
+		state->cpumask_idx = CPUMASK_HFI;
+		state->valid = 1;
+	
+		lpmd_config.config_state_count = 1;
+		return;
+	}
+
+	/*
+	 * When HFI monitor is not enabled and config states are not used,
+	 * Switch system following global setting based on utilization.
+	 */
+	state = &lpmd_config.config_states[CONFIG_STATE_BASE];
+	lpmd_init_config_state(state);
 	state->id = 1;
-	snprintf(state->name, MAX_STATE_NAME, "LPM_DEEP");
+	snprintf(state->name, MAX_STATE_NAME, "UTIL_POWER");
 	state->entry_system_load_thres = lpmd_config.util_entry_threshold;
 	state->enter_cpu_load_thres = lpmd_config.util_exit_threshold;
 	state->itmt_state = lpmd_config.ignore_itmt ? SETTING_IGNORE : 0;
@@ -904,13 +784,13 @@ static void build_default_config_state(void)
 	state->poll_interval_increment = -1;
 	state->epp = lpmd_config.lp_mode_epp;
 	state->epb = SETTING_IGNORE;
+	state->cpumask_idx = CPUMASK_LPM_DEFAULT;
 	state->valid = 1;
-	state->wlt_type = -1;
-	snprintf(state->active_cpus, MAX_STR_LENGTH, "%s", get_cpus_str(CPUMASK_LPM_DEFAULT));
 
-	state = &lpmd_config.config_states[1];
+	state = &lpmd_config.config_states[CONFIG_STATE_BASE + 1];
+	lpmd_init_config_state(state);
 	state->id = 2;
-	snprintf(state->name, MAX_STATE_NAME, "FULL_POWER");
+	snprintf(state->name, MAX_STATE_NAME, "UTIL_PERF");
 	state->entry_system_load_thres = 100;
 	state->enter_cpu_load_thres = 100;
 	state->itmt_state = lpmd_config.ignore_itmt ? SETTING_IGNORE : SETTING_RESTORE;
@@ -919,9 +799,8 @@ static void build_default_config_state(void)
 	state->max_poll_interval = 1000;
 	state->epp = lpmd_config.lp_mode_epp == SETTING_IGNORE ? SETTING_IGNORE : SETTING_RESTORE;
 	state->epb = SETTING_IGNORE;
+	state->cpumask_idx = CPUMASK_ONLINE;
 	state->valid = 1;
-	state->wlt_type = -1;
-	snprintf(state->active_cpus, MAX_STR_LENGTH, "%s", get_cpus_str(CPUMASK_ONLINE));
 
 	lpmd_config.config_state_count = 2;
 }
