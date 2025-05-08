@@ -223,7 +223,6 @@ static void process_one_event(int first, int last, int nr)
 			lpmd_log_debug ("\tDetect HFI LPM event\n");
 		}
 		process_lpm (HFI_ENTER);
-		reset_cpus (CPUMASK_HFI_LAST);
 		copy_cpu_mask(CPUMASK_HFI, CPUMASK_HFI_LAST);
 	}
 	else if (has_cpus (CPUMASK_HFI_BANNED)) {
@@ -240,7 +239,6 @@ static void process_one_event(int first, int last, int nr)
 			lpmd_log_debug ("\tDetect HFI LPM event with banned CPUs\n");
 		}
 		process_lpm (HFI_ENTER);
-		reset_cpus (CPUMASK_HFI_LAST);
 		copy_cpu_mask(CPUMASK_HFI, CPUMASK_HFI_LAST);
 	}
 	else if (in_hfi_lpm ()) {

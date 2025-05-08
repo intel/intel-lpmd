@@ -372,13 +372,13 @@ void reset_cpus(enum cpumask_idx idx)
 	cpumasks[idx].str_reverse = NULL;
 	cpumasks[idx].hexstr = NULL;
 	cpumasks[idx].hexstr_reverse = NULL;
-	lpm_cpus_cur = CPUMASK_LPM_DEFAULT;
 }
 
 void copy_cpu_mask(enum cpumask_idx source, enum cpumask_idx dest)
 {
 	int i;
 
+	reset_cpus(dest);
 	for (i = 0; i < topo_max_cpus; i++) {
 		if (!CPU_ISSET_S(i, size_cpumask, cpumasks[source].mask))
 			continue;
@@ -391,6 +391,7 @@ void copy_cpu_mask_exclude(enum cpumask_idx source, enum cpumask_idx dest, enum 
 {
 	int i;
 
+	reset_cpus(dest);
 	for (i = 0; i < topo_max_cpus; i++) {
 		if (!CPU_ISSET_S(i, size_cpumask, cpumasks[source].mask))
 			continue;
@@ -1115,10 +1116,8 @@ static int detect_lpm_cpus_cluster(void)
 		reset_cpus (CPUMASK_LPM_DEFAULT);
 	}
 
-	if (!has_cpus (CPUMASK_LPM_DEFAULT)) {
-		reset_cpus (CPUMASK_LPM_DEFAULT);
+	if (!has_cpus (CPUMASK_LPM_DEFAULT))
 		return 0;
-	}
 
 	return CPU_COUNT_S(size_cpumask, cpumasks[CPUMASK_LPM_DEFAULT].mask);
 }
@@ -1156,7 +1155,8 @@ static int detect_lpm_cpus_lcore(void)
 
 	return CPU_COUNT_S(size_cpumask, cpumasks[CPUMASK_LPM_DEFAULT].mask);
 
-err: reset_cpus (CPUMASK_LPM_DEFAULT);
+err:
+	reset_cpus (CPUMASK_LPM_DEFAULT);
 	return 0;
 }
 
