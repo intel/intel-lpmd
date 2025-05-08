@@ -303,21 +303,16 @@ int is_cpu_ecore(int cpu);
 int is_cpu_pcore(int cpu);
 /* cpu.c: helpers */
 int is_cpu_online(int cpu);
-int is_cpu_for_lpm(int cpu);
 int get_max_cpus(void);
 int get_max_online_cpu(void);
 
 char* get_cpus_str(enum cpumask_idx idx);
-char* get_lpm_cpus_hexstr(void);
-int has_lpm_cpus(void);
 int has_cpus(enum cpumask_idx idx);
 
 void copy_cpu_mask_exclude(enum cpumask_idx source, enum cpumask_idx dest, enum cpumask_idx exlude);
 void copy_cpu_mask(enum cpumask_idx source, enum cpumask_idx dest);
-void copy_cpu_mask_exclude(enum cpumask_idx source, enum cpumask_idx dest, enum cpumask_idx exlude);
 
 cpu_set_t *get_cpumask(enum cpumask_idx source);
-int cpumask_to_str(cpu_set_t *cpumask, char *buf, int size);
 int cpumask_to_hexstr(cpu_set_t *cpumask, char *buf, int size);
 int cpumask_to_str_reverse(cpu_set_t *mask, char *buf, int size);
 

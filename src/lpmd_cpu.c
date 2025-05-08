@@ -85,20 +85,6 @@ int is_cpu_online(int cpu)
 	return CPU_ISSET_S(cpu, size_cpumask, cpumasks[CPUMASK_ONLINE].mask);
 }
 
-int is_cpu_for_lpm(int cpu)
-{
-	if (cpu < 0 || cpu >= topo_max_cpus)
-		return 0;
-
-	if (lpm_cpus_cur == CPUMASK_MAX)
-		return 0;
-
-	if (!cpumasks[lpm_cpus_cur].mask)
-		return 0;
-
-	return !!CPU_ISSET_S(cpu, size_cpumask, cpumasks[lpm_cpus_cur].mask);
-}
-
 int get_max_cpus(void)
 {
 	return topo_max_cpus;
@@ -148,7 +134,7 @@ static int cpu_migrate(int cpu)
 		return 0;
 }
 
-int cpumask_to_str(cpu_set_t *mask, char *buf, int length)
+static int cpumask_to_str(cpu_set_t *mask, char *buf, int length)
 {
 	int i;
 	int offset = 0;
@@ -250,36 +236,6 @@ static char* get_cpus_hexstr(enum cpumask_idx idx)
 	return cpumasks[idx].hexstr;
 }
 
-char* get_lpm_cpus_hexstr(void)
-{
-	return get_cpus_hexstr (lpm_cpus_cur);
-}
-
-static char* get_cpus_hexstr_reverse(enum cpumask_idx idx)
-{
-	cpu_set_t *mask;
-
-	if (!cpumasks[idx].mask)
-		return NULL;
-
-	if (!CPU_COUNT_S(size_cpumask, cpumasks[idx].mask))
-		return NULL;
-
-	if (cpumasks[idx].hexstr_reverse)
-		return cpumasks[idx].hexstr_reverse;
-
-	cpumasks[idx].hexstr_reverse = calloc (MAX_STR_LENGTH, 1);
-	if (!cpumasks[idx].hexstr_reverse)
-		err (3, "STR_ALLOC");
-
-	alloc_cpu_set (&mask);
-	CPU_XOR_S(size_cpumask, mask, cpumasks[idx].mask, cpumasks[CPUMASK_ONLINE].mask);
-	cpumask_to_hexstr (mask, cpumasks[idx].hexstr_reverse, MAX_STR_LENGTH);
-	CPU_FREE(mask);
-
-	return cpumasks[idx].hexstr_reverse;
-}
-
 int cpumask_to_str_reverse(cpu_set_t *mask, char *buf, int size)
 {
 	cpu_set_t *tmp;
@@ -367,11 +323,6 @@ int has_cpus(enum cpumask_idx idx)
 		return 0;
 
 	return CPU_COUNT_S(size_cpumask, cpumasks[idx].mask);
-}
-
-int has_lpm_cpus(void)
-{
-	return has_cpus (lpm_cpus_cur);
 }
 
 cpu_set_t *get_cpumask(enum cpumask_idx idx)
@@ -964,19 +915,6 @@ end:
 	return 0;
 }
 
-/* Run intel_lpmd on the LP-Mode CPUs only */
-static void lpmd_set_cpu_affinity(void)
-{
-	if (!cpumasks[CPUMASK_LPM_DEFAULT].mask)
-		return;
-	if (!CPU_COUNT_S (size_cpumask, cpumasks[CPUMASK_LPM_DEFAULT].mask))
-		return;
-	if (!sched_setaffinity (0, size_cpumask, cpumasks[CPUMASK_LPM_DEFAULT].mask))
-		lpmd_log_info ("\tSet intel_lpmd cpu affinity to CPU %s\n", get_cpus_str (CPUMASK_LPM_DEFAULT));
-	else
-		lpmd_log_warn ("\tFailed to set intel_lpmd cpu affinity\n");
-}
-
 /*
  * Detect LPM cpus
  * parse cpuset with following syntax
@@ -1260,7 +1198,6 @@ end: if (has_cpus (CPUMASK_LPM_DEFAULT))
 		lpmd_log_info ("\tUse CPU %s as Default Low Power CPUs (%s)\n",
 						get_cpus_str (CPUMASK_LPM_DEFAULT), str);
 
-	lpmd_set_cpu_affinity ();
 	return 0;
 }
 
