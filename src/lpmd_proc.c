@@ -356,7 +356,7 @@ int process_lpm_unlock(enum lpm_command cmd)
 				set_lpm_epp (lpmd_config.lp_mode_epp);
 				set_lpm_epb (SETTING_IGNORE);
 				set_lpm_itmt (lpmd_config.ignore_itmt ? SETTING_IGNORE : 0); /* Disable ITMT */
-				set_lpm_irq(get_cpumask(CPUMASK_LPM_DEFAULT), 1);
+				set_lpm_irq(CPUMASK_LPM_DEFAULT);
 				set_lpm_cpus (CPUMASK_LPM_DEFAULT);
 			}
 			ret = enter_lpm (cmd);
@@ -367,7 +367,7 @@ int process_lpm_unlock(enum lpm_command cmd)
 			set_lpm_epp (lpmd_config.lp_mode_epp);
 			set_lpm_epb (SETTING_IGNORE);
 			set_lpm_itmt (lpmd_config.ignore_itmt ? SETTING_IGNORE : 0); /* Disable ITMT */
-			set_lpm_irq(get_cpumask(CPUMASK_LPM_DEFAULT), 1);
+			set_lpm_irq(CPUMASK_LPM_DEFAULT);
 			set_lpm_cpus (CPUMASK_LPM_DEFAULT);
 			ret = enter_lpm (cmd);
 			break;
@@ -375,7 +375,7 @@ int process_lpm_unlock(enum lpm_command cmd)
 			set_lpm_epp (lpmd_config.lp_mode_epp);
 			set_lpm_epb (SETTING_IGNORE);
 			set_lpm_itmt (0);	/* HFI always disables ITMT */
-			set_lpm_irq(NULL, SETTING_IGNORE);	/* HFI ignores IRQ */
+			set_lpm_irq(SETTING_IGNORE);	/* HFI ignores IRQ */
 			set_lpm_cpus (CPUMASK_HFI);
 			ret = enter_lpm (cmd);
 			break;
@@ -386,14 +386,14 @@ int process_lpm_unlock(enum lpm_command cmd)
 			set_lpm_epp (SETTING_RESTORE);
 			set_lpm_epb (SETTING_RESTORE);
 			set_lpm_itmt (SETTING_RESTORE);
-			set_lpm_irq(NULL, SETTING_RESTORE);
+			set_lpm_irq(SETTING_RESTORE);
 			ret = exit_lpm (cmd);
 			break;
 		case HFI_EXIT:
 			set_lpm_epp (lpmd_config.lp_mode_epp == SETTING_IGNORE ? SETTING_IGNORE : SETTING_RESTORE);
 			set_lpm_epb (SETTING_IGNORE);
 			set_lpm_itmt (SETTING_RESTORE); /* Restore ITMT */
-			set_lpm_irq(NULL, SETTING_IGNORE);	/* HFI ignores IRQ */
+			set_lpm_irq(SETTING_IGNORE);	/* HFI ignores IRQ */
 			ret = exit_lpm (cmd);
 			break;
 		default:

@@ -43,8 +43,6 @@
 
 #include "lpmd.h"
 
-char *lp_mode_irq_str;
-
 static char irq_socket_name[64];
 
 static int irqbalance_pid = -1;
@@ -65,27 +63,32 @@ struct info_irqs {
 struct info_irqs info_irqs;
 struct info_irqs *info = &info_irqs;
 
-static char irq_str[MAX_STR_LENGTH];
-
+static char *irq_str;
 static int lp_mode_irq;
-int set_lpm_irq(cpu_set_t *cpumask, int action)
+
+/* SETTING_IGNORE/SETTING_RESTORE/cpumask_idx */
+int set_lpm_irq(int action)
 {
 	lp_mode_irq = action;
 
-	if (lp_mode_irq == SETTING_IGNORE)
+	if (action < SETTING_RESTORE || action >= CPUMASK_MAX)
+		return -1;
+
+	if (action == SETTING_IGNORE)
 		return 0;
 
 	if (irqbalance_pid > 0) {
 		if (lp_mode_irq == SETTING_RESTORE)
-			snprintf(irq_str, sizeof("NULL"), "NULL");
+			irq_str = "NULL";
 		else {
-			cpumask_to_str_reverse(cpumask, irq_str, MAX_STR_LENGTH);
-			if (irq_str[0] == '\0')
-				snprintf(irq_str, sizeof("NULL"), "NULL");
+			irq_str = get_irqbalance_str(action);
+			if (!irq_str)
+				irq_str = "NULL";
 		}
 	} else {
 		if (lp_mode_irq != SETTING_RESTORE)
-			cpumask_to_hexstr(cpumask, irq_str, MAX_STR_LENGTH);
+			irq_str = get_proc_irq_str(action);
+		/* Use cached str for RESTORE */
 	}
 
 	return 0;

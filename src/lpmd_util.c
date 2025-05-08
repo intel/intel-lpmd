@@ -575,12 +575,12 @@ static int enter_state(lpmd_config_state_t *state, int bsys, int bcpu)
 		reset_cpus(CPUMASK_UTIL);
 		parse_cpu_str(state->active_cpus, CPUMASK_UTIL);
 		if (state->irq_migrate != SETTING_IGNORE)
-			set_lpm_irq(get_cpumask(CPUMASK_UTIL), 1);
+			set_lpm_irq(CPUMASK_UTIL);
 		else
-			set_lpm_irq(NULL, SETTING_IGNORE);
+			set_lpm_irq(SETTING_IGNORE);
 		set_lpm_cpus(CPUMASK_UTIL);
 	} else {
-		set_lpm_irq(NULL, SETTING_IGNORE);
+		set_lpm_irq(SETTING_IGNORE);
 		set_lpm_cpus(CPUMASK_MAX); /* Ignore Task migration */
 	}
 

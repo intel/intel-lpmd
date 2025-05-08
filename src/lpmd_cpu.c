@@ -447,6 +447,16 @@ static int set_max_cpu_num(void)
 	return 0;
 }
 
+char *get_proc_irq_str(enum cpumask_idx idx)
+{
+	return get_cpus_hexstr(idx);
+}
+
+char *get_irqbalance_str(enum cpumask_idx idx)
+{
+	return get_cpus_str_reverse(idx);
+}
+
 /* Handling EPP */
 
 #define MAX_EPP_STRING_LENGTH	32

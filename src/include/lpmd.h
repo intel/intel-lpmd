@@ -192,8 +192,14 @@ enum lpm_command {
 };
 
 enum cpumask_idx {
-	CPUMASK_LPM_DEFAULT, CPUMASK_ONLINE, CPUMASK_HFI, CPUMASK_HFI_BANNED,
-	CPUMASK_HFI_LAST, CPUMASK_UTIL, CPUMASK_MAX,
+	CPUMASK_LPM_DEFAULT,
+	CPUMASK_ONLINE,
+	CPUMASK_HFI,
+	CPUMASK_HFI_BANNED,
+	CPUMASK_HFI_LAST,
+	CPUMASK_UTIL,
+	CPUMASK_MAX,
+	CPUMASK_NONE = CPUMASK_MAX,
 };
 
 #define UTIL_DELAY_MAX		5000
@@ -237,7 +243,7 @@ int get_epp_epb(int *epp, char *epp_string, int size, int *epb);
 void set_lpm_itmt(int val);
 int get_lpm_itmt(void);
 int get_itmt(void);
-int set_lpm_irq(cpu_set_t *cpumask, int action);
+int set_lpm_irq(int action);
 int set_lpm_cpus(enum cpumask_idx idx);
 
 /* lpmd_main.c */
@@ -324,6 +330,8 @@ int set_lpm_cpus(enum cpumask_idx new);
 int uevent_init(void);
 int check_cpu_hotplug(void);
 
+char *get_proc_irq_str(enum cpumask_idx idx);
+char *get_irqbalance_str(enum cpumask_idx idx);
 /* irq.c */
 int init_irq(void);
 int process_irqs(int enter, enum lpm_cpu_process_mode mode);
