@@ -118,6 +118,19 @@ static size_t alloc_cpu_set(cpu_set_t **cpu_set)
 	return size;
 }
 
+int alloc_cpumask(void)
+{
+	int idx;
+
+	for (idx = CPUMASK_USER; idx < CPUMASK_MAX; idx++) {
+		if (!cpumasks[idx].mask) {
+			alloc_cpu_set(&cpumasks[idx].mask);
+			break;
+		}
+	}
+	return idx;
+}
+
 static int cpu_migrate(int cpu)
 {
 	cpu_set_t *mask;
