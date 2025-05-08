@@ -379,8 +379,13 @@ static int parse_proc_stat(void)
 	return 0;
 }
 
-static int state_match(lpmd_config_state_t *state, int bsys, int bcpu, int bgfx, int wlt_index)
+static int state_match(lpmd_config_state_t *state, lpmd_data_t *data)
 {
+	int bcpu = data->util_cpu;
+	int bsys = data->util_sys;
+	int bgfx = data->util_gfx;
+	int wlt_index = data->wlt_hint;
+
 	if (!state->valid)
 		return 0;
 
@@ -431,12 +436,12 @@ unmatch:
 
 #define DEFAULT_POLL_RATE_MS	1000
 
-static int enter_state(lpmd_config_state_t *state, int bsys, int bcpu)
+static int enter_state(lpmd_config_state_t *state, lpmd_data_t *data)
 {
 	static int interval = DEFAULT_POLL_RATE_MS;
 
-	state->entry_load_sys = bsys;
-	state->entry_load_cpu = bcpu;
+	state->entry_load_sys = data->util_sys;
+	state->entry_load_cpu = data->util_cpu;
 
 	/* Adjust polling interval only */
 	if (state == current_state) {
@@ -445,7 +450,7 @@ static int enter_state(lpmd_config_state_t *state, int bsys, int bcpu)
 		}
 		/* Adaptive polling interval based on cpu utilization */
 		if (state->poll_interval_increment == -1) {
-			interval = state->max_poll_interval * (10000 - bcpu) / 10000;
+			interval = state->max_poll_interval * (10000 - data->util_cpu) / 10000;
 			interval /= 100;
 			interval *= 100;
 		}
@@ -548,8 +553,8 @@ static int process_next_config_state(lpmd_config_t *config)
 	// Check for new state
 	for (i = 0; i < config->config_state_count; ++i) {
 		state = &config->config_states[i];
-		if (state_match(state, busy_sys, busy_cpu, busy_gfx, config->data.wlt_hint)) {
-			interval = enter_state(state, busy_sys, busy_cpu);
+		if (state_match(state, &config->data)) {
+			interval = enter_state(state, &config->data);
 			break;
 		}
 	}
@@ -585,6 +590,9 @@ int periodic_util_update(lpmd_config_t *lpmd_config)
 
 	parse_proc_stat ();
 	parse_gfx_util();
+	lpmd_config->data.util_sys = busy_sys;
+	lpmd_config->data.util_cpu = busy_cpu;
+	lpmd_config->data.util_gfx = busy_gfx;
 
 	return process_next_config_state(lpmd_config);
 }
