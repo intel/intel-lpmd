@@ -325,11 +325,6 @@ int has_cpus(enum cpumask_idx idx)
 	return CPU_COUNT_S(size_cpumask, cpumasks[idx].mask);
 }
 
-cpu_set_t *get_cpumask(enum cpumask_idx idx)
-{
-	return cpumasks[idx].mask;
-}
-
 static int _add_cpu(int cpu, enum cpumask_idx idx)
 {
 	if (idx != CPUMASK_ONLINE && !is_cpu_online (cpu))

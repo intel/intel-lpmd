@@ -312,16 +312,12 @@ int is_cpu_online(int cpu);
 int get_max_cpus(void);
 int get_max_online_cpu(void);
 
+int alloc_cpumask(void);
 char* get_cpus_str(enum cpumask_idx idx);
 int has_cpus(enum cpumask_idx idx);
 
 void copy_cpu_mask_exclude(enum cpumask_idx source, enum cpumask_idx dest, enum cpumask_idx exlude);
 void copy_cpu_mask(enum cpumask_idx source, enum cpumask_idx dest);
-
-cpu_set_t *get_cpumask(enum cpumask_idx source);
-int cpumask_to_hexstr(cpu_set_t *cpumask, char *buf, int size);
-int cpumask_to_str_reverse(cpu_set_t *mask, char *buf, int size);
-
 int is_equal(enum cpumask_idx idx1, enum cpumask_idx idx2);
 
 int add_cpu(int cpu, enum cpumask_idx idx);
