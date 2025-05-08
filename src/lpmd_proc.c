@@ -352,13 +352,6 @@ int process_lpm_unlock(enum lpm_command cmd)
 
 	switch (cmd) {
 		case UTIL_ENTER:
-			if (!use_config_states()) {
-				set_lpm_epp (lpmd_config.lp_mode_epp);
-				set_lpm_epb (SETTING_IGNORE);
-				set_lpm_itmt (lpmd_config.ignore_itmt ? SETTING_IGNORE : 0); /* Disable ITMT */
-				set_lpm_irq(CPUMASK_LPM_DEFAULT);
-				set_lpm_cpus (CPUMASK_LPM_DEFAULT);
-			}
 			ret = enter_lpm (cmd);
 			break;
 		case USER_ENTER:
