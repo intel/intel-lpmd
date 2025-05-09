@@ -464,7 +464,7 @@ static void* lpmd_core_main_loop(void *arg)
 
 		/* Polling time out, update polling data */
 		if (n == 0 && lpmd_config.data.polling_interval > 0) {
-			periodic_util_update (&lpmd_config);
+			util_update(&lpmd_config);
 
 			if (lpmd_config.wlt_proxy_enable)
 				lpmd_config.data.wlt_hint = read_wlt_proxy(&lpmd_config.data.polling_interval);

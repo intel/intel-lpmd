@@ -306,8 +306,8 @@ int lpmd_build_default_config_states(lpmd_config_t *config);
 int lpmd_parse_config_states(lpmd_config_t *config);
 int lpmd_enter_next_state(void);
 
-/* util.c */
-int periodic_util_update(lpmd_config_t *lpmd_config);
+/* lpmd_util.c */
+int util_update(lpmd_config_t *lpmd_config);
 
 
 /* cpu.c */

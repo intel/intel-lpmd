@@ -374,7 +374,7 @@ static int parse_proc_stat(void)
 	return 0;
 }
 
-int periodic_util_update(lpmd_config_t *lpmd_config)
+int util_update(lpmd_config_t *lpmd_config)
 {
 	parse_proc_stat ();
 	parse_gfx_util();
