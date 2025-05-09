@@ -35,6 +35,173 @@
 
 #include "lpmd.h"
 
+/* LPMD state control: ON/OFF/AUTO/FREEZE/RESTORE/TERMINATE */
+static int lpmd_state = LPMD_OFF;
+static int saved_lpmd_state = LPMD_OFF;
+
+int update_lpmd_state(int new)
+{
+	lpmd_lock();
+	switch (new) {
+		case LPMD_FREEZE:
+			if (lpmd_state == LPMD_FREEZE)
+				break;
+			saved_lpmd_state = lpmd_state;
+			lpmd_state == LPMD_FREEZE;
+			break;
+		case LPMD_RESTORE:
+			if (lpmd_state != LPMD_FREEZE)
+				break;
+			lpmd_state == saved_lpmd_state;
+			saved_lpmd_state = lpmd_state;
+			break;
+		default:
+			if (lpmd_state == LPMD_FREEZE)
+				saved_lpmd_state = new;
+			else
+				lpmd_state = new;
+			break;
+	}
+	lpmd_unlock();
+	return 0;
+}
+
+int get_lpmd_state(void)
+{
+	return lpmd_state;
+}
+
+/* LPMD config states control */
+
+int lpmd_init_config_state(lpmd_config_state_t *state)
+{
+	state->id = -1;
+	state->valid = 0;
+	state->name[0] = '\0';
+
+	state->wlt_type = -1;
+
+	state->entry_system_load_thres = 0;
+	state->exit_system_load_thres = 0;
+	state->exit_system_load_hyst = 0;
+	state->enter_cpu_load_thres = 0;
+	state->exit_cpu_load_thres = 0;
+	state->enter_gfx_load_thres = 0;
+	state->exit_gfx_load_thres = 0;
+
+	state->min_poll_interval = 0;
+	state->max_poll_interval = 0;
+	state->poll_interval_increment = 0;
+
+	state->epp = SETTING_IGNORE;
+	state->epb = SETTING_IGNORE;
+	state->active_cpus[0] = '\0';
+
+	state->island_0_number_p_cores = 0;
+	state->island_0_number_e_cores = 0;
+	state->island_1_number_p_cores = 0;
+	state->island_1_number_e_cores = 0;
+	state->island_2_number_p_cores = 0;
+	state->island_2_number_e_cores = 0;
+
+	state->itmt_state = SETTING_IGNORE;
+	state->irq_migrate = SETTING_IGNORE;
+
+	state->entry_load_sys = 0;
+	state->entry_load_cpu = 0;
+	state->cpumask_idx = CPUMASK_NONE;
+	
+	return 0;
+}
+
+int lpmd_build_default_config_states(lpmd_config_t *config)
+{
+	lpmd_config_state_t *state;
+
+	state = &config->config_states[DEFAULT_OFF];
+	lpmd_init_config_state(state);
+	state->id = -1;
+	snprintf(state->name, MAX_STATE_NAME, "DEFAULT_OFF");
+	state->itmt_state = SETTING_RESTORE;
+	state->irq_migrate = SETTING_RESTORE;
+	state->epp = SETTING_RESTORE;
+	state->epb = SETTING_RESTORE;
+	state->cpumask_idx = CPUMASK_ONLINE;
+	state->valid = 1;
+
+	state = &config->config_states[DEFAULT_ON];
+	lpmd_init_config_state(state);
+	state->id = -1;
+	snprintf(state->name, MAX_STATE_NAME, "DEFAULT_ON");
+	state->itmt_state = config->ignore_itmt ? SETTING_IGNORE : 0;
+	state->irq_migrate = 1;
+	state->epp = config->lp_mode_epp;
+	state->epb = SETTING_IGNORE;
+	state->cpumask_idx = CPUMASK_LPM_DEFAULT;
+	state->valid = 1;
+
+	if (config->config_state_count)
+		return 0;
+
+	/*
+	 * When HFI monitor is enabled and config states are not used,
+	 * Switch system with different CPU affinity based on HFI hints
+	 */
+	if (config->hfi_lpm_enable){
+		state = &config->config_states[DEFAULT_HFI];
+		lpmd_init_config_state(state);
+		state->id = -1;
+		snprintf(state->name, MAX_STATE_NAME, "DEFAULT_HFI");
+		state->itmt_state = SETTING_IGNORE;
+		state->irq_migrate = SETTING_IGNORE;
+		state->epp = SETTING_IGNORE;
+		state->epb = SETTING_IGNORE;
+		state->cpumask_idx = CPUMASK_HFI;
+		state->valid = 1;
+	
+		config->config_state_count = 1;
+		return 0;
+	}
+
+	/*
+	 * When HFI monitor is not enabled and config states are not used,
+	 * Switch system following global setting based on utilization.
+	 */
+	state = &config->config_states[CONFIG_STATE_BASE];
+	lpmd_init_config_state(state);
+	state->id = 1;
+	snprintf(state->name, MAX_STATE_NAME, "UTIL_POWER");
+	state->entry_system_load_thres = config->util_entry_threshold;
+	state->enter_cpu_load_thres = config->util_exit_threshold;
+	state->itmt_state = config->ignore_itmt ? SETTING_IGNORE : 0;
+	state->irq_migrate = 1;
+	state->min_poll_interval = 100;
+	state->max_poll_interval = 1000;
+	state->poll_interval_increment = -1;
+	state->epp = config->lp_mode_epp;
+	state->epb = SETTING_IGNORE;
+	state->cpumask_idx = CPUMASK_LPM_DEFAULT;
+	state->valid = 1;
+
+	state = &config->config_states[CONFIG_STATE_BASE + 1];
+	lpmd_init_config_state(state);
+	state->id = 2;
+	snprintf(state->name, MAX_STATE_NAME, "UTIL_PERF");
+	state->entry_system_load_thres = 100;
+	state->enter_cpu_load_thres = 100;
+	state->itmt_state = config->ignore_itmt ? SETTING_IGNORE : SETTING_RESTORE;
+	state->irq_migrate = 1;
+	state->min_poll_interval = 1000;
+	state->max_poll_interval = 1000;
+	state->epp = config->lp_mode_epp == SETTING_IGNORE ? SETTING_IGNORE : SETTING_RESTORE;
+	state->epb = SETTING_IGNORE;
+	state->cpumask_idx = CPUMASK_ONLINE;
+	state->valid = 1;
+
+	config->config_state_count = 2;
+	return 0;
+}
+
 static int current_idx = STATE_NONE;
 
 static int config_state_match(lpmd_config_t *config, int idx)
@@ -108,42 +275,6 @@ end:
 	if (config->data.polling_interval > state->max_poll_interval)
 		config->data.polling_interval = state->max_poll_interval;
 	return 0;
-}
-
-/* for lpmd state control: ON/OFF/AUTO/FREEZE/RESTORE/TERMINATE */
-static int lpmd_state = LPMD_OFF;
-static int saved_lpmd_state = LPMD_OFF;
-
-int update_lpmd_state(int new)
-{
-	lpmd_lock();
-	switch (new) {
-		case LPMD_FREEZE:
-			if (lpmd_state == LPMD_FREEZE)
-				break;
-			saved_lpmd_state = lpmd_state;
-			lpmd_state == LPMD_FREEZE;
-			break;
-		case LPMD_RESTORE:
-			if (lpmd_state != LPMD_FREEZE)
-				break;
-			lpmd_state == saved_lpmd_state;
-			saved_lpmd_state = lpmd_state;
-			break;
-		default:
-			if (lpmd_state == LPMD_FREEZE)
-				saved_lpmd_state = new;
-			else
-				lpmd_state = new;
-			break;
-	}
-	lpmd_unlock();
-	return 0;
-}
-
-int get_lpmd_state(void)
-{
-	return lpmd_state;
 }
 
 static int choose_next_state(lpmd_config_t *config)
@@ -225,7 +356,7 @@ end:
 	return ret;
 }
 
-int enter_next_state(void)
+int lpmd_enter_next_state(void)
 {
 	lpmd_config_t *config = get_lpmd_config();
 	int idx = current_idx;
@@ -256,4 +387,52 @@ end:
 	return 0;
 }
 
+#define DEFAULT_POLL_RATE_MS	1000
 
+int lpmd_parse_config_states(lpmd_config_t *lpmd_config)
+{
+	lpmd_config_state_t *state;
+	int nr_state = 0;
+	int i, ret;
+
+	for (i = 0; i < lpmd_config->config_state_count; i++) {
+		state = &lpmd_config->config_states[i];
+
+		if (state->active_cpus[0] != '\0') {
+			state->cpumask_idx = alloc_cpumask();
+			if (state->cpumask_idx == CPUMASK_NONE) {
+				lpmd_log_error("Cannot alloc CPUMASK\n");
+				return -1;
+			}
+			ret = parse_cpu_str(state->active_cpus, state->cpumask_idx);
+			if (ret <= 0) {
+				state->valid = 0;
+				continue;
+			}
+		}
+
+		if (state->entry_system_load_thres || state->enter_cpu_load_thres || state->enter_gfx_load_thres)
+			polling_enabled = 1;
+
+		if (!state->min_poll_interval)
+			state->min_poll_interval = state->max_poll_interval > DEFAULT_POLL_RATE_MS ? DEFAULT_POLL_RATE_MS : state->max_poll_interval;
+		if (!state->max_poll_interval)
+			state->max_poll_interval = state->min_poll_interval > DEFAULT_POLL_RATE_MS ? state->min_poll_interval : DEFAULT_POLL_RATE_MS;
+		if (!state->poll_interval_increment)
+			state->poll_interval_increment = -1;
+
+		state->entry_system_load_thres *= 100;
+		state->enter_cpu_load_thres *= 100;
+		state->exit_cpu_load_thres *= 100;
+		state->enter_gfx_load_thres *= 100;
+
+		nr_state++;
+	}
+
+	if (nr_state < 1) {
+		lpmd_log_info("%d valid config states found\n", nr_state);
+		return 1;
+	}
+
+	return 0;
+}

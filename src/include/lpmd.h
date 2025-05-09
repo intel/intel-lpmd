@@ -275,15 +275,11 @@ int do_platform_check(void);
 lpmd_config_t *get_lpmd_config(void);
 int process_itmt(void);
 
-void lpmd_init_config_state(lpmd_config_state_t *state);
 int lpmd_lock(void);
 int lpmd_unlock(void);
 int get_cpu_mode(void);
 void set_ignore_itmt(void);
 
-int update_lpmd_state(int state);
-int get_lpmd_state(void);
-int enter_next_state(void);
 
 void lpmd_terminate(void);
 void lpmd_force_on(void);
@@ -302,9 +298,17 @@ int intel_dbus_server_init(gboolean (*exit_handler)(void));
 /* lpmd_config.c */
 int lpmd_get_config(lpmd_config_t *lpmd_config);
 
+/* lpmd_state_machine.c */
+int update_lpmd_state(int state);
+int get_lpmd_state(void);
+int lpmd_init_config_state(lpmd_config_state_t *state);
+int lpmd_build_default_config_states(lpmd_config_t *config);
+int lpmd_parse_config_states(lpmd_config_t *config);
+int lpmd_enter_next_state(void);
+
 /* util.c */
 int periodic_util_update(lpmd_config_t *lpmd_config);
-int util_init(lpmd_config_t *lpmd_config);
+
 
 /* cpu.c */
 int check_cpu_capability(lpmd_config_t *lpmd_config);
