@@ -117,6 +117,14 @@ typedef struct {
 	/* active_cpus from HFI monitor but we can leverage CPUMASK_HFI for now */
 }lpmd_data_t;
 
+enum default_config_state {
+	DEFAULT_OFF,	/* lpmd force off: state with all default power settings */
+	DEFAULT_ON,	/* lpmd force on: state with global CPU/IRQ/ITMT/EPP configurations */
+	DEFAULT_HFI,	/* LPM state with CPU isolation based on HFI hints only */
+	CONFIG_STATE_BASE,
+	MAX_STATES = CONFIG_STATE_BASE + MAX_CONFIG_STATES,
+};
+
 typedef struct {
 	int id;
 	int valid;
