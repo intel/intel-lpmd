@@ -1202,16 +1202,6 @@ static int detect_lpm_cpus(char *cmd_cpus)
 		goto end;
 	}
 
-	if (has_hfi_lpm_monitor ()) {
-		lpmd_log_info (
-				"\tNo valid Low Power CPUs detected, use dynamic Low Power CPUs from HFI hints\n");
-		return 0;
-	}
-	else {
-		lpmd_log_error ("\tNo valid Low Power CPUs detected, exit\n");
-		exit (1);
-	}
-
 end: if (has_cpus (CPUMASK_LPM_DEFAULT))
 		lpmd_log_info ("\tUse CPU %s as Default Low Power CPUs (%s)\n",
 						get_cpus_str (CPUMASK_LPM_DEFAULT), str);

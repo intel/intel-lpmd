@@ -46,23 +46,6 @@ int lpmd_unlock(void)
 	return pthread_mutex_unlock (&lpmd_mutex);
 }
 
-/* Can be configurable */
-int get_idle_percentage(void)
-{
-	return 90;
-}
-
-/* Can be configurable */
-int get_idle_duration(void)
-{
-	return -1;
-}
-
-int get_cpu_mode(void)
-{
-	return lpmd_config.mode;
-}
-
 static int has_hfi_capability(void)
 {
 	unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
@@ -75,45 +58,6 @@ static int has_hfi_capability(void)
 	return 0;
 }
 
-int has_hfi_lpm_monitor(void)
-{
-	return !!lpmd_config.hfi_lpm_enable;
-}
-
-int has_util_monitor(void)
-{
-	return !!lpmd_config.util_enable;
-}
-
-int get_util_entry_interval(void)
-{
-	return lpmd_config.util_entry_delay;
-}
-
-int get_util_exit_interval(void)
-{
-	return lpmd_config.util_exit_delay;
-}
-
-int get_util_entry_threshold(void)
-{
-	return lpmd_config.util_entry_threshold;
-}
-
-int get_util_exit_threshold(void)
-{
-	return lpmd_config.util_exit_threshold;
-}
-
-int get_util_entry_hyst(void)
-{
-	return lpmd_config.util_entry_hyst;
-}
-
-int get_util_exit_hyst(void)
-{
-	return lpmd_config.util_exit_hyst;
-}
 
 /* ITMT Management */
 #define PATH_ITMT_CONTROL "/proc/sys/kernel/sched_itmt_enabled"
@@ -160,74 +104,7 @@ int process_itmt(void)
 }
 
 /* Main functions */
-static int lpmd_state = LPMD_OFF;
-static int saved_lpmd_state = -1;
-static int lpmd_freezed = 0;
 
-int in_auto_mode()
-{
-	return lpmd_state == LPMD_AUTO;
-}
-
-static int _update_lpmd_state(enum lpmd_states new)
-{
-	lpmd_state = new;
-	switch (lpmd_state) {
-		case LPMD_ON:
-			break;
-		case LPMD_OFF:
-			break;
-		case LPM_AUTO:
-			lpmd_state = LPMD_AUTO;
-			/* TODO: should choose a proper config state and enter */
-			break;
-		default:
-			return -1;
-	}
-	return 0;
-}
-
-
-int _enter_next_state(lpmd_config_state_t *state)
-{
-	int ret;
-
-	lpmd_lock();
-
-	set_lpm_epp(state->epp);
-	set_lpm_epb(state->epb);
-	set_lpm_itmt(state->itmt_state);
-
-	if (state->cpumask_idx != CPUMASK_NONE) {
-		if (state->irq_migrate != SETTING_IGNORE)
-			set_lpm_irq(state->cpumask_idx);
-		else
-			set_lpm_irq(SETTING_IGNORE);
-		set_lpm_cpus(state->cpumask_idx);
-	} else {
-		set_lpm_irq(SETTING_IGNORE);
-		set_lpm_cpus(CPUMASK_NONE); /* Ignore Task migration */
-	}
-
-	process_itmt();
-	process_irqs (1, get_cpu_mode ());
-
-	process_cpus (1, get_cpu_mode ());
-
-	lpmd_unlock();
-	return ret;
-}
-
-int _enter_default_state(enum default_config_state idx)
-{
-	if (idx >= CONFIG_STATE_BASE)
-		return -1;
-
-	return _enter_next_state(&lpmd_config.config_states[idx]);
-}
-
-static int
-proc_message(message_capsul_t *msg);
 static int write_pipe_fd;
 
 static void lpmd_send_message(message_name_t msg_id, int size, unsigned char *msg)

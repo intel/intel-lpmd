@@ -81,45 +81,6 @@ static void lpmd_dump_config(lpmd_config_t *lpmd_config)
 	}
 }
 
-void _lpmd_init_config_state(lpmd_config_state_t *state)
-{
-	state->id = -1;
-	state->valid = 0;
-	state->name[0] = '\0';
-
-	state->wlt_type = -1;
-
-	state->entry_system_load_thres = 0;
-	state->exit_system_load_thres = 0;
-	state->exit_system_load_hyst = 0;
-	state->enter_cpu_load_thres = 0;
-	state->exit_cpu_load_thres = 0;
-	state->enter_gfx_load_thres = 0;
-	state->exit_gfx_load_thres = 0;
-
-	state->min_poll_interval = 0;
-	state->max_poll_interval = 0;
-	state->poll_interval_increment = 0;
-
-	state->epp = SETTING_IGNORE;
-	state->epb = SETTING_IGNORE;
-	state->active_cpus[0] = '\0';
-
-	state->island_0_number_p_cores = 0;
-	state->island_0_number_e_cores = 0;
-	state->island_1_number_p_cores = 0;
-	state->island_1_number_e_cores = 0;
-	state->island_2_number_p_cores = 0;
-	state->island_2_number_e_cores = 0;
-
-	state->itmt_state = SETTING_IGNORE;
-	state->irq_migrate = SETTING_IGNORE;
-
-	state->entry_load_sys = 0;
-	state->entry_load_cpu = 0;
-	state->cpumask_idx = CPUMASK_NONE;
-}
-
 static void lpmd_parse_state(xmlDoc *doc, xmlNode *a_node, lpmd_config_state_t *state)
 {
 	xmlNode *cur_node = NULL;

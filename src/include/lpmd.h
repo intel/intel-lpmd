@@ -210,13 +210,6 @@ enum lpm_cpu_process_mode {
 	LPM_CPU_MODE_MAX = LPM_CPU_POWERCLAMP,
 };
 
-enum lpm_command {
-	USER_ENTER, /* Force enter LPM and always stay in LPM */
-	USER_AUTO, /* Allow oppotunistic LPM based on util/hfi request */
-	USER_EXIT, /* Force exit LPM and never enter LPM */
-	LPM_CMD_MAX,
-};
-
 #define NUM_USER_CPUMASKS	10
 enum cpumask_idx {
 	CPUMASK_LPM_DEFAULT,
@@ -285,30 +278,12 @@ int process_itmt(void);
 void lpmd_init_config_state(lpmd_config_state_t *state);
 int lpmd_lock(void);
 int lpmd_unlock(void);
-int in_lpm(void);
-int in_auto_mode(void);
-int get_idle_percentage(void);
-int get_idle_duration(void);
 int get_cpu_mode(void);
-int has_hfi_lpm_monitor(void);
-int has_util_monitor(void);
-int get_util_entry_interval(void);
-int get_util_exit_interval(void);
-int get_util_entry_threshold(void);
-int get_util_exit_threshold(void);
-int get_util_entry_hyst(void);
-int get_util_exit_hyst(void);
 void set_ignore_itmt(void);
 
-int enter_default_state(enum default_config_state idx);
 int update_lpmd_state(int state);
 int get_lpmd_state(void);
 int enter_next_state(void);
-
-int process_lpm(enum lpm_command cmd);
-int process_lpm_unlock(enum lpm_command cmd);
-int freeze_lpm(void);
-int restore_lpm(void);
 
 void lpmd_terminate(void);
 void lpmd_force_on(void);
@@ -330,8 +305,6 @@ int lpmd_get_config(lpmd_config_t *lpmd_config);
 /* util.c */
 int periodic_util_update(lpmd_config_t *lpmd_config);
 int util_init(lpmd_config_t *lpmd_config);
-int use_config_states(void);
-void reset_config_state(void);
 
 /* cpu.c */
 int check_cpu_capability(lpmd_config_t *lpmd_config);
@@ -366,7 +339,6 @@ char *get_irqbalance_str(enum cpumask_idx idx);
 /* irq.c */
 int init_irq(void);
 int process_irqs(int enter, enum lpm_cpu_process_mode mode);
-int update_lpm_irq(cpu_set_t *cpumask, int action);
 
 /* hfi.c */
 int hfi_init(void);

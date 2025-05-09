@@ -193,7 +193,7 @@ static char *update_one_cpu(struct perf_cap *perf_cap)
 		reset_cpus (CPUMASK_HFI_BANNED);
 	}
 
-	if (perf_cap->eff == 255 * 4 && has_hfi_lpm_monitor ()) {
+	if (perf_cap->eff == 255 * 4) {
 		add_cpu (perf_cap->cpu, CPUMASK_HFI);
 		return "LPM";
 	}
