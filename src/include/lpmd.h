@@ -276,6 +276,9 @@ int in_debug_mode(void);
 int do_platform_check(void);
 
 /* lpmd_proc.c: interfaces */
+lpmd_config_t *get_lpmd_config(void);
+int process_itmt(void);
+
 void lpmd_init_config_state(lpmd_config_state_t *state);
 int lpmd_lock(void);
 int lpmd_unlock(void);

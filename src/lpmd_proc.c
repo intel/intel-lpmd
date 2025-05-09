@@ -27,6 +27,11 @@
 
 static lpmd_config_t lpmd_config;
 
+lpmd_config_t *get_lpmd_config(void)
+{
+	return &lpmd_config;
+}
+
 static UpClient *upower_client;
 
 static pthread_mutex_t lpmd_mutex;
@@ -139,7 +144,7 @@ static int init_itmt(void)
 	return lpmd_read_int(PATH_ITMT_CONTROL, &saved_itmt, -1);
 }
 
-static int process_itmt(void)
+int process_itmt(void)
 {
 	if (lp_mode_itmt == SETTING_RESTORE)
 		lp_mode_itmt = saved_itmt;
