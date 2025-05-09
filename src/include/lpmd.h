@@ -323,10 +323,13 @@ int process_epp_epb(lpmd_config_state_t *state);
 int irq_init(void);
 int process_irq(lpmd_config_state_t *state);
 
-/* cpu.c */
+/* lpmd_cpu.c */
+int cpu_init(char *cmd_cpus, enum lpm_cpu_process_mode mode, int lp_mode_epp);
+int cpu_exit(void);
+int process_cpus(lpmd_config_state_t *state, enum lpm_cpu_process_mode mode);
+
 int check_cpu_capability(lpmd_config_t *lpmd_config);
-int init_cpu(char *cmd_cpus, enum lpm_cpu_process_mode mode, int lp_mode_epp);
-int process_cpus(int enter, enum lpm_cpu_process_mode mode);
+
 int parse_cpu_str(char *buf, enum cpumask_idx idx);
 
 int is_cpu_lcore(int cpu);

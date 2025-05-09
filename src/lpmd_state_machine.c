@@ -326,27 +326,20 @@ static int get_state_interval(lpmd_config_t *config, int idx)
 static int enter_state(lpmd_config_t *config, int idx)
 {
 	lpmd_config_state_t *state = &config->config_states[idx];
-	int ret;
 
 	state->entry_load_sys = config->data.util_sys;
 	state->entry_load_cpu = config->data.util_cpu;
 	
-	if (state->cpumask_idx != CPUMASK_NONE) {
-		set_lpm_cpus(state->cpumask_idx);
-	} else {
-		set_lpm_cpus(CPUMASK_NONE); /* Ignore Task migration */
-        }
-
 	process_itmt(state);
 	
 	process_epp_epb(state);
 
 	process_irq(state);
 
-	process_cpus (1, get_cpu_mode ());
+	process_cpus(state, config->mode);
 
 end:
-	return ret;
+	return 0;
 }
 
 int lpmd_enter_next_state(void)
@@ -402,6 +395,8 @@ int lpmd_parse_config_states(lpmd_config_t *lpmd_config)
 				state->valid = 0;
 				continue;
 			}
+		} else {
+			state->cpumask_idx = CPUMASK_NONE;
 		}
 
 		if (state->entry_system_load_thres || state->enter_cpu_load_thres || state->enter_gfx_load_thres)

@@ -353,7 +353,7 @@ int lpmd_main(void)
 
 	pthread_mutex_init (&lpmd_mutex, NULL);
 
-	ret = init_cpu (lpmd_config.lp_mode_cpus, lpmd_config.mode, lpmd_config.lp_mode_epp);
+	ret = cpu_init(lpmd_config.lp_mode_cpus, lpmd_config.mode, lpmd_config.lp_mode_epp);
 	if (ret)
 		return ret;
 

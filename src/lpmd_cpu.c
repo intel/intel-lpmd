@@ -994,47 +994,25 @@ static int update_allowed_cpus(const char *unit, uint8_t *vals, int size)
 	int ret;
 	int i;
 
-//	 creates a new, independent bus connection to the system bus
 	ret = sd_bus_open_system (&bus);
 	if (ret < 0) {
 		fprintf (stderr, "Failed to connect to system bus: %s\n", strerror (-ret));
 		goto finish;
 	}
 
-	/*
-	 * creates a new bus message object that encapsulates a D-Bus method call,
-	 * and returns it in the m output parameter.
-	 * The call will be made on the destination, path, on the interface, member.
-	 */
-	/* Issue the method call and store the response message in m */
-	ret = sd_bus_message_new_method_call (bus, &m, "org.freedesktop.systemd1",
-											"/org/freedesktop/systemd1",
-											"org.freedesktop.systemd1.Manager",
-											"SetUnitProperties");
+	ret = sd_bus_message_new_method_call (bus, &m, "org.freedesktop.systemd1", "/org/freedesktop/systemd1",
+				"org.freedesktop.systemd1.Manager", "SetUnitProperties");
 	if (ret < 0) {
 		fprintf (stderr, "Failed to issue method call: %s\n", error.message);
 		goto finish;
 	}
 
-
-//	Attach fields to a D-Bus message based on a type string
 	ret = sd_bus_message_append (m, "sb", unit, 1);
 	if (ret < 0) {
 		fprintf (stderr, "Failed to append unit: %s\n", error.message);
 		goto finish;
 	}
 
-	/*
-	 * appends a new container to the message m.
-	 * After opening a new container, it can be filled with content using
-	 * sd_bus_message_append(3) and similar functions.
-	 * Containers behave like a stack. To nest containers inside each other,
-	 * call sd_bus_message_open_container() multiple times without calling
-	 * sd_bus_message_close_container() in between. Each container will be
-	 * nested inside the previous container.
-	 * Instead of literals, the corresponding constants SD_BUS_TYPE_STRUCT,
-	 * SD_BUS_TYPE_ARRAY, SD_BUS_TYPE_VARIANT or SD_BUS_TYPE_DICT_ENTRY can also be used.
-	 */
 	ret = sd_bus_message_open_container (m, SD_BUS_TYPE_ARRAY, "(sv)");
 	if (ret < 0) {
 		fprintf (stderr, "Failed to append array: %s\n", error.message);
@@ -1047,10 +1025,6 @@ static int update_allowed_cpus(const char *unit, uint8_t *vals, int size)
 		goto finish;
 	}
 
-	/*
-	 * appends a single field to the message m.
-	 * The parameter type determines how the pointer p is interpreted.
-	 */
 	ret = sd_bus_message_append_basic (m, SD_BUS_TYPE_STRING, "AllowedCPUs");
 	if (ret < 0) {
 		fprintf (stderr, "Failed to append string: %s\n", error.message);
@@ -1063,10 +1037,6 @@ static int update_allowed_cpus(const char *unit, uint8_t *vals, int size)
 		goto finish_2;
 	}
 
-	/*
-	 * appends an array to a D-Bus message m. A container will be opened,
-	 * the array contents appended, and the container closed.
-	 */
 	ret = sd_bus_message_append_array (m, 'y', vals, size);
 	if (ret < 0) {
 		fprintf (stderr, "Failed to append allowed_cpus: %s\n", error.message);
@@ -1101,7 +1071,7 @@ finish: if (ret >= 0) {
 	return ret < 0 ? -1 : 0;
 }
 
-static int restore_systemd_cgroup()
+static int restore_systemd_cgroup(void)
 {
 	int size = topo_max_cpus / 8;
 	uint8_t *vals;
@@ -1110,7 +1080,6 @@ static int restore_systemd_cgroup()
 	if (!vals)
 		return -1;
 	get_cpus_hexvals (CPUMASK_ONLINE, vals, size);
-
 	update_allowed_cpus ("system.slice", vals, size);
 	update_allowed_cpus ("user.slice", vals, size);
 	update_allowed_cpus ("machine.slice", vals, size);
@@ -1118,7 +1087,7 @@ static int restore_systemd_cgroup()
 	return 0;
 }
 
-static int update_systemd_cgroup()
+static int update_systemd_cgroup(lpmd_config_state_t *state)
 {
 	int size = topo_max_cpus / 8;
 	uint8_t *vals;
@@ -1127,7 +1096,7 @@ static int update_systemd_cgroup()
 	vals = calloc (size, 1);
 	if (!vals)
 		return -1;
-	get_cpus_hexvals (lpm_cpus_cur, vals, size);
+	get_cpus_hexvals (state->cpumask_idx, vals, size);
 
 	ret = update_allowed_cpus ("system.slice", vals, size);
 	if (ret)
@@ -1151,114 +1120,53 @@ restore: free (vals);
 
 static int check_cpu_cgroupv2_support(void)
 {
-	if (lpmd_write_str (PATH_CG2_SUBTREE_CONTROL, "+cpuset", LPMD_LOG_DEBUG))
-		return 1;
-
-	return 0;
+	return lpmd_write_str (PATH_CG2_SUBTREE_CONTROL, "+cpuset", LPMD_LOG_DEBUG);
 }
 
-static int process_cpu_cgroupv2_enter(void)
+static int process_cpu_cgroupv2(lpmd_config_state_t *state)
 {
-	if (lpmd_write_str (PATH_CG2_SUBTREE_CONTROL, "+cpuset", LPMD_LOG_DEBUG))
-		return 1;
-
-	return update_systemd_cgroup ();
+	if (is_equal(state->cpumask_idx, CPUMASK_ONLINE)) {
+		restore_systemd_cgroup ();
+		return lpmd_write_str (PATH_CG2_SUBTREE_CONTROL, "-cpuset", LPMD_LOG_DEBUG);	
+	} else {
+		if (lpmd_write_str (PATH_CG2_SUBTREE_CONTROL, "+cpuset", LPMD_LOG_DEBUG))
+			return 1;
+		return update_systemd_cgroup(state);
+	}
 }
 
-static int process_cpu_cgroupv2_exit(void)
+/* Support for cgroup based cpu isolation */
+static int process_cpu_isolate(lpmd_config_state_t *state)
 {
-	restore_systemd_cgroup ();
-
-	return lpmd_write_str (PATH_CG2_SUBTREE_CONTROL, "-cpuset", LPMD_LOG_DEBUG);
-}
-
-static int process_cpu_cgroupv2(int enter)
-{
-	if (enter)
-		return process_cpu_cgroupv2_enter ();
-	else
-		return process_cpu_cgroupv2_exit ();
-}
-
-static int __process_cpu_isolate_exit(char *name)
-{
-	char path[MAX_STR_LENGTH];
-	DIR *dir;
-
-	snprintf(path, MAX_STR_LENGTH, "/sys/fs/cgroup/%s", name);
-	dir = opendir(path);
-	if (!dir)
+	if (lpmd_write_str ("/sys/fs/cgroup/lpm/cpuset.cpus.partition", "member", LPMD_LOG_DEBUG))
 		return 1;
 
-	closedir(dir);
-
-	snprintf(path, MAX_STR_LENGTH, "/sys/fs/cgroup/%s/cpuset.cpus.partition", name);
-	if (lpmd_write_str (path, "member", LPMD_LOG_DEBUG))
-		return 1;
-
-	if (!get_cpus_str (CPUMASK_ONLINE))
-		return 0;
-
-	snprintf(path, MAX_STR_LENGTH, "/sys/fs/cgroup/%s/cpuset.cpus", name);
-	if (lpmd_write_str (path, get_cpus_str (CPUMASK_ONLINE),
-						LPMD_LOG_DEBUG))
-		return 1;
+	if (!is_equal(state->cpumask_idx, CPUMASK_ONLINE)) {
+		if (lpmd_write_str ("/sys/fs/cgroup/lpm/cpuset.cpus", get_cpus_str_reverse (lpm_cpus_cur), LPMD_LOG_DEBUG))
+			return 1;
+		if (lpmd_write_str ("/sys/fs/cgroup/lpm/cpuset.cpus.partition", "isolated", LPMD_LOG_DEBUG))
+			return 1;
+	} else {
+		if (lpmd_write_str ("/sys/fs/cgroup/lpm/cpuset.cpus", get_cpus_str (CPUMASK_ONLINE), LPMD_LOG_DEBUG))
+			return 1;
+	}
 
 	return 0;
 }
 
 static int check_cpu_isolate_support(void)
 {
-	return check_cpu_cgroupv2_support ();
-}
-
-static int process_cpu_isolate_enter(void)
-{
-	DIR *dir;
 	int ret;
 
-	dir = opendir ("/sys/fs/cgroup/lpm");
-	if (!dir) {
-		ret = mkdir ("/sys/fs/cgroup/lpm", 0744);
-		if (ret) {
-			printf ("Can't create dir:%s errno:%d\n", "/sys/fs/cgroup/lpm", errno);
-			return ret;
-		}
-		lpmd_log_info ("\tCreate %s\n", "/sys/fs/cgroup/lpm");
-	} else {
-		closedir (dir);
-	}
+	ret = check_cpu_cgroupv2_support ();
+	if (ret)
+		return ret;
+		
+	ret = mkdir ("/sys/fs/cgroup/lpm", 0744);
+	if (ret)
+		lpmd_log_error ("Can't create dir:%s errno:%d\n", "/sys/fs/cgroup/lpm", errno);
 
-	if (lpmd_write_str ("/sys/fs/cgroup/lpm/cpuset.cpus.partition", "member", LPMD_LOG_DEBUG))
-		return 1;
-
-	if (!CPU_EQUAL_S(size_cpumask, cpumasks[lpm_cpus_cur].mask, cpumasks[CPUMASK_ONLINE].mask)) {
-		if (lpmd_write_str ("/sys/fs/cgroup/lpm/cpuset.cpus", get_cpus_str_reverse (lpm_cpus_cur),
-						LPMD_LOG_DEBUG))
-			return 1;
-
-		if (lpmd_write_str ("/sys/fs/cgroup/lpm/cpuset.cpus.partition", "isolated", LPMD_LOG_DEBUG))
-			return 1;
-	} else {
-		if (lpmd_write_str ("/sys/fs/cgroup/lpm/cpuset.cpus", get_cpus_str (CPUMASK_ONLINE),
-						LPMD_LOG_DEBUG))
-			return 1;
-	}
-
-	return 0;
-}
-
-static int process_cpu_isolate_exit(void)
-{
-	return __process_cpu_isolate_exit("lpm");
-}
-
-static int process_cpu_isolate(int enter)
-{
-	if (enter)
-		return process_cpu_isolate_enter ();
-	else
-		return process_cpu_isolate_exit ();
+	return ret;
 }
 
 static int check_cpu_mode_support(enum lpm_cpu_process_mode mode)
@@ -1267,13 +1175,11 @@ static int check_cpu_mode_support(enum lpm_cpu_process_mode mode)
 
 	switch (mode) {
 		case LPM_CPU_OFFLINE:
+		case LPM_CPU_POWERCLAMP:
 			ret = -1;
 			break;
 		case LPM_CPU_CGROUPV2:
 			ret = check_cpu_cgroupv2_support ();
-			break;
-		case LPM_CPU_POWERCLAMP:
-			ret = -1;
 			break;
 		case LPM_CPU_ISOLATE:
 			ret = check_cpu_isolate_support ();
@@ -1282,10 +1188,8 @@ static int check_cpu_mode_support(enum lpm_cpu_process_mode mode)
 			lpmd_log_error ("Invalid CPU process mode %d\n", mode);
 			exit (-1);
 	}
-	if (ret) {
+	if (ret)
 		lpmd_log_error ("Mode %d not supported\n", mode);
-		return ret;
-	}
 
 	return ret;
 }
@@ -1301,7 +1205,6 @@ static int get_tdp(void)
 	char str[MAX_STR_LENGTH];
 	char *pos;
 	int tdp = 0;
-
 
 	if ((dir = opendir (PATH_RAPL)) == NULL) {
 		perror ("opendir() error");
@@ -1352,10 +1255,16 @@ static int get_tdp(void)
 	return tdp / 1000000;
 }
 
-static void cpu_cleanup(void)
+int cpu_exit(void)
 {
-	/* leanup previous cgroup setting in case service quits unexpectedly last time */
-	__process_cpu_isolate_exit("lpm");
+	DIR *dir;
+
+	dir = opendir("/sys/fs/cgroup/lpm");
+	if (dir) {
+		closedir(dir);
+		rmdir("/sys/fs/cgroup/lpm");
+	}
+	return 0;
 }
 
 int check_cpu_capability(lpmd_config_t *lpmd_config)
@@ -1367,8 +1276,7 @@ int check_cpu_capability(lpmd_config_t *lpmd_config)
 	int pcores, ecores, lcores;
 	int tdp;
 
-	/* Must be called before migrating any tasks */
-	cpu_cleanup();
+	cpu_exit();
 
 	ret = detect_supported_cpu(lpmd_config);
 	if (ret) {
@@ -1420,7 +1328,7 @@ int check_cpu_capability(lpmd_config_t *lpmd_config)
 	return 0;
 }
 
-int init_cpu(char *cmd_cpus, enum lpm_cpu_process_mode mode, int epp)
+int cpu_init(char *cmd_cpus, enum lpm_cpu_process_mode mode, int epp)
 {
 	int ret;
 
@@ -1435,31 +1343,26 @@ int init_cpu(char *cmd_cpus, enum lpm_cpu_process_mode mode, int epp)
 	return 0;
 }
 
-int process_cpus(int enter, enum lpm_cpu_process_mode mode)
+int process_cpus(lpmd_config_state_t *state, enum lpm_cpu_process_mode mode)
 {
 	int ret;
 
-	if (enter != 1 && enter != 0)
-		return LPMD_ERROR;
-
-	if (lpm_cpus_cur == CPUMASK_MAX) {
+	if (state->cpumask_idx == CPUMASK_NONE) {
 		lpmd_log_info ("Ignore Task migration\n");
 		return 0;
 	}
 
 	lpmd_log_info ("Process CPUs ...\n");
 	switch (mode) {
+		case LPM_CPU_POWERCLAMP:
 		case LPM_CPU_OFFLINE:
 			ret = -1;
 			break;
 		case LPM_CPU_CGROUPV2:
-			ret = process_cpu_cgroupv2 (enter);
-			break;
-		case LPM_CPU_POWERCLAMP:
-			ret = -1;
+			ret = process_cpu_cgroupv2(state);
 			break;
 		case LPM_CPU_ISOLATE:
-			ret = process_cpu_isolate (enter);
+			ret = process_cpu_isolate(state);
 			break;
 		default:
 			exit (-1);
