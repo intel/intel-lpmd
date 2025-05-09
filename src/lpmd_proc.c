@@ -477,7 +477,7 @@ static void* lpmd_core_main_loop(void *arg)
 
 		/* Update CPUMASK_HFI */
 		if (idx_hfi_fd >= 0 && (poll_fds[idx_hfi_fd].revents & POLLIN)) {
-			hfi_receive ();
+			hfi_update();
 		}
 
 		/* Update WLT hint */

@@ -319,12 +319,14 @@ int hfi_kill(void)
 	return 0;
 }
 
-void hfi_receive(void)
+int hfi_update(void)
 {
 	int err = 0;
 
 	while (!err)
 		err = nl_recvmsgs (drv.nl_handle, drv.nl_cb);
+
+	return 0;
 }
 
 int hfi_init(void)

@@ -309,6 +309,10 @@ int lpmd_enter_next_state(void);
 /* lpmd_util.c */
 int util_update(lpmd_config_t *lpmd_config);
 
+/* lpmd_hfi.c */
+int hfi_init(void);
+int hfi_kill(void);
+int hfi_update(void);
 
 /* cpu.c */
 int check_cpu_capability(lpmd_config_t *lpmd_config);
@@ -344,10 +348,7 @@ char *get_irqbalance_str(enum cpumask_idx idx);
 int init_irq(void);
 int process_irqs(int enter, enum lpm_cpu_process_mode mode);
 
-/* hfi.c */
-int hfi_init(void);
-int hfi_kill(void);
-void hfi_receive(void);
+
 
 /* socket.c */
 int socket_init_connection(char *name);
