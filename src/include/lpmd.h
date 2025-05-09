@@ -319,6 +319,10 @@ int epp_epb_init(void);
 int get_epp_epb(int *epp, char *epp_str, int size, int *epb);
 int process_epp_epb(lpmd_config_state_t *state);
 
+/* lpmd_irq.c */
+int irq_init(void);
+int process_irq(lpmd_config_state_t *state);
+
 /* cpu.c */
 int check_cpu_capability(lpmd_config_t *lpmd_config);
 int init_cpu(char *cmd_cpus, enum lpm_cpu_process_mode mode, int lp_mode_epp);
@@ -349,10 +353,6 @@ int check_cpu_hotplug(void);
 
 char *get_proc_irq_str(enum cpumask_idx idx);
 char *get_irqbalance_str(enum cpumask_idx idx);
-/* irq.c */
-int init_irq(void);
-int process_irqs(int enter, enum lpm_cpu_process_mode mode);
-
 
 
 /* socket.c */

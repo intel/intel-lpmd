@@ -66,59 +66,25 @@ struct info_irqs *info = &info_irqs;
 static char *irq_str;
 static int lp_mode_irq;
 
-/* SETTING_IGNORE/SETTING_RESTORE/cpumask_idx */
-int set_lpm_irq(int action)
-{
-	lp_mode_irq = action;
-
-	if (action < SETTING_RESTORE || action >= CPUMASK_MAX)
-		return -1;
-
-	if (action == SETTING_IGNORE)
-		return 0;
-
-	if (irqbalance_pid > 0) {
-		if (lp_mode_irq == SETTING_RESTORE)
-			irq_str = "NULL";
-		else {
-			irq_str = get_irqbalance_str(action);
-			if (!irq_str)
-				irq_str = "NULL";
-		}
-	} else {
-		if (lp_mode_irq != SETTING_RESTORE)
-			irq_str = get_proc_irq_str(action);
-		/* Use cached str for RESTORE */
-	}
-
-	return 0;
-}
 
 /* Interrupt Management */
 #define SOCKET_PATH "irqbalance"
 #define SOCKET_TMPFS "/run/irqbalance"
 
-static int irqbalance_ban_cpus(int enter)
+static int irqbalance_ban_cpus(char *irq_str)
 {
 	char socket_cmd[MAX_STR_LENGTH];
-	struct timespec tp1, tp2;
 	int offset;
 
-	if (lp_mode_irq == SETTING_RESTORE)
-		lpmd_log_debug ("\tRestore IRQ affinity (irqbalance)\n");
-	else
-		lpmd_log_debug ("\tUpdate IRQ affinity (irqbalance)\n");
-
+	lpmd_log_debug ("\tUpdate IRQ affinity (irqbalance)\n");
 	offset = snprintf (socket_cmd, MAX_STR_LENGTH, "settings cpus %s", irq_str);
 	if (offset >= MAX_STR_LENGTH)
 		offset = MAX_STR_LENGTH - 1;
-	socket_cmd[offset] = '\0';
 
-	clock_gettime (CLOCK_MONOTONIC, &tp1);
+	socket_cmd[offset] = '\0';
 	socket_send_cmd (irq_socket_name, socket_cmd);
-	clock_gettime (CLOCK_MONOTONIC, &tp2);
-	lpmd_log_debug ("\tSend socket command %s (%lu ns)\n", socket_cmd,
-		1000000000UL * (tp2.tv_sec - tp1.tv_sec) + tp2.tv_nsec - tp1.tv_nsec);
+
+	lpmd_log_debug ("\tSend socket command %s\n", socket_cmd);
 	return 0;
 }
 
@@ -142,7 +108,7 @@ static int native_restore_irqs(void)
 
 static int irq_updated;
 
-static int update_one_irq(int irq)
+static int update_one_irq(int irq, char *irq_str)
 {
 	FILE *filep;
 	size_t size = 0;
@@ -186,7 +152,7 @@ static int update_one_irq(int irq)
 	return lpmd_write_str (path, irq_str, LPMD_LOG_DEBUG);
 }
 
-static int native_update_irqs(void)
+static int native_update_irqs(char *irq_str)
 {
 	FILE *filep;
 	char *line = NULL;
@@ -239,7 +205,7 @@ static int native_update_irqs(void)
 		*c = 0;
 		number = strtoul (line, NULL, 10);
 
-		update_one_irq (number);
+		update_one_irq (number, irq_str);
 		free (line);
 	}
 
@@ -249,33 +215,29 @@ static int native_update_irqs(void)
 	return 0;
 }
 
-static int native_process_irqs(int enter)
+int process_irq(lpmd_config_state_t *state)
 {
-	if (lp_mode_irq == SETTING_RESTORE)
-		return native_restore_irqs ();
-	else
-		return native_update_irqs ();
+	switch (state->irq_migrate) {
+		case SETTING_IGNORE:
+			lpmd_log_info ("Ignore IRQ migration\n");
+			return 0;
+		case SETTING_RESTORE:
+			if (irqbalance_pid == -1)
+				native_restore_irqs();
+			else
+				irqbalance_ban_cpus("NULL");
+			return 0;
+		default:
+			if (irqbalance_pid == -1)
+				native_update_irqs(get_proc_irq_str(state->cpumask_idx));
+			else
+				irqbalance_ban_cpus(get_irqbalance_str(state->cpumask_idx));
+			return 0;
+	}	
+	return 0;
 }
 
-int process_irqs(int enter, enum lpm_cpu_process_mode mode)
-{
-	/* No need to handle IRQs in offline mode */
-	if (mode == LPM_CPU_OFFLINE)
-		return 0;
-
-	if (lp_mode_irq == SETTING_IGNORE) {
-		lpmd_log_info ("Ignore IRQ migration\n");
-		return 0;
-	}
-
-	lpmd_log_info ("Process IRQs ...\n");
-	if (irqbalance_pid == -1)
-		return native_process_irqs (enter);
-	else
-		return irqbalance_ban_cpus (enter);
-}
-
-int init_irq(void)
+int irq_init (void)
 {
 	DIR *dir;
 	int socket_fd;

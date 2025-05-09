@@ -373,7 +373,7 @@ int lpmd_main(void)
 
 	lpmd_parse_config_states(&lpmd_config);
 
-	ret = init_irq ();
+	ret = irq_init();
 	if (ret)
 		return ret;
 

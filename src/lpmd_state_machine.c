@@ -332,13 +332,8 @@ static int enter_state(lpmd_config_t *config, int idx)
 	state->entry_load_cpu = config->data.util_cpu;
 	
 	if (state->cpumask_idx != CPUMASK_NONE) {
-		if (state->irq_migrate != SETTING_IGNORE)
-			set_lpm_irq(state->cpumask_idx);
-		else
-			set_lpm_irq(SETTING_IGNORE);
 		set_lpm_cpus(state->cpumask_idx);
 	} else {
-		set_lpm_irq(SETTING_IGNORE);
 		set_lpm_cpus(CPUMASK_NONE); /* Ignore Task migration */
         }
 
@@ -346,7 +341,7 @@ static int enter_state(lpmd_config_t *config, int idx)
 	
 	process_epp_epb(state);
 
-	process_irqs (1, get_cpu_mode ());
+	process_irq(state);
 
 	process_cpus (1, get_cpu_mode ());
 
