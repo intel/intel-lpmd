@@ -58,51 +58,6 @@ static int has_hfi_capability(void)
 	return 0;
 }
 
-
-/* ITMT Management */
-#define PATH_ITMT_CONTROL "/proc/sys/kernel/sched_itmt_enabled"
-
-static int saved_itmt = SETTING_IGNORE;
-static int lp_mode_itmt = SETTING_IGNORE;
-
-int get_lpm_itmt(void)
-{
-	return lp_mode_itmt;
-}
-
-void set_lpm_itmt(int val)
-{
-	lp_mode_itmt = val;
-}
-
-int get_itmt(void)
-{
-	int val;
-
-	lpmd_read_int(PATH_ITMT_CONTROL, &val, -1);
-	return val;
-}
-
-static int init_itmt(void)
-{
-	return lpmd_read_int(PATH_ITMT_CONTROL, &saved_itmt, -1);
-}
-
-int process_itmt(void)
-{
-	if (lp_mode_itmt == SETTING_RESTORE)
-		lp_mode_itmt = saved_itmt;
-
-	if (lp_mode_itmt == SETTING_IGNORE) {
-		lpmd_log_debug("Ignore ITMT\n");
-		return 0;
-	}
-
-	lpmd_log_debug ("%s ITMT\n", lp_mode_itmt ? "Enable" : "Disable");
-
-	return lpmd_write_int(PATH_ITMT_CONTROL, lp_mode_itmt, -1);
-}
-
 /* Main functions */
 
 static int write_pipe_fd;
@@ -402,7 +357,13 @@ int lpmd_main(void)
 	if (ret)
 		return ret;
 
-	init_itmt();
+	ret = itmt_init();
+	if (ret)
+		return ret;
+
+	ret = epp_epb_init();
+	if (ret)
+		return ret;
 
 	if (!has_hfi_capability ())
 		lpmd_config.hfi_lpm_enable = 0;

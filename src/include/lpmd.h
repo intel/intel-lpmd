@@ -256,14 +256,6 @@ enum power_profile_daemon_mode {
 };
 
 /* Helpers for entering LPMode */
-void set_lpm_epp(int val);
-int get_lpm_epp(void);
-void set_lpm_epb(int val);
-int get_lpm_epb(void);
-int get_epp_epb(int *epp, char *epp_string, int size, int *epb);
-void set_lpm_itmt(int val);
-int get_lpm_itmt(void);
-int get_itmt(void);
 int set_lpm_irq(int action);
 int set_lpm_cpus(enum cpumask_idx idx);
 
@@ -273,7 +265,6 @@ int do_platform_check(void);
 
 /* lpmd_proc.c: interfaces */
 lpmd_config_t *get_lpmd_config(void);
-int process_itmt(void);
 
 int lpmd_lock(void);
 int lpmd_unlock(void);
@@ -319,6 +310,14 @@ int wlt_init(void);
 int wlt_exit(void);
 int wlt_update(int fd);
 
+/* lpmd_misc.c */
+int itmt_init(void);
+int get_itmt(void);
+int process_itmt(lpmd_config_state_t *state);
+
+int epp_epb_init(void);
+int get_epp_epb(int *epp, char *epp_str, int size, int *epb);
+int process_epp_epb(lpmd_config_state_t *state);
 
 /* cpu.c */
 int check_cpu_capability(lpmd_config_t *lpmd_config);
