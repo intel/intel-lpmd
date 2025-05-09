@@ -123,6 +123,8 @@ typedef struct {
 	int util_sys;	/* From Util monitor */
 	int util_gfx;	/* From Util monitor */
 	int wlt_hint;	/* From WLT monitor */
+	int has_hfi_update;	/* From HFI monitor */
+	int polling_interval;
 	/* active_cpus from HFI monitor but we can leverage CPUMASK_HFI for now */
 }lpmd_data_t;
 
@@ -132,6 +134,7 @@ enum default_config_state {
 	DEFAULT_HFI,	/* LPM state with CPU isolation based on HFI hints only */
 	CONFIG_STATE_BASE,
 	MAX_STATES = CONFIG_STATE_BASE + MAX_CONFIG_STATES,
+	STATE_NONE = MAX_STATES,
 };
 
 typedef struct {
@@ -297,8 +300,10 @@ int get_util_entry_hyst(void);
 int get_util_exit_hyst(void);
 void set_ignore_itmt(void);
 
-int enter_next_state(lpmd_config_state_t *state);
 int enter_default_state(enum default_config_state idx);
+int update_lpmd_state(int state);
+int get_lpmd_state(void);
+int enter_next_state(void);
 
 int process_lpm(enum lpm_command cmd);
 int process_lpm_unlock(enum lpm_command cmd);

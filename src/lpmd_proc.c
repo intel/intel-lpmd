@@ -169,15 +169,13 @@ int in_auto_mode()
 	return lpmd_state == LPMD_AUTO;
 }
 
-static int update_lpmd_state(enum lpmd_states new)
+static int _update_lpmd_state(enum lpmd_states new)
 {
 	lpmd_state = new;
 	switch (lpmd_state) {
 		case LPMD_ON:
-			enter_default_state(DEFAULT_ON);
 			break;
 		case LPMD_OFF:
-			enter_default_state(DEFAULT_OFF);
 			break;
 		case LPM_AUTO:
 			lpmd_state = LPMD_AUTO;
@@ -189,14 +187,12 @@ static int update_lpmd_state(enum lpmd_states new)
 	return 0;
 }
 
-int enter_next_state(lpmd_config_state_t *state)
+
+int _enter_next_state(lpmd_config_state_t *state)
 {
 	int ret;
 
 	lpmd_lock();
-
-	if (lpmd_freezed)
-		return 0;
 
 	set_lpm_epp(state->epp);
 	set_lpm_epb(state->epb);
@@ -211,10 +207,9 @@ int enter_next_state(lpmd_config_state_t *state)
 	} else {
 		set_lpm_irq(SETTING_IGNORE);
 		set_lpm_cpus(CPUMASK_NONE); /* Ignore Task migration */
-        }
+	}
 
 	process_itmt();
-
 	process_irqs (1, get_cpu_mode ());
 
 	process_cpus (1, get_cpu_mode ());
@@ -223,45 +218,12 @@ int enter_next_state(lpmd_config_state_t *state)
 	return ret;
 }
 
-int enter_default_state(enum default_config_state idx)
+int _enter_default_state(enum default_config_state idx)
 {
 	if (idx >= CONFIG_STATE_BASE)
 		return -1;
 
-	return enter_next_state(&lpmd_config.config_states[idx]);
-}
-
-int freeze_lpm(void)
-{
-	lpmd_lock ();
-
-	if (lpmd_freezed)
-		goto end;
-
-	update_lpmd_state(LPMD_OFF);
-	lpmd_freezed = 1;
-	saved_lpmd_state = lpmd_state;
-
-end:
-	lpmd_unlock ();
-	return 0;
-}
-
-int restore_lpm(void)
-{
-	lpmd_lock ();
-
-	if (!lpmd_freezed)
-		goto end;
-
-	lpmd_freezed = 0;
-
-	update_lpmd_state(saved_lpmd_state);
-	saved_lpmd_state = -1;
-
-end:
-	lpmd_unlock ();
-	return 0;
+	return _enter_next_state(&lpmd_config.config_states[idx]);
 }
 
 static int
@@ -573,7 +535,7 @@ static int proc_message(message_capsul_t *msg)
 			if (lpmd_config.wlt_proxy_enable)
 				wlt_proxy_uninit();
 			hfi_kill ();
-			update_lpmd_state(LPMD_OFF);
+			update_lpmd_state(LPMD_TERMINATE);
 			break;
 		case LPM_FORCE_ON:
 			// Always stay in LPM mode
@@ -606,41 +568,47 @@ static void dump_poll_results(int ret)
 // LPMD processing thread. This is callback to pthread lpmd_core_main
 static void* lpmd_core_main_loop(void *arg)
 {
-	int interval = -1, n;
+	int n;
+
+	lpmd_config.data.polling_interval = 100;
 
 	for (;;) {
 
-		if (main_loop_terminate)
+		if (get_lpmd_state() == LPMD_TERMINATE)
 			break;
 
-//		 Opportunistic LPM is disabled in below cases
-		if (lpmd_state != LPMD_AUTO || lpmd_config.config_states[DEFAULT_HFI].valid)
-			interval = -1;
-		else if (interval == -1)
-			interval = 100;
-
-		lpmd_log_debug("Poll with interval %d\n", interval);
-		n = poll (poll_fds, poll_fd_cnt, interval);
+		lpmd_log_debug("Poll with interval %d\n", lpmd_config.data.polling_interval);
+		n = poll (poll_fds, poll_fd_cnt, lpmd_config.data.polling_interval);
 		if (n < 0) {
 			lpmd_log_warn ("Write to pipe failed\n");
 			continue;
 		}
 		dump_poll_results(n);
 
-		/* Time out, need to choose next util state and interval */
-		if (n == 0 && interval > 0) {
-			if (lpmd_config.wlt_proxy_enable) {
-				lpmd_config.data.wlt_hint = read_wlt_proxy(&interval);
-				periodic_util_update (&lpmd_config);
-			} else if (lpmd_config.wlt_hint_enable && lpmd_config.wlt_hint_poll_enable) {
-				lpmd_config.data.wlt_hint = read_wlt(wlt_fd);
+		/* Polling time out, update polling data */
+		if (n == 0 && lpmd_config.data.polling_interval > 0) {
+			periodic_util_update (&lpmd_config);
 
-				interval = periodic_util_update (&lpmd_config);
-			} else {
-				interval = periodic_util_update (&lpmd_config);
-			}
+			if (lpmd_config.wlt_proxy_enable)
+				lpmd_config.data.wlt_hint = read_wlt_proxy(&lpmd_config.data.polling_interval);
 		}
 
+		/* Check CPU hotplug. Maybe need to freeze lpmd */
+		if (idx_uevent_fd >= 0 && (poll_fds[idx_uevent_fd].revents & POLLIN)) {
+			check_cpu_hotplug ();
+		}
+
+		/* Update CPUMASK_HFI */
+		if (idx_hfi_fd >= 0 && (poll_fds[idx_hfi_fd].revents & POLLIN)) {
+			hfi_receive ();
+		}
+
+		/* Update WLT hint */
+		if (idx_wlt_fd >= 0 && (poll_fds[idx_wlt_fd].revents & POLLPRI)) {
+			lpmd_config.data.wlt_hint = read_wlt(poll_fds[idx_wlt_fd].fd);
+		}
+
+		/* Respond Dbus commands */
 		if (idx_pipe_fd >= 0 && (poll_fds[idx_pipe_fd].revents & POLLIN)) {
 //			 process message written on pipe here
 
@@ -657,21 +625,8 @@ static void* lpmd_core_main_loop(void *arg)
 			}
 		}
 
-		if (idx_uevent_fd >= 0 && (poll_fds[idx_uevent_fd].revents & POLLIN)) {
-			check_cpu_hotplug ();
-		}
-
-		if (idx_hfi_fd >= 0 && (poll_fds[idx_hfi_fd].revents & POLLIN)) {
-			hfi_receive ();
-		}
-
-		if (idx_wlt_fd >= 0 && (poll_fds[idx_wlt_fd].revents & POLLPRI)) {
-			lpmd_config.data.wlt_hint = read_wlt(poll_fds[idx_wlt_fd].fd);
-			if (in_auto_mode())
-				interval = periodic_util_update (&lpmd_config);
-		}
-
-
+		/* Enter next state after collecting all system statistics */
+		enter_next_state();
 	}
 
 	return NULL;

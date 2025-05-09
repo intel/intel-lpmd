@@ -815,14 +815,14 @@ free:
 	/* CPU Hotplug detected, should freeze lpmd */
 	if (!CPU_EQUAL_S (size_cpumask, curr, cpumasks[CPUMASK_ONLINE].mask)) {
 		lpmd_log_debug ("check_cpu_hotplug: CPU Hotplug detected, freeze lpmd\n");
-		return freeze_lpm ();
+		return update_lpmd_state(LPMD_FREEZE);
 	}
 
 	/* CPU restored to original state, should restore lpmd */
 	if (CPU_EQUAL_S (size_cpumask, curr, cpumasks[CPUMASK_ONLINE].mask) &&
 	    !CPU_EQUAL_S (size_cpumask, curr, prev)) {
 		lpmd_log_debug ("check_cpu_hotplug: CPU Hotplug restored, restore lpmd\n");
-		return restore_lpm ();
+		return update_lpmd_state(LPMD_RESTORE);
 	}
 
 	/* No update since last change */

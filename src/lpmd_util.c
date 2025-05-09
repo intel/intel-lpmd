@@ -40,12 +40,7 @@
 
 #define PATH_PROC_STAT "/proc/stat"
 
-static lpmd_config_state_t *current_state;
-
-void reset_config_state(void)
-{
-	current_state = NULL;
-}
+static int current_idx = STATE_NONE;
 
 enum type_stat {
 	STAT_CPU,
@@ -379,206 +374,237 @@ static int parse_proc_stat(void)
 	return 0;
 }
 
-static int state_match(lpmd_config_state_t *state, lpmd_data_t *data)
-{
-	int bcpu = data->util_cpu;
-	int bsys = data->util_sys;
-	int bgfx = data->util_gfx;
-	int wlt_index = data->wlt_hint;
-
-	if (!state->valid)
-		return 0;
-
-	if (state->wlt_type != -1) {
-		/* wlt hint must match */
-		if (state->wlt_type != wlt_index)
-			return 0;
-
-		/* return match directly if no util threshold specified */
-		if (!state->enter_gfx_load_thres)
-			return 1;
-		/* leverage below logic to handle util threshold */
-	}
-
-	/* No need to dump utilization info if no threshold specified */
-	if (!state->enter_cpu_load_thres && !state->entry_system_load_thres && !state->enter_gfx_load_thres)
-		return 1;
-
-	if (state->enter_cpu_load_thres) {
-		if (bcpu > state->enter_cpu_load_thres)
-			goto unmatch;
-	}
-
-	if (state->enter_gfx_load_thres) {
-		if (bgfx == -1)
-			lpmd_log_debug("Graphics utilization not available, ignore graphics threshold\n");
-		else if (bgfx > state->enter_gfx_load_thres)
-			goto unmatch;
-	}
-
-	if (state->entry_system_load_thres) {
-		if (bsys > state->entry_system_load_thres) {
-			if (!state->exit_system_load_hyst || state != current_state)
-				goto unmatch;
-
-			if (bsys > state->entry_load_sys + state->exit_system_load_hyst ||
-			    bsys > state->entry_system_load_thres + state->exit_system_load_hyst)
-				goto unmatch;
-		}
-	}
-
-	lpmd_log_debug("Match  %12s: sys_thres %3d cpu_thres %3d gfx_thres %3d hyst %3d\n", state->name, state->entry_system_load_thres, state->enter_cpu_load_thres, state->enter_gfx_load_thres, state->exit_system_load_hyst);
-	return 1;
-unmatch:
-	lpmd_log_debug("Ignore %12s: sys_thres %3d cpu_thres %3d gfx_thres %3d hyst %3d\n", state->name, state->entry_system_load_thres, state->enter_cpu_load_thres, state->enter_gfx_load_thres, state->exit_system_load_hyst);
-	return 0;
-}
-
-#define DEFAULT_POLL_RATE_MS	1000
-
-static int enter_state(lpmd_config_state_t *state, lpmd_data_t *data)
-{
-	static int interval = DEFAULT_POLL_RATE_MS;
-
-	state->entry_load_sys = data->util_sys;
-	state->entry_load_cpu = data->util_cpu;
-
-	/* Adjust polling interval only */
-	if (state == current_state) {
-		if (state->poll_interval_increment > 0) {
-			interval += state->poll_interval_increment;
-		}
-		/* Adaptive polling interval based on cpu utilization */
-		if (state->poll_interval_increment == -1) {
-			interval = state->max_poll_interval * (10000 - data->util_cpu) / 10000;
-			interval /= 100;
-			interval *= 100;
-		}
-		if (state->min_poll_interval && interval < state->min_poll_interval)
-			interval = state->min_poll_interval;
-		if (state->max_poll_interval && interval > state->max_poll_interval)
-			interval = state->max_poll_interval;
-		return interval;
-	}
-
-	enter_next_state(state);
-
-	if (state->min_poll_interval)
-		interval = state->min_poll_interval;
-	else
-		interval = DEFAULT_POLL_RATE_MS;
-
-	current_state = state;
-
-	return interval;
-}
-
-static void dump_system_status(lpmd_config_t *config, int interval)
-{
-	int epp, epb;
-	char epp_str[32] = "";
-	char buf[MAX_STR_LENGTH * 2];
-	int offset;
-	int size;
-
-	offset = 0;
-	size = MAX_STR_LENGTH * 2;
-
-	offset += snprintf(buf, size, "[%d/%d] %12s: ",
-		current_state->id, config->config_state_count, current_state->name);
-	size = MAX_STR_LENGTH * 2 - offset;
-
-	if (busy_sys == -1)
-		offset += snprintf(buf + offset, size, "bsys     na, ");
-	else
-		offset += snprintf(buf + offset, size, "bsys %3d.%02d, ", busy_sys / 100, busy_sys % 100);
-	size = MAX_STR_LENGTH * 2 - offset;
-
-	if (busy_cpu == -1)
-		offset += snprintf(buf + offset, size, "bcpu     na, ");
-	else
-		offset += snprintf(buf + offset, size, "bcpu %3d.%02d, ", busy_cpu / 100, busy_cpu % 100);
-	size = MAX_STR_LENGTH * 2 - offset;
-
-	if (busy_gfx == -1)
-		offset += snprintf(buf + offset, size, "bgfx     na, ");
-	else
-		offset += snprintf(buf + offset, size, "bgfx %3d.%02d, ", busy_gfx / 100, busy_gfx % 100);
-	size = MAX_STR_LENGTH * 2 - offset;
-
-	get_epp_epb(&epp, epp_str, 32, &epb);
-
-	if (epp >= 0)
-		offset += snprintf(buf + offset, size, "epp %3d, ", epp);
-	else
-		offset += snprintf(buf + offset, size, "epp %s, ", epp_str);
-	size = MAX_STR_LENGTH * 2 - offset;
-
-	offset += snprintf(buf + offset, size, "epb %3d, ", epb);
-	size = MAX_STR_LENGTH * 2 - offset;
-
-	if (current_state->itmt_state != SETTING_IGNORE)
-		offset += snprintf(buf + offset, size, "itmt %2d, ", get_itmt());
-
-	size = MAX_STR_LENGTH * 2 - offset;
-
-	snprintf(buf + offset, size, "interval %4d", interval);
-
-	lpmd_log_info("%s\n", buf);
-}
-
-static int process_next_config_state(lpmd_config_t *config)
-{
-	lpmd_config_state_t *state = NULL;
-	int i = 0;
-	int interval = -1;
-
-	// Check for new state
-	for (i = CONFIG_STATE_BASE; i < CONFIG_STATE_BASE + config->config_state_count; ++i) {
-		state = &config->config_states[i];
-		if (state_match(state, &config->data)) {
-			interval = enter_state(state, &config->data);
-			break;
-		}
-	}
-
-	if (!current_state)
-		return interval;
-
-	dump_system_status(config, interval);
-
-	return interval;
-}
-
 int periodic_util_update(lpmd_config_t *lpmd_config)
 {
-	int interval;
-	static int initialized;
-	int wlt_index = lpmd_config->data.wlt_hint;
-
-	if (wlt_index >= 0) {
-		if (lpmd_config->wlt_hint_poll_enable) {
-			parse_gfx_util();
-			interval = process_next_config_state(lpmd_config);
-		} else {
-			process_next_config_state(lpmd_config);
-			interval = -1;
-		}
-		return interval;
-	}
-
-//	 poll() timeout should be -1 when util monitor not enabled
-	if (!has_util_monitor ())
-		return -1;
-
 	parse_proc_stat ();
 	parse_gfx_util();
 	lpmd_config->data.util_sys = busy_sys;
 	lpmd_config->data.util_cpu = busy_cpu;
 	lpmd_config->data.util_gfx = busy_gfx;
 
-	return process_next_config_state(lpmd_config);
+	return 0;
 }
+
+static int config_state_match(lpmd_config_t *config, int idx)
+{
+	lpmd_config_state_t *state = &config->config_states[idx];
+	int bcpu = config->data.util_cpu;
+	int bsys = config->data.util_sys;
+	int bgfx = config->data.util_gfx;
+	int wlt_index = config->data.wlt_hint;
+
+	if (!state->valid)
+		return 0;
+
+	if (state->wlt_type != -1 && state->wlt_type != wlt_index)
+		return 0;
+
+	if (state->enter_cpu_load_thres && state->enter_cpu_load_thres < bcpu)
+		return 0;
+
+	if (state->enter_gfx_load_thres && state->enter_cpu_load_thres < bgfx)
+		return 0;
+
+	if (state->entry_system_load_thres && state->enter_cpu_load_thres < bsys) {
+		if (!state->exit_system_load_hyst)
+			return 0;
+		if ((state->entry_load_sys + state->exit_system_load_hyst) < bsys || (state->entry_system_load_thres + state->exit_system_load_hyst) < bsys)
+			return 0;
+	}
+
+	return 1;
+}
+
+static int polling_enabled;
+
+static int get_config_state_interval(lpmd_config_t *config, int idx)
+{
+	lpmd_config_state_t *state = &config->config_states[idx];
+
+	/* Start polling only when needed */
+	if (!polling_enabled) {
+		config->data.polling_interval = -1;
+		return 0;
+	}
+
+	/* wlt proxy updates polling separately */
+	if (config->wlt_proxy_enable)
+		return 0;
+
+	/* Always start with minumum polling interval for a new state */
+	if (idx != current_idx) {
+		config->data.polling_interval = state->min_poll_interval;
+		return 0;
+	}
+
+	/* CPU utilization based adaptive polling */
+	if (state->poll_interval_increment == -1) {
+		config->data.polling_interval = state->max_poll_interval * (10000 - config->data.util_cpu) / 10000;
+		config->data.polling_interval /= 100;
+		config->data.polling_interval *= 100;
+		goto end;
+	}
+
+	/* lazy polling if load is sustained */
+	if (state->poll_interval_increment > 0)
+		config->data.polling_interval += state->poll_interval_increment;
+	
+end:
+	/* Adjust based on min/max limitation */
+	if (config->data.polling_interval < state->min_poll_interval)
+		config->data.polling_interval = state->min_poll_interval;
+	if (config->data.polling_interval > state->max_poll_interval)
+		config->data.polling_interval = state->max_poll_interval;
+	return 0;
+}
+
+/* for lpmd state control: ON/OFF/AUTO/FREEZE/RESTORE/TERMINATE */
+static int lpmd_state = LPMD_OFF;
+static int saved_lpmd_state = LPMD_OFF;
+
+int update_lpmd_state(int new)
+{
+	lpmd_lock();
+	switch (new) {
+		case LPMD_FREEZE:
+			if (lpmd_state == LPMD_FREEZE)
+				break;
+			saved_lpmd_state = lpmd_state;
+			lpmd_state == LPMD_FREEZE;
+			break;
+		case LPMD_RESTORE:
+			if (lpmd_state != LPMD_FREEZE)
+				break;
+			lpmd_state == saved_lpmd_state;
+			saved_lpmd_state = lpmd_state;
+			break;
+		default:
+			if (lpmd_state == LPMD_FREEZE)
+				saved_lpmd_state = new;
+			else
+				lpmd_state = new;
+			break;
+	}
+	lpmd_unlock();
+	return 0;
+}
+
+int get_lpmd_state(void)
+{
+	return lpmd_state;
+}
+
+static int choose_next_state(lpmd_config_t *config)
+{
+	int i;
+
+	switch (lpmd_state) {
+		case LPMD_ON:
+		case LPMD_TERMINATE:
+			return DEFAULT_ON;
+		case LPMD_OFF:
+			return DEFAULT_OFF;
+	}
+
+	/*
+	 * DEFAULT_HFI is enabled only if HFI monitor is enabled
+	 * and there is no user config states defined in the config file
+	 */
+	if (config->config_states[DEFAULT_HFI].valid) {
+		if (config->data.has_hfi_update)
+			return DEFAULT_HFI;
+		else
+			return STATE_NONE;
+	}
+
+	/* Choose a config state */
+	for (i = CONFIG_STATE_BASE; i < CONFIG_STATE_BASE + config->config_state_count; ++i) {
+		if (config_state_match(config, i))
+			return i;
+	}
+
+	return STATE_NONE;
+}
+
+static int get_state_interval(lpmd_config_t *config, int idx)
+{
+	switch (idx) {
+		case DEFAULT_ON:
+		case DEFAULT_OFF:
+		case DEFAULT_HFI:
+			config->data.polling_interval = -1;
+			return 0;
+		default:
+			get_config_state_interval(config, idx);
+			return 0;
+	}
+}
+
+static int enter_state(lpmd_config_t *config, int idx)
+{
+	lpmd_config_state_t *state = &config->config_states[idx];
+	int ret;
+
+	state->entry_load_sys = config->data.util_sys;
+	state->entry_load_cpu = config->data.util_cpu;
+	
+	set_lpm_epp(state->epp);
+	set_lpm_epb(state->epb);
+	set_lpm_itmt(state->itmt_state);
+
+	if (state->cpumask_idx != CPUMASK_NONE) {
+		if (state->irq_migrate != SETTING_IGNORE)
+			set_lpm_irq(state->cpumask_idx);
+		else
+			set_lpm_irq(SETTING_IGNORE);
+		set_lpm_cpus(state->cpumask_idx);
+	} else {
+		set_lpm_irq(SETTING_IGNORE);
+		set_lpm_cpus(CPUMASK_NONE); /* Ignore Task migration */
+        }
+
+	process_itmt();
+
+	process_irqs (1, get_cpu_mode ());
+
+	process_cpus (1, get_cpu_mode ());
+
+end:
+	return ret;
+}
+
+int enter_next_state(void)
+{
+	lpmd_config_t *config = get_lpmd_config();
+	int idx = current_idx;
+
+	lpmd_lock();
+
+	if (lpmd_state = LPMD_FREEZE) {
+		/* Wait till RESTORE */
+		config->data.polling_interval = -1;
+		goto end;
+	}
+
+	idx = choose_next_state(config);
+	/* No action needed, keep previous idx and interval */
+	if (idx == STATE_NONE)
+		goto end;
+
+	config->data.polling_interval = get_state_interval(config, idx);
+
+	enter_state(config, idx);
+
+	current_idx = idx;
+	config->data.has_hfi_update = 0;
+
+end:
+	lpmd_unlock();
+
+	return 0;
+}
+
+#define DEFAULT_POLL_RATE_MS	1000
 
 int util_init(lpmd_config_t *lpmd_config)
 {
@@ -602,6 +628,9 @@ int util_init(lpmd_config_t *lpmd_config)
 			}
 		}
 
+		if (state->entry_system_load_thres || state->enter_cpu_load_thres || state->enter_gfx_load_thres)
+			polling_enabled = 1;
+
 		if (!state->min_poll_interval)
 			state->min_poll_interval = state->max_poll_interval > DEFAULT_POLL_RATE_MS ? DEFAULT_POLL_RATE_MS : state->max_poll_interval;
 		if (!state->max_poll_interval)
@@ -617,7 +646,7 @@ int util_init(lpmd_config_t *lpmd_config)
 		nr_state++;
 	}
 
-	if (nr_state < 2) {
+	if (nr_state < 1) {
 		lpmd_log_info("%d valid config states found\n", nr_state);
 		return 1;
 	}

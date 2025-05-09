@@ -206,6 +206,8 @@ static char *update_one_cpu(struct perf_cap *perf_cap)
 
 static void process_one_event(int first, int last, int nr)
 {
+	lpmd_config_t *config = get_lpmd_config();
+
 	/* Need to update more CPUs */
 	if (nr == 16 && last != get_max_online_cpu ())
 		return;
@@ -217,7 +219,7 @@ static void process_one_event(int first, int last, int nr)
 			return;
 		}
 		lpmd_log_debug ("\tDetect HFI LPM event\n");
-		enter_default_state(DEFAULT_HFI);
+		config->data.has_hfi_update = 1;
 		copy_cpu_mask(CPUMASK_HFI, CPUMASK_HFI_LAST);
 	}
 	else if (has_cpus (CPUMASK_HFI_BANNED)) {
@@ -228,14 +230,14 @@ static void process_one_event(int first, int last, int nr)
 			return;
 		}
 		lpmd_log_debug ("\tDetect HFI LPM event with banned CPUs\n");
-		enter_default_state(DEFAULT_HFI);
+		config->data.has_hfi_update = 1;
 		copy_cpu_mask(CPUMASK_HFI, CPUMASK_HFI_LAST);
 	}
 	else if (has_cpus (CPUMASK_HFI_LAST)) {
 		lpmd_log_debug ("\tHFI LPM recover\n");
 //		 Don't override the DETECT_LPM_CPU_DEFAULT so it is auto recovered
 		copy_cpu_mask(CPUMASK_ONLINE, CPUMASK_HFI);
-		enter_default_state(DEFAULT_HFI);
+		config->data.has_hfi_update = 1;
 		reset_cpus (CPUMASK_HFI_LAST);
 	}
 	else {
@@ -253,9 +255,6 @@ static int handle_event(struct nl_msg *n, void *arg)
 	int first_cpu = -1, last_cpu = -1, nr_cpus = 0;
 	int j, index = 0, offset = 0;
 	char buf[MAX_STR_LENGTH];
-
-	if (!in_auto_mode())
-		return 0;
 
 	if (genlhdr->cmd != THERMAL_GENL_EVENT_CAPACITY_CHANGE)
 		return 0;
