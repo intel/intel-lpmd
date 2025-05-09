@@ -158,136 +158,7 @@ static int poll_fd_cnt;
 static int idx_pipe_fd = -1;
 static int idx_uevent_fd = -1;
 static int idx_hfi_fd = -1;
-
-static int wlt_fd;
 static int idx_wlt_fd = -1;
-
-// Workload type classification
-#define WORKLOAD_NOTIFICATION_DELAY_ATTRIBUTE "/sys/bus/pci/devices/0000:00:04.0/workload_hint/notification_delay_ms"
-#define WORKLOAD_ENABLE_ATTRIBUTE "/sys/bus/pci/devices/0000:00:04.0/workload_hint/workload_hint_enable"
-#define WORKLOAD_TYPE_INDEX_ATTRIBUTE  "/sys/bus/pci/devices/0000:00:04.0/workload_hint/workload_type_index"
-
-#define NOTIFICATION_DELAY	100
-
-// Clear workload type notifications
-static void exit_wlt()
-{
-	int fd;
-
-	/* Disable feature via sysfs knob */
-	fd = open(WORKLOAD_ENABLE_ATTRIBUTE, O_RDWR);
-	if (fd < 0)
-		return;
-
-	// Disable WLT notification
-	if (write(fd, "0\n", 2) < 0) {
-		close (fd);
-		return;
-	}
-
-	close(fd);
-}
-
-// Initialize Workload type notifications
-static int init_wlt()
-{
-	char delay_str[64];
-	int fd;
-
-	lpmd_log_debug ("init_wlt begin\n");
-
-	// Set notification delay
-	fd = open(WORKLOAD_NOTIFICATION_DELAY_ATTRIBUTE, O_RDWR);
-	if (fd < 0)
-		return fd;
-
-	sprintf(delay_str, "%d\n", NOTIFICATION_DELAY);
-
-	if (write(fd, delay_str, strlen(delay_str)) < 0) {
-		close(fd);
-		return -1;
-	}
-
-	close(fd);
-
-	// Enable WLT notification
-	fd = open(WORKLOAD_ENABLE_ATTRIBUTE, O_RDWR);
-	if (fd < 0)
-		return fd;
-
-	if (write(fd, "1\n", 2) < 0) {
-		close(fd);
-		return -1;
-	}
-
-	close(fd);
-
-	// Open FD for workload type attribute
-	fd = open(WORKLOAD_TYPE_INDEX_ATTRIBUTE, O_RDONLY);
-	if (fd < 0) {
-		exit_wlt();
-		return fd;
-	}
-
-	lpmd_log_debug ("init_wlt end wlt fd:%d\n", fd);
-
-	return fd;
-}
-
-// Read current Workload type
-static int read_wlt(int fd)
-{
-	char index_str[4];
-	int index, ret;
-
-	if (fd < 0)
-		return WLT_INVALID;
-
-	if ((lseek(fd, 0L, SEEK_SET)) < 0)
-		return WLT_INVALID;
-
-	ret = read(fd, index_str, sizeof(index_str));
-	if (ret <= 0)
-		return WLT_INVALID;
-
-	 ret = sscanf(index_str, "%d", &index);
-	 if (ret < 0)
-		return WLT_INVALID;
-
-	lpmd_log_debug("wlt:%d\n", index);
-
-	return index;
-}
-
-static void poll_for_wlt(int enable)
-{
-	static int wlt_enabled_once = 0;
-
-	lpmd_log_info("%s enable:%d\n", __func__, enable);
-
-	if (wlt_fd <= 0) {
-		if (enable) {
-			wlt_fd = init_wlt();
-			if (wlt_fd < 0)
-				return;
-		} else {
-			return;
-		}
-	}
-
-	if (enable) {
-		idx_wlt_fd = poll_fd_cnt;
-		poll_fds[idx_wlt_fd].fd = wlt_fd;
-		poll_fds[idx_wlt_fd].events = POLLPRI;
-		poll_fds[idx_wlt_fd].revents = 0;
-		if (!wlt_enabled_once)
-			poll_fd_cnt++;
-		wlt_enabled_once = 1;
-	} else if (idx_wlt_fd >= 0) {
-		poll_fds[idx_wlt_fd].fd = -1;
-		idx_wlt_fd = -1;
-	}
-}
 
 #include <gio/gio.h>
 
@@ -482,7 +353,7 @@ static void* lpmd_core_main_loop(void *arg)
 
 		/* Update WLT hint */
 		if (idx_wlt_fd >= 0 && (poll_fds[idx_wlt_fd].revents & POLLPRI)) {
-			lpmd_config.data.wlt_hint = read_wlt(poll_fds[idx_wlt_fd].fd);
+			lpmd_config.data.wlt_hint = wlt_update(poll_fds[idx_wlt_fd].fd);
 		}
 
 		/* Respond Dbus commands */
@@ -602,7 +473,12 @@ int lpmd_main(void)
 		if (!lpmd_config.hfi_lpm_enable) {
 			lpmd_config.util_enable = 0;
 			if (!lpmd_config.wlt_proxy_enable) {
-				poll_for_wlt(1);
+				poll_fds[poll_fd_cnt].fd = wlt_init();
+				if (poll_fds[poll_fd_cnt].fd > 0) {
+					poll_fds[idx_wlt_fd].events = POLLIN;
+					poll_fds[idx_wlt_fd].revents = 0;
+					poll_fd_cnt++;
+				}
 			}
 		}
 	}

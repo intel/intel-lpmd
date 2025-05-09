@@ -314,6 +314,12 @@ int hfi_init(void);
 int hfi_kill(void);
 int hfi_update(void);
 
+/* lpmd_wlt.c */
+int wlt_init(void);
+int wlt_exit(void);
+int wlt_update(int fd);
+
+
 /* cpu.c */
 int check_cpu_capability(lpmd_config_t *lpmd_config);
 int init_cpu(char *cmd_cpus, enum lpm_cpu_process_mode mode, int lp_mode_epp);
