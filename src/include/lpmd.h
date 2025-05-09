@@ -109,6 +109,15 @@ typedef struct {
 #define MAX_STATE_NAME		32
 #define MAX_CONFIG_LEN		64
 
+enum lpmd_states {
+	LPMD_OFF,
+	LPMD_ON,
+	LPMD_AUTO,
+	LPMD_FREEZE,
+	LPMD_RESTORE,
+	LPMD_TERMINATE,
+};
+
 typedef struct {
 	int util_cpu;	/* From Util monitor */
 	int util_sys;	/* From Util monitor */

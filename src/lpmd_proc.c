@@ -155,13 +155,6 @@ static int process_itmt(void)
 }
 
 /* Main functions */
-
-enum lpmd_states {
-	LPMD_ON,
-	LPMD_AUTO,
-	LPMD_OFF,
-};
-
 static int lpmd_state = LPMD_OFF;
 static int saved_lpmd_state = -1;
 static int lpmd_freezed = 0;
