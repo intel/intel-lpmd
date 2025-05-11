@@ -1,7 +1,7 @@
 /*
- * lpmd_cpu.c: CPU related processing
+ * lpmd_cpumask.c: helper functions for cpumask handlingf
  *
- * Copyright (C) 2023 Intel Corporation. All rights reserved.
+ * Copyright (C) 2025 Intel Corporation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,38 +16,10 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
- *
- * This file contain functions to manage Linux cpuset for LP CPUs. Also using
- * power clamp in lieu of Linux cpuset. There are helper functions to format
- * cpuset strings based on the which cpuset method is used or power clamp low
- * power cpumask.
  */
 
 #define _GNU_SOURCE
-#include <stdio.h>
 #include <err.h>
-#include <stdlib.h>
-#include <stdarg.h>
-#include <string.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <sys/file.h>
-#include <sys/mount.h>
-#include <sys/types.h>
-#include <sys/time.h>
-#include <sys/stat.h>
-#include <sys/socket.h>
-#include <sys/un.h>
-#include <errno.h>
-#include <getopt.h>
-#include <sched.h>
-#include <dirent.h>
-#include <ctype.h>
-#include <signal.h>
-#include <netlink/genl/genl.h>
-#include <netlink/genl/family.h>
-#include <netlink/genl/ctrl.h>
-#include <systemd/sd-bus.h>
 
 #include "lpmd.h"
 
