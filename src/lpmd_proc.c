@@ -360,7 +360,7 @@ int lpmd_main(void)
 
 	pthread_mutex_init (&lpmd_mutex, NULL);
 
-	ret = cpu_init(lpmd_config.lp_mode_cpus);
+	ret = detect_lpm_cpus(lpmd_config.lp_mode_cpus);
 	if (ret)
 		return ret;
 

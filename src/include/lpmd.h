@@ -335,14 +335,11 @@ int check_cpu_hotplug(void);
 /* lpmd_cpu.c */
 int detect_supported_platform(lpmd_config_t *lpmd_config);
 int detect_cpu_topo(lpmd_config_t *lpmd_config);
-int is_cpu_atom(int cpu);
+int detect_lpm_cpus(char *cmd_cpus);
 
 /* lpmd_cpumask.c */
-int cpu_init(char *cmd_cpus);
 int cpu_migrate(int cpu);
-
 int check_cpu_capability(lpmd_config_t *lpmd_config);
-
 int parse_cpu_str(char *buf, enum cpumask_idx idx);
 
 int is_cpu_lcore(int cpu);
@@ -358,6 +355,7 @@ void set_max_online_cpu(int num);
 int alloc_cpumask(void);
 int free_cpumask(enum cpumask_idx idx);
 char* get_cpus_str(enum cpumask_idx idx);
+int cpumask_nr_cpus(enum cpumask_idx idx);
 int has_cpus(enum cpumask_idx idx);
 
 void copy_cpu_mask_exclude(enum cpumask_idx source, enum cpumask_idx dest, enum cpumask_idx exlude);

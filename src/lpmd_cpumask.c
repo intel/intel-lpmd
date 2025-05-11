@@ -364,6 +364,14 @@ int is_equal(enum cpumask_idx idx1, enum cpumask_idx idx2)
 	return 0;
 }
 
+int cpumask_nr_cpus(enum cpumask_idx idx)
+{
+	if (!cpumasks[idx].mask)
+		return 0;
+
+	return CPU_COUNT_S(size_cpumask, cpumasks[idx].mask);
+}
+
 int has_cpus(enum cpumask_idx idx)
 {
 	if (idx == CPUMASK_MAX)
@@ -375,7 +383,7 @@ int has_cpus(enum cpumask_idx idx)
 	return CPU_COUNT_S(size_cpumask, cpumasks[idx].mask);
 }
 
-static int _add_cpu(int cpu, enum cpumask_idx idx)
+int add_cpu(int cpu, enum cpumask_idx idx)
 {
 	if (idx != CPUMASK_ONLINE && !is_cpu_online (cpu))
 		return 0;
@@ -386,28 +394,6 @@ static int _add_cpu(int cpu, enum cpumask_idx idx)
 	CPU_SET_S(cpu, size_cpumask, cpumasks[idx].mask);
 
 	return LPMD_SUCCESS;
-}
-
-int add_cpu(int cpu, enum cpumask_idx idx)
-{
-	if (cpu < 0 || cpu >= topo_max_cpus)
-		return 0;
-
-	_add_cpu (cpu, idx);
-
-	if (idx & (CPUMASK_HFI | CPUMASK_HFI_BANNED))
-		return 0;
-
-	if (idx == CPUMASK_LPM_DEFAULT) {
-		lpmd_log_info ("\tDetected %s CPU%d\n", cpumasks[idx].name, cpu);
-	} else {
-		if (idx < CPUMASK_MAX)
-			lpmd_log_debug ("\tDetected %s CPU%d\n", cpumasks[idx].name, cpu);
-		else
-			lpmd_log_debug ("\tIncorrect CPU ID for CPU%d\n", cpu);
-	}
-
-	return 0;
 }
 
 void reset_cpus(enum cpumask_idx idx)
@@ -435,7 +421,7 @@ void copy_cpu_mask(enum cpumask_idx source, enum cpumask_idx dest)
 		if (!CPU_ISSET_S(i, size_cpumask, cpumasks[source].mask))
 			continue;
 
-		_add_cpu(i, dest);
+		add_cpu(i, dest);
 	}
 }
 
@@ -451,7 +437,6 @@ void copy_cpu_mask_exclude(enum cpumask_idx source, enum cpumask_idx dest, enum 
 		if (CPU_ISSET_S(i, size_cpumask, cpumasks[exlude].mask))
 			continue;
 
-		_add_cpu(i, dest);
 	}
 }
 
@@ -519,7 +504,7 @@ int parse_cpu_str(char *buf, enum cpumask_idx idx)
 
 		start = strtoul (next, &next, 10);
 
-		_add_cpu (start, idx);
+		add_cpu (start, idx);
 		nr_cpus++;
 
 		if (*next == '\0')
@@ -546,7 +531,7 @@ int parse_cpu_str(char *buf, enum cpumask_idx idx)
 			goto error;
 
 		while (++start <= end) {
-			_add_cpu (start, idx);
+			add_cpu (start, idx);
 			nr_cpus++;
 		}
 
@@ -562,135 +547,3 @@ error:
 	return -1;
 }
 
-static int detect_lpm_cpus_cmd(char *cmd)
-{
-	int ret;
-
-	ret = parse_cpu_str (cmd, CPUMASK_LPM_DEFAULT);
-	if (ret <= 0)
-		reset_cpus (CPUMASK_LPM_DEFAULT);
-
-	return ret;
-}
-
-static int detect_lpm_cpus_cluster(void)
-{
-	FILE *filep;
-	char path[MAX_STR_LENGTH];
-	char str[MAX_STR_LENGTH];
-	int i, ret;
-
-	for (i = topo_max_cpus; i >= 0; i--) {
-		if (!is_cpu_online (i))
-			continue;
-
-		snprintf (path, sizeof(path), "/sys/devices/system/cpu/cpu%d/topology/cluster_cpus_list",
-					i);
-		path[MAX_STR_LENGTH - 1] = '\0';
-
-		filep = fopen (path, "r");
-		if (!filep)
-			continue;
-
-		ret = fread (str, 1, MAX_STR_LENGTH - 1, filep);
-		fclose (filep);
-
-		if (ret <= 0)
-			continue;
-
-		str[ret] = '\0';
-
-		if (parse_cpu_str (str, CPUMASK_LPM_DEFAULT) <= 0)
-			continue;
-
-		/* An Ecore module contains 4 Atom cores */
-		if (CPU_COUNT_S(size_cpumask, cpumasks[CPUMASK_LPM_DEFAULT].mask) == 4 && is_cpu_atom(i))
-			break;
-
-		reset_cpus (CPUMASK_LPM_DEFAULT);
-	}
-
-	if (!has_cpus (CPUMASK_LPM_DEFAULT))
-		return 0;
-
-	return CPU_COUNT_S(size_cpumask, cpumasks[CPUMASK_LPM_DEFAULT].mask);
-}
-
-static int detect_cpu_lcore(int cpu)
-{
-	if (is_cpu_lcore(cpu))
-		_add_cpu (cpu, CPUMASK_LPM_DEFAULT);
-	return 0;
-}
-
-/*
- * Use Lcore CPUs as LPM CPUs.
- * Applies on platforms like MeteorLake.
- */
-static int detect_lpm_cpus_lcore(void)
-{
-	int i;
-
-	for (i = 0; i < topo_max_cpus; i++) {
-		if (!is_cpu_online (i))
-			continue;
-		if (detect_cpu_lcore(i) < 0)
-			return -1;
-	}
-
-	/* All cpus has L3 */
-	if (!has_cpus (CPUMASK_LPM_DEFAULT))
-		return 0;
-
-	/* All online cpus don't have L3 */
-	if (CPU_EQUAL_S(size_cpumask, cpumasks[CPUMASK_LPM_DEFAULT].mask,
-					cpumasks[CPUMASK_ONLINE].mask))
-		goto err;
-
-	return CPU_COUNT_S(size_cpumask, cpumasks[CPUMASK_LPM_DEFAULT].mask);
-
-err:
-	reset_cpus (CPUMASK_LPM_DEFAULT);
-	return 0;
-}
-
-static int detect_lpm_cpus(char *cmd_cpus)
-{
-	int ret;
-	char *str;
-
-	if (cmd_cpus && cmd_cpus[0] != '\0') {
-		ret = detect_lpm_cpus_cmd (cmd_cpus);
-		if (ret <= 0) {
-			lpmd_log_error ("\tInvalid -c parameter: %s\n", cmd_cpus);
-			exit (-1);
-		}
-		str = "CommandLine";
-		goto end;
-	}
-
-	ret = detect_lpm_cpus_lcore ();
-	if (ret < 0)
-		return ret;
-
-	if (ret > 0) {
-		str = "Lcores";
-		goto end;
-	}
-
-	if (detect_lpm_cpus_cluster ()) {
-		str = "Ecores";
-		goto end;
-	}
-
-end: if (has_cpus (CPUMASK_LPM_DEFAULT))
-		lpmd_log_info ("\tUse CPU %s as Default Low Power CPUs (%s)\n",
-						get_cpus_str (CPUMASK_LPM_DEFAULT), str);
-
-	return 0;
-}
-
-int cpu_init(char *cmd_cpus)
-{
-	return detect_lpm_cpus (cmd_cpus);
-}

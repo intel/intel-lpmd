@@ -348,3 +348,130 @@ int detect_cpu_topo(lpmd_config_t *lpmd_config)
 
 	return 0;
 }
+
+static int detect_lpm_cpus_cmd(char *cmd)
+{
+	int ret;
+
+	ret = parse_cpu_str (cmd, CPUMASK_LPM_DEFAULT);
+	if (ret <= 0)
+		reset_cpus (CPUMASK_LPM_DEFAULT);
+
+	return ret;
+}
+
+static int detect_lpm_cpus_cluster(void)
+{
+	FILE *filep;
+	char path[MAX_STR_LENGTH];
+	char str[MAX_STR_LENGTH];
+	int i, ret;
+
+	for (i = get_max_cpus(); i >= 0; i--) {
+		if (!is_cpu_online (i))
+			continue;
+
+		snprintf (path, sizeof(path), "/sys/devices/system/cpu/cpu%d/topology/cluster_cpus_list",
+					i);
+		path[MAX_STR_LENGTH - 1] = '\0';
+
+		filep = fopen (path, "r");
+		if (!filep)
+			continue;
+
+		ret = fread (str, 1, MAX_STR_LENGTH - 1, filep);
+		fclose (filep);
+
+		if (ret <= 0)
+			continue;
+
+		str[ret] = '\0';
+
+		if (parse_cpu_str (str, CPUMASK_LPM_DEFAULT) <= 0)
+			continue;
+
+		/* An Ecore module contains 4 Atom cores */
+		if (cpumask_nr_cpus(CPUMASK_LPM_DEFAULT) == 4 && is_cpu_atom(i))
+			break;
+
+		reset_cpus (CPUMASK_LPM_DEFAULT);
+	}
+
+	if (!has_cpus (CPUMASK_LPM_DEFAULT))
+		return 0;
+
+	return cpumask_nr_cpus(CPUMASK_LPM_DEFAULT);
+}
+
+static int detect_cpu_lcore(int cpu)
+{
+	if (is_cpu_lcore(cpu))
+		add_cpu (cpu, CPUMASK_LPM_DEFAULT);
+	return 0;
+}
+
+/*
+ * Use Lcore CPUs as LPM CPUs.
+ * Applies on platforms like MeteorLake.
+ */
+static int detect_lpm_cpus_lcore(void)
+{
+	int i;
+
+	for (i = 0; i < get_max_cpus(); i++) {
+		if (!is_cpu_online (i))
+			continue;
+		if (detect_cpu_lcore(i) < 0)
+			return -1;
+	}
+
+	/* All cpus has L3 */
+	if (!has_cpus (CPUMASK_LPM_DEFAULT))
+		return 0;
+
+	/* All online cpus don't have L3 */
+	if (is_equal(CPUMASK_LPM_DEFAULT, CPUMASK_ONLINE))
+		goto err;
+
+	return cpumask_nr_cpus(CPUMASK_LPM_DEFAULT);
+
+err:
+	reset_cpus (CPUMASK_LPM_DEFAULT);
+	return 0;
+}
+
+int detect_lpm_cpus(char *cmd_cpus)
+{
+	int ret;
+	char *str;
+
+	if (cmd_cpus && cmd_cpus[0] != '\0') {
+		ret = detect_lpm_cpus_cmd (cmd_cpus);
+		if (ret <= 0) {
+			lpmd_log_error ("\tInvalid -c parameter: %s\n", cmd_cpus);
+			exit (-1);
+		}
+		str = "CommandLine";
+		goto end;
+	}
+
+	ret = detect_lpm_cpus_lcore ();
+	if (ret < 0)
+		return ret;
+
+	if (ret > 0) {
+		str = "Lcores";
+		goto end;
+	}
+
+	if (detect_lpm_cpus_cluster ()) {
+		str = "Ecores";
+		goto end;
+	}
+
+end: if (has_cpus (CPUMASK_LPM_DEFAULT))
+		lpmd_log_info ("\tUse CPU %s as Default Low Power CPUs (%s)\n",
+						get_cpus_str (CPUMASK_LPM_DEFAULT), str);
+
+	return 0;
+}
