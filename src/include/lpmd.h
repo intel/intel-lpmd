@@ -329,7 +329,7 @@ int cgroup_exit(void);
 int process_cgroup(lpmd_config_state_t *state, enum lpm_cpu_process_mode mode);
 
 
-/* lpmd_cpu.c */
+/* lpmd_cpumask.c */
 int cpu_init(char *cmd_cpus);
 
 int check_cpu_capability(lpmd_config_t *lpmd_config);

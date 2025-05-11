@@ -52,7 +52,7 @@ intel_lpmd_SOURCES = \
 	src/lpmd_proc.c \
 	src/lpmd_dbus_server.c \
 	src/lpmd_config.c \
-	src/lpmd_cpu.c \
+	src/lpmd_cpumask.c \
 	src/lpmd_helpers.c \
 	src/lpmd_hfi.c \
 	src/lpmd_irq.c \
