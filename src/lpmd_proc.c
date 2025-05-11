@@ -349,7 +349,7 @@ int lpmd_main(void)
 	if (ret)
 		return ret;
 
-	ret = check_cpu_capability(&lpmd_config);
+	ret = detect_cpu_topo(&lpmd_config);
 	if (ret)
 		return ret;
 

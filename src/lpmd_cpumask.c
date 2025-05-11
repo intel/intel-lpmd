@@ -91,9 +91,19 @@ int get_max_cpus(void)
 	return topo_max_cpus;
 }
 
+void set_max_cpus(int num)
+{
+	topo_max_cpus = num;
+}
+
 int get_max_online_cpu(void)
 {
 	return max_online_cpu;
+}
+
+void set_max_online_cpu(int num)
+{
+	max_online_cpu = num;
 }
 
 static size_t alloc_cpu_set(cpu_set_t **cpu_set)
@@ -143,7 +153,7 @@ int free_cpumask(enum cpumask_idx idx)
 	return 0;
 }
 
-static int cpu_migrate(int cpu)
+int cpu_migrate(int cpu)
 {
 	cpu_set_t *mask;
 	int ret;
@@ -454,37 +464,6 @@ int set_lpm_cpus(enum cpumask_idx new)
 	return 0;
 }
 
-#define BITMASK_SIZE 32
-static int set_max_cpu_num(void)
-{
-	FILE *filep;
-	unsigned long dummy;
-	int i;
-
-	topo_max_cpus = 0;
-	for (i = 0; i < 256; ++i) {
-		char path[MAX_STR_LENGTH];
-
-		snprintf (path, sizeof(path), "/sys/devices/system/cpu/cpu%d/topology/thread_siblings", i);
-
-		filep = fopen (path, "r");
-		if (filep)
-			break;
-	}
-
-	if (!filep) {
-		lpmd_log_error ("Can't get max cpu number\n");
-		return -1;
-	}
-
-	while (fscanf (filep, "%lx,", &dummy) == 1)
-		topo_max_cpus += BITMASK_SIZE;
-	fclose (filep);
-
-	lpmd_log_debug ("\t%d CPUs supported in maximum\n", topo_max_cpus);
-	return 0;
-}
-
 char *get_proc_irq_str(enum cpumask_idx idx)
 {
 	return get_cpus_hexstr(idx);
@@ -592,78 +571,6 @@ static int detect_lpm_cpus_cmd(char *cmd)
 		reset_cpus (CPUMASK_LPM_DEFAULT);
 
 	return ret;
-}
-
-/*
- * Use one Ecore Module as LPM CPUs.
- * Applies on Hybrid platforms like AlderLake/RaptorLake.
- */
-static int is_cpu_atom(int cpu)
-{
-	unsigned int eax, ebx, ecx, edx;
-	unsigned int type;
-
-	if (cpu_migrate(cpu) < 0) {
-		lpmd_log_error("Failed to migrated to cpu%d\n", cpu);
-		return -1;
-	}
-
-	cpuid(0x1a, eax, ebx, ecx, edx);
-
-	type = (eax >> 24) & 0xFF;
-
-	return type == 0x20;
-}
-
-static int is_cpu_in_l3(int cpu)
-{
-	unsigned int eax, ebx, ecx, edx, subleaf;
-
-	if (cpu_migrate(cpu) < 0) {
-		lpmd_log_error("Failed to migrated to cpu%d\n", cpu);
-		err (1, "cpu migrate");
-	}
-
-	for(subleaf = 0;; subleaf++) {
-		unsigned int type, level;
-
-		cpuid_count(4, subleaf, eax, ebx, ecx, edx);
-
-		type = eax & 0x1f;
-		level = (eax >> 5) & 0x7;
-
-		/* No more caches */
-		if (!type)
-			break;
-		/* Unified Cache */
-		if (type !=3 )
-			continue;
-		/* L3 */
-		if (level != 3)
-			continue;
-
-		return 1;
-	}
-	return 0;
-}
-
-int is_cpu_pcore(int cpu)
-{
-	return !is_cpu_atom(cpu);
-}
-
-int is_cpu_ecore(int cpu)
-{
-	if (!is_cpu_atom(cpu))
-		return 0;
-	return is_cpu_in_l3(cpu);
-}
-
-int is_cpu_lcore(int cpu)
-{
-	if (!is_cpu_atom(cpu))
-		return 0;
-	return !is_cpu_in_l3(cpu);
 }
 
 static int detect_lpm_cpus_cluster(void)
@@ -779,120 +686,6 @@ static int detect_lpm_cpus(char *cmd_cpus)
 end: if (has_cpus (CPUMASK_LPM_DEFAULT))
 		lpmd_log_info ("\tUse CPU %s as Default Low Power CPUs (%s)\n",
 						get_cpus_str (CPUMASK_LPM_DEFAULT), str);
-
-	return 0;
-}
-
-#define PATH_RAPL	"/sys/class/powercap"
-static int get_tdp(void)
-{
-	FILE *filep;
-	DIR *dir;
-	struct dirent *entry;
-	int ret;
-	char path[MAX_STR_LENGTH * 2];
-	char str[MAX_STR_LENGTH];
-	char *pos;
-	int tdp = 0;
-
-	if ((dir = opendir (PATH_RAPL)) == NULL) {
-		perror ("opendir() error");
-		return 1;
-	}
-
-	while ((entry = readdir (dir)) != NULL) {
-		if (strlen (entry->d_name) > 100)
-			continue;
-
-		if (strncmp(entry->d_name, "intel-rapl", strlen("intel-rapl")))
-			continue;
-
-		snprintf (path, MAX_STR_LENGTH * 2, "%s/%s/name", PATH_RAPL, entry->d_name);
-		filep = fopen (path, "r");
-		if (!filep)
-			continue;
-
-		ret = fread (str, 1, MAX_STR_LENGTH, filep);
-		fclose (filep);
-
-		if (ret <= 0)
-			continue;
-
-		if (strncmp(str, "package", strlen("package")))
-			continue;
-
-		snprintf (path, MAX_STR_LENGTH * 2, "%s/%s/constraint_0_max_power_uw", PATH_RAPL, entry->d_name);
-		filep = fopen (path, "r");
-		if (!filep)
-			continue;
-
-		ret = fread (str, 1, MAX_STR_LENGTH, filep);
-		fclose (filep);
-
-		if (ret <= 0)
-			continue;
-
-		if (ret >= MAX_STR_LENGTH)
-			ret = MAX_STR_LENGTH - 1;
-
-		str[ret] = '\0';
-		tdp = strtol(str, &pos, 10);
-		break;
-	}
-	closedir (dir);
-
-	return tdp / 1000000;
-}
-
-int check_cpu_capability(lpmd_config_t *lpmd_config)
-{
-	FILE *filep;
-	int i;
-	char path[MAX_STR_LENGTH];
-	int ret;
-	int pcores, ecores, lcores;
-	int tdp;
-
-	ret = set_max_cpu_num ();
-	if (ret)
-		return ret;
-
-	reset_cpus (CPUMASK_ONLINE);
-	pcores = ecores = lcores = 0;
-
-	for (i = 0; i < topo_max_cpus; i++) {
-		unsigned int online = 0;
-
-		snprintf (path, sizeof(path), "/sys/devices/system/cpu/cpu%d/online", i);
-		filep = fopen (path, "r");
-		if (filep) {
-			if (fscanf (filep, "%u", &online) != 1)
-				lpmd_log_warn ("fread failed for %s\n", path);
-			fclose (filep);
-		}
-		else if (!i)
-			online = 1;
-		else
-			break;
-
-		if (!online)
-			continue;
-
-		add_cpu (i, CPUMASK_ONLINE);
-		if (is_cpu_pcore(i))
-			pcores++;
-		else if (is_cpu_ecore(i))
-			ecores++;
-		else if (is_cpu_lcore(i))
-			lcores++;
-	}
-	max_online_cpu = i;
-
-	tdp = get_tdp();
-	lpmd_log_info("Detected %d Pcores, %d Ecores, %d Lcores, TDP %dW\n", pcores, ecores, lcores, tdp);
-	ret = snprintf(lpmd_config->cpu_config, MAX_CONFIG_LEN - 1, " %dP%dE%dL-%dW ", pcores, ecores, lcores, tdp);
-
-	lpmd_config->tdp = tdp;
 
 	return 0;
 }

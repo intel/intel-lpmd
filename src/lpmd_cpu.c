@@ -19,6 +19,8 @@
  */
 
 #define _GNU_SOURCE
+#include <err.h>
+
 #include "lpmd.h"
 
 /* Bit 15 of CPUID.7 EDX stands for Hybrid support */
@@ -122,6 +124,227 @@ int detect_supported_platform(lpmd_config_t *lpmd_config)
 end:
 	lpmd_config->cpu_family = family;
 	lpmd_config->cpu_model = model;
+
+	return 0;
+}
+
+/*
+ * Use one Ecore Module as LPM CPUs.
+ * Applies on Hybrid platforms like AlderLake/RaptorLake.
+ */
+int is_cpu_atom(int cpu)
+{
+	unsigned int eax, ebx, ecx, edx;
+	unsigned int type;
+
+	if (cpu_migrate(cpu) < 0) {
+		lpmd_log_error("Failed to migrated to cpu%d\n", cpu);
+		return -1;
+	}
+
+	cpuid(0x1a, eax, ebx, ecx, edx);
+
+	type = (eax >> 24) & 0xFF;
+
+	return type == 0x20;
+}
+
+static int is_cpu_in_l3(int cpu)
+{
+	unsigned int eax, ebx, ecx, edx, subleaf;
+
+	if (cpu_migrate(cpu) < 0) {
+		lpmd_log_error("Failed to migrated to cpu%d\n", cpu);
+		err (1, "cpu migrate");
+	}
+
+	for(subleaf = 0;; subleaf++) {
+		unsigned int type, level;
+
+		cpuid_count(4, subleaf, eax, ebx, ecx, edx);
+
+		type = eax & 0x1f;
+		level = (eax >> 5) & 0x7;
+
+		/* No more caches */
+		if (!type)
+			break;
+		/* Unified Cache */
+		if (type !=3 )
+			continue;
+		/* L3 */
+		if (level != 3)
+			continue;
+
+		return 1;
+	}
+	return 0;
+}
+
+int is_cpu_pcore(int cpu)
+{
+	return !is_cpu_atom(cpu);
+}
+
+int is_cpu_ecore(int cpu)
+{
+	if (!is_cpu_atom(cpu))
+		return 0;
+	return is_cpu_in_l3(cpu);
+}
+
+int is_cpu_lcore(int cpu)
+{
+	if (!is_cpu_atom(cpu))
+		return 0;
+	return !is_cpu_in_l3(cpu);
+}
+
+#define PATH_RAPL	"/sys/class/powercap"
+static int get_tdp(void)
+{
+	FILE *filep;
+	DIR *dir;
+	struct dirent *entry;
+	int ret;
+	char path[MAX_STR_LENGTH * 2];
+	char str[MAX_STR_LENGTH];
+	char *pos;
+	int tdp = 0;
+
+	if ((dir = opendir (PATH_RAPL)) == NULL) {
+		perror ("opendir() error");
+		return 1;
+	}
+
+	while ((entry = readdir (dir)) != NULL) {
+		if (strlen (entry->d_name) > 100)
+			continue;
+
+		if (strncmp(entry->d_name, "intel-rapl", strlen("intel-rapl")))
+			continue;
+
+		snprintf (path, MAX_STR_LENGTH * 2, "%s/%s/name", PATH_RAPL, entry->d_name);
+		filep = fopen (path, "r");
+		if (!filep)
+			continue;
+
+		ret = fread (str, 1, MAX_STR_LENGTH, filep);
+		fclose (filep);
+
+		if (ret <= 0)
+			continue;
+
+		if (strncmp(str, "package", strlen("package")))
+			continue;
+
+		snprintf (path, MAX_STR_LENGTH * 2, "%s/%s/constraint_0_max_power_uw", PATH_RAPL, entry->d_name);
+		filep = fopen (path, "r");
+		if (!filep)
+			continue;
+
+		ret = fread (str, 1, MAX_STR_LENGTH, filep);
+		fclose (filep);
+
+		if (ret <= 0)
+			continue;
+
+		if (ret >= MAX_STR_LENGTH)
+			ret = MAX_STR_LENGTH - 1;
+
+		str[ret] = '\0';
+		tdp = strtol(str, &pos, 10);
+		break;
+	}
+	closedir (dir);
+
+	return tdp / 1000000;
+}
+
+
+#define BITMASK_SIZE 32
+int detect_max_cpus(void)
+{
+	FILE *filep;
+	unsigned long dummy;
+	int max_cpus;
+	int i;
+
+	max_cpus = 0;
+	for (i = 0; i < 256; ++i) {
+		char path[MAX_STR_LENGTH];
+
+		snprintf (path, sizeof(path), "/sys/devices/system/cpu/cpu%d/topology/thread_siblings", i);
+
+		filep = fopen (path, "r");
+		if (filep)
+			break;
+	}
+
+	if (!filep) {
+		lpmd_log_error ("Can't get max cpu number\n");
+		return -1;
+	}
+
+	while (fscanf (filep, "%lx,", &dummy) == 1)
+		max_cpus += BITMASK_SIZE;
+	fclose (filep);
+
+	lpmd_log_debug ("\t%d CPUs supported in maximum\n", max_cpus);
+	
+	set_max_cpus(max_cpus);
+	return 0;
+}
+
+int detect_cpu_topo(lpmd_config_t *lpmd_config)
+{
+	FILE *filep;
+	int i;
+	char path[MAX_STR_LENGTH];
+	int ret;
+	int pcores, ecores, lcores;
+	int tdp;
+
+	ret = detect_max_cpus();
+	if (ret)
+		return ret;
+
+	reset_cpus (CPUMASK_ONLINE);
+	pcores = ecores = lcores = 0;
+
+	for (i = 0; i < get_max_cpus(); i++) {
+		unsigned int online = 0;
+
+		snprintf (path, sizeof(path), "/sys/devices/system/cpu/cpu%d/online", i);
+		filep = fopen (path, "r");
+		if (filep) {
+			if (fscanf (filep, "%u", &online) != 1)
+				lpmd_log_warn ("fread failed for %s\n", path);
+			fclose (filep);
+		}
+		else if (!i)
+			online = 1;
+		else
+			break;
+
+		if (!online)
+			continue;
+
+		add_cpu (i, CPUMASK_ONLINE);
+		if (is_cpu_pcore(i))
+			pcores++;
+		else if (is_cpu_ecore(i))
+			ecores++;
+		else if (is_cpu_lcore(i))
+			lcores++;
+	}
+	set_max_online_cpu(i);
+
+	tdp = get_tdp();
+	lpmd_log_info("Detected %d Pcores, %d Ecores, %d Lcores, TDP %dW\n", pcores, ecores, lcores, tdp);
+	ret = snprintf(lpmd_config->cpu_config, MAX_CONFIG_LEN - 1, " %dP%dE%dL-%dW ", pcores, ecores, lcores, tdp);
+
+	lpmd_config->tdp = tdp;
 
 	return 0;
 }
