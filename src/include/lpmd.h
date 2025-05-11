@@ -328,6 +328,9 @@ int cgroup_init(lpmd_config_t *config);
 int cgroup_exit(void);
 int process_cgroup(lpmd_config_state_t *state, enum lpm_cpu_process_mode mode);
 
+/* lpmd_uevent.c */
+int uevent_init(void);
+int check_cpu_hotplug(void);
 
 /* lpmd_cpumask.c */
 int cpu_init(char *cmd_cpus);
@@ -345,6 +348,7 @@ int get_max_cpus(void);
 int get_max_online_cpu(void);
 
 int alloc_cpumask(void);
+int free_cpumask(enum cpumask_idx idx);
 char* get_cpus_str(enum cpumask_idx idx);
 int has_cpus(enum cpumask_idx idx);
 
@@ -355,8 +359,7 @@ int is_equal(enum cpumask_idx idx1, enum cpumask_idx idx2);
 int add_cpu(int cpu, enum cpumask_idx idx);
 void reset_cpus(enum cpumask_idx idx);
 int set_lpm_cpus(enum cpumask_idx new);
-int uevent_init(void);
-int check_cpu_hotplug(void);
+
 
 char *get_proc_irq_str(enum cpumask_idx idx);
 char *get_irqbalance_str(enum cpumask_idx idx);
