@@ -340,6 +340,7 @@ void set_max_cpus(int num);
 int get_max_online_cpu(void);
 void set_max_online_cpu(int num);
 int cpu_migrate(int cpu);
+int cpu_clear_affinity(void);
 
 int cpumask_alloc(void);
 int cpumask_free(enum cpumask_idx idx);

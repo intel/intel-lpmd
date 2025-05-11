@@ -146,6 +146,7 @@ int is_cpu_atom(int cpu)
 
 	type = (eax >> 24) & 0xFF;
 
+	cpu_clear_affinity();
 	return type == 0x20;
 }
 
@@ -176,8 +177,11 @@ static int is_cpu_in_l3(int cpu)
 		if (level != 3)
 			continue;
 
+		cpu_clear_affinity();
 		return 1;
 	}
+
+	cpu_clear_affinity();
 	return 0;
 }
 

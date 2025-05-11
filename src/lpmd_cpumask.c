@@ -115,6 +115,11 @@ int cpu_migrate(int cpu)
 		return 0;
 }
 
+int cpu_clear_affinity(void)
+{
+	return  sched_setaffinity(0, size_cpumask, cpumasks[CPUMASK_ONLINE].mask);
+}
+
 int cpumask_alloc(void)
 {
 	int idx;
