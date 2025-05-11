@@ -255,10 +255,6 @@ enum power_profile_daemon_mode {
 	PPD_INVALID
 };
 
-/* Helpers for entering LPMode */
-int set_lpm_irq(int action);
-int set_lpm_cpus(enum cpumask_idx idx);
-
 /* lpmd_main.c */
 int in_debug_mode(void);
 int do_platform_check(void);
@@ -268,9 +264,6 @@ lpmd_config_t *get_lpmd_config(void);
 
 int lpmd_lock(void);
 int lpmd_unlock(void);
-int get_cpu_mode(void);
-void set_ignore_itmt(void);
-
 
 void lpmd_terminate(void);
 void lpmd_force_on(void);
@@ -339,6 +332,7 @@ int detect_lpm_cpus(char *cmd_cpus);
 
 int is_cpu_ecore(int cpu);
 int is_cpu_pcore(int cpu);
+
 /* lpmd_cpumask.c */
 int is_cpu_online(int cpu);
 int get_max_cpus(void);
@@ -346,7 +340,6 @@ void set_max_cpus(int num);
 int get_max_online_cpu(void);
 void set_max_online_cpu(int num);
 int cpu_migrate(int cpu);
-
 
 int cpumask_alloc(void);
 int cpumask_free(enum cpumask_idx idx);
