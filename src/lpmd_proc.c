@@ -344,7 +344,11 @@ int lpmd_main(void)
 
 	/* Remove previous cgroup setting, if there is any */
 	cgroup_exit();
-	
+
+	ret = detect_supported_platform(&lpmd_config);
+	if (ret)
+		return ret;
+
 	ret = check_cpu_capability(&lpmd_config);
 	if (ret)
 		return ret;

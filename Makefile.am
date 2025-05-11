@@ -62,6 +62,7 @@ intel_lpmd_SOURCES = \
 	src/lpmd_wlt.c \
 	src/lpmd_misc.c \
 	src/lpmd_uevent.c \
+	src/lpmd_cpu.c \
 	src/lpmd_state_machine.c \
 	src/wlt_proxy/wlt_proxy.c \
 	src/wlt_proxy/spike_mgmt.c \

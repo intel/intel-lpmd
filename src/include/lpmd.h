@@ -332,6 +332,9 @@ int process_cgroup(lpmd_config_state_t *state, enum lpm_cpu_process_mode mode);
 int uevent_init(void);
 int check_cpu_hotplug(void);
 
+/* lpmd_cpu.c */
+int detect_supported_platform(lpmd_config_t *lpmd_config);
+
 /* lpmd_cpumask.c */
 int cpu_init(char *cmd_cpus);
 
