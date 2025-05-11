@@ -62,6 +62,7 @@ struct lpm_cpus {
 	char *str_reverse;
 	char *hexstr;
 	char *hexstr_reverse;
+	uint8_t *hexvals;
 };
 
 static struct lpm_cpus cpumasks[CPUMASK_MAX] = {
@@ -286,21 +287,35 @@ static char* get_cpus_str_reverse(enum cpumask_idx idx)
 	return cpumasks[idx].str_reverse;
 }
 
-int get_cpus_hexvals(enum cpumask_idx idx, uint8_t *vals, int size)
+static uint8_t *get_cpus_hexvals(enum cpumask_idx idx, int *size)
 {
 	int i, j, k;
 	uint8_t v = 0;
+	uint8_t *vals;
 
 	if (!cpumasks[idx].mask)
-		return -1;
+		return NULL;
+
+	if (!CPU_COUNT_S(size_cpumask, cpumasks[idx].mask))
+		return NULL;
+
+	*size = topo_max_cpus / 8;
+
+	if (cpumasks[idx].hexvals)
+		return cpumasks[idx].hexvals;
+
+	vals = calloc (*size, 1);
+	if (!vals)
+		return NULL;
 
 	for (i = 0; i < topo_max_cpus; i++) {
 		j = i % 8;
 		k = i / 8;
 
-		if (k >= size) {
+		if (k >= *size) {
 			lpmd_log_error ("size too big\n");
-			return -1;
+			free(vals);
+			return NULL;
 		}
 
 		if (!CPU_ISSET_S(i, size_cpumask, cpumasks[idx].mask))
@@ -313,7 +328,8 @@ set_val: if (j == 7) {
 		}
 	}
 
-	return 0;
+	cpumasks[idx].hexvals = vals;
+	return cpumasks[idx].hexvals;
 }
 
 int is_equal(enum cpumask_idx idx1, enum cpumask_idx idx2)
@@ -381,10 +397,12 @@ void reset_cpus(enum cpumask_idx idx)
 	free (cpumasks[idx].str_reverse);
 	free (cpumasks[idx].hexstr);
 	free (cpumasks[idx].hexstr_reverse);
+	free (cpumasks[idx].hexvals);
 	cpumasks[idx].str = NULL;
 	cpumasks[idx].str_reverse = NULL;
 	cpumasks[idx].hexstr = NULL;
 	cpumasks[idx].hexstr_reverse = NULL;
+	cpumasks[idx].hexvals = NULL;
 }
 
 void copy_cpu_mask(enum cpumask_idx source, enum cpumask_idx dest)
@@ -474,9 +492,9 @@ char *get_cpu_isolation_str(enum cpumask_idx idx)
 		return get_cpus_str_reverse(idx);
 }
 
-int get_cgroup_systemd_vals(enum cpumask_idx idx, uint8_t *vals, int size)
+uint8_t *get_cgroup_systemd_vals(enum cpumask_idx idx, int *size)
 {
-	return get_cpus_hexvals(idx, vals, size);
+	return get_cpus_hexvals(idx, size);
 }
 
 static int uevent_fd = -1;

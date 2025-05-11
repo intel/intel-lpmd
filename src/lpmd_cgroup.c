@@ -115,30 +115,29 @@ finish: if (ret >= 0) {
 
 static int restore_systemd_cgroup(void)
 {
-	int size = get_max_cpus() / 8;
+	int size;
 	uint8_t *vals;
 
-	vals = calloc (size, 1);
+	vals = get_cgroup_systemd_vals(CPUMASK_ONLINE, &size);
 	if (!vals)
 		return -1;
-	get_cgroup_systemd_vals(CPUMASK_ONLINE, vals, size);
+
 	update_allowed_cpus ("system.slice", vals, size);
 	update_allowed_cpus ("user.slice", vals, size);
 	update_allowed_cpus ("machine.slice", vals, size);
-	free (vals);
+
 	return 0;
 }
 
 static int update_systemd_cgroup(lpmd_config_state_t *state)
 {
-	int size = get_max_cpus() / 8;
+	int size;
 	uint8_t *vals;
 	int ret;
 
-	vals = calloc (size, 1);
+	vals = get_cgroup_systemd_vals(state->cpumask_idx, &size);
 	if (!vals)
 		return -1;
-	get_cgroup_systemd_vals(state->cpumask_idx, vals, size);
 
 	ret = update_allowed_cpus ("system.slice", vals, size);
 	if (ret)
@@ -152,10 +151,9 @@ static int update_systemd_cgroup(lpmd_config_state_t *state)
 	if (ret)
 		goto restore;
 
-	free (vals);
 	return 0;
 
-restore: free (vals);
+restore:
 	restore_systemd_cgroup ();
 	return ret;
 }
