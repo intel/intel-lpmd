@@ -189,13 +189,14 @@ static int process_cpu_isolate(lpmd_config_state_t *state)
 	return 0;
 }
 
-int cgroup_exit(void)
+int cgroup_cleanup(void)
 {
 	DIR *dir = opendir("/sys/fs/cgroup/lpm");
 	if (dir) {
 		closedir(dir);
 		rmdir("/sys/fs/cgroup/lpm");
 	}
+	restore_systemd_cgroup();
 	return 0;
 }
 

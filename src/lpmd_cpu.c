@@ -335,6 +335,15 @@ int detect_cpu_topo(lpmd_config_t *lpmd_config)
 			continue;
 
 		cpumask_add_cpu(i, CPUMASK_ONLINE);
+		set_max_online_cpu(i);
+	}
+
+	/* Here it is the first time we migrate CPUs, must clear the previous cgroup settings */
+	cgroup_cleanup();
+
+	for (i = 0; i < get_max_cpus(); i++) {
+		if (!is_cpu_online(i))
+			continue;
 		if (is_cpu_pcore(i))
 			pcores++;
 		else if (is_cpu_ecore(i))
@@ -342,7 +351,6 @@ int detect_cpu_topo(lpmd_config_t *lpmd_config)
 		else if (is_cpu_lcore(i))
 			lcores++;
 	}
-	set_max_online_cpu(i);
 
 	tdp = get_tdp();
 	lpmd_log_info("Detected %d Pcores, %d Ecores, %d Lcores, TDP %dW\n", pcores, ecores, lcores, tdp);

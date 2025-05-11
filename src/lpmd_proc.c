@@ -222,22 +222,13 @@ static void connect_to_upower_daemon(void)
 /* Poll time out default */
 #define POLL_TIMEOUT_DEFAULT_SECONDS	1
 
-static bool main_loop_terminate;
-
 // called from LPMD main thread to process user and system messages
 static int proc_message(message_capsul_t *msg)
 {
-	int ret = 0;
-
 	lpmd_log_debug ("Received message %d\n", msg->msg_id);
 	switch (msg->msg_id) {
 		case TERMINATE:
 			lpmd_log_msg ("Terminating ...\n");
-			ret = -1;
-			main_loop_terminate = true;
-			if (lpmd_config.wlt_proxy_enable)
-				wlt_proxy_uninit();
-			hfi_kill ();
 			update_lpmd_state(LPMD_TERMINATE);
 			break;
 		case LPM_FORCE_ON:
@@ -256,7 +247,7 @@ static int proc_message(message_capsul_t *msg)
 			break;
 	}
 
-	return ret;
+	return 0;
 }
 
 static void dump_poll_results(int ret)
@@ -332,6 +323,11 @@ static void* lpmd_core_main_loop(void *arg)
 		lpmd_enter_next_state();
 	}
 
+	if (lpmd_config.wlt_proxy_enable)
+		wlt_proxy_uninit();
+	hfi_kill ();
+	cgroup_cleanup();
+
 	return NULL;
 }
 
@@ -341,9 +337,6 @@ int lpmd_main(void)
 	int ret;
 
 	lpmd_log_debug ("lpmd_main begin\n");
-
-	/* Remove previous cgroup setting, if there is any */
-	cgroup_exit();
 
 	ret = detect_supported_platform(&lpmd_config);
 	if (ret)

@@ -318,7 +318,7 @@ int process_irq(lpmd_config_state_t *state);
 
 /* lpmd_cgroup.c*/
 int cgroup_init(lpmd_config_t *config);
-int cgroup_exit(void);
+int cgroup_cleanup(void);
 int process_cgroup(lpmd_config_state_t *state, enum lpm_cpu_process_mode mode);
 
 /* lpmd_uevent.c */
