@@ -337,36 +337,31 @@ int detect_supported_platform(lpmd_config_t *lpmd_config);
 int detect_cpu_topo(lpmd_config_t *lpmd_config);
 int detect_lpm_cpus(char *cmd_cpus);
 
-/* lpmd_cpumask.c */
-int cpu_migrate(int cpu);
-int check_cpu_capability(lpmd_config_t *lpmd_config);
-int parse_cpu_str(char *buf, enum cpumask_idx idx);
-
-int is_cpu_lcore(int cpu);
 int is_cpu_ecore(int cpu);
 int is_cpu_pcore(int cpu);
-/* cpu.c: helpers */
+/* lpmd_cpumask.c */
 int is_cpu_online(int cpu);
 int get_max_cpus(void);
 void set_max_cpus(int num);
 int get_max_online_cpu(void);
 void set_max_online_cpu(int num);
+int cpu_migrate(int cpu);
 
-int alloc_cpumask(void);
-int free_cpumask(enum cpumask_idx idx);
-char* get_cpus_str(enum cpumask_idx idx);
+
+int cpumask_alloc(void);
+int cpumask_free(enum cpumask_idx idx);
+int cpumask_reset(enum cpumask_idx idx);
+
+int cpumask_add_cpu(int cpu, enum cpumask_idx idx);
+int cpumask_init_cpus(char *buf, enum cpumask_idx idx);
 int cpumask_nr_cpus(enum cpumask_idx idx);
-int has_cpus(enum cpumask_idx idx);
+int cpumask_has_cpu(enum cpumask_idx idx);
 
-void copy_cpu_mask_exclude(enum cpumask_idx source, enum cpumask_idx dest, enum cpumask_idx exlude);
-void copy_cpu_mask(enum cpumask_idx source, enum cpumask_idx dest);
-int is_equal(enum cpumask_idx idx1, enum cpumask_idx idx2);
+int cpumask_equal(enum cpumask_idx idx1, enum cpumask_idx idx2);
+void cpumask_copy(enum cpumask_idx source, enum cpumask_idx dest);
+void cpumask_exclude_copy(enum cpumask_idx source, enum cpumask_idx dest, enum cpumask_idx exlude);
 
-int add_cpu(int cpu, enum cpumask_idx idx);
-void reset_cpus(enum cpumask_idx idx);
-int set_lpm_cpus(enum cpumask_idx new);
-
-
+char *get_cpus_str(enum cpumask_idx idx);
 char *get_proc_irq_str(enum cpumask_idx idx);
 char *get_irqbalance_str(enum cpumask_idx idx);
 char *get_cpu_isolation_str(enum cpumask_idx idx);

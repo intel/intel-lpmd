@@ -387,12 +387,12 @@ int lpmd_parse_config_states(lpmd_config_t *lpmd_config)
 		state = &lpmd_config->config_states[i];
 
 		if (state->active_cpus[0] != '\0') {
-			state->cpumask_idx = alloc_cpumask();
+			state->cpumask_idx = cpumask_alloc();
 			if (state->cpumask_idx == CPUMASK_NONE) {
 				lpmd_log_error("Cannot alloc CPUMASK\n");
 				return -1;
 			}
-			ret = parse_cpu_str(state->active_cpus, state->cpumask_idx);
+			ret = cpumask_init_cpus(state->active_cpus, state->cpumask_idx);
 			if (ret <= 0) {
 				state->valid = 0;
 				continue;

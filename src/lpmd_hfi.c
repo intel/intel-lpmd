@@ -189,16 +189,16 @@ static char *update_one_cpu(struct perf_cap *perf_cap)
 		return NULL;
 
 	if (!perf_cap->cpu) {
-		reset_cpus (CPUMASK_HFI);
-		reset_cpus (CPUMASK_HFI_BANNED);
+		cpumask_reset(CPUMASK_HFI);
+		cpumask_reset(CPUMASK_HFI_BANNED);
 	}
 
 	if (perf_cap->eff == 255 * 4) {
-		add_cpu (perf_cap->cpu, CPUMASK_HFI);
+		cpumask_add_cpu(perf_cap->cpu, CPUMASK_HFI);
 		return "LPM";
 	}
 	if (!perf_cap->perf && !perf_cap->eff) {
-		add_cpu (perf_cap->cpu, CPUMASK_HFI_BANNED);
+		cpumask_add_cpu(perf_cap->cpu, CPUMASK_HFI_BANNED);
 		return "BAN";
 	}
 	return "NOR";
@@ -212,33 +212,33 @@ static void process_one_event(int first, int last, int nr)
 	if (nr == 16 && last != get_max_online_cpu ())
 		return;
 
-	if (has_cpus (CPUMASK_HFI)) {
+	if (cpumask_has_cpu(CPUMASK_HFI)) {
 		/* Ignore duplicate event */
-		if (is_equal (CPUMASK_HFI_LAST, CPUMASK_HFI )) {
+		if (cpumask_equal (CPUMASK_HFI_LAST, CPUMASK_HFI )) {
 			lpmd_log_debug ("\tDuplicated HFI LPM hints ignored\n\n");
 			return;
 		}
 		lpmd_log_debug ("\tDetect HFI LPM event\n");
 		config->data.has_hfi_update = 1;
-		copy_cpu_mask(CPUMASK_HFI, CPUMASK_HFI_LAST);
+		cpumask_copy(CPUMASK_HFI, CPUMASK_HFI_LAST);
 	}
-	else if (has_cpus (CPUMASK_HFI_BANNED)) {
-		copy_cpu_mask_exclude(CPUMASK_ONLINE, CPUMASK_HFI, CPUMASK_HFI_BANNED);
+	else if (cpumask_has_cpu(CPUMASK_HFI_BANNED)) {
+		cpumask_exclude_copy(CPUMASK_ONLINE, CPUMASK_HFI, CPUMASK_HFI_BANNED);
 		/* Ignore duplicate event */
-		if (is_equal (CPUMASK_HFI_LAST, CPUMASK_HFI )) {
+		if (cpumask_equal (CPUMASK_HFI_LAST, CPUMASK_HFI )) {
 			lpmd_log_debug ("\tDuplicated HFI BANNED hints ignored\n\n");
 			return;
 		}
 		lpmd_log_debug ("\tDetect HFI LPM event with banned CPUs\n");
 		config->data.has_hfi_update = 1;
-		copy_cpu_mask(CPUMASK_HFI, CPUMASK_HFI_LAST);
+		cpumask_copy(CPUMASK_HFI, CPUMASK_HFI_LAST);
 	}
-	else if (has_cpus (CPUMASK_HFI_LAST)) {
+	else if (cpumask_has_cpu(CPUMASK_HFI_LAST)) {
 		lpmd_log_debug ("\tHFI LPM recover\n");
 //		 Don't override the DETECT_LPM_CPU_DEFAULT so it is auto recovered
-		copy_cpu_mask(CPUMASK_ONLINE, CPUMASK_HFI);
+		cpumask_copy(CPUMASK_ONLINE, CPUMASK_HFI);
 		config->data.has_hfi_update = 1;
-		reset_cpus (CPUMASK_HFI_LAST);
+		cpumask_reset (CPUMASK_HFI_LAST);
 	}
 	else {
 		lpmd_log_info ("\t\t\tUnsupported HFI event ignored\n");
@@ -335,7 +335,7 @@ int hfi_init(void)
 	struct nl_cb *cb;
 	int mcast_id;
 
-	reset_cpus (CPUMASK_HFI_LAST);
+	cpumask_reset(CPUMASK_HFI_LAST);
 
 	signal (SIGPIPE, SIG_IGN);
 

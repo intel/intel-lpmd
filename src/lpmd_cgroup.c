@@ -160,7 +160,7 @@ restore:
 
 static int process_cpu_cgroupv2(lpmd_config_state_t *state)
 {
-	if (is_equal(state->cpumask_idx, CPUMASK_ONLINE)) {
+	if (cpumask_equal(state->cpumask_idx, CPUMASK_ONLINE)) {
 		restore_systemd_cgroup ();
 		return lpmd_write_str (PATH_CG2_SUBTREE_CONTROL, "-cpuset", LPMD_LOG_DEBUG);	
 	} else {
@@ -176,7 +176,7 @@ static int process_cpu_isolate(lpmd_config_state_t *state)
 	if (lpmd_write_str ("/sys/fs/cgroup/lpm/cpuset.cpus.partition", "member", LPMD_LOG_DEBUG))
 		return 1;
 
-	if (!is_equal(state->cpumask_idx, CPUMASK_ONLINE)) {
+	if (!cpumask_equal(state->cpumask_idx, CPUMASK_ONLINE)) {
 		if (lpmd_write_str ("/sys/fs/cgroup/lpm/cpuset.cpus", get_cpu_isolation_str(state->cpumask_idx), LPMD_LOG_DEBUG))
 			return 1;
 		if (lpmd_write_str ("/sys/fs/cgroup/lpm/cpuset.cpus.partition", "isolated", LPMD_LOG_DEBUG))

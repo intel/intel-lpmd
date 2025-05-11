@@ -309,7 +309,7 @@ int detect_cpu_topo(lpmd_config_t *lpmd_config)
 	if (ret)
 		return ret;
 
-	reset_cpus (CPUMASK_ONLINE);
+	cpumask_reset(CPUMASK_ONLINE);
 	pcores = ecores = lcores = 0;
 
 	for (i = 0; i < get_max_cpus(); i++) {
@@ -330,7 +330,7 @@ int detect_cpu_topo(lpmd_config_t *lpmd_config)
 		if (!online)
 			continue;
 
-		add_cpu (i, CPUMASK_ONLINE);
+		cpumask_add_cpu(i, CPUMASK_ONLINE);
 		if (is_cpu_pcore(i))
 			pcores++;
 		else if (is_cpu_ecore(i))
@@ -353,9 +353,9 @@ static int detect_lpm_cpus_cmd(char *cmd)
 {
 	int ret;
 
-	ret = parse_cpu_str (cmd, CPUMASK_LPM_DEFAULT);
+	ret = cpumask_init_cpus (cmd, CPUMASK_LPM_DEFAULT);
 	if (ret <= 0)
-		reset_cpus (CPUMASK_LPM_DEFAULT);
+		cpumask_reset(CPUMASK_LPM_DEFAULT);
 
 	return ret;
 }
@@ -387,17 +387,17 @@ static int detect_lpm_cpus_cluster(void)
 
 		str[ret] = '\0';
 
-		if (parse_cpu_str (str, CPUMASK_LPM_DEFAULT) <= 0)
+		if (cpumask_init_cpus (str, CPUMASK_LPM_DEFAULT) <= 0)
 			continue;
 
 		/* An Ecore module contains 4 Atom cores */
 		if (cpumask_nr_cpus(CPUMASK_LPM_DEFAULT) == 4 && is_cpu_atom(i))
 			break;
 
-		reset_cpus (CPUMASK_LPM_DEFAULT);
+		cpumask_reset(CPUMASK_LPM_DEFAULT);
 	}
 
-	if (!has_cpus (CPUMASK_LPM_DEFAULT))
+	if (!cpumask_has_cpu(CPUMASK_LPM_DEFAULT))
 		return 0;
 
 	return cpumask_nr_cpus(CPUMASK_LPM_DEFAULT);
@@ -406,7 +406,7 @@ static int detect_lpm_cpus_cluster(void)
 static int detect_cpu_lcore(int cpu)
 {
 	if (is_cpu_lcore(cpu))
-		add_cpu (cpu, CPUMASK_LPM_DEFAULT);
+		cpumask_add_cpu(cpu, CPUMASK_LPM_DEFAULT);
 	return 0;
 }
 
@@ -426,17 +426,17 @@ static int detect_lpm_cpus_lcore(void)
 	}
 
 	/* All cpus has L3 */
-	if (!has_cpus (CPUMASK_LPM_DEFAULT))
+	if (!cpumask_has_cpu(CPUMASK_LPM_DEFAULT))
 		return 0;
 
 	/* All online cpus don't have L3 */
-	if (is_equal(CPUMASK_LPM_DEFAULT, CPUMASK_ONLINE))
+	if (cpumask_equal(CPUMASK_LPM_DEFAULT, CPUMASK_ONLINE))
 		goto err;
 
 	return cpumask_nr_cpus(CPUMASK_LPM_DEFAULT);
 
 err:
-	reset_cpus (CPUMASK_LPM_DEFAULT);
+	cpumask_reset(CPUMASK_LPM_DEFAULT);
 	return 0;
 }
 
@@ -469,7 +469,7 @@ int detect_lpm_cpus(char *cmd_cpus)
 		goto end;
 	}
 
-end: if (has_cpus (CPUMASK_LPM_DEFAULT))
+end: if (cpumask_has_cpu(CPUMASK_LPM_DEFAULT))
 		lpmd_log_info ("\tUse CPU %s as Default Low Power CPUs (%s)\n",
 						get_cpus_str (CPUMASK_LPM_DEFAULT), str);
 

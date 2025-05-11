@@ -72,7 +72,7 @@ int check_cpu_hotplug(void)
 	if (!filep)
 		return 0;
 
-	curr = alloc_cpumask();
+	curr = cpumask_alloc();
 	if (curr == CPUMASK_NONE)
 		err(3, "ALLOC_CPUMASK");
 		
@@ -100,7 +100,7 @@ int check_cpu_hotplug(void)
 		if (ret != 1)
 			goto free;
 
-		add_cpu(cpu, curr);
+		cpumask_add_cpu(cpu, curr);
 
 free:
 		free (tmpline);
@@ -109,8 +109,8 @@ free:
 
 	fclose (filep);
 
-	ret = is_equal(curr, CPUMASK_ONLINE);
-	free_cpumask(curr);
+	ret = cpumask_equal(curr, CPUMASK_ONLINE);
+	cpumask_free(curr);
 
 	if (ret)
 		return update_lpmd_state(LPMD_RESTORE);

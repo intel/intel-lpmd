@@ -129,30 +129,6 @@ static size_t alloc_cpu_set(cpu_set_t **cpu_set)
 	return size;
 }
 
-int alloc_cpumask(void)
-{
-	int idx;
-
-	for (idx = CPUMASK_USER; idx < CPUMASK_MAX; idx++) {
-		if (!cpumasks[idx].mask) {
-			alloc_cpu_set(&cpumasks[idx].mask);
-			break;
-		}
-	}
-	return idx;
-}
-
-int free_cpumask(enum cpumask_idx idx)
-{
-	if (!cpumasks[idx].mask)
-		return 0;
-		
-	reset_cpus(idx);
-	free(cpumasks[idx].mask);
-	cpumasks[idx].mask = NULL;
-	return 0;
-}
-
 int cpu_migrate(int cpu)
 {
 	cpu_set_t *mask;
@@ -167,6 +143,188 @@ int cpu_migrate(int cpu)
 		return -1;
 	else
 		return 0;
+}
+
+int cpumask_alloc(void)
+{
+	int idx;
+
+	for (idx = CPUMASK_USER; idx < CPUMASK_MAX; idx++) {
+		if (!cpumasks[idx].mask) {
+			alloc_cpu_set(&cpumasks[idx].mask);
+			break;
+		}
+	}
+	return idx;
+}
+
+int cpumask_free(enum cpumask_idx idx)
+{
+	if (!cpumasks[idx].mask)
+		return 0;
+		
+	cpumask_reset(idx);
+	free(cpumasks[idx].mask);
+	cpumasks[idx].mask = NULL;
+	return 0;
+}
+
+int cpumask_reset(enum cpumask_idx idx)
+{
+	if (!cpumasks[idx].mask)
+		alloc_cpu_set(&cpumasks[idx].mask);
+	else
+		CPU_ZERO_S(size_cpumask, cpumasks[idx].mask);
+
+	free (cpumasks[idx].str);
+	free (cpumasks[idx].str_reverse);
+	free (cpumasks[idx].hexstr);
+	free (cpumasks[idx].hexstr_reverse);
+	free (cpumasks[idx].hexvals);
+	cpumasks[idx].str = NULL;
+	cpumasks[idx].str_reverse = NULL;
+	cpumasks[idx].hexstr = NULL;
+	cpumasks[idx].hexstr_reverse = NULL;
+	cpumasks[idx].hexvals = NULL;
+	return 0;
+}
+
+int cpumask_add_cpu(int cpu, enum cpumask_idx idx)
+{
+	if (idx != CPUMASK_ONLINE && !is_cpu_online (cpu))
+		return 0;
+
+	if (!cpumasks[idx].mask)
+		alloc_cpu_set (&cpumasks[idx].mask);
+
+	CPU_SET_S(cpu, size_cpumask, cpumasks[idx].mask);
+
+	return LPMD_SUCCESS;
+}
+
+int cpumask_init_cpus(char *buf, enum cpumask_idx idx)
+{
+	unsigned int start, end;
+	char *next;
+	int nr_cpus = 0;
+
+	if (buf[0] == '\0')
+		return 0;
+
+	next = buf;
+
+	while (next && *next) {
+		if (*next == '\n')
+			*next = '\0';
+		next++;
+	}
+	next = buf;
+
+	while (next && *next) {
+		if (*next == '\n')
+			*next = '\0';
+
+		if (*next == '-') /* no negative cpu numbers */
+			goto error;
+
+		start = strtoul (next, &next, 10);
+
+		cpumask_add_cpu (start, idx);
+		nr_cpus++;
+
+		if (*next == '\0')
+			break;
+
+		if (*next == ',') {
+			next += 1;
+			continue;
+		}
+
+		if (*next == '-') {
+			next += 1; /* start range */
+		}
+		else if (*next == '.') {
+			next += 1;
+			if (*next == '.')
+				next += 1; /* start range */
+			else
+				goto error;
+		}
+
+		end = strtoul (next, &next, 10);
+		if (end <= start)
+			goto error;
+
+		while (++start <= end) {
+			cpumask_add_cpu (start, idx);
+			nr_cpus++;
+		}
+
+		if (*next == ',')
+			next += 1;
+		else if (*next != '\0')
+			goto error;
+	}
+
+	return nr_cpus;
+error:
+	lpmd_log_error ("CPU string malformed: %s\n", buf);
+	return -1;
+}
+
+int cpumask_nr_cpus(enum cpumask_idx idx)
+{
+	if (idx == CPUMASK_NONE)
+		return 0;
+
+	if (!cpumasks[idx].mask)
+		return 0;
+
+	return CPU_COUNT_S(size_cpumask, cpumasks[idx].mask);
+}
+
+int cpumask_has_cpu(enum cpumask_idx idx)
+{
+	return cpumask_nr_cpus(idx);
+}
+
+int cpumask_equal(enum cpumask_idx idx1, enum cpumask_idx idx2)
+{
+	if (!cpumasks[idx1].mask || !cpumasks[idx2].mask)
+		return 0;
+
+	if (CPU_EQUAL_S(size_cpumask, cpumasks[idx1].mask, cpumasks[idx2].mask))
+		return 1;
+
+	return 0;
+}
+
+void cpumask_copy(enum cpumask_idx source, enum cpumask_idx dest)
+{
+	int i;
+
+	cpumask_reset(dest);
+	for (i = 0; i < topo_max_cpus; i++) {
+		if (!CPU_ISSET_S(i, size_cpumask, cpumasks[source].mask))
+			continue;
+
+		cpumask_add_cpu(i, dest);
+	}
+}
+
+void cpumask_exclude_copy(enum cpumask_idx source, enum cpumask_idx dest, enum cpumask_idx exlude)
+{
+	int i;
+
+	cpumask_reset(dest);
+	for (i = 0; i < topo_max_cpus; i++) {
+		if (!CPU_ISSET_S(i, size_cpumask, cpumasks[source].mask))
+			continue;
+
+		if (CPU_ISSET_S(i, size_cpumask, cpumasks[exlude].mask))
+			continue;
+
+	}
 }
 
 static int cpumask_to_str(cpu_set_t *mask, char *buf, int length)
@@ -198,7 +356,7 @@ static char to_hexchar(int val)
 	return val - 10 + 'a';
 }
 
-int cpumask_to_hexstr(cpu_set_t *mask, char *str, int size)
+static int cpumask_to_hexstr(cpu_set_t *mask, char *str, int size)
 {
 	int cpu;
 	int i;
@@ -271,18 +429,6 @@ static char* get_cpus_hexstr(enum cpumask_idx idx)
 	return cpumasks[idx].hexstr;
 }
 
-int cpumask_to_str_reverse(cpu_set_t *mask, char *buf, int size)
-{
-	cpu_set_t *tmp;
-
-	alloc_cpu_set (&tmp);
-	CPU_XOR_S(size_cpumask, tmp, mask, cpumasks[CPUMASK_ONLINE].mask);
-	cpumask_to_str (tmp, buf, size);
-	CPU_FREE(tmp);
-
-	return 0;
-}
-
 static char* get_cpus_str_reverse(enum cpumask_idx idx)
 {
 	cpu_set_t *mask;
@@ -353,102 +499,6 @@ set_val: if (j == 7) {
 	return cpumasks[idx].hexvals;
 }
 
-int is_equal(enum cpumask_idx idx1, enum cpumask_idx idx2)
-{
-	if (!cpumasks[idx1].mask || !cpumasks[idx2].mask)
-		return 0;
-
-	if (CPU_EQUAL_S(size_cpumask, cpumasks[idx1].mask, cpumasks[idx2].mask))
-		return 1;
-
-	return 0;
-}
-
-int cpumask_nr_cpus(enum cpumask_idx idx)
-{
-	if (!cpumasks[idx].mask)
-		return 0;
-
-	return CPU_COUNT_S(size_cpumask, cpumasks[idx].mask);
-}
-
-int has_cpus(enum cpumask_idx idx)
-{
-	if (idx == CPUMASK_MAX)
-		return 0;
-
-	if (!cpumasks[idx].mask)
-		return 0;
-
-	return CPU_COUNT_S(size_cpumask, cpumasks[idx].mask);
-}
-
-int add_cpu(int cpu, enum cpumask_idx idx)
-{
-	if (idx != CPUMASK_ONLINE && !is_cpu_online (cpu))
-		return 0;
-
-	if (!cpumasks[idx].mask)
-		alloc_cpu_set (&cpumasks[idx].mask);
-
-	CPU_SET_S(cpu, size_cpumask, cpumasks[idx].mask);
-
-	return LPMD_SUCCESS;
-}
-
-void reset_cpus(enum cpumask_idx idx)
-{
-	if (cpumasks[idx].mask)
-		CPU_ZERO_S(size_cpumask, cpumasks[idx].mask);
-	free (cpumasks[idx].str);
-	free (cpumasks[idx].str_reverse);
-	free (cpumasks[idx].hexstr);
-	free (cpumasks[idx].hexstr_reverse);
-	free (cpumasks[idx].hexvals);
-	cpumasks[idx].str = NULL;
-	cpumasks[idx].str_reverse = NULL;
-	cpumasks[idx].hexstr = NULL;
-	cpumasks[idx].hexstr_reverse = NULL;
-	cpumasks[idx].hexvals = NULL;
-}
-
-void copy_cpu_mask(enum cpumask_idx source, enum cpumask_idx dest)
-{
-	int i;
-
-	reset_cpus(dest);
-	for (i = 0; i < topo_max_cpus; i++) {
-		if (!CPU_ISSET_S(i, size_cpumask, cpumasks[source].mask))
-			continue;
-
-		add_cpu(i, dest);
-	}
-}
-
-void copy_cpu_mask_exclude(enum cpumask_idx source, enum cpumask_idx dest, enum cpumask_idx exlude)
-{
-	int i;
-
-	reset_cpus(dest);
-	for (i = 0; i < topo_max_cpus; i++) {
-		if (!CPU_ISSET_S(i, size_cpumask, cpumasks[source].mask))
-			continue;
-
-		if (CPU_ISSET_S(i, size_cpumask, cpumasks[exlude].mask))
-			continue;
-
-	}
-}
-
-int set_lpm_cpus(enum cpumask_idx new)
-{
-	if (lpm_cpus_cur == new)
-		return 0;
-
-	lpm_cpus_cur = new;
-	return 0;
-}
-
 char *get_proc_irq_str(enum cpumask_idx idx)
 {
 	return get_cpus_hexstr(idx);
@@ -471,79 +521,3 @@ uint8_t *get_cgroup_systemd_vals(enum cpumask_idx idx, int *size)
 {
 	return get_cpus_hexvals(idx, size);
 }
-
-/*
- * Detect LPM cpus
- * parse cpuset with following syntax
- * 1,2,4..6,8-10 and set bits in cpu_subset
- */
-int parse_cpu_str(char *buf, enum cpumask_idx idx)
-{
-	unsigned int start, end;
-	char *next;
-	int nr_cpus = 0;
-
-	if (buf[0] == '\0')
-		return 0;
-
-	next = buf;
-
-	while (next && *next) {
-		if (*next == '\n')
-			*next = '\0';
-		next++;
-	}
-	next = buf;
-
-	while (next && *next) {
-		if (*next == '\n')
-			*next = '\0';
-
-		if (*next == '-') /* no negative cpu numbers */
-			goto error;
-
-		start = strtoul (next, &next, 10);
-
-		add_cpu (start, idx);
-		nr_cpus++;
-
-		if (*next == '\0')
-			break;
-
-		if (*next == ',') {
-			next += 1;
-			continue;
-		}
-
-		if (*next == '-') {
-			next += 1; /* start range */
-		}
-		else if (*next == '.') {
-			next += 1;
-			if (*next == '.')
-				next += 1; /* start range */
-			else
-				goto error;
-		}
-
-		end = strtoul (next, &next, 10);
-		if (end <= start)
-			goto error;
-
-		while (++start <= end) {
-			add_cpu (start, idx);
-			nr_cpus++;
-		}
-
-		if (*next == ',')
-			next += 1;
-		else if (*next != '\0')
-			goto error;
-	}
-
-	return nr_cpus;
-error:
-	lpmd_log_error ("CPU string malformed: %s\n", buf);
-	return -1;
-}
-
