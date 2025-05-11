@@ -342,6 +342,9 @@ int lpmd_main(void)
 
 	lpmd_log_debug ("lpmd_main begin\n");
 
+	/* Remove previous cgroup setting, if there is any */
+	cgroup_exit();
+	
 	ret = check_cpu_capability(&lpmd_config);
 	if (ret)
 		return ret;
@@ -353,7 +356,11 @@ int lpmd_main(void)
 
 	pthread_mutex_init (&lpmd_mutex, NULL);
 
-	ret = cpu_init(lpmd_config.lp_mode_cpus, lpmd_config.mode, lpmd_config.lp_mode_epp);
+	ret = cpu_init(lpmd_config.lp_mode_cpus);
+	if (ret)
+		return ret;
+
+	ret = cgroup_init(&lpmd_config);
 	if (ret)
 		return ret;
 

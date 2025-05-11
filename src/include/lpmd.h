@@ -323,10 +323,14 @@ int process_epp_epb(lpmd_config_state_t *state);
 int irq_init(void);
 int process_irq(lpmd_config_state_t *state);
 
+/* lpmd_cgroup.c*/
+int cgroup_init(lpmd_config_t *config);
+int cgroup_exit(void);
+int process_cgroup(lpmd_config_state_t *state, enum lpm_cpu_process_mode mode);
+
+
 /* lpmd_cpu.c */
-int cpu_init(char *cmd_cpus, enum lpm_cpu_process_mode mode, int lp_mode_epp);
-int cpu_exit(void);
-int process_cpus(lpmd_config_state_t *state, enum lpm_cpu_process_mode mode);
+int cpu_init(char *cmd_cpus);
 
 int check_cpu_capability(lpmd_config_t *lpmd_config);
 
@@ -356,7 +360,8 @@ int check_cpu_hotplug(void);
 
 char *get_proc_irq_str(enum cpumask_idx idx);
 char *get_irqbalance_str(enum cpumask_idx idx);
-
+char *get_cpu_isolation_str(enum cpumask_idx idx);
+int get_cgroup_systemd_vals(enum cpumask_idx idx, uint8_t *vals, int size);
 
 /* socket.c */
 int socket_init_connection(char *name);

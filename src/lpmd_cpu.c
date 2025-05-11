@@ -286,7 +286,7 @@ static char* get_cpus_str_reverse(enum cpumask_idx idx)
 	return cpumasks[idx].str_reverse;
 }
 
-static int get_cpus_hexvals(enum cpumask_idx idx, uint8_t *vals, int size)
+int get_cpus_hexvals(enum cpumask_idx idx, uint8_t *vals, int size)
 {
 	int i, j, k;
 	uint8_t v = 0;
@@ -464,6 +464,19 @@ char *get_proc_irq_str(enum cpumask_idx idx)
 char *get_irqbalance_str(enum cpumask_idx idx)
 {
 	return get_cpus_str_reverse(idx);
+}
+
+char *get_cpu_isolation_str(enum cpumask_idx idx)
+{
+	if (idx == CPUMASK_ONLINE)
+		return get_cpus_str(idx);
+	else
+		return get_cpus_str_reverse(idx);
+}
+
+int get_cgroup_systemd_vals(enum cpumask_idx idx, uint8_t *vals, int size)
+{
+	return get_cpus_hexvals(idx, vals, size);
 }
 
 static int uevent_fd = -1;
@@ -1073,13 +1086,13 @@ finish: if (ret >= 0) {
 
 static int restore_systemd_cgroup(void)
 {
-	int size = topo_max_cpus / 8;
+	int size = get_max_cpus() / 8;
 	uint8_t *vals;
 
 	vals = calloc (size, 1);
 	if (!vals)
 		return -1;
-	get_cpus_hexvals (CPUMASK_ONLINE, vals, size);
+	get_cgroup_systemd_vals(CPUMASK_ONLINE, vals, size);
 	update_allowed_cpus ("system.slice", vals, size);
 	update_allowed_cpus ("user.slice", vals, size);
 	update_allowed_cpus ("machine.slice", vals, size);
@@ -1089,14 +1102,14 @@ static int restore_systemd_cgroup(void)
 
 static int update_systemd_cgroup(lpmd_config_state_t *state)
 {
-	int size = topo_max_cpus / 8;
+	int size = get_max_cpus() / 8;
 	uint8_t *vals;
 	int ret;
 
 	vals = calloc (size, 1);
 	if (!vals)
 		return -1;
-	get_cpus_hexvals (state->cpumask_idx, vals, size);
+	get_cgroup_systemd_vals(state->cpumask_idx, vals, size);
 
 	ret = update_allowed_cpus ("system.slice", vals, size);
 	if (ret)
@@ -1118,11 +1131,6 @@ restore: free (vals);
 	return ret;
 }
 
-static int check_cpu_cgroupv2_support(void)
-{
-	return lpmd_write_str (PATH_CG2_SUBTREE_CONTROL, "+cpuset", LPMD_LOG_DEBUG);
-}
-
 static int process_cpu_cgroupv2(lpmd_config_state_t *state)
 {
 	if (is_equal(state->cpumask_idx, CPUMASK_ONLINE)) {
@@ -1134,66 +1142,6 @@ static int process_cpu_cgroupv2(lpmd_config_state_t *state)
 		return update_systemd_cgroup(state);
 	}
 }
-
-/* Support for cgroup based cpu isolation */
-static int process_cpu_isolate(lpmd_config_state_t *state)
-{
-	if (lpmd_write_str ("/sys/fs/cgroup/lpm/cpuset.cpus.partition", "member", LPMD_LOG_DEBUG))
-		return 1;
-
-	if (!is_equal(state->cpumask_idx, CPUMASK_ONLINE)) {
-		if (lpmd_write_str ("/sys/fs/cgroup/lpm/cpuset.cpus", get_cpus_str_reverse (lpm_cpus_cur), LPMD_LOG_DEBUG))
-			return 1;
-		if (lpmd_write_str ("/sys/fs/cgroup/lpm/cpuset.cpus.partition", "isolated", LPMD_LOG_DEBUG))
-			return 1;
-	} else {
-		if (lpmd_write_str ("/sys/fs/cgroup/lpm/cpuset.cpus", get_cpus_str (CPUMASK_ONLINE), LPMD_LOG_DEBUG))
-			return 1;
-	}
-
-	return 0;
-}
-
-static int check_cpu_isolate_support(void)
-{
-	int ret;
-
-	ret = check_cpu_cgroupv2_support ();
-	if (ret)
-		return ret;
-		
-	ret = mkdir ("/sys/fs/cgroup/lpm", 0744);
-	if (ret)
-		lpmd_log_error ("Can't create dir:%s errno:%d\n", "/sys/fs/cgroup/lpm", errno);
-
-	return ret;
-}
-
-static int check_cpu_mode_support(enum lpm_cpu_process_mode mode)
-{
-	int ret;
-
-	switch (mode) {
-		case LPM_CPU_OFFLINE:
-		case LPM_CPU_POWERCLAMP:
-			ret = -1;
-			break;
-		case LPM_CPU_CGROUPV2:
-			ret = check_cpu_cgroupv2_support ();
-			break;
-		case LPM_CPU_ISOLATE:
-			ret = check_cpu_isolate_support ();
-			break;
-		default:
-			lpmd_log_error ("Invalid CPU process mode %d\n", mode);
-			exit (-1);
-	}
-	if (ret)
-		lpmd_log_error ("Mode %d not supported\n", mode);
-
-	return ret;
-}
-
 #define PATH_RAPL	"/sys/class/powercap"
 static int get_tdp(void)
 {
@@ -1255,18 +1203,6 @@ static int get_tdp(void)
 	return tdp / 1000000;
 }
 
-int cpu_exit(void)
-{
-	DIR *dir;
-
-	dir = opendir("/sys/fs/cgroup/lpm");
-	if (dir) {
-		closedir(dir);
-		rmdir("/sys/fs/cgroup/lpm");
-	}
-	return 0;
-}
-
 int check_cpu_capability(lpmd_config_t *lpmd_config)
 {
 	FILE *filep;
@@ -1275,8 +1211,6 @@ int check_cpu_capability(lpmd_config_t *lpmd_config)
 	int ret;
 	int pcores, ecores, lcores;
 	int tdp;
-
-	cpu_exit();
 
 	ret = detect_supported_cpu(lpmd_config);
 	if (ret) {
@@ -1328,44 +1262,7 @@ int check_cpu_capability(lpmd_config_t *lpmd_config)
 	return 0;
 }
 
-int cpu_init(char *cmd_cpus, enum lpm_cpu_process_mode mode, int epp)
+int cpu_init(char *cmd_cpus)
 {
-	int ret;
-
-	ret = detect_lpm_cpus (cmd_cpus);
-	if (ret)
-		return ret;
-
-	ret = check_cpu_mode_support (mode);
-	if (ret)
-		return ret;
-
-	return 0;
-}
-
-int process_cpus(lpmd_config_state_t *state, enum lpm_cpu_process_mode mode)
-{
-	int ret;
-
-	if (state->cpumask_idx == CPUMASK_NONE) {
-		lpmd_log_info ("Ignore Task migration\n");
-		return 0;
-	}
-
-	lpmd_log_info ("Process CPUs ...\n");
-	switch (mode) {
-		case LPM_CPU_POWERCLAMP:
-		case LPM_CPU_OFFLINE:
-			ret = -1;
-			break;
-		case LPM_CPU_CGROUPV2:
-			ret = process_cpu_cgroupv2(state);
-			break;
-		case LPM_CPU_ISOLATE:
-			ret = process_cpu_isolate(state);
-			break;
-		default:
-			exit (-1);
-	}
-	return ret;
+	return detect_lpm_cpus (cmd_cpus);
 }

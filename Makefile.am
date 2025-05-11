@@ -56,6 +56,7 @@ intel_lpmd_SOURCES = \
 	src/lpmd_helpers.c \
 	src/lpmd_hfi.c \
 	src/lpmd_irq.c \
+	src/lpmd_cgroup.c \
 	src/lpmd_socket.c \
 	src/lpmd_util.c \
 	src/lpmd_wlt.c \
