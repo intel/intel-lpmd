@@ -375,15 +375,69 @@ end:
 	return 0;
 }
 
+
+static void lpmd_dump_states(lpmd_config_t *lpmd_config)
+{
+	int i;
+	lpmd_config_state_t *state;
+
+	if (!lpmd_config)
+		return;
+
+	lpmd_log_info ("Mode:%d\n", lpmd_config->mode);
+	lpmd_log_info ("HFI LPM Enable:%d\n", lpmd_config->hfi_lpm_enable);
+	lpmd_log_info ("WLT Hint Enable:%d\n", lpmd_config->wlt_hint_enable);
+	lpmd_log_info ("WLT Proxy Enable:%d\n", lpmd_config->wlt_proxy_enable);
+	lpmd_log_info ("WLT Proxy Enable:%d\n", lpmd_config->wlt_hint_poll_enable);
+	lpmd_log_info ("Util entry threshold:%d\n", lpmd_config->util_entry_threshold);
+	lpmd_log_info ("Util exit threshold:%d\n", lpmd_config->util_exit_threshold);
+	lpmd_log_info ("Util LP Mode CPUs:%s\n", lpmd_config->lp_mode_cpus);
+	lpmd_log_info ("EPP in LP Mode:%d\n", lpmd_config->lp_mode_epp);
+	lpmd_log_info ("CPU Family:%d\n", lpmd_config->cpu_family);
+	lpmd_log_info ("CPU Model:%d\n", lpmd_config->cpu_model);
+	lpmd_log_info ("CPU Config:%s\n", lpmd_config->cpu_config);
+
+	for (i = 0; i < MAX_STATES; ++i) {
+		state = &lpmd_config->config_states[i];
+
+		if (!state->valid)
+			continue;
+
+		lpmd_log_info ("ID:%d\n", state->id);
+		lpmd_log_info ("\tName:%s\n", state->name);
+		lpmd_log_info ("\tentry_system_load_thres:%d\n", state->entry_system_load_thres);
+		lpmd_log_info ("\texit_system_load_thres:%d\n", state->exit_system_load_thres);
+		lpmd_log_info ("\texit_system_load_hyst:%d\n", state->exit_system_load_hyst);
+		lpmd_log_info ("\tentry_cpu_load_thres:%d\n", state->enter_cpu_load_thres);
+		lpmd_log_info ("\texit_cpu_load_thres:%d\n", state->exit_cpu_load_thres);
+		lpmd_log_info ("\tentry_gfx_load_thres:%d\n", state->enter_gfx_load_thres);
+		lpmd_log_info ("\texit_gfx_load_thres:%d\n", state->exit_gfx_load_thres);
+		lpmd_log_info ("\tWLT Type:%d\n", state->wlt_type);
+		lpmd_log_info ("\tmin_poll_interval:%d\n", state->min_poll_interval);
+		lpmd_log_info ("\tmax_poll_interval:%d\n", state->max_poll_interval);
+		lpmd_log_info ("\tpoll_interval_increment:%d\n", state->poll_interval_increment);
+		lpmd_log_info ("\tEPP:%d\n", state->epp);
+		lpmd_log_info ("\tEPB:%d\n", state->epb);
+		lpmd_log_info ("\tITMTState:%d\n", state->itmt_state);
+		lpmd_log_info ("\tIRQMigrate:%d\n", state->irq_migrate);
+		if (state->active_cpus[0] != '\0')
+			lpmd_log_info ("\tactive_cpus:%s\n", state->active_cpus);
+		lpmd_log_info ("\tisland_0_number_p_cores:%d\n", state->island_0_number_p_cores);
+		lpmd_log_info ("\tisland_0_number_e_cores:%d\n", state->island_0_number_e_cores);
+		lpmd_log_info ("\tisland_1_number_p_cores:%d\n", state->island_1_number_p_cores);
+		lpmd_log_info ("\tisland_1_number_e_cores:%d\n", state->island_1_number_e_cores);
+		lpmd_log_info ("\tisland_2_number_p_cores:%d\n", state->island_2_number_p_cores);
+		lpmd_log_info ("\tisland_2_number_e_cores:%d\n", state->island_2_number_e_cores);
+	}
+}
 #define DEFAULT_POLL_RATE_MS	1000
 
 int lpmd_parse_config_states(lpmd_config_t *lpmd_config)
 {
 	lpmd_config_state_t *state;
-	int nr_state = 0;
 	int i, ret;
 
-	for (i = 0; i < lpmd_config->config_state_count; i++) {
+	for (i = CONFIG_STATE_BASE; i < CONFIG_STATE_BASE + lpmd_config->config_state_count; i++) {
 		state = &lpmd_config->config_states[i];
 
 		if (state->active_cpus[0] != '\0') {
@@ -404,25 +458,37 @@ int lpmd_parse_config_states(lpmd_config_t *lpmd_config)
 		if (state->entry_system_load_thres || state->enter_cpu_load_thres || state->enter_gfx_load_thres)
 			polling_enabled = 1;
 
-		if (!state->min_poll_interval)
+		if (state->min_poll_interval <= 0)
 			state->min_poll_interval = state->max_poll_interval > DEFAULT_POLL_RATE_MS ? DEFAULT_POLL_RATE_MS : state->max_poll_interval;
-		if (!state->max_poll_interval)
+		if (state->max_poll_interval <= 0)
 			state->max_poll_interval = state->min_poll_interval > DEFAULT_POLL_RATE_MS ? state->min_poll_interval : DEFAULT_POLL_RATE_MS;
-		if (!state->poll_interval_increment)
+		if (state->poll_interval_increment <= 0)
 			state->poll_interval_increment = -1;
 
-		state->entry_system_load_thres *= 100;
-		state->enter_cpu_load_thres *= 100;
-		state->exit_cpu_load_thres *= 100;
-		state->enter_gfx_load_thres *= 100;
+		if (state->entry_system_load_thres < 0 || state->entry_system_load_thres > 100)
+			continue;
+		else
+			state->entry_system_load_thres *= 100;
 
-		nr_state++;
+		if (state->enter_cpu_load_thres < 0 || state->enter_cpu_load_thres > 100)
+			continue;
+		else
+			state->enter_cpu_load_thres *= 100;
+
+		if (state->exit_cpu_load_thres < 0 || state->exit_cpu_load_thres > 100)
+			continue;
+		else
+			state->exit_cpu_load_thres *= 100;
+
+		if (state->enter_gfx_load_thres < 0 || state->enter_gfx_load_thres > 100)
+			continue;
+		else
+			state->enter_gfx_load_thres *= 100;
+
+		state->valid = 1;
 	}
 
-	if (nr_state < 1) {
-		lpmd_log_info("%d valid config states found\n", nr_state);
-		return 1;
-	}
+	lpmd_dump_states(lpmd_config);
 
 	return 0;
 }

@@ -25,62 +25,6 @@
 #define CONFIG_FILE_NAME "intel_lpmd_config.xml"
 #define MAX_FILE_NAME_PATH	128
 
-static void lpmd_dump_config(lpmd_config_t *lpmd_config)
-{
-	int i;
-	lpmd_config_state_t *state;
-
-	if (!lpmd_config)
-		return;
-
-	lpmd_log_info ("Mode:%d\n", lpmd_config->mode);
-	lpmd_log_info ("HFI LPM Enable:%d\n", lpmd_config->hfi_lpm_enable);
-	lpmd_log_info ("WLT Hint Enable:%d\n", lpmd_config->wlt_hint_enable);
-	lpmd_log_info ("WLT Proxy Enable:%d\n", lpmd_config->wlt_proxy_enable);
-	lpmd_log_info ("WLT Proxy Enable:%d\n", lpmd_config->wlt_hint_poll_enable);
-	lpmd_log_info ("Util entry threshold:%d\n", lpmd_config->util_entry_threshold);
-	lpmd_log_info ("Util exit threshold:%d\n", lpmd_config->util_exit_threshold);
-	lpmd_log_info ("Util LP Mode CPUs:%s\n", lpmd_config->lp_mode_cpus);
-	lpmd_log_info ("EPP in LP Mode:%d\n", lpmd_config->lp_mode_epp);
-
-	if (!lpmd_config->config_state_count)
-		return;
-
-	lpmd_log_info ("CPU Family:%d\n", lpmd_config->cpu_family);
-	lpmd_log_info ("CPU Model:%d\n", lpmd_config->cpu_model);
-	lpmd_log_info ("CPU Config:%s\n", lpmd_config->cpu_config);
-
-	for (i = 0; i < lpmd_config->config_state_count; ++i) {
-		state = &lpmd_config->config_states[i];
-
-		lpmd_log_info ("ID:%d\n", state->id);
-		lpmd_log_info ("\tName:%s\n", state->name);
-		lpmd_log_info ("\tentry_system_load_thres:%d\n", state->entry_system_load_thres);
-		lpmd_log_info ("\texit_system_load_thres:%d\n", state->exit_system_load_thres);
-		lpmd_log_info ("\texit_system_load_hyst:%d\n", state->exit_system_load_hyst);
-		lpmd_log_info ("\tentry_cpu_load_thres:%d\n", state->enter_cpu_load_thres);
-		lpmd_log_info ("\texit_cpu_load_thres:%d\n", state->exit_cpu_load_thres);
-		lpmd_log_info ("\tentry_gfx_load_thres:%d\n", state->enter_gfx_load_thres);
-		lpmd_log_info ("\texit_gfx_load_thres:%d\n", state->exit_gfx_load_thres);
-		lpmd_log_info ("\tWLT Type:%d\n", state->wlt_type);
-		lpmd_log_info ("\tmin_poll_interval:%d\n", state->min_poll_interval);
-		lpmd_log_info ("\tmax_poll_interval:%d\n", state->max_poll_interval);
-		lpmd_log_info ("\tpoll_interval_increment:%d\n", state->poll_interval_increment);
-		lpmd_log_info ("\tEPP:%d\n", state->epp);
-		lpmd_log_info ("\tEPB:%d\n", state->epb);
-		lpmd_log_info ("\tITMTState:%d\n", state->itmt_state);
-		lpmd_log_info ("\tIRQMigrate:%d\n", state->irq_migrate);
-		if (state->active_cpus[0] != '\0')
-			lpmd_log_info ("\tactive_cpus:%s\n", state->active_cpus);
-		lpmd_log_info ("\tisland_0_number_p_cores:%d\n", state->island_0_number_p_cores);
-		lpmd_log_info ("\tisland_0_number_e_cores:%d\n", state->island_0_number_e_cores);
-		lpmd_log_info ("\tisland_1_number_p_cores:%d\n", state->island_1_number_p_cores);
-		lpmd_log_info ("\tisland_1_number_e_cores:%d\n", state->island_1_number_e_cores);
-		lpmd_log_info ("\tisland_2_number_p_cores:%d\n", state->island_2_number_p_cores);
-		lpmd_log_info ("\tisland_2_number_e_cores:%d\n", state->island_2_number_e_cores);
-	}
-}
-
 static void lpmd_parse_state(xmlDoc *doc, xmlNode *a_node, lpmd_config_state_t *state)
 {
 	xmlNode *cur_node = NULL;
@@ -156,20 +100,6 @@ static void lpmd_parse_state(xmlDoc *doc, xmlNode *a_node, lpmd_config_state_t *
 	}
 }
 
-static int validate_config_state(lpmd_config_t *lpmd_config, lpmd_config_state_t *state)
-{
-	if (!state->enter_gfx_load_thres && (lpmd_config->wlt_hint_enable || lpmd_config->wlt_proxy_enable)) {
-		if (state->wlt_type >=0 && state->wlt_type < WLT_INVALID)
-			state->valid = 1;
-	} else {
-		if ((state->enter_cpu_load_thres > 0 && state->enter_cpu_load_thres <= 100) ||
-		    (state->entry_system_load_thres > 0 && state->entry_system_load_thres <= 100) ||
-		    (state->enter_gfx_load_thres > 0 && state->enter_gfx_load_thres <= 100))
-			state->valid = 1;
-	}
-	return 0;
-}
-
 static int is_wildcard(char *str)
 {
 	if (!str)
@@ -243,7 +173,6 @@ static void lpmd_parse_states(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_
 				if (lpmd_config->config_state_count >= MAX_CONFIG_STATES)
 					break;
 				lpmd_parse_state (doc, cur_node->children, &lpmd_config->config_states[config_state_count]);
-				validate_config_state(lpmd_config, &lpmd_config->config_states[config_state_count]);
 				config_state_count += lpmd_config->config_states[config_state_count].valid;
 			}
 		}
@@ -519,8 +448,6 @@ process_xml:
 	}
 
 	xmlFreeDoc (doc);
-
-	lpmd_dump_config (lpmd_config);
 
 	return LPMD_SUCCESS;
 }
