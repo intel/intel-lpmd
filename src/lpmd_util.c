@@ -376,11 +376,16 @@ static int parse_proc_stat(void)
 
 int util_update(lpmd_config_t *lpmd_config)
 {
-	parse_proc_stat ();
-	parse_gfx_util();
-	lpmd_config->data.util_sys = busy_sys;
-	lpmd_config->data.util_cpu = busy_cpu;
-	lpmd_config->data.util_gfx = busy_gfx;
+	if (lpmd_config->util_sys_enable || lpmd_config->util_cpu_enable) {
+		parse_proc_stat ();
+		lpmd_config->data.util_sys = busy_sys;
+		lpmd_config->data.util_cpu = busy_cpu;
+	}
+
+	if (lpmd_config->util_gfx_enable) {
+		parse_gfx_util();
+		lpmd_config->data.util_gfx = busy_gfx;
+	}
 
 	return 0;
 }

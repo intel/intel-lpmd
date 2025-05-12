@@ -469,8 +469,14 @@ static int config_states_update_config(lpmd_config_t *config)
 		if (state->wlt_type != -1)
 			config->wlt_hint_enable = 1;
 
-		if (state->entry_system_load_thres || state->enter_cpu_load_thres || state->enter_gfx_load_thres)
-			config->util_enable = 1;
+		if (state->entry_system_load_thres)
+			config->util_sys_enable = 1;
+
+		if (state->enter_cpu_load_thres)
+			config->util_cpu_enable = 1;
+
+		if (state->enter_gfx_load_thres)
+			config->util_gfx_enable = 1;
 	}
 	return 0;
 }

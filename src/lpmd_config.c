@@ -380,12 +380,6 @@ err:			xmlFree (tmp_value);
 		}
 	}
 
-	/* use entry_threshold == 0 or exit_threshold == 0 to effectively disable util monitor */
-	if (lpmd_config->util_entry_threshold && lpmd_config->util_exit_threshold)
-		lpmd_config->util_enable = 1;
-	else
-		lpmd_config->util_enable = 0;
-
 	return LPMD_SUCCESS;
 }
 
