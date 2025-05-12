@@ -171,6 +171,7 @@ typedef struct {
 	int entry_load_sys;
 	int entry_load_cpu;
 	int cpumask_idx;
+	int steady;
 }lpmd_config_state_t;
 
 // lpmd config data

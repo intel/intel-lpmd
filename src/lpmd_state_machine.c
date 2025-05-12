@@ -129,6 +129,7 @@ int lpmd_build_default_config_states(lpmd_config_t *config)
 	state->epp = SETTING_RESTORE;
 	state->epb = SETTING_RESTORE;
 	state->cpumask_idx = CPUMASK_ONLINE;
+	state->steady = 1;
 	state->valid = 1;
 
 	state = &config->config_states[DEFAULT_ON];
@@ -140,6 +141,7 @@ int lpmd_build_default_config_states(lpmd_config_t *config)
 	state->epp = config->lp_mode_epp;
 	state->epb = SETTING_IGNORE;
 	state->cpumask_idx = CPUMASK_LPM_DEFAULT;
+	state->steady = 1;
 	state->valid = 1;
 
 	if (config->config_state_count)
@@ -159,6 +161,7 @@ int lpmd_build_default_config_states(lpmd_config_t *config)
 		state->epp = SETTING_IGNORE;
 		state->epb = SETTING_IGNORE;
 		state->cpumask_idx = CPUMASK_HFI;
+		state->steady = 0;
 		state->valid = 1;
 	
 		config->config_state_count = 1;
@@ -183,6 +186,7 @@ int lpmd_build_default_config_states(lpmd_config_t *config)
 	state->epp = config->lp_mode_epp;
 	state->epb = SETTING_IGNORE;
 	state->cpumask_idx = CPUMASK_LPM_DEFAULT;
+	state->steady = 1;
 	state->valid = 1;
 
 	state = &config->config_states[CONFIG_STATE_BASE + 1];
@@ -198,13 +202,14 @@ int lpmd_build_default_config_states(lpmd_config_t *config)
 	state->epp = config->lp_mode_epp == SETTING_IGNORE ? SETTING_IGNORE : SETTING_RESTORE;
 	state->epb = SETTING_IGNORE;
 	state->cpumask_idx = CPUMASK_ONLINE;
+	state->steady = 1;
 	state->valid = 1;
 
 	config->config_state_count = 2;
 	return 0;
 }
 
-static int current_idx = STATE_NONE;
+static int current_idx = DEFAULT_OFF;
 
 static int config_state_match(lpmd_config_t *config, int idx)
 {
@@ -325,9 +330,22 @@ static int get_state_interval(lpmd_config_t *config, int idx)
 	}
 }
 
+static int need_enter(lpmd_config_t *config, int idx)
+{
+	if (idx != current_idx)
+		return 1;
+	if (!config->config_states[idx].steady)
+		return 1;
+
+	return 0;
+}
+
 static int enter_state(lpmd_config_t *config, int idx)
 {
 	lpmd_config_state_t *state = &config->config_states[idx];
+
+	if (!need_enter(config, idx))
+		return 0;
 
 	state->entry_load_sys = config->data.util_sys;
 	state->entry_load_cpu = config->data.util_cpu;
@@ -487,6 +505,7 @@ int lpmd_parse_config_states(lpmd_config_t *lpmd_config)
 		else
 			state->enter_gfx_load_thres *= 100;
 
+		state->steady = 1;
 		state->valid = 1;
 	}
 
