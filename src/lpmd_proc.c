@@ -373,9 +373,7 @@ int lpmd_main(void)
 		lpmd_config.hfi_lpm_enable = 0;
 
 	/* Must done after init_cpu() */
-	lpmd_build_default_config_states(&lpmd_config);
-
-	lpmd_parse_config_states(&lpmd_config);
+	lpmd_build_config_states(&lpmd_config);
 
 	ret = irq_init();
 	if (ret)
