@@ -98,6 +98,7 @@ int lpmd_init_config_state(lpmd_config_state_t *state)
 	state->epp = SETTING_IGNORE;
 	state->epb = SETTING_IGNORE;
 	state->active_cpus[0] = '\0';
+	state->cpumask_idx = CPUMASK_NONE;
 
 	state->island_0_number_p_cores = 0;
 	state->island_0_number_e_cores = 0;
@@ -348,6 +349,7 @@ static void dump_states(lpmd_config_t *lpmd_config)
 		lpmd_log_info ("\tIRQMigrate:%d\n", state->irq_migrate);
 		if (state->active_cpus[0] != '\0')
 			lpmd_log_info ("\tactive_cpus:%s\n", state->active_cpus);
+		lpmd_log_info ("\tCPUMASK idx:%d\n", state->cpumask_idx);
 		lpmd_log_info ("\tisland_0_number_p_cores:%d\n", state->island_0_number_p_cores);
 		lpmd_log_info ("\tisland_0_number_e_cores:%d\n", state->island_0_number_e_cores);
 		lpmd_log_info ("\tisland_1_number_p_cores:%d\n", state->island_1_number_p_cores);
@@ -450,6 +452,29 @@ static int build_default_states(lpmd_config_t *config)
 	return 0;
 }
 
+static int build_state_cpumask(lpmd_config_state_t *state)
+{
+	if (state->cpumask_idx != CPUMASK_NONE)
+		return 0;
+
+	if (state->active_cpus[0] == '\0')
+		return 0;
+
+	state->cpumask_idx = cpumask_alloc();
+	if (state->cpumask_idx == CPUMASK_NONE) {
+		lpmd_log_error("Cannot alloc CPUMASK\n");
+		return -1;
+	}
+
+	if (cpumask_init_cpus(state->active_cpus, state->cpumask_idx) <= 0) {
+		cpumask_free(state->cpumask_idx);
+		lpmd_log_error("Cannot parse cpumask string: %s\n", state->active_cpus);
+		return -1;
+	}
+
+	return 0;
+}
+
 #define DEFAULT_POLL_RATE_MS	1000
 
 int lpmd_build_config_states(lpmd_config_t *lpmd_config)
@@ -459,24 +484,11 @@ int lpmd_build_config_states(lpmd_config_t *lpmd_config)
 
 	build_default_states(lpmd_config);
 
-	/* Build user defined config states */
 	for (i = CONFIG_STATE_BASE; i < CONFIG_STATE_BASE + lpmd_config->config_state_count; i++) {
 		state = &lpmd_config->config_states[i];
 
-		if (state->active_cpus[0] != '\0') {
-			state->cpumask_idx = cpumask_alloc();
-			if (state->cpumask_idx == CPUMASK_NONE) {
-				lpmd_log_error("Cannot alloc CPUMASK\n");
-				return -1;
-			}
-			ret = cpumask_init_cpus(state->active_cpus, state->cpumask_idx);
-			if (ret <= 0) {
-				state->valid = 0;
-				continue;
-			}
-		} else {
-			state->cpumask_idx = CPUMASK_NONE;
-		}
+		if (build_state_cpumask(state))
+			continue;
 
 		if (state->entry_system_load_thres || state->enter_cpu_load_thres || state->enter_gfx_load_thres)
 			polling_enabled = 1;

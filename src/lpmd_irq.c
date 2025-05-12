@@ -228,6 +228,8 @@ int process_irq(lpmd_config_state_t *state)
 				irqbalance_ban_cpus("NULL");
 			return 0;
 		default:
+			if (state->cpumask_idx == CPUMASK_NONE)
+				return 0;
 			if (irqbalance_pid == -1)
 				native_update_irqs(get_proc_irq_str(state->cpumask_idx));
 			else
