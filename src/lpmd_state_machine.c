@@ -349,6 +349,7 @@ int lpmd_enter_next_state(void)
 	lpmd_config_t *config = get_lpmd_config();
 	int idx = current_idx;
 
+	lpmd_log_debug("lpmd_enter_next_state\n");
 	lpmd_lock();
 
 	if (lpmd_state == LPMD_FREEZE) {
@@ -358,12 +359,13 @@ int lpmd_enter_next_state(void)
 	}
 
 	idx = choose_next_state(config);
+	lpmd_log_debug("choose_next_state: %d\n", idx);
 	/* No action needed, keep previous idx and interval */
 	if (idx == STATE_NONE)
 		goto end;
 
 	get_state_interval(config, idx);
-
+	lpmd_log_debug("get_state_interval: %d\n", config->data.polling_interval);
 	enter_state(config, idx);
 
 	current_idx = idx;
