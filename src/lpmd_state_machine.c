@@ -460,6 +460,24 @@ static int build_state_cpumask(lpmd_config_state_t *state)
 	if (state->active_cpus[0] == '\0')
 		return 0;
 
+	if (!strncmp(state->active_cpus, "all", sizeof("all")) ||
+	    !strncmp(state->active_cpus, "ALL", sizeof("ALL"))) {
+		state->cpumask_idx = CPUMASK_ONLINE;
+		return 0;
+	}
+
+	if (!strncmp(state->active_cpus, "lp", sizeof("lp")) ||
+	    !strncmp(state->active_cpus, "LP", sizeof("LP"))) {
+		state->cpumask_idx = CPUMASK_LPM_DEFAULT;
+		return 0;
+	}
+
+	if (!strncmp(state->active_cpus, "hfi", sizeof("hfi")) ||
+	    !strncmp(state->active_cpus, "HFI", sizeof("HFI"))) {
+		state->cpumask_idx = CPUMASK_HFI;
+		return 0;
+	}
+
 	state->cpumask_idx = cpumask_alloc();
 	if (state->cpumask_idx == CPUMASK_NONE) {
 		lpmd_log_error("Cannot alloc CPUMASK\n");
