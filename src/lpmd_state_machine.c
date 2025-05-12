@@ -39,6 +39,15 @@
 static int lpmd_state = LPMD_OFF;
 static int saved_lpmd_state = LPMD_OFF;
 
+static char *lpmd_state_name[] = {
+	[LPMD_ON]		= "     ON",
+	[LPMD_OFF]		= "    OFF",
+	[LPMD_AUTO]		= "   AUTO",
+	[LPMD_FREEZE]		= " FREEZE",
+	[LPMD_RESTORE]		= "RESTORE",
+	[LPMD_TERMINATE]	= "   TERM",
+};
+
 int update_lpmd_state(int new)
 {
 	lpmd_lock();
@@ -270,12 +279,97 @@ end:
 	return 0;
 }
 
+static void dump_state(lpmd_config_state_t *state)
+{
+	char buf[MAX_STR_LENGTH];
+	int offset = 0;
+
+	if (!in_debug_mode())
+		return;
+
+	offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "[Config] [%s] [%s]: ", lpmd_state_name[lpmd_state], state->name);
+
+	if (state->wlt_type)
+		offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "WLT [%2d] ", state->wlt_type);
+
+	if (state->entry_system_load_thres)
+		offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "SYS [%6d] ", state->entry_system_load_thres / 100);
+
+	if (state->enter_cpu_load_thres)
+		offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "CPU [%6d] ", state->enter_cpu_load_thres / 100);
+
+	if (state->enter_gfx_load_thres)
+		offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "GFX [%6d] ", state->enter_gfx_load_thres / 100);
+
+	offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "CPUMASK [%d] ", state->cpumask_idx);
+	offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "IRQ [%d] ", state->irq_migrate);
+	offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "ITMT [%d] ", state->itmt_state);
+	offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "EPB [%d] ", state->epb);
+	offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "EPP [%d] ", state->epp);
+
+	lpmd_log_debug("%s\n", buf);
+}
+
+static void dump_data(lpmd_config_t *config, int idx)
+{
+	char buf[MAX_STR_LENGTH];
+	char epp_str[32];
+	int epp, epb;
+	int offset = 0;
+	lpmd_config_state_t *state = &config->config_states[idx];
+
+	if (!in_debug_mode())
+		return;
+
+	offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "[Data  ] [%s] [%s]: ", lpmd_state_name[lpmd_state], state->name);
+
+	if (config->wlt_hint_enable)
+		offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "WLT [%2d] ", config->data.wlt_hint);
+
+	if (config->util_sys_enable)
+		if (config->data.util_sys == -1)
+			offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "SYS [   N/A] ");
+		else
+			offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "SYS [%3d.%02d] ", config->data.util_sys / 100, config->data.util_sys % 100);
+
+	if (config->util_cpu_enable)
+		if (config->data.util_cpu == -1)
+			offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "CPU [   N/A] ");
+		else
+			offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "CPU [%3d.%02d] ", config->data.util_cpu / 100, config->data.util_cpu % 100);
+
+	if (config->util_gfx_enable)
+		if (config->data.util_gfx == -1)
+			offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "GFX [   N/A] ");
+		else
+			offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "GFX [%3d.%02d] ", config->data.util_gfx / 100, config->data.util_gfx % 100);
+
+	if (state->cpumask_idx != CPUMASK_NONE)
+		offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "CPUMASK [%s] ", get_cpus_hexstr(state->cpumask_idx));
+	else
+		offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "CPUMASK [%s] ", get_cpus_hexstr(CPUMASK_ONLINE));
+
+	offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "ITMT [%d] ", get_itmt());
+
+	get_epp_epb(&epp, epp_str, 32, &epb);
+	if (epp == -1)
+		offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "EPB [%d] EPP[%s] ", epb, epp_str);
+	else
+		offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "EPB [%d] EPP[%d] ", epb, epp);
+
+	if (config->hfi_lpm_enable)
+		offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "HFI [%c] ", config->data.has_hfi_update ? 'Y' : 'N');
+
+	offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "Interval [%d]", config->data.polling_interval);
+
+	lpmd_log_debug("%s\n", buf);
+}
+
 int lpmd_enter_next_state(void)
 {
 	lpmd_config_t *config = get_lpmd_config();
 	int idx = current_idx;
 
-	lpmd_log_debug("lpmd_enter_next_state\n");
 	lpmd_lock();
 
 	if (lpmd_state == LPMD_FREEZE) {
@@ -285,19 +379,20 @@ int lpmd_enter_next_state(void)
 	}
 
 	idx = choose_next_state(config);
-	lpmd_log_debug("choose_next_state: %d\n", idx);
 	/* No action needed, keep previous idx and interval */
 	if (idx == STATE_NONE)
 		goto end;
 
 	get_state_interval(config, idx);
-	lpmd_log_debug("get_state_interval: %d\n", config->data.polling_interval);
+
 	enter_state(config, idx);
 
 	current_idx = idx;
 	config->data.has_hfi_update = 0;
+	dump_state(&config->config_states[idx]);
 
 end:
+	dump_data(config, current_idx);
 	lpmd_unlock();
 
 	return 0;
@@ -316,6 +411,7 @@ static void dump_states(lpmd_config_t *lpmd_config)
 	lpmd_log_info ("WLT Hint Enable:%d\n", lpmd_config->wlt_hint_enable);
 	lpmd_log_info ("WLT Proxy Enable:%d\n", lpmd_config->wlt_proxy_enable);
 	lpmd_log_info ("WLT Proxy Enable:%d\n", lpmd_config->wlt_hint_poll_enable);
+	lpmd_log_info ("Util Enable:%d\n", lpmd_config->util_enable);
 	lpmd_log_info ("Util entry threshold:%d\n", lpmd_config->util_entry_threshold);
 	lpmd_log_info ("Util exit threshold:%d\n", lpmd_config->util_exit_threshold);
 	lpmd_log_info ("Util LP Mode CPUs:%s\n", lpmd_config->lp_mode_cpus);

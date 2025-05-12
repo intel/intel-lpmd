@@ -252,11 +252,32 @@ static int proc_message(message_capsul_t *msg)
 
 static void dump_poll_results(int ret)
 {
-	int i;
+	int i = 0;
 
-	lpmd_log_debug("poll_fds[]: ret %d, pipe %d, uevent %d, hfi %d, wlt %d\n", ret, idx_pipe_fd, idx_uevent_fd, idx_hfi_fd, idx_wlt_fd);
-	for (i = 0; i < poll_fd_cnt; i++)
-		lpmd_log_debug("poll_fds[%d]: event %d, revent %d\n", i, poll_fds[i].events, poll_fds[i].revents);
+
+//	if (!in_debug_mode())
+	if (1)
+		return;
+
+	if (idx_pipe_fd != -1) {
+		lpmd_log_debug("poll_fds[%s]: event %d, revent %d\n", "  Pipe", poll_fds[i].events, poll_fds[i].revents);
+		i++;
+	}
+
+	if (idx_uevent_fd != -1) {
+		lpmd_log_debug("poll_fds[%s]: event %d, revent %d\n", "Uevent", poll_fds[i].events, poll_fds[i].revents);
+		i++;
+	}
+
+	if (idx_hfi_fd != -1) {
+		lpmd_log_debug("poll_fds[%s]: event %d, revent %d\n", "   HFI", poll_fds[i].events, poll_fds[i].revents);
+		i++;
+	}
+
+	if (idx_wlt_fd != -1) {
+		lpmd_log_debug("poll_fds[%s]: event %d, revent %d\n", "   WLT", poll_fds[i].events, poll_fds[i].revents);
+		i++;
+	}
 }
 
 // LPMD processing thread. This is callback to pthread lpmd_core_main
@@ -271,7 +292,6 @@ static void* lpmd_core_main_loop(void *arg)
 		if (get_lpmd_state() == LPMD_TERMINATE)
 			break;
 
-		lpmd_log_debug("Poll with interval %d\n", lpmd_config.data.polling_interval);
 		n = poll (poll_fds, poll_fd_cnt, lpmd_config.data.polling_interval);
 		if (n < 0) {
 			lpmd_log_warn ("Write to pipe failed\n");

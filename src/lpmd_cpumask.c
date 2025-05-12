@@ -385,7 +385,7 @@ char* get_cpus_str(enum cpumask_idx idx)
 	return cpumasks[idx].str;
 }
 
-static char* get_cpus_hexstr(enum cpumask_idx idx)
+char* get_cpus_hexstr(enum cpumask_idx idx)
 {
 	if (!cpumasks[idx].mask)
 		return NULL;

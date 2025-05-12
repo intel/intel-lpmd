@@ -31,6 +31,9 @@ int get_itmt(void)
 {
 	int val;
 
+	if (!has_itmt)
+		return -1;
+
 	lpmd_read_int(PATH_ITMT_CONTROL, &val, -1);
 	return val;
 }

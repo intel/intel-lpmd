@@ -189,6 +189,7 @@ typedef struct {
 			uint32_t util_sys_enable:1;
 			uint32_t util_cpu_enable:1;
 			uint32_t util_gfx_enable:1;
+			uint32_t util_reserved:29;
 		};
 		uint32_t util_enable;
 	};
@@ -363,6 +364,7 @@ void cpumask_copy(enum cpumask_idx source, enum cpumask_idx dest);
 void cpumask_exclude_copy(enum cpumask_idx source, enum cpumask_idx dest, enum cpumask_idx exlude);
 
 char *get_cpus_str(enum cpumask_idx idx);
+char* get_cpus_hexstr(enum cpumask_idx idx);
 char *get_proc_irq_str(enum cpumask_idx idx);
 char *get_irqbalance_str(enum cpumask_idx idx);
 char *get_cpu_isolation_str(enum cpumask_idx idx);
