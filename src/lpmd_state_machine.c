@@ -452,6 +452,30 @@ static int build_default_states(lpmd_config_t *config)
 	return 0;
 }
 
+static int config_states_update_config(lpmd_config_t *config)
+{
+	lpmd_config_state_t *state;
+	int i;
+
+	for (i = CONFIG_STATE_BASE; i < CONFIG_STATE_BASE + config->config_state_count; i++) {
+		state = &config->config_states[i];
+
+		if (!state->valid)
+			continue;
+
+		if (state->cpumask_idx == CPUMASK_HFI)
+			config->hfi_lpm_enable = 1;
+
+		if (state->wlt_type != -1)
+			config->wlt_hint_enable = 1;
+
+		if (state->entry_system_load_thres || state->enter_cpu_load_thres || state->enter_gfx_load_thres)
+			config->util_enable = 1;
+	}
+	return 0;
+}
+
+
 static int build_state_cpumask(lpmd_config_state_t *state)
 {
 	if (state->cpumask_idx != CPUMASK_NONE)
@@ -542,6 +566,7 @@ int lpmd_build_config_states(lpmd_config_t *lpmd_config)
 		state->valid = 1;
 	}
 
+	config_states_update_config(lpmd_config);
 	dump_states(lpmd_config);
 
 	return 0;
