@@ -25,15 +25,17 @@
 #define CONFIG_FILE_NAME "intel_lpmd_config.xml"
 #define MAX_FILE_NAME_PATH	128
 
-static void lpmd_parse_state(xmlDoc *doc, xmlNode *a_node, lpmd_config_state_t *state)
+static void lpmd_parse_state(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *config, int idx)
 {
 	xmlNode *cur_node = NULL;
 	char *tmp_value;
 	char *pos;
+	lpmd_config_state_t *state = &config->config_states[idx];
 
 	if (!doc || !a_node || !state)
 		return;
 
+	lpmd_log_debug("lpmd_parse_state: %d\n", idx);
 	lpmd_init_config_state(state);
 
 	for (cur_node = a_node; cur_node; cur_node = cur_node->next) {
@@ -172,11 +174,12 @@ static void lpmd_parse_states(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_
 
 				if (lpmd_config->config_state_count >= MAX_CONFIG_STATES)
 					break;
-				lpmd_parse_state (doc, cur_node->children, &lpmd_config->config_states[config_state_count]);
-				config_state_count += lpmd_config->config_states[config_state_count].valid;
+				lpmd_parse_state (doc, cur_node->children, lpmd_config, CONFIG_STATE_BASE + config_state_count);
+				config_state_count ++;
 			}
 		}
 	}
+	lpmd_log_debug("Found %d config states\n", config_state_count);
 	lpmd_config->config_state_count = config_state_count;
 }
 

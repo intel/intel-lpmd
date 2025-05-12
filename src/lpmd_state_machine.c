@@ -328,8 +328,8 @@ static void dump_states(lpmd_config_t *lpmd_config)
 
 		if (!state->valid)
 			continue;
-
-		lpmd_log_info ("ID:%d\n", state->id);
+		lpmd_log_info ("Index:%d\n", i);
+		lpmd_log_info ("\tID:%d\n", state->id);
 		lpmd_log_info ("\tName:%s\n", state->name);
 		lpmd_log_info ("\tentry_system_load_thres:%d\n", state->entry_system_load_thres);
 		lpmd_log_info ("\texit_system_load_thres:%d\n", state->exit_system_load_thres);
