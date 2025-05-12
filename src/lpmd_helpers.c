@@ -27,6 +27,26 @@
 
 #include "lpmd.h"
 
+int copy_user_string(char *src, char *dst, int size)
+{
+	int offset_src, offset_dst;
+
+	for (offset_src = 0, offset_dst = 0; src[offset_src] != '\0' && offset_src < size; offset_src++) {
+		/* Ignore heading spaces */
+		if (src[offset_src] == ' ' && !offset_dst)
+			continue;
+		dst[offset_dst] = src[offset_src];
+		offset_dst++;
+	}
+	dst[offset_dst] = '\0';
+
+	/* Remove tailing spaces */
+	while (dst[--offset_dst] == ' ')
+		dst[offset_dst] = '\0';
+
+	return 0;
+}
+
 static int _write_str(const char *name, char *str, int print_level, int log_level, const char *mode)
 {
 	FILE *filep;

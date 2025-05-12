@@ -94,7 +94,7 @@ static void lpmd_parse_state(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *config
 					if (!strncmp (tmp_value, "-1", strlen ("-1")))
 						state->active_cpus[0] = '\0';
 					else
-						snprintf (state->active_cpus, sizeof(state->active_cpus), "%s", tmp_value);
+						copy_user_string(tmp_value, state->active_cpus, sizeof(state->active_cpus));
 				}
 				xmlFree(tmp_value);
 			}
@@ -313,8 +313,7 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_co
 					if (!strncmp (tmp_value, "-1", strlen ("-1")))
 						lpmd_config->lp_mode_cpus[0] = '\0';
 					else
-						snprintf (lpmd_config->lp_mode_cpus, sizeof(lpmd_config->lp_mode_cpus),
-									"%s", tmp_value);
+						copy_user_string(tmp_value, lpmd_config->lp_mode_cpus, sizeof(lpmd_config->lp_mode_cpus));
 				}
 				else if (!strncmp((const char*)cur_node->name, "PerformanceDef", strlen ("PerformanceDef"))) {
 					errno = 0;
