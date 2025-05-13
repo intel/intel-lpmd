@@ -257,9 +257,6 @@ static int enter_state(lpmd_config_t *config, int idx)
 {
 	lpmd_config_state_t *state = &config->config_states[idx];
 
-	if (!need_enter(config, idx))
-		return 0;
-
 	state->entry_load_sys = config->data.util_sys;
 	state->entry_load_cpu = config->data.util_cpu;
 	
@@ -381,10 +378,11 @@ int lpmd_enter_next_state(void)
 
 	get_state_interval(config, idx);
 
-	enter_state(config, idx);
-
-	current_idx = idx;
-	dump_state(&config->config_states[idx]);
+	if (need_enter(config, idx)) {
+		enter_state(config, idx);
+		current_idx = idx;
+		dump_state(&config->config_states[idx]);
+	}
 
 end:
 	dump_data(config, current_idx);
@@ -575,6 +573,8 @@ static int config_states_update_config(lpmd_config_t *config)
 
 static int build_state_cpumask(lpmd_config_state_t *state)
 {
+	state->steady = 1;
+
 	if (state->cpumask_idx != CPUMASK_NONE)
 		return 0;
 
@@ -596,6 +596,7 @@ static int build_state_cpumask(lpmd_config_state_t *state)
 	if (!strncmp(state->active_cpus, "hfi", sizeof("hfi")) ||
 	    !strncmp(state->active_cpus, "HFI", sizeof("HFI"))) {
 		state->cpumask_idx = CPUMASK_HFI;
+		state->steady = 0;
 		return 0;
 	}
 
@@ -659,7 +660,7 @@ int lpmd_build_config_states(lpmd_config_t *lpmd_config)
 		else
 			state->enter_gfx_load_thres *= 100;
 
-		state->steady = 1;
+
 		state->valid = 1;
 	}
 
