@@ -112,6 +112,8 @@ free:
 	ret = cpumask_equal(curr, CPUMASK_ONLINE);
 	cpumask_free(curr);
 
+	update_reason(UPDATE_CPUHOTPLUG);
+
 	if (ret)
 		return update_lpmd_state(LPMD_RESTORE);
 

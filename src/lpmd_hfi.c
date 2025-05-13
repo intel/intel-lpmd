@@ -219,7 +219,7 @@ static void process_one_event(int first, int last, int nr)
 			return;
 		}
 		lpmd_log_debug ("\tDetect HFI LPM event\n");
-		config->data.has_hfi_update = 1;
+		update_reason(UPDATE_HFI);
 		cpumask_copy(CPUMASK_HFI, CPUMASK_HFI_LAST);
 	}
 	else if (cpumask_has_cpu(CPUMASK_HFI_BANNED)) {
@@ -230,14 +230,14 @@ static void process_one_event(int first, int last, int nr)
 			return;
 		}
 		lpmd_log_debug ("\tDetect HFI LPM event with banned CPUs\n");
-		config->data.has_hfi_update = 1;
+		update_reason(UPDATE_HFI);
 		cpumask_copy(CPUMASK_HFI, CPUMASK_HFI_LAST);
 	}
 	else if (cpumask_has_cpu(CPUMASK_HFI_LAST)) {
 		lpmd_log_debug ("\tHFI LPM recover\n");
 //		 Don't override the DETECT_LPM_CPU_DEFAULT so it is auto recovered
 		cpumask_copy(CPUMASK_ONLINE, CPUMASK_HFI);
-		config->data.has_hfi_update = 1;
+		update_reason(UPDATE_HFI);
 		cpumask_reset (CPUMASK_HFI_LAST);
 	}
 	else {

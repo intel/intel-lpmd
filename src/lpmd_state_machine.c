@@ -217,12 +217,8 @@ static int choose_next_state(lpmd_config_t *config)
 	 * DEFAULT_HFI is enabled only if HFI monitor is enabled
 	 * and there is no user config states defined in the config file
 	 */
-	if (config->config_states[DEFAULT_HFI].valid) {
-		if (config->data.has_hfi_update)
+	if (config->config_states[DEFAULT_HFI].valid)
 			return DEFAULT_HFI;
-		else
-			return STATE_NONE;
-	}
 
 	/* Choose a config state */
 	for (i = CONFIG_STATE_BASE; i < CONFIG_STATE_BASE + config->config_state_count; ++i) {
@@ -358,7 +354,7 @@ static void dump_data(lpmd_config_t *config, int idx)
 		offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "EPB [%d] EPP[%d] ", epb, epp);
 
 	if (config->hfi_lpm_enable)
-		offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "HFI [%c] ", config->data.has_hfi_update ? 'Y' : 'N');
+		offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "UPDATE [%d] ", config->data.need_update);
 
 	offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "Interval [%d]", config->data.polling_interval);
 
@@ -388,7 +384,6 @@ int lpmd_enter_next_state(void)
 	enter_state(config, idx);
 
 	current_idx = idx;
-	config->data.has_hfi_update = 0;
 	dump_state(&config->config_states[idx]);
 
 end:

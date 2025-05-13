@@ -118,14 +118,21 @@ enum lpmd_states {
 	LPMD_TERMINATE,
 };
 
+enum lpmd_update_reason {
+	UPDATE_USER,
+	UPDATE_UTIL,
+	UPDATE_HFI,
+	UPDATE_CPUHOTPLUG,
+	UPDATE_WLT,
+};
+
 typedef struct {
 	int util_cpu;	/* From Util monitor */
 	int util_sys;	/* From Util monitor */
 	int util_gfx;	/* From Util monitor */
 	int wlt_hint;	/* From WLT monitor */
-	int has_hfi_update;	/* From HFI monitor */
 	int polling_interval;
-	/* active_cpus from HFI monitor but we can leverage CPUMASK_HFI for now */
+	int need_update;
 }lpmd_data_t;
 
 enum default_config_state {
@@ -284,6 +291,7 @@ int get_ppd_mode(void);
 
 /* lpmd_proc.c: init func */
 int lpmd_main(void);
+void update_reason(int reason);
 
 /* lpmd_dbus_server.c */
 int intel_dbus_server_init(gboolean (*exit_handler)(void));

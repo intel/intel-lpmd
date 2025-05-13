@@ -280,6 +280,11 @@ static void dump_poll_results(int ret)
 	}
 }
 
+void update_reason(int reason)
+{
+	lpmd_config.data.need_update |= 1 << reason;
+}
+
 // LPMD processing thread. This is callback to pthread lpmd_core_main
 static void* lpmd_core_main_loop(void *arg)
 {
@@ -301,6 +306,7 @@ static void* lpmd_core_main_loop(void *arg)
 
 		/* Polling time out, update polling data */
 		if (n == 0 && lpmd_config.data.polling_interval > 0) {
+			update_reason(UPDATE_UTIL);
 			util_update(&lpmd_config);
 
 			if (lpmd_config.wlt_proxy_enable)
@@ -319,7 +325,11 @@ static void* lpmd_core_main_loop(void *arg)
 
 		/* Update WLT hint */
 		if (idx_wlt_fd >= 0 && (poll_fds[idx_wlt_fd].revents & POLLPRI)) {
-			lpmd_config.data.wlt_hint = wlt_update(poll_fds[idx_wlt_fd].fd);
+			int wlt_hint = wlt_update(poll_fds[idx_wlt_fd].fd);
+			if (wlt_hint != lpmd_config.data.wlt_hint) {
+				lpmd_config.data.wlt_hint = wlt_hint;
+				update_reason(UPDATE_WLT);
+			}
 		}
 
 		/* Respond Dbus commands */
@@ -337,10 +347,14 @@ static void* lpmd_core_main_loop(void *arg)
 			if (proc_message (&msg) < 0) {
 				lpmd_log_debug ("Terminating thread..\n");
 			}
+			update_reason(UPDATE_USER);
 		}
 
-		/* Enter next state after collecting all system statistics */
-		lpmd_enter_next_state();
+		if (lpmd_config.data.need_update) {
+			/* Enter next state after collecting all system statistics */
+			lpmd_enter_next_state();
+			lpmd_config.data.need_update = 0;
+		}
 	}
 
 	if (lpmd_config.wlt_proxy_enable)
