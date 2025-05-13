@@ -201,6 +201,40 @@ end:
 	return 0;
 }
 
+static void dump_state(lpmd_config_state_t *state, char *str, int debug)
+{
+	char buf[MAX_STR_LENGTH];
+	int offset = 0;
+
+	if (debug && !in_debug_mode())
+		return;
+
+	offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "[%6s] [%s] [%s]: ", str, lpmd_state_name[lpmd_state], state->name);
+
+	if (state->wlt_type)
+		offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "WLT [%2d] ", state->wlt_type);
+
+	if (state->entry_system_load_thres)
+		offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "SYS [%6d] ", state->entry_system_load_thres / 100);
+
+	if (state->enter_cpu_load_thres)
+		offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "CPU [%6d] ", state->enter_cpu_load_thres / 100);
+
+	if (state->enter_gfx_load_thres)
+		offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "GFX [%6d] ", state->enter_gfx_load_thres / 100);
+
+	offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "CPUMASK [%d] ", state->cpumask_idx);
+	offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "IRQ [%d] ", state->irq_migrate);
+	offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "ITMT [%d] ", state->itmt_state);
+	offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "EPB [%d] ", state->epb);
+	offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "EPP [%d] ", state->epp);
+
+	if (debug)
+		lpmd_log_debug("%s\n", buf);
+	else
+		lpmd_log_info("%s\n", buf);
+}
+
 static int choose_next_state(lpmd_config_t *config)
 {
 	int i;
@@ -222,8 +256,11 @@ static int choose_next_state(lpmd_config_t *config)
 
 	/* Choose a config state */
 	for (i = CONFIG_STATE_BASE; i < CONFIG_STATE_BASE + config->config_state_count; ++i) {
-		if (config_state_match(config, i))
+		if (config_state_match(config, i)) {
+			dump_state(&config->config_states[i], "Choose", 1);
 			return i;
+		}
+		dump_state(&config->config_states[i], "Ignore", 1);
 	}
 
 	return STATE_NONE;
@@ -272,37 +309,6 @@ end:
 	return 0;
 }
 
-static void dump_state(lpmd_config_state_t *state)
-{
-	char buf[MAX_STR_LENGTH];
-	int offset = 0;
-
-	if (!in_debug_mode())
-		return;
-
-	offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "[Config] [%s] [%s]: ", lpmd_state_name[lpmd_state], state->name);
-
-	if (state->wlt_type)
-		offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "WLT [%2d] ", state->wlt_type);
-
-	if (state->entry_system_load_thres)
-		offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "SYS [%6d] ", state->entry_system_load_thres / 100);
-
-	if (state->enter_cpu_load_thres)
-		offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "CPU [%6d] ", state->enter_cpu_load_thres / 100);
-
-	if (state->enter_gfx_load_thres)
-		offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "GFX [%6d] ", state->enter_gfx_load_thres / 100);
-
-	offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "CPUMASK [%d] ", state->cpumask_idx);
-	offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "IRQ [%d] ", state->irq_migrate);
-	offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "ITMT [%d] ", state->itmt_state);
-	offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "EPB [%d] ", state->epb);
-	offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "EPP [%d] ", state->epp);
-
-	lpmd_log_debug("%s\n", buf);
-}
-
 static void dump_data(lpmd_config_t *config, int idx)
 {
 	char buf[MAX_STR_LENGTH];
@@ -314,7 +320,7 @@ static void dump_data(lpmd_config_t *config, int idx)
 	if (!in_debug_mode())
 		return;
 
-	offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "[Data  ] [%s] [%s]: ", lpmd_state_name[lpmd_state], state->name);
+	offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "[  Data] [%s] [%s]: ", lpmd_state_name[lpmd_state], state->name);
 
 	if (config->wlt_hint_enable)
 		offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "WLT [%2d] ", config->data.wlt_hint);
@@ -381,7 +387,7 @@ int lpmd_enter_next_state(void)
 	if (need_enter(config, idx)) {
 		enter_state(config, idx);
 		current_idx = idx;
-		dump_state(&config->config_states[idx]);
+		dump_state(&config->config_states[idx], "Enter", 0);
 	}
 
 end:
