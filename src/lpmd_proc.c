@@ -192,7 +192,6 @@ int is_on_battery(void)
 static void upower_daemon_cb (UpClient *client, GParamSpec *pspec, gpointer user_data)
 {
 	battery_mode = up_client_get_on_battery(upower_client);
-	lpmd_log_info("upower event: on-battery: %d\n", battery_mode);
 }
 
 static void connect_to_upower_daemon(void)

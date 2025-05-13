@@ -144,14 +144,12 @@ static int get_gfx_util_sysfs(unsigned long long time_ms)
 		if (gfx_rc6_prev != ULLONG_MAX)
 			gfx_util = 10000 - (gfx_rc6 - gfx_rc6_prev) * 10000 / time_ms;
 		gfx_rc6_prev = gfx_rc6;
-		lpmd_log_debug("GFX Utilization: %d.%d\n", gfx_util / 100, gfx_util % 100);
 	}
 
 	if (sam_mc6 != ULLONG_MAX) {
 		if (sam_mc6_prev != ULLONG_MAX)
 			sam_util = 10000 - (sam_mc6 - sam_mc6_prev) * 10000 / time_ms;
 		sam_mc6_prev = sam_mc6;
-		lpmd_log_debug("SAM Utilization: %d.%d\n", sam_util / 100, sam_util % 100);
 	}
 
 	return gfx_util > sam_util ? gfx_util : sam_util;
