@@ -176,16 +176,10 @@ struct perf_cap {
 	int eff;
 };
 
-static int suv_bit_set(void)
-{
-//	Depends on kernel patch to export kernel knobs for this
-	return 0;
-}
-
 /*
  * Detect different kinds of CPU HFI hint
  * "LPM". EFF == 255
- * "SUV". PERF == EFF == 0, suv bit set.
+ * "SUV". PERF == EFF == 0, suv bit set. Not supported for now.
  * "BAN". PERF == EFF == 0, suv bit not set.
  * "NOR".
  */
@@ -195,20 +189,16 @@ static char *update_one_cpu(struct perf_cap *perf_cap)
 		return NULL;
 
 	if (!perf_cap->cpu) {
-		reset_cpus (CPUMASK_HFI);
-		reset_cpus (CPUMASK_HFI_BANNED);
+		cpumask_reset(CPUMASK_HFI);
+		cpumask_reset(CPUMASK_HFI_BANNED);
 	}
 
-	if (perf_cap->eff == 255 * 4 && has_hfi_lpm_monitor ()) {
-		add_cpu (perf_cap->cpu, CPUMASK_HFI);
+	if (perf_cap->eff == 255 * 4) {
+		cpumask_add_cpu(perf_cap->cpu, CPUMASK_HFI);
 		return "LPM";
 	}
-	if (!perf_cap->perf && !perf_cap->eff && has_hfi_suv_monitor () && suv_bit_set ()) {
-		add_cpu (perf_cap->cpu, CPUMASK_HFI_SUV);
-		return "SUV";
-	}
 	if (!perf_cap->perf && !perf_cap->eff) {
-		add_cpu (perf_cap->cpu, CPUMASK_HFI_BANNED);
+		cpumask_add_cpu(perf_cap->cpu, CPUMASK_HFI_BANNED);
 		return "BAN";
 	}
 	return "NOR";
@@ -216,63 +206,39 @@ static char *update_one_cpu(struct perf_cap *perf_cap)
 
 static void process_one_event(int first, int last, int nr)
 {
+	lpmd_config_t *config = get_lpmd_config();
+
 	/* Need to update more CPUs */
 	if (nr == 16 && last != get_max_online_cpu ())
 		return;
 
-	if (has_cpus (CPUMASK_HFI)) {
+	if (cpumask_has_cpu(CPUMASK_HFI)) {
 		/* Ignore duplicate event */
-		if (is_equal (CPUMASK_HFI_LAST, CPUMASK_HFI )) {
+		if (cpumask_equal (CPUMASK_HFI_LAST, CPUMASK_HFI )) {
 			lpmd_log_debug ("\tDuplicated HFI LPM hints ignored\n\n");
 			return;
 		}
-		if (in_hfi_lpm ()) {
-			lpmd_log_debug ("\tUpdate HFI LPM event\n\n");
-		}
-		else {
-			lpmd_log_debug ("\tDetect HFI LPM event\n");
-		}
-		process_lpm (HFI_ENTER);
-		reset_cpus (CPUMASK_HFI_LAST);
-		copy_cpu_mask(CPUMASK_HFI, CPUMASK_HFI_LAST);
+		lpmd_log_debug ("\tDetect HFI LPM event\n");
+		update_reason(UPDATE_HFI);
+		cpumask_copy(CPUMASK_HFI, CPUMASK_HFI_LAST);
 	}
-	else if (has_cpus (CPUMASK_HFI_SUV)) {
-		if (in_suv_lpm ()) {
-			lpmd_log_debug ("\tUpdate HFI SUV event\n\n");
-		}
-		else {
-			lpmd_log_debug ("\tDetect HFI SUV event\n");
-		}
-//		 TODO: SUV re-enter is not supported for now
-		process_suv_mode (HFI_SUV_ENTER);
-	}
-	else if (has_cpus (CPUMASK_HFI_BANNED)) {
-		copy_cpu_mask_exclude(CPUMASK_ONLINE, CPUMASK_HFI, CPUMASK_HFI_BANNED);
+	else if (cpumask_has_cpu(CPUMASK_HFI_BANNED)) {
+		cpumask_exclude_copy(CPUMASK_ONLINE, CPUMASK_HFI, CPUMASK_HFI_BANNED);
 		/* Ignore duplicate event */
-		if (is_equal (CPUMASK_HFI_LAST, CPUMASK_HFI )) {
+		if (cpumask_equal (CPUMASK_HFI_LAST, CPUMASK_HFI )) {
 			lpmd_log_debug ("\tDuplicated HFI BANNED hints ignored\n\n");
 			return;
 		}
-		if (in_hfi_lpm ()) {
-			lpmd_log_debug ("\tUpdate HFI LPM event with banned CPUs\n\n");
-		}
-		else {
-			lpmd_log_debug ("\tDetect HFI LPM event with banned CPUs\n");
-		}
-		process_lpm (HFI_ENTER);
-		reset_cpus (CPUMASK_HFI_LAST);
-		copy_cpu_mask(CPUMASK_HFI, CPUMASK_HFI_LAST);
+		lpmd_log_debug ("\tDetect HFI LPM event with banned CPUs\n");
+		update_reason(UPDATE_HFI);
+		cpumask_copy(CPUMASK_HFI, CPUMASK_HFI_LAST);
 	}
-	else if (in_hfi_lpm ()) {
+	else if (cpumask_has_cpu(CPUMASK_HFI_LAST)) {
 		lpmd_log_debug ("\tHFI LPM recover\n");
 //		 Don't override the DETECT_LPM_CPU_DEFAULT so it is auto recovered
-		process_lpm (HFI_EXIT);
-		reset_cpus (CPUMASK_HFI_LAST);
-	}
-	else if (in_suv_lpm ()) {
-		lpmd_log_debug ("\tHFI SUV recover\n");
-//		 Don't override the DETECT_LPM_CPU_DEFAULT so it is auto recovered
-		process_suv_mode (HFI_SUV_EXIT);
+		cpumask_copy(CPUMASK_ONLINE, CPUMASK_HFI);
+		update_reason(UPDATE_HFI);
+		cpumask_reset (CPUMASK_HFI_LAST);
 	}
 	else {
 		lpmd_log_info ("\t\t\tUnsupported HFI event ignored\n");
@@ -289,9 +255,6 @@ static int handle_event(struct nl_msg *n, void *arg)
 	int first_cpu = -1, last_cpu = -1, nr_cpus = 0;
 	int j, index = 0, offset = 0;
 	char buf[MAX_STR_LENGTH];
-
-	if (!in_auto_mode())
-		return 0;
 
 	if (genlhdr->cmd != THERMAL_GENL_EVENT_CAPACITY_CHANGE)
 		return 0;
@@ -356,12 +319,14 @@ int hfi_kill(void)
 	return 0;
 }
 
-void hfi_receive(void)
+int hfi_update(void)
 {
 	int err = 0;
 
 	while (!err)
 		err = nl_recvmsgs (drv.nl_handle, drv.nl_cb);
+
+	return 0;
 }
 
 int hfi_init(void)
@@ -370,7 +335,7 @@ int hfi_init(void)
 	struct nl_cb *cb;
 	int mcast_id;
 
-	reset_cpus (CPUMASK_HFI_LAST);
+	cpumask_reset(CPUMASK_HFI_LAST);
 
 	signal (SIGPIPE, SIG_IGN);
 

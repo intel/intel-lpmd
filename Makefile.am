@@ -52,12 +52,18 @@ intel_lpmd_SOURCES = \
 	src/lpmd_proc.c \
 	src/lpmd_dbus_server.c \
 	src/lpmd_config.c \
-	src/lpmd_cpu.c \
+	src/lpmd_cpumask.c \
 	src/lpmd_helpers.c \
 	src/lpmd_hfi.c \
 	src/lpmd_irq.c \
+	src/lpmd_cgroup.c \
 	src/lpmd_socket.c \
 	src/lpmd_util.c \
+	src/lpmd_wlt.c \
+	src/lpmd_misc.c \
+	src/lpmd_uevent.c \
+	src/lpmd_cpu.c \
+	src/lpmd_state_machine.c \
 	src/wlt_proxy/wlt_proxy.c \
 	src/wlt_proxy/spike_mgmt.c \
 	src/wlt_proxy/state_machine.c \
