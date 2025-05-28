@@ -263,7 +263,7 @@ static int parse_proc_stat(void)
 	int val;
 	int count = get_max_online_cpu() + 1;
 	int sys_idx = count - 1;
-	int size = sizeof(struct proc_stat_info) * count;
+	size_t size = sizeof(struct proc_stat_info) * count;
 
 	filep = fopen (PATH_PROC_STAT, "r");
 	if (!filep)
@@ -294,7 +294,6 @@ static int parse_proc_stat(void)
 		int idx;
 		char *tmpline = NULL;
 		struct proc_stat_info *info;
-		size_t size = 0;
 		char *line;
 		int cpu;
 		char *p;
