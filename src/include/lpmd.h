@@ -384,6 +384,7 @@ int socket_send_cmd(char *name, char *data);
 
 /* helper */
 int copy_user_string(char *src, char *dst, int size);
+int lpmd_read_str(char *path, char *str, int size);
 int lpmd_write_str(const char *name, char *str, int print_level);
 int lpmd_write_str_verbose(const char *name, char *str, int print_level);
 int lpmd_write_str_append(const char *name, char *str, int print_level);

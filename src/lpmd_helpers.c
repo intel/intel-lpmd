@@ -47,6 +47,31 @@ int copy_user_string(char *src, char *dst, int size)
 	return 0;
 }
 
+int lpmd_read_str(char *path, char *str, int size)
+{
+	FILE *filep;
+	int ret;
+
+	filep = fopen (path, "r");
+	if (!filep) {
+		lpmd_log_error("Cannot open %s\n", path);
+		return 1;
+	}
+
+	ret = fread (str, 1, size, filep);
+        fclose (filep);
+
+	if (ret <= 0)
+		return 1;
+
+	if (ret >= size)
+		ret = size - 1;
+	str[ret - 1] = '\0';
+
+	lpmd_log_debug ("Read \"%s\" from %s\n", str, path);
+	return 0;
+}
+
 static int _write_str(const char *name, char *str, int print_level, int log_level, const char *mode)
 {
 	FILE *filep;
