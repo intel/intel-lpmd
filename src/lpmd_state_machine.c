@@ -144,8 +144,13 @@ static int config_state_match(lpmd_config_t *config, int idx)
 	if (!state->valid)
 		return 0;
 
-	if (state->wlt_type != -1 && state->wlt_type != wlt_index)
-		return 0;
+	if (state->wlt_type != -1) {
+		if (config->wlt_hint_mask != -1)
+			wlt_index &= config->wlt_hint_mask;
+
+		if (state->wlt_type != wlt_index)
+			return 0;
+	}
 
 	if (state->enter_cpu_load_thres && state->enter_cpu_load_thres < bcpu)
 		return 0;
@@ -423,6 +428,7 @@ static void dump_states(lpmd_config_t *lpmd_config)
 	lpmd_log_info ("WLT Hint Enable:%d\n", lpmd_config->wlt_hint_enable);
 	lpmd_log_info ("WLT Proxy Enable:%d\n", lpmd_config->wlt_proxy_enable);
 	lpmd_log_info ("WLT Proxy Enable:%d\n", lpmd_config->wlt_hint_poll_enable);
+	lpmd_log_info ("WLT Hint mask:%d\n", lpmd_config->wlt_hint_mask);
 	lpmd_log_info ("Util Enable:%d\n", lpmd_config->util_enable);
 	lpmd_log_info ("Util entry threshold:%d\n", lpmd_config->util_entry_threshold);
 	lpmd_log_info ("Util exit threshold:%d\n", lpmd_config->util_exit_threshold);

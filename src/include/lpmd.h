@@ -196,6 +196,8 @@ typedef struct {
 	int wlt_hint_enable;
 	int wlt_hint_poll_enable;
 	int wlt_proxy_enable;
+	int wlt_hint_mask;
+
 	union {
 		struct {
 			uint32_t util_sys_enable:1;

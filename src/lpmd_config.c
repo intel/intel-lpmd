@@ -205,6 +205,7 @@ static void lpmd_init_config(lpmd_config_t *config)
 	config->balance_slider_def_dc = -1;
 	config->slider_offset_def_ac = -1;
 	config->slider_offset_def_dc = -1;
+	config->wlt_hint_mask = -1;
 }
 
 static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_config)
@@ -242,6 +243,10 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_co
 					if (errno || *pos != '\0'
 							|| (lpmd_config->wlt_hint_enable != 1 && lpmd_config->wlt_hint_enable != 0))
 						goto err;
+				}
+				else if (!strncmp((const char*)cur_node->name, "WLTHintMask", strlen("WLTHintMask"))) {
+					errno = 0;
+					lpmd_config->wlt_hint_mask = strtol (tmp_value, &pos, 10);
 				}
 				else if (!strncmp((const char*)cur_node->name, "WLTHintPollEnable", strlen("WLtHintPollEnable"))) {
 					errno = 0;
