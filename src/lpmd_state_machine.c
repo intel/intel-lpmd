@@ -57,13 +57,13 @@ int update_lpmd_state(int new)
 				break;
 			lpmd_log_debug ("Freeze lpmd\n");
 			saved_lpmd_state = lpmd_state;
-			lpmd_state == LPMD_FREEZE;
+			lpmd_state = LPMD_FREEZE;
 			break;
 		case LPMD_RESTORE:
 			if (lpmd_state != LPMD_FREEZE)
 				break;
 			lpmd_log_debug ("Restore lpmd\n");
-			lpmd_state == saved_lpmd_state;
+			lpmd_state = saved_lpmd_state;
 			saved_lpmd_state = lpmd_state;
 			break;
 		default:
