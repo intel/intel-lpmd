@@ -324,23 +324,26 @@ static void dump_data(lpmd_config_t *config, int idx)
 	if (config->wlt_hint_enable)
 		offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "WLT [%2d] ", config->data.wlt_hint);
 
-	if (config->util_sys_enable)
+	if (config->util_sys_enable) {
 		if (config->data.util_sys == -1)
 			offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "SYS [   N/A] ");
 		else
 			offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "SYS [%3d.%02d] ", config->data.util_sys / 100, config->data.util_sys % 100);
+	}
 
-	if (config->util_cpu_enable)
+	if (config->util_cpu_enable) {
 		if (config->data.util_cpu == -1)
 			offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "CPU [   N/A] ");
 		else
 			offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "CPU [%3d.%02d] ", config->data.util_cpu / 100, config->data.util_cpu % 100);
+	}
 
-	if (config->util_gfx_enable)
+	if (config->util_gfx_enable) {
 		if (config->data.util_gfx == -1)
 			offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "GFX [   N/A] ");
 		else
 			offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "GFX [%3d.%02d] ", config->data.util_gfx / 100, config->data.util_gfx % 100);
+	}
 
 	if (state->cpumask_idx != CPUMASK_NONE)
 		offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "CPUMASK [%s] ", get_cpus_hexstr(state->cpumask_idx));
