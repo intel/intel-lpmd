@@ -305,7 +305,6 @@ static int enter_state(lpmd_config_t *config, int idx)
 
 	process_cgroup(state, config->mode);
 
-end:
 	return 0;
 }
 
