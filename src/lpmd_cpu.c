@@ -455,7 +455,7 @@ err:
 int detect_lpm_cpus(char *cmd_cpus)
 {
 	int ret;
-	char *str;
+	char *str = NULL;
 
 	if (cmd_cpus && cmd_cpus[0] != '\0') {
 		ret = detect_lpm_cpus_cmd (cmd_cpus);
