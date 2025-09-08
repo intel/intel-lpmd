@@ -63,9 +63,6 @@ struct info_irqs {
 struct info_irqs info_irqs;
 struct info_irqs *info = &info_irqs;
 
-static char *irq_str;
-static int lp_mode_irq;
-
 
 /* Interrupt Management */
 #define SOCKET_PATH "irqbalance"
