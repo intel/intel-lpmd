@@ -628,7 +628,7 @@ static int build_state_cpumask(lpmd_config_state_t *state)
 int lpmd_build_config_states(lpmd_config_t *lpmd_config)
 {
 	lpmd_config_state_t *state;
-	int i, ret;
+	int i;
 
 	build_default_states(lpmd_config);
 
