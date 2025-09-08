@@ -206,7 +206,6 @@ static char *update_one_cpu(struct perf_cap *perf_cap)
 
 static void process_one_event(int first, int last, int nr)
 {
-	lpmd_config_t *config = get_lpmd_config();
 
 	/* Need to update more CPUs */
 	if (nr == 16 && last != get_max_online_cpu ())
