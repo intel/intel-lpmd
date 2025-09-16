@@ -96,6 +96,16 @@ static void lpmd_parse_state(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *config
 					else
 						copy_user_string(tmp_value, state->active_cpus, sizeof(state->active_cpus));
 				}
+				if (!strncmp((const char*)cur_node->name, "BalanceSliderAC", strlen("BalanceSliderAC")))
+					state->balance_slider_ac = strtol (tmp_value, &pos, 10);
+				if (!strncmp((const char*)cur_node->name, "SliderOffsetAC", strlen("SliderOffsetAC")))
+					state->slider_offset_ac = strtol (tmp_value, &pos, 10);
+
+				if (!strncmp((const char*)cur_node->name, "BalanceSliderDC", strlen("BalanceSliderDC")))
+					state->balance_slider_dc = strtol (tmp_value, &pos, 10);
+				if (!strncmp((const char*)cur_node->name, "SliderOffsetDC", strlen("SliderOffsetDC")))
+					state->slider_offset_dc = strtol (tmp_value, &pos, 10);
+
 				xmlFree(tmp_value);
 			}
 		}
@@ -191,6 +201,10 @@ static void lpmd_init_config(lpmd_config_t *config)
 	config->data.util_cpu = -1;
 	config->data.util_gfx = -1;
 	config->data.wlt_hint = -1;
+	config->balance_slider_def_ac = -1;
+	config->balance_slider_def_dc = -1;
+	config->slider_offset_def_ac = -1;
+	config->slider_offset_def_dc = -1;
 }
 
 static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_config)
@@ -360,6 +374,23 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_co
 				else if (!strncmp((const char*)cur_node->name, "States", strlen ("States"))) {
 					errno = 0;
 					lpmd_parse_states(doc, cur_node->children, lpmd_config);
+				}
+				else if (!strncmp((const char*)cur_node->name, "BalancedSliderAC", strlen ("BalancedSliderAC"))) {
+					errno = 0;
+					lpmd_config->balance_slider_def_ac = strtol (tmp_value, &pos, 10);
+
+				}
+				else if (!strncmp((const char*)cur_node->name, "BalancedSliderDC", strlen ("BalancedSliderDC"))) {
+					errno = 0;
+					lpmd_config->balance_slider_def_dc = strtol (tmp_value, &pos, 10);
+				}
+				else if (!strncmp((const char*)cur_node->name, "SliderOffsetAC", strlen ("SliderOffsetAC"))) {
+					errno = 0;
+					lpmd_config->slider_offset_def_ac = strtol (tmp_value, &pos, 10);
+				}
+				else if (!strncmp((const char*)cur_node->name, "SliderOffsetDC", strlen ("SliderOffsetDC"))) {
+					errno = 0;
+					lpmd_config->slider_offset_def_dc = strtol (tmp_value, &pos, 10);
 				}
 				else {
 					if (!strncmp((const char*)cur_node->name, "HfiSuvEnable", strlen("HfiSuvEnable"))) {
