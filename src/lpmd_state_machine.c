@@ -57,13 +57,13 @@ int update_lpmd_state(int new)
 				break;
 			lpmd_log_debug ("Freeze lpmd\n");
 			saved_lpmd_state = lpmd_state;
-			lpmd_state == LPMD_FREEZE;
+			lpmd_state = LPMD_FREEZE;
 			break;
 		case LPMD_RESTORE:
 			if (lpmd_state != LPMD_FREEZE)
 				break;
 			lpmd_log_debug ("Restore lpmd\n");
-			lpmd_state == saved_lpmd_state;
+			lpmd_state = saved_lpmd_state;
 			saved_lpmd_state = lpmd_state;
 			break;
 		default:
@@ -305,7 +305,6 @@ static int enter_state(lpmd_config_t *config, int idx)
 
 	process_cgroup(state, config->mode);
 
-end:
 	return 0;
 }
 
@@ -325,23 +324,26 @@ static void dump_data(lpmd_config_t *config, int idx)
 	if (config->wlt_hint_enable)
 		offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "WLT [%2d] ", config->data.wlt_hint);
 
-	if (config->util_sys_enable)
+	if (config->util_sys_enable) {
 		if (config->data.util_sys == -1)
 			offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "SYS [   N/A] ");
 		else
 			offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "SYS [%3d.%02d] ", config->data.util_sys / 100, config->data.util_sys % 100);
+	}
 
-	if (config->util_cpu_enable)
+	if (config->util_cpu_enable) {
 		if (config->data.util_cpu == -1)
 			offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "CPU [   N/A] ");
 		else
 			offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "CPU [%3d.%02d] ", config->data.util_cpu / 100, config->data.util_cpu % 100);
+	}
 
-	if (config->util_gfx_enable)
+	if (config->util_gfx_enable) {
 		if (config->data.util_gfx == -1)
 			offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "GFX [   N/A] ");
 		else
 			offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "GFX [%3d.%02d] ", config->data.util_gfx / 100, config->data.util_gfx % 100);
+	}
 
 	if (state->cpumask_idx != CPUMASK_NONE)
 		offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "CPUMASK [%s] ", get_cpus_hexstr(state->cpumask_idx));
@@ -626,7 +628,7 @@ static int build_state_cpumask(lpmd_config_state_t *state)
 int lpmd_build_config_states(lpmd_config_t *lpmd_config)
 {
 	lpmd_config_state_t *state;
-	int i, ret;
+	int i;
 
 	build_default_states(lpmd_config);
 

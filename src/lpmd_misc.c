@@ -25,7 +25,6 @@
 
 static int has_itmt;
 static int saved_itmt = SETTING_IGNORE;
-static int lp_mode_itmt = SETTING_IGNORE;
 
 int get_itmt(void)
 {

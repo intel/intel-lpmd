@@ -51,13 +51,6 @@ static gboolean
 dbus_interface_l_pm__au_to(PrefObject *obj, GError **error);
 
 static gboolean
-dbus_interface_s_uv__mo_de__en_te_r(PrefObject *obj, GError **error);
-
-static gboolean
-dbus_interface_s_uv__mo_de__ex_it(PrefObject *obj, GError **error);
-
-
-static gboolean
 (*intel_lpmd_dbus_exit_callback)(void);
 
 // Dbus object initialization

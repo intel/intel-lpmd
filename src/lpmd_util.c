@@ -40,7 +40,6 @@
 
 #define PATH_PROC_STAT "/proc/stat"
 
-static int current_idx = STATE_NONE;
 
 enum type_stat {
 	STAT_CPU,

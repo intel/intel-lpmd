@@ -211,8 +211,6 @@ int cgroup_init(lpmd_config_t *config)
 
 int process_cgroup(lpmd_config_state_t *state, enum lpm_cpu_process_mode mode)
 {
-	int ret;
-
 	if (state->cpumask_idx == CPUMASK_NONE) {
 		lpmd_log_debug ("Ignore cgroup processing\n");
 		return 0;
