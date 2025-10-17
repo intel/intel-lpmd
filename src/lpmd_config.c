@@ -116,9 +116,9 @@ static int is_wildcard(char *str)
 {
 	if (!str)
 		return 1;
-	if (strncmp(str, "*", strlen("*")))
+	if (!strncmp(str, "*", strlen("*")))
 		return 1;
-	if (strncmp(str, " * ", strlen(" * ")))
+	if (!strncmp(str, " * ", strlen(" * ")))
 		return 1;
 
 	return 0;
