@@ -362,6 +362,7 @@ int get_epp_epb(int *epp, char *epp_str, int size, int *epb)
 	/* CPU0 is always online */
 	snprintf (path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cpufreq/energy_performance_preference", 0);
 	get_epp (path, epp, epp_str, size);
+	epp_str[size - 1] = '\0';
 
 	snprintf(path, MAX_STR_LENGTH, "/sys/devices/system/cpu/cpu%d/power/energy_perf_bias", 0);
 	lpmd_read_int(path, epb, -1);
