@@ -471,7 +471,8 @@ int lpmd_main(void)
 			if (!lpmd_config.wlt_proxy_enable) {
 				poll_fds[poll_fd_cnt].fd = wlt_init();
 				if (poll_fds[poll_fd_cnt].fd > 0) {
-					poll_fds[idx_wlt_fd].events = POLLIN;
+					idx_wlt_fd = poll_fd_cnt;
+					poll_fds[idx_wlt_fd].events = POLLPRI;
 					poll_fds[idx_wlt_fd].revents = 0;
 					poll_fd_cnt++;
 				}
