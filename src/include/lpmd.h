@@ -174,6 +174,11 @@ typedef struct {
 	int itmt_state;
 	int irq_migrate;
 
+	int balance_slider_ac;
+	int slider_offset_ac;
+	int balance_slider_dc;
+	int slider_offset_dc;
+
 	// Private state variables, not configurable
 	int entry_load_sys;
 	int entry_load_cpu;
@@ -191,6 +196,8 @@ typedef struct {
 	int wlt_hint_enable;
 	int wlt_hint_poll_enable;
 	int wlt_proxy_enable;
+	int wlt_hint_mask;
+
 	union {
 		struct {
 			uint32_t util_sys_enable:1;
@@ -214,6 +221,12 @@ typedef struct {
 	char cpu_config[MAX_CONFIG_LEN];
 	int config_state_count;
 	int tdp;
+
+	int balance_slider_def_ac;
+	int slider_offset_def_ac;
+	int balance_slider_def_dc;
+	int slider_offset_def_dc;
+
 	lpmd_config_state_t config_states[MAX_STATES];
 	lpmd_data_t data;
 } lpmd_config_t;
@@ -328,6 +341,10 @@ int epp_epb_init(void);
 int get_epp_epb(int *epp, char *epp_str, int size, int *epb);
 int process_epp_epb(lpmd_config_state_t *state);
 
+void process_balance_slider_default_update(lpmd_config_t *config);
+void process_slider_offset_default_update(lpmd_config_t *config);
+void process_slider(lpmd_config_t *config, lpmd_config_state_t *state);
+
 /* lpmd_irq.c */
 int irq_init(void);
 int process_irq(lpmd_config_state_t *state);
@@ -384,6 +401,7 @@ int socket_send_cmd(char *name, char *data);
 
 /* helper */
 int copy_user_string(char *src, char *dst, int size);
+int lpmd_read_str(char *path, char *str, int size);
 int lpmd_write_str(const char *name, char *str, int print_level);
 int lpmd_write_str_verbose(const char *name, char *str, int print_level);
 int lpmd_write_str_append(const char *name, char *str, int print_level);

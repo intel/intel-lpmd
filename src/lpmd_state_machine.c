@@ -122,7 +122,12 @@ int lpmd_init_config_state(lpmd_config_state_t *state)
 	state->entry_load_sys = 0;
 	state->entry_load_cpu = 0;
 	state->cpumask_idx = CPUMASK_NONE;
-	
+
+	state->balance_slider_ac = -1;
+	state->balance_slider_dc = -1;
+	state->slider_offset_ac = -1;
+	state->slider_offset_dc = -1;
+
 	return 0;
 }
 
@@ -139,8 +144,13 @@ static int config_state_match(lpmd_config_t *config, int idx)
 	if (!state->valid)
 		return 0;
 
-	if (state->wlt_type != -1 && state->wlt_type != wlt_index)
-		return 0;
+	if (state->wlt_type != -1) {
+		if (config->wlt_hint_mask != -1)
+			wlt_index &= config->wlt_hint_mask;
+
+		if (state->wlt_type != wlt_index)
+			return 0;
+	}
 
 	if (state->enter_cpu_load_thres && state->enter_cpu_load_thres < bcpu)
 		return 0;
@@ -228,6 +238,10 @@ static void dump_state(lpmd_config_state_t *state, char *str, int debug)
 	offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "ITMT [%d] ", state->itmt_state);
 	offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "EPB [%d] ", state->epb);
 	offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "EPP [%d] ", state->epp);
+	offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "SliderAC [%d] ", state->balance_slider_ac);
+	offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "SliderDC [%d] ", state->balance_slider_ac);
+	offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "OffsetAC [%d] ", state->slider_offset_ac);
+	offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "OffsetDC [%d] ", state->slider_offset_dc);
 
 	if (debug)
 		lpmd_log_debug("%s\n", buf);
@@ -296,7 +310,9 @@ static int enter_state(lpmd_config_t *config, int idx)
 
 	state->entry_load_sys = config->data.util_sys;
 	state->entry_load_cpu = config->data.util_cpu;
-	
+
+	process_slider(config, state);
+
 	process_itmt(state);
 	
 	process_epp_epb(state);
@@ -412,6 +428,7 @@ static void dump_states(lpmd_config_t *lpmd_config)
 	lpmd_log_info ("WLT Hint Enable:%d\n", lpmd_config->wlt_hint_enable);
 	lpmd_log_info ("WLT Proxy Enable:%d\n", lpmd_config->wlt_proxy_enable);
 	lpmd_log_info ("WLT Proxy Enable:%d\n", lpmd_config->wlt_hint_poll_enable);
+	lpmd_log_info ("WLT Hint mask:%d\n", lpmd_config->wlt_hint_mask);
 	lpmd_log_info ("Util Enable:%d\n", lpmd_config->util_enable);
 	lpmd_log_info ("Util entry threshold:%d\n", lpmd_config->util_entry_threshold);
 	lpmd_log_info ("Util exit threshold:%d\n", lpmd_config->util_exit_threshold);
@@ -420,6 +437,11 @@ static void dump_states(lpmd_config_t *lpmd_config)
 	lpmd_log_info ("CPU Family:%d\n", lpmd_config->cpu_family);
 	lpmd_log_info ("CPU Model:%d\n", lpmd_config->cpu_model);
 	lpmd_log_info ("CPU Config:%s\n", lpmd_config->cpu_config);
+
+	lpmd_log_info ("balance_slider_def_ac:%d\n", lpmd_config->balance_slider_def_ac);
+	lpmd_log_info ("balance_slider_def_dc:%d\n", lpmd_config->balance_slider_def_dc);
+	lpmd_log_info ("slider_offset_def_ac:%d\n", lpmd_config->slider_offset_def_ac);
+	lpmd_log_info ("slider_offset_def_dc:%d\n", lpmd_config->slider_offset_def_dc);
 
 	for (i = 0; i < MAX_STATES; ++i) {
 		state = &lpmd_config->config_states[i];
@@ -453,6 +475,10 @@ static void dump_states(lpmd_config_t *lpmd_config)
 		lpmd_log_info ("\tisland_1_number_e_cores:%d\n", state->island_1_number_e_cores);
 		lpmd_log_info ("\tisland_2_number_p_cores:%d\n", state->island_2_number_p_cores);
 		lpmd_log_info ("\tisland_2_number_e_cores:%d\n", state->island_2_number_e_cores);
+		lpmd_log_info ("\tBalancedSliderAC:%d\n", state->balance_slider_ac);
+		lpmd_log_info ("\tBalancedSliderDC:%d\n", state->balance_slider_dc);
+		lpmd_log_info ("\tSliderOffsetAC:%d\n", state->slider_offset_ac);
+		lpmd_log_info ("\tSliderOffsetDC:%d\n", state->slider_offset_dc);
 	}
 }
 

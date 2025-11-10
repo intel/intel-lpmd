@@ -64,6 +64,207 @@ int process_itmt(lpmd_config_state_t *state)
 	}
 }
 
+/* Slider Management */
+
+#define PATH_PLATFORM_PROFILE	"/sys/class/platform-profile"
+#define NAME_SOC_SLD		"SoC Power Slider"
+
+static char soc_sld_path[MAX_STR_LENGTH];
+static char soc_sld_profile[MAX_STR_LENGTH];
+static int slider_available;
+static int slider_unavailable;
+
+#define PATH_SOC_BALANCE_SLIDER	"/sys/module/processor_thermal_soc_slider/parameters/slider_balance"
+#define PATH_SOC_OFFSET		"/sys/module/processor_thermal_soc_slider/parameters/slider_offset"
+
+static void init_slider_path()
+{
+	DIR *dir;
+	struct dirent *entry;
+	int ret;
+
+	snprintf(soc_sld_path, MAX_STR_LENGTH, "%s", PATH_PLATFORM_PROFILE);
+	if ((dir = opendir(soc_sld_path)) == NULL) {
+		lpmd_log_debug("Cannot find %s\n", soc_sld_path);
+		goto slider_failed;
+	}
+
+	while ((entry = readdir(dir)) != NULL) {
+		if (strlen(entry->d_name) > 100)
+			continue;
+		if (strncmp(entry->d_name, "platform-profile",
+				strlen("platform-profile")))
+			continue;
+
+		snprintf(soc_sld_path, MAX_STR_LENGTH, "%s/%s/name",
+				PATH_PLATFORM_PROFILE, entry->d_name);
+
+		ret = lpmd_read_str(soc_sld_path, soc_sld_profile, MAX_STR_LENGTH);
+		if (ret)
+			continue;
+
+		if (!strncmp(soc_sld_profile, NAME_SOC_SLD, strlen(NAME_SOC_SLD))) {
+			snprintf(soc_sld_path, MAX_STR_LENGTH, "%s/%s/profile",
+					PATH_PLATFORM_PROFILE, entry->d_name);
+			slider_available = 1;
+			break;
+		}
+	}
+
+	closedir(dir);
+
+	if (!entry) {
+		lpmd_log_debug("\tCannot find %s\n", NAME_SOC_SLD);
+		goto slider_failed;
+	}
+
+	lpmd_log_info("\tAvailable at %s/%s, use profile [%s]\n",
+			PATH_PLATFORM_PROFILE, entry->d_name, soc_sld_profile);
+
+	return;
+
+slider_failed:
+	lpmd_log_debug("\tIgnore soc_sld/sld_offset setting\n");
+	slider_unavailable = 1;
+}
+
+static int update_balance_slider(int slider)
+{
+	int ret;
+	static int current_slider = -1;
+
+	lpmd_log_debug("update_balance_slider\n");
+
+	if (slider < 0)
+		return 0;
+
+	if (slider_unavailable)
+		return -1;
+
+	if (!slider_available) {
+		init_slider_path();
+		if (slider_unavailable)
+			return -1;
+	}
+
+	if (current_slider >= 0 && current_slider == slider)
+		return 0;
+
+	ret = lpmd_write_int(PATH_SOC_BALANCE_SLIDER, slider, 1);
+	if (ret)
+		return ret;
+
+	/* Read the current profile and rewrite to make the module params effective */
+	ret = lpmd_read_str(soc_sld_path, soc_sld_profile, MAX_STR_LENGTH);
+	if (ret)
+		return ret;
+
+	ret = lpmd_write_str(soc_sld_path, soc_sld_profile, 1);
+	if (ret)
+		return ret;
+
+	current_slider = slider;
+
+	return 0;
+}
+
+static int update_slider_offset(int offset)
+{
+	int ret;
+	static int current_slider_offset = -1;
+
+	if (slider_unavailable)
+		return -1;
+
+	if (offset < 0)
+		return 0;
+
+	if (!slider_available) {
+		init_slider_path();
+		if (slider_unavailable)
+			return -1;
+	}
+
+	if (current_slider_offset >= 0 && current_slider_offset == offset)
+		return 0;
+
+	ret = lpmd_write_int(PATH_SOC_OFFSET, offset, 1);
+	if (ret)
+		return ret;
+
+	/* Read the current profile and rewrite to make the module params effective */
+	ret = lpmd_read_str(soc_sld_path, soc_sld_profile, MAX_STR_LENGTH);
+	if (ret)
+		return ret;
+
+	ret = lpmd_write_str(soc_sld_path, soc_sld_profile, 1);
+	if (ret)
+		return ret;
+
+	current_slider_offset = offset;
+
+	return 0;
+}
+
+void process_balance_slider_default_update(lpmd_config_t *config)
+{
+	lpmd_log_debug("process_balance_slider_default_update\n");
+
+	if (is_on_battery()) {
+		if (config->balance_slider_def_dc >= 0)
+			update_balance_slider(config->balance_slider_def_dc);
+	} else {
+		if (config->balance_slider_def_ac >= 0)
+			update_balance_slider(config->balance_slider_def_ac);
+	}
+}
+
+void process_slider_offset_default_update(lpmd_config_t *config)
+{
+	lpmd_log_debug("process_slider_offset_default_update\n");
+
+	if (is_on_battery()) {
+		if (config->slider_offset_def_dc >= 0)
+			update_slider_offset(config->slider_offset_def_dc);
+	} else {
+		if (config->slider_offset_def_ac >= 0)
+			update_slider_offset(config->slider_offset_def_ac);
+	}
+}
+
+static int process_balance_slider(lpmd_config_state_t *state)
+{
+	lpmd_log_debug("process_balance_slider\n");
+
+	if (is_on_battery())
+		return update_balance_slider(state->balance_slider_dc);
+	else
+		return update_balance_slider(state->balance_slider_ac);
+}
+
+static int process_slider_offset(lpmd_config_state_t *state)
+{
+	lpmd_log_debug("process_slider_offset\n");
+
+	if (is_on_battery())
+		return update_slider_offset(state->slider_offset_dc);
+	else
+		return update_slider_offset(state->slider_offset_ac);
+}
+
+void process_slider(lpmd_config_t *config, lpmd_config_state_t *state)
+{
+	int ret;
+
+	ret = process_balance_slider(state);
+	if (ret)
+		process_balance_slider_default_update(config);
+
+	ret = process_slider_offset(state);
+	if (ret)
+		process_slider_offset_default_update(config);
+}
+
 /* EPP/EPB Management */
 #define MAX_EPP_STRING_LENGTH	32
 struct cpu_info {
@@ -161,6 +362,7 @@ int get_epp_epb(int *epp, char *epp_str, int size, int *epb)
 	/* CPU0 is always online */
 	snprintf (path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cpufreq/energy_performance_preference", 0);
 	get_epp (path, epp, epp_str, size);
+	epp_str[size - 1] = '\0';
 
 	snprintf(path, MAX_STR_LENGTH, "/sys/devices/system/cpu/cpu%d/power/energy_perf_bias", 0);
 	lpmd_read_int(path, epb, -1);

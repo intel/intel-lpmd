@@ -45,11 +45,11 @@ int wlt_update(int fd)
 	if (ret <= 0)
 		return WLT_INVALID;
 
-	 ret = sscanf(index_str, "%d", &index);
-	 if (ret < 0)
+	ret = sscanf(index_str, "%d", &index);
+	if (ret < 0)
 		return WLT_INVALID;
 
-	lpmd_log_debug("wlt:%d\n", index);
+	lpmd_log_debug("wlt: %d\n", index);
 
 	return index;
 }

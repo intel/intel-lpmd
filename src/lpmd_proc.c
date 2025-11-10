@@ -182,16 +182,27 @@ static int connect_to_power_profile_daemon(void)
 	return 1;
 }
 
-static int battery_mode;
+static int battery_mode = -1;
 
 int is_on_battery(void)
 {
+	if (battery_mode < 0)
+		battery_mode = up_client_get_on_battery(upower_client);
+
 	return battery_mode;
 }
 
 static void upower_daemon_cb (UpClient *client, GParamSpec *pspec, gpointer user_data)
 {
+	static int mode = -1;
+
 	battery_mode = up_client_get_on_battery(upower_client);
+	if (mode != battery_mode){
+		process_balance_slider_default_update(&lpmd_config);
+		process_slider_offset_default_update(&lpmd_config);
+	}
+
+	mode = battery_mode;
 }
 
 static void connect_to_upower_daemon(void)
@@ -486,6 +497,10 @@ int lpmd_main(void)
 	/* Enable lpmd auto run when power profile daemon is not connected */
 	if (connect_to_power_profile_daemon ())
 		lpmd_set_auto();
+
+	process_balance_slider_default_update(&lpmd_config);
+	process_slider_offset_default_update(&lpmd_config);
+
 	/*
 	 * lpmd_core_main_loop: is the thread where all LPMD actions take place.
 	 * All other thread send message via pipe to trigger processing

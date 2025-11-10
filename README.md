@@ -92,6 +92,9 @@ Run a workload and monitor `lpmd` to ensure it puts the system in the appropriat
 
 ## Releases
 
+### Release 0.1.0
+- Add support for Panther Lake
+
 ### Release 0.0.9
 
 - Fix lpmd from processing HFI/WLT updates when it is not in auto mode.

@@ -76,6 +76,7 @@ static int probe_gfx_util_sysfs(void)
 {
 	FILE *fp;
 	char buf[8];
+	int ret;
 
 	if (access("/sys/class/drm/card0/device/tile0/gt0/gtidle/idle_residency_ms", R_OK))
 		return 1;
@@ -84,19 +85,20 @@ static int probe_gfx_util_sysfs(void)
 	if (!fp)
 		return 1;
 
-	if (!fread(buf, sizeof(char), 7, fp)) {
+	ret = fread(buf, sizeof(char), 7, fp);
+	if (!ret) {
 		fclose(fp);
 		return 1;
 	}
 
 	fclose(fp);
 
-	if (!strncmp(buf, "gt0-rc", strlen("gt0-rc"))) {
+	if (ret >= strlen("gt0-rc") && !strncmp(buf, "gt0-rc", strlen("gt0-rc"))) {
 		if (!access("/sys/class/drm/card0/device/tile0/gt0/gtidle/idle_residency_ms", R_OK))
 			path_gfx_rc6 = "/sys/class/drm/card0/device/tile0/gt0/gtidle/idle_residency_ms";
 		if (!access("/sys/class/drm/card0/device/tile0/gt1/gtidle/idle_residency_ms", R_OK))
 			path_sam_mc6 = "/sys/class/drm/card0/device/tile0/gt1/gtidle/idle_residency_ms";
-	} else if (!strncmp(buf, "gt0-mc", strlen("gt0-mc"))) {
+	} else if (ret >= strlen("gt0-mc") && !strncmp(buf, "gt0-mc", strlen("gt0-mc"))) {
 		if (!access("/sys/class/drm/card0/device/tile0/gt1/gtidle/idle_residency_ms", R_OK))
 			path_gfx_rc6 = "/sys/class/drm/card0/device/tile0/gt1/gtidle/idle_residency_ms";
 		if (!access("/sys/class/drm/card0/device/tile0/gt0/gtidle/idle_residency_ms", R_OK))
@@ -110,9 +112,9 @@ static int probe_gfx_util_sysfs(void)
 static int get_gfx_util_sysfs(unsigned long long time_ms)
 {
 	static unsigned long long gfx_rc6_prev = ULLONG_MAX, sam_mc6_prev = ULLONG_MAX;
-	unsigned long long gfx_rc6, sam_mc6;
+	unsigned long long gfx_rc6 = ULLONG_MAX, sam_mc6 = ULLONG_MAX;
 	FILE *fp;
-	int gfx_util, sam_util;
+	unsigned long long gfx_util, sam_util;
 	int ret;
 
 	gfx_util = sam_util = -1;
@@ -195,6 +197,8 @@ static int parse_gfx_util_msr(void)
 	uint64_t tsc;
 	int cpu;
 
+	busy_gfx = -1;
+
 	cpu = sched_getcpu();
 	tsc = read_msr(cpu, MSR_TSC);
 	if (tsc == UINT64_MAX)
@@ -207,17 +211,22 @@ static int parse_gfx_util_msr(void)
 	if (!tsc_prev || !val_prev) {
 		tsc_prev = tsc;
 		val_prev = val;
-		busy_gfx = -1;
 		return 0;
 	}
 
-	busy_gfx = (val - val_prev) * 10000 / (tsc - tsc_prev);
+	if (val > val_prev && tsc >tsc_prev) {
+		uint64_t _busy_gfx;
+
+		_busy_gfx = abs(val - val_prev) * 10000ULL / abs(tsc - tsc_prev);
+		if (_busy_gfx < INT_MAX)
+			busy_gfx = (int)_busy_gfx;
+	}
+
 	tsc_prev = tsc;
 	val_prev = val;
 	return 0;
 err:
 	lpmd_log_debug("parse_gfx_util_msr failed\n");
-	busy_gfx = -1;
 	return 1;
 }
 
