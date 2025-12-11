@@ -39,76 +39,79 @@ static void lpmd_parse_state(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *config
 	lpmd_init_config_state(state);
 
 	for (cur_node = a_node; cur_node; cur_node = cur_node->next) {
-		if (cur_node->type == XML_ELEMENT_NODE) {
-			tmp_value = (char*) xmlNodeListGetString (doc, cur_node->xmlChildrenNode, 1);
-			if (tmp_value) {
-				if (!strncmp((const char*)cur_node->name, "ID", strlen("ID")))
-					state->id = strtol (tmp_value, &pos, 10);
-				if (!strncmp((const char*)cur_node->name, "Name", strlen("Name"))) {
-					snprintf(state->name, MAX_STATE_NAME - 1, "%s", tmp_value);
-					state->name[MAX_STATE_NAME - 1] = '\0';
-				}
-				if (!strncmp((const char*)cur_node->name, "WLTType", strlen("WLTType")))
-					state->wlt_type = strtol (tmp_value, &pos, 10);
-				if (!strncmp((const char*)cur_node->name, "EntrySystemLoadThres", strlen("EntrySystemLoadThres")))
-					state->entry_system_load_thres = strtol (tmp_value, &pos, 10);
-				if (!strncmp((const char*)cur_node->name, "ExitSystemLoadThres", strlen("ExitSystemLoadThres")))
-					state->exit_system_load_thres = strtol (tmp_value, &pos, 10);
-				if (!strncmp((const char*)cur_node->name, "ExitSystemLoadhysteresis", strlen("ExitSystemLoadhysteresis")))
-					state->exit_system_load_hyst = strtol (tmp_value, &pos, 10);
-				if (!strncmp((const char*)cur_node->name, "EnterCPULoadThres", strlen("EnterCPULoadThres")))
-					state->enter_cpu_load_thres = strtol (tmp_value, &pos, 10);
-				if (!strncmp((const char*)cur_node->name, "ExitCPULoadThres", strlen("ExitCPULoadThres")))
-					state->exit_cpu_load_thres = strtol (tmp_value, &pos, 10);
-				if (!strncmp((const char*)cur_node->name, "EnterGFXLoadThres", strlen("EnterGFXLoadThres")))
-					state->enter_gfx_load_thres = strtol (tmp_value, &pos, 10);
-				if (!strncmp((const char*)cur_node->name, "ExitGFXLoadThres", strlen("ExitGFXLoadThres")))
-					state->exit_gfx_load_thres = strtol (tmp_value, &pos, 10);
-				if (!strncmp((const char*)cur_node->name, "MinPollInterval", strlen("MinPollInterval")))
-					state->min_poll_interval = strtol (tmp_value, &pos, 10);
-				if (!strncmp((const char*)cur_node->name, "MaxPollInterval", strlen("MaxPollInterval")))
-					state->max_poll_interval = strtol (tmp_value, &pos, 10);
-				if (!strncmp((const char*)cur_node->name, "PollIntervalIncrement", strlen("PollIntervalIncrement")))
-					state->poll_interval_increment = strtol (tmp_value, &pos, 10);
-				if (!strncmp((const char*)cur_node->name, "EPP", strlen("EPP")))
-					state->epp = strtol (tmp_value, &pos, 10);
-				if (!strncmp((const char*)cur_node->name, "EPB", strlen("EPB")))
-					state->epb = strtol (tmp_value, &pos, 10);
-				if (!strncmp((const char*)cur_node->name, "ITMTState", strlen("ITMTState")))
-					state->itmt_state = strtol (tmp_value, &pos, 10);
-				if (!strncmp((const char*)cur_node->name, "IRQMigrate", strlen("IRQMigrate")))
-					state->irq_migrate = strtol (tmp_value, &pos, 10);
-				if (!strncmp((const char*)cur_node->name, "Island0Pcores", strlen("Island0Pcores")))
-					state->island_0_number_p_cores = strtol (tmp_value, &pos, 10);
-				if (!strncmp((const char*)cur_node->name, "Island0Ecores", strlen("Island0Ecores")))
-					state->island_0_number_e_cores = strtol (tmp_value, &pos, 10);
-				if (!strncmp((const char*)cur_node->name, "Island1Pcores", strlen("Island1Pcores")))
-					state->island_1_number_p_cores = strtol (tmp_value, &pos, 10);
-				if (!strncmp((const char*)cur_node->name, "Island1Ecores", strlen("Island1Ecores")))
-					state->island_1_number_e_cores = strtol (tmp_value, &pos, 10);
-				if (!strncmp((const char*)cur_node->name, "Island2Pcores", strlen("Island2Pcores")))
-					state->island_2_number_p_cores = strtol (tmp_value, &pos, 10);
-				if (!strncmp((const char*)cur_node->name, "Island2Ecores", strlen("Island2Ecores")))
-					state->island_2_number_e_cores = strtol (tmp_value, &pos, 10);
-				if (!strncmp((const char*)cur_node->name, "ActiveCPUs", strlen("ActiveCPUs"))) {
-					if (!strncmp (tmp_value, "-1", strlen ("-1")))
-						state->active_cpus[0] = '\0';
-					else
-						copy_user_string(tmp_value, state->active_cpus, sizeof(state->active_cpus));
-				}
-				if (!strncmp((const char*)cur_node->name, "BalanceSliderAC", strlen("BalanceSliderAC")))
-					state->balance_slider_ac = strtol (tmp_value, &pos, 10);
-				if (!strncmp((const char*)cur_node->name, "SliderOffsetAC", strlen("SliderOffsetAC")))
-					state->slider_offset_ac = strtol (tmp_value, &pos, 10);
+		if (cur_node->type != XML_ELEMENT_NODE)
+			continue;
 
-				if (!strncmp((const char*)cur_node->name, "BalanceSliderDC", strlen("BalanceSliderDC")))
-					state->balance_slider_dc = strtol (tmp_value, &pos, 10);
-				if (!strncmp((const char*)cur_node->name, "SliderOffsetDC", strlen("SliderOffsetDC")))
-					state->slider_offset_dc = strtol (tmp_value, &pos, 10);
+		tmp_value = (char*) xmlNodeListGetString (doc, cur_node->xmlChildrenNode, 1);
 
-				xmlFree(tmp_value);
-			}
+		if (!tmp_value)
+			continue;
+
+		if (!strncmp((const char*)cur_node->name, "ID", strlen("ID")))
+			state->id = strtol (tmp_value, &pos, 10);
+		if (!strncmp((const char*)cur_node->name, "Name", strlen("Name"))) {
+			snprintf(state->name, MAX_STATE_NAME - 1, "%s", tmp_value);
+			state->name[MAX_STATE_NAME - 1] = '\0';
 		}
+		if (!strncmp((const char*)cur_node->name, "WLTType", strlen("WLTType")))
+			state->wlt_type = strtol (tmp_value, &pos, 10);
+		if (!strncmp((const char*)cur_node->name, "EntrySystemLoadThres", strlen("EntrySystemLoadThres")))
+			state->entry_system_load_thres = strtol (tmp_value, &pos, 10);
+		if (!strncmp((const char*)cur_node->name, "ExitSystemLoadThres", strlen("ExitSystemLoadThres")))
+			state->exit_system_load_thres = strtol (tmp_value, &pos, 10);
+		if (!strncmp((const char*)cur_node->name, "ExitSystemLoadhysteresis", strlen("ExitSystemLoadhysteresis")))
+			state->exit_system_load_hyst = strtol (tmp_value, &pos, 10);
+		if (!strncmp((const char*)cur_node->name, "EnterCPULoadThres", strlen("EnterCPULoadThres")))
+			state->enter_cpu_load_thres = strtol (tmp_value, &pos, 10);
+		if (!strncmp((const char*)cur_node->name, "ExitCPULoadThres", strlen("ExitCPULoadThres")))
+			state->exit_cpu_load_thres = strtol (tmp_value, &pos, 10);
+		if (!strncmp((const char*)cur_node->name, "EnterGFXLoadThres", strlen("EnterGFXLoadThres")))
+			state->enter_gfx_load_thres = strtol (tmp_value, &pos, 10);
+		if (!strncmp((const char*)cur_node->name, "ExitGFXLoadThres", strlen("ExitGFXLoadThres")))
+			state->exit_gfx_load_thres = strtol (tmp_value, &pos, 10);
+		if (!strncmp((const char*)cur_node->name, "MinPollInterval", strlen("MinPollInterval")))
+			state->min_poll_interval = strtol (tmp_value, &pos, 10);
+		if (!strncmp((const char*)cur_node->name, "MaxPollInterval", strlen("MaxPollInterval")))
+			state->max_poll_interval = strtol (tmp_value, &pos, 10);
+		if (!strncmp((const char*)cur_node->name, "PollIntervalIncrement", strlen("PollIntervalIncrement")))
+			state->poll_interval_increment = strtol (tmp_value, &pos, 10);
+		if (!strncmp((const char*)cur_node->name, "EPP", strlen("EPP")))
+			state->epp = strtol (tmp_value, &pos, 10);
+		if (!strncmp((const char*)cur_node->name, "EPB", strlen("EPB")))
+			state->epb = strtol (tmp_value, &pos, 10);
+		if (!strncmp((const char*)cur_node->name, "ITMTState", strlen("ITMTState")))
+			state->itmt_state = strtol (tmp_value, &pos, 10);
+		if (!strncmp((const char*)cur_node->name, "IRQMigrate", strlen("IRQMigrate")))
+			state->irq_migrate = strtol (tmp_value, &pos, 10);
+		if (!strncmp((const char*)cur_node->name, "Island0Pcores", strlen("Island0Pcores")))
+			state->island_0_number_p_cores = strtol (tmp_value, &pos, 10);
+		if (!strncmp((const char*)cur_node->name, "Island0Ecores", strlen("Island0Ecores")))
+			state->island_0_number_e_cores = strtol (tmp_value, &pos, 10);
+		if (!strncmp((const char*)cur_node->name, "Island1Pcores", strlen("Island1Pcores")))
+			state->island_1_number_p_cores = strtol (tmp_value, &pos, 10);
+		if (!strncmp((const char*)cur_node->name, "Island1Ecores", strlen("Island1Ecores")))
+			state->island_1_number_e_cores = strtol (tmp_value, &pos, 10);
+		if (!strncmp((const char*)cur_node->name, "Island2Pcores", strlen("Island2Pcores")))
+			state->island_2_number_p_cores = strtol (tmp_value, &pos, 10);
+		if (!strncmp((const char*)cur_node->name, "Island2Ecores", strlen("Island2Ecores")))
+			state->island_2_number_e_cores = strtol (tmp_value, &pos, 10);
+		if (!strncmp((const char*)cur_node->name, "ActiveCPUs", strlen("ActiveCPUs"))) {
+			if (!strncmp (tmp_value, "-1", strlen ("-1")))
+				state->active_cpus[0] = '\0';
+			else
+				copy_user_string(tmp_value, state->active_cpus, sizeof(state->active_cpus));
+		}
+		if (!strncmp((const char*)cur_node->name, "BalanceSliderAC", strlen("BalanceSliderAC")))
+			state->balance_slider_ac = strtol (tmp_value, &pos, 10);
+		if (!strncmp((const char*)cur_node->name, "SliderOffsetAC", strlen("SliderOffsetAC")))
+			state->slider_offset_ac = strtol (tmp_value, &pos, 10);
+
+		if (!strncmp((const char*)cur_node->name, "BalanceSliderDC", strlen("BalanceSliderDC")))
+			state->balance_slider_dc = strtol (tmp_value, &pos, 10);
+		if (!strncmp((const char*)cur_node->name, "SliderOffsetDC", strlen("SliderOffsetDC")))
+			state->slider_offset_dc = strtol (tmp_value, &pos, 10);
+
+		xmlFree(tmp_value);
 	}
 }
 
