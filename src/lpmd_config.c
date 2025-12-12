@@ -83,18 +83,12 @@ static void lpmd_parse_state(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *config
 			state->itmt_state = strtol (tmp_value, &pos, 10);
 		if (!strncmp((const char*)cur_node->name, "IRQMigrate", strlen("IRQMigrate")))
 			state->irq_migrate = strtol (tmp_value, &pos, 10);
-		if (!strncmp((const char*)cur_node->name, "Island0Pcores", strlen("Island0Pcores")))
-			state->island_0_number_p_cores = strtol (tmp_value, &pos, 10);
-		if (!strncmp((const char*)cur_node->name, "Island0Ecores", strlen("Island0Ecores")))
-			state->island_0_number_e_cores = strtol (tmp_value, &pos, 10);
-		if (!strncmp((const char*)cur_node->name, "Island1Pcores", strlen("Island1Pcores")))
-			state->island_1_number_p_cores = strtol (tmp_value, &pos, 10);
-		if (!strncmp((const char*)cur_node->name, "Island1Ecores", strlen("Island1Ecores")))
-			state->island_1_number_e_cores = strtol (tmp_value, &pos, 10);
-		if (!strncmp((const char*)cur_node->name, "Island2Pcores", strlen("Island2Pcores")))
-			state->island_2_number_p_cores = strtol (tmp_value, &pos, 10);
-		if (!strncmp((const char*)cur_node->name, "Island2Ecores", strlen("Island2Ecores")))
-			state->island_2_number_e_cores = strtol (tmp_value, &pos, 10);
+		if (!strncmp((const char*)cur_node->name, "ActivePcores", strlen("ActivePcores")))
+			state->active_p_cores = strtol (tmp_value, &pos, 10);
+		if (!strncmp((const char*)cur_node->name, "ActiveEcores", strlen("ActiveEcores")))
+			state->active_e_cores = strtol (tmp_value, &pos, 10);
+		if (!strncmp((const char*)cur_node->name, "ActiveLcores", strlen("ActiveLcores")))
+			state->active_l_cores = strtol (tmp_value, &pos, 10);
 		if (!strncmp((const char*)cur_node->name, "ActiveCPUs", strlen("ActiveCPUs"))) {
 			if (!strncmp (tmp_value, "-1", strlen ("-1")))
 				state->active_cpus[0] = '\0';

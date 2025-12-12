@@ -164,12 +164,9 @@ typedef struct {
 	char active_cpus[MAX_STR_LENGTH];
 	// If active CPUs are specified then
 	// the below counts don't matter
-	int island_0_number_p_cores;
-	int island_0_number_e_cores;
-	int island_1_number_p_cores;
-	int island_1_number_e_cores;
-	int island_2_number_p_cores;
-	int island_2_number_e_cores;
+	int active_p_cores;
+	int active_e_cores;
+	int active_l_cores;
 
 	int itmt_state;
 	int irq_migrate;
