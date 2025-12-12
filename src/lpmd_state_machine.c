@@ -607,7 +607,11 @@ static int config_states_update_config(lpmd_config_t *config)
 }
 
 
-static int build_state_cpumask(lpmd_config_state_t *state)
+/*
+ * Return 0 on success - either when nothing requires setting up Return -1 on error
+ * and -2 if there are no active cpus specified.
+ */
+static int build_state_cpumask_activecpus(lpmd_config_state_t *state)
 {
 	state->steady = 1;
 
@@ -615,7 +619,7 @@ static int build_state_cpumask(lpmd_config_state_t *state)
 		return 0;
 
 	if (state->active_cpus[0] == '\0')
-		return 0;
+		return -2;
 
 	if (!strncmp(state->active_cpus, "all", sizeof("all")) ||
 	    !strncmp(state->active_cpus, "ALL", sizeof("ALL"))) {
@@ -651,19 +655,59 @@ static int build_state_cpumask(lpmd_config_state_t *state)
 	return 0;
 }
 
+static int build_state_cpumask_cputypes(lpmd_config_state_t *state, struct core_masks_t *cmasks)
+{
+	int ret;
+
+	if (state->cpumask_idx != CPUMASK_NONE)
+		return 0;
+
+	state->cpumask_idx = cpumask_alloc();
+	if (state->cpumask_idx == CPUMASK_NONE) {
+		lpmd_log_error("Cannot alloc CPUMASK\n");
+		return -1;
+	}
+
+	/* Setup the specified P-cores */
+	ret = cpumask_init_cpus_type(state->active_p_cores, state->cpumask_idx, cmasks, P_CORE);
+	if (ret < 0) {
+		cpumask_free(state->cpumask_idx);
+		return -1;
+	}
+
+	/* Setup the specified E-cores */
+	ret = cpumask_init_cpus_type(state->active_e_cores, state->cpumask_idx, cmasks, E_CORE);
+	if (ret < 0) {
+		cpumask_free(state->cpumask_idx);
+		return -1;
+	}
+
+	/* Setup the specified L-cores */
+	ret = cpumask_init_cpus_type(state->active_l_cores, state->cpumask_idx, cmasks, L_CORE);
+	if (ret < 0) {
+		cpumask_free(state->cpumask_idx);
+		return -1;
+	}
+
+	return 0;
+}
+
 #define DEFAULT_POLL_RATE_MS	1000
 
 int lpmd_build_config_states(lpmd_config_t *lpmd_config)
 {
 	lpmd_config_state_t *state;
-	int i;
+	int ret, i;
 
 	build_default_states(lpmd_config);
 
 	for (i = CONFIG_STATE_BASE; i < CONFIG_STATE_BASE + lpmd_config->config_state_count; i++) {
 		state = &lpmd_config->config_states[i];
 
-		if (build_state_cpumask(state))
+		ret = build_state_cpumask_activecpus(state);
+		if (ret == -2)
+			build_state_cpumask_cputypes(state, &lpmd_config->core_type_masks);
+		else if (ret)
 			continue;
 
 		if (state->entry_system_load_thres || state->enter_cpu_load_thres || state->enter_gfx_load_thres)

@@ -177,6 +177,41 @@ int cpumask_add_cpu(int cpu, enum cpumask_idx idx)
 	return LPMD_SUCCESS;
 }
 
+static unsigned int get_next_cpu_cmask(unsigned int id, enum core_type type, unsigned char *cmask)
+{
+	bool ret;
+	int i;
+
+	for (i = id ; i < MAX_CPUS ; i++) {
+		ret = !!(cmask[i / 8] & (1 << (i % 8)));
+		if (ret)
+			return i;
+	}
+	return id;
+}
+
+
+int cpumask_init_cpus_type(int count, enum cpumask_idx idx, struct core_masks_t *cmasks, enum core_type type)
+{
+	unsigned int current, next;
+	int nr_cpus = 0;
+
+	if (!count)
+		return 0;
+
+	current = get_next_cpu_cmask(0, type, cmasks->cmask[type]);
+	while(nr_cpus != count) {
+		cpumask_add_cpu(current, idx);
+		next = get_next_cpu_cmask(current + 1, type, cmasks->cmask[type]);
+		if(next == current) /* Couldn't find next core of the provided type */
+			return nr_cpus;
+		nr_cpus++;
+		current = next;
+	}
+
+	return nr_cpus;
+}
+
 int cpumask_init_cpus(char *buf, enum cpumask_idx idx)
 {
 	unsigned int start, end;

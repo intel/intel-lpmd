@@ -42,12 +42,6 @@
 
 static int sample[3][SMA_LENGTH];
 
-enum core_type {
-    P_CORE = 1,
-    E_CORE = 2,
-    L_CORE = 3
-};
-
 typedef struct {
 
     int cpu;
