@@ -108,7 +108,6 @@ typedef struct {
 #define MAX_CONFIG_STATES	10
 #define MAX_STATE_NAME		32
 #define MAX_CONFIG_LEN		64
-#define MAX_CPUS		64
 
 enum lpmd_states {
 	LPMD_OFF,
@@ -191,10 +190,6 @@ typedef struct {
 	int steady;
 }lpmd_config_state_t;
 
-struct core_masks_t {
-	unsigned char cmask[CORE_TYPES_COUNT][MAX_CPUS / 8];
-};
-
 // lpmd config data
 typedef struct {
 	int mode;
@@ -231,8 +226,6 @@ typedef struct {
 	int config_state_count;
 	int tdp;
 
-	struct core_masks_t core_type_masks;
-
 	int balance_slider_def_ac;
 	int slider_offset_def_ac;
 	int balance_slider_def_dc;
@@ -240,6 +233,7 @@ typedef struct {
 
 	lpmd_config_state_t config_states[MAX_STATES];
 	lpmd_data_t data;
+	unsigned char *core_type_masks[CORE_TYPES_COUNT];
 } lpmd_config_t;
 
 enum lpm_cpu_process_mode {
@@ -392,9 +386,12 @@ int cpumask_alloc(void);
 int cpumask_free(enum cpumask_idx idx);
 int cpumask_reset(enum cpumask_idx idx);
 
+void free_cpu_type_masks(lpmd_config_t *lpmd_config);
+int allocate_cpu_type_masks(lpmd_config_t *lpmd_config);
+
 int cpumask_add_cpu(int cpu, enum cpumask_idx idx);
 int cpumask_init_cpus(char *buf, enum cpumask_idx idx);
-int cpumask_init_cpus_type(int count, enum cpumask_idx idx, struct core_masks_t *cmasks, enum core_type type);
+int cpumask_init_cpus_type(int count, enum cpumask_idx idx, unsigned char **cmasks, enum core_type type);
 int cpumask_nr_cpus(enum cpumask_idx idx);
 int cpumask_has_cpu(enum cpumask_idx idx);
 

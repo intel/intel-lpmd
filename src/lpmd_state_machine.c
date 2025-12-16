@@ -655,7 +655,7 @@ static int build_state_cpumask_activecpus(lpmd_config_state_t *state)
 	return 0;
 }
 
-static int build_state_cpumask_cputypes(lpmd_config_state_t *state, struct core_masks_t *cmasks)
+static int build_state_cpumask_cputypes(lpmd_config_state_t *state, unsigned char **cmasks)
 {
 	int ret;
 
@@ -706,7 +706,7 @@ int lpmd_build_config_states(lpmd_config_t *lpmd_config)
 
 		ret = build_state_cpumask_activecpus(state);
 		if (ret == -2)
-			build_state_cpumask_cputypes(state, &lpmd_config->core_type_masks);
+			build_state_cpumask_cputypes(state, lpmd_config->core_type_masks);
 		else if (ret)
 			continue;
 

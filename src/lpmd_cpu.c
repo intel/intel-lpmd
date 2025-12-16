@@ -313,6 +313,11 @@ int detect_cpu_topo(lpmd_config_t *lpmd_config)
 	if (ret)
 		return ret;
 
+	/* Allocate space for per-type cpu masks */
+	ret = allocate_cpu_type_masks(lpmd_config);
+	if (ret)
+		return ret;
+
 	cpumask_reset(CPUMASK_ONLINE);
 	pcores = ecores = lcores = 0;
 
@@ -341,22 +346,22 @@ int detect_cpu_topo(lpmd_config_t *lpmd_config)
 	/* Here it is the first time we migrate CPUs, must clear the previous cgroup settings */
 	cgroup_cleanup();
 
-	memset(lpmd_config->core_type_masks.cmask[0], 0, CORE_TYPES_COUNT * MAX_CPUS / 8);
+	memset(lpmd_config->core_type_masks[0], 0, CORE_TYPES_COUNT * get_max_cpus() / 8);
 
 	for (i = 0; i < get_max_cpus(); i++) {
 		if (!is_cpu_online(i))
 			continue;
 		if (is_cpu_pcore(i)) {
 			pcores++;
-			lpmd_config->core_type_masks.cmask[P_CORE][i / 8] |= 1 << (i % 8);
+			lpmd_config->core_type_masks[P_CORE][i / 8] |= 1 << (i % 8);
 		}
 		else if (is_cpu_ecore(i)) {
 			ecores++;
-			lpmd_config->core_type_masks.cmask[E_CORE][i / 8] |= 1 << (i % 8);
+			lpmd_config->core_type_masks[E_CORE][i / 8] |= 1 << (i % 8);
 		}
 		else if (is_cpu_lcore(i)) {
 			lcores++;
-			lpmd_config->core_type_masks.cmask[L_CORE][i / 8] |= 1 << (i % 8);
+			lpmd_config->core_type_masks[L_CORE][i / 8] |= 1 << (i % 8);
 		}
 	}
 

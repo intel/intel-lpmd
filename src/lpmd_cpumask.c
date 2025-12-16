@@ -177,12 +177,32 @@ int cpumask_add_cpu(int cpu, enum cpumask_idx idx)
 	return LPMD_SUCCESS;
 }
 
+void free_cpu_type_masks(lpmd_config_t *lpmd_config)
+{
+	int i;
+	for (i = 0 ; i < CORE_TYPES_COUNT ; i++)
+		free(lpmd_config->core_type_masks[i]);
+}
+
+int allocate_cpu_type_masks(lpmd_config_t *lpmd_config)
+{
+	int i;
+	for (i = 0 ; i < CORE_TYPES_COUNT ; i++) {
+		lpmd_config->core_type_masks[i] = malloc(get_max_cpus() / 8);
+		if (!lpmd_config->core_type_masks[i]) {
+			free_cpu_type_masks(lpmd_config);
+			return -1;
+		}
+	}
+	return 0;
+}
+
 static unsigned int get_next_cpu_cmask(unsigned int id, enum core_type type, unsigned char *cmask)
 {
 	bool ret;
 	int i;
 
-	for (i = id ; i < MAX_CPUS ; i++) {
+	for (i = id ; i < get_max_cpus() ; i++) {
 		ret = !!(cmask[i / 8] & (1 << (i % 8)));
 		if (ret)
 			return i;
@@ -191,7 +211,7 @@ static unsigned int get_next_cpu_cmask(unsigned int id, enum core_type type, uns
 }
 
 
-int cpumask_init_cpus_type(int count, enum cpumask_idx idx, struct core_masks_t *cmasks, enum core_type type)
+int cpumask_init_cpus_type(int count, enum cpumask_idx idx, unsigned char **cmasks, enum core_type type)
 {
 	unsigned int current, next;
 	int nr_cpus = 0;
@@ -199,10 +219,10 @@ int cpumask_init_cpus_type(int count, enum cpumask_idx idx, struct core_masks_t 
 	if (!count)
 		return 0;
 
-	current = get_next_cpu_cmask(0, type, cmasks->cmask[type]);
+	current = get_next_cpu_cmask(0, type, cmasks[type]);
 	while(nr_cpus != count) {
 		cpumask_add_cpu(current, idx);
-		next = get_next_cpu_cmask(current + 1, type, cmasks->cmask[type]);
+		next = get_next_cpu_cmask(current + 1, type, cmasks[type]);
 		if(next == current) /* Couldn't find next core of the provided type */
 			return nr_cpus;
 		nr_cpus++;

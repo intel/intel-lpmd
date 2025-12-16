@@ -391,34 +391,37 @@ int lpmd_main(void)
 
 	ret = detect_cpu_topo(&lpmd_config);
 	if (ret)
-		return ret;
+		goto cleanup;
 
 //	 Call all lpmd related functions here
 	ret = lpmd_get_config (&lpmd_config);
 	if (ret)
-		return ret;
+		goto cleanup;
 
 	pthread_mutex_init (&lpmd_mutex, NULL);
 
 	ret = detect_lpm_cpus(lpmd_config.lp_mode_cpus);
 	if (ret)
-		return ret;
+		goto cleanup;
 
 	ret = cgroup_init(&lpmd_config);
 	if (ret)
-		return ret;
+		goto cleanup;
 
 	itmt_init();
 
 	ret = epp_epb_init();
 	if (ret)
-		return ret;
+		goto cleanup;
 
 	if (!has_hfi_capability ())
 		lpmd_config.hfi_lpm_enable = 0;
 
 	/* Must done after init_cpu() */
 	lpmd_build_config_states(&lpmd_config);
+
+	/* Cleanup dynamically allocated core-type cpumasks */
+	free_cpu_type_masks(&lpmd_config);
 
 	ret = irq_init();
 	if (ret)
@@ -514,4 +517,7 @@ int lpmd_main(void)
 	lpmd_log_debug ("lpmd_init succeeds\n");
 
 	return LPMD_SUCCESS;
+cleanup:
+	free_cpu_type_masks(&lpmd_config);
+	return ret;
 }
