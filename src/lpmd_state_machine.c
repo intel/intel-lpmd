@@ -109,9 +109,9 @@ int lpmd_init_config_state(lpmd_config_state_t *state)
 	state->active_cpus[0] = '\0';
 	state->cpumask_idx = CPUMASK_NONE;
 
-	state->active_p_cores = 0;
-	state->active_e_cores = 0;
-	state->active_l_cores = 0;
+	state->active_p_cores[0] = '\0';
+	state->active_e_cores[0] = '\0';
+	state->active_l_cores[0] = '\0';
 
 	state->itmt_state = SETTING_IGNORE;
 	state->irq_migrate = SETTING_IGNORE;
@@ -473,10 +473,13 @@ static void dump_states(lpmd_config_t *lpmd_config)
 		lpmd_log_info ("\tIRQMigrate:%d\n", state->irq_migrate);
 		if (state->active_cpus[0] != '\0')
 			lpmd_log_info ("\tactive_cpus:%s\n", state->active_cpus);
+		if (state->active_p_cores[0] != '\0')
+			lpmd_log_info ("\tactive_p_cores:%s\n", state->active_p_cores);
+		if (state->active_e_cores[0] != '\0')
+			lpmd_log_info ("\tactive_e_cores:%s\n", state->active_e_cores);
+		if (state->active_l_cores[0] != '\0')
+			lpmd_log_info ("\tactive_l_cores:%s\n", state->active_l_cores);
 		lpmd_log_info ("\tCPUMASK idx:%d\n", state->cpumask_idx);
-		lpmd_log_info ("\tactive_p_cores:%d\n", state->active_p_cores);
-		lpmd_log_info ("\tactive_e_cores:%d\n", state->active_e_cores);
-		lpmd_log_info ("\tactive_l_cores:%d\n", state->active_l_cores);
 		lpmd_log_info ("\tBalancedSliderAC:%d\n", state->balance_slider_ac);
 		lpmd_log_info ("\tBalancedSliderDC:%d\n", state->balance_slider_dc);
 		lpmd_log_info ("\tSliderOffsetAC:%d\n", state->slider_offset_ac);

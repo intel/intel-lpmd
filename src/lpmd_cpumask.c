@@ -197,6 +197,18 @@ int allocate_cpu_type_masks(lpmd_config_t *lpmd_config)
 	return 0;
 }
 
+static unsigned int count_cpu_type_cores(unsigned char * bitmask)
+{
+	unsigned int count = 0;
+	int i;
+
+	for (i = 0 ; i < get_max_cpus() ; i++) {
+		if (!!(bitmask[i / 8] & (1 << (i % 8))))
+			count++;
+	}
+	return count;
+}
+
 static unsigned int get_next_cpu_cmask(unsigned int id, enum core_type type, unsigned char *cmask)
 {
 	bool ret;
@@ -210,14 +222,20 @@ static unsigned int get_next_cpu_cmask(unsigned int id, enum core_type type, uns
 	return id;
 }
 
-
-int cpumask_init_cpus_type(int count, enum cpumask_idx idx, unsigned char **cmasks, enum core_type type)
+int cpumask_init_cpus_type(char * buf, enum cpumask_idx idx, unsigned char **cmasks, enum core_type type)
 {
-	unsigned int current, next;
+	unsigned int current, next, count;
 	int nr_cpus = 0;
+	char * end;
 
-	if (!count)
-		return 0;
+	if (!strncmp(buf, "ALL", strlen("ALL")) || !strncmp(buf, "all", strlen("all")))
+		count = count_cpu_type_cores(cmasks[type]);
+	else {
+		errno = 0;
+		count = strtol(buf, &end, 10);
+		if (errno || *end != '\0' || !count)
+			return 0;
+	}
 
 	current = get_next_cpu_cmask(0, type, cmasks[type]);
 	while(nr_cpus != count) {

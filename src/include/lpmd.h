@@ -171,9 +171,9 @@ typedef struct {
 	char active_cpus[MAX_STR_LENGTH];
 	// If active CPUs are specified then
 	// the below counts don't matter
-	int active_p_cores;
-	int active_e_cores;
-	int active_l_cores;
+	char active_p_cores[MAX_STR_LENGTH];
+	char active_e_cores[MAX_STR_LENGTH];
+	char active_l_cores[MAX_STR_LENGTH];
 
 	int itmt_state;
 	int irq_migrate;
@@ -391,7 +391,7 @@ int allocate_cpu_type_masks(lpmd_config_t *lpmd_config);
 
 int cpumask_add_cpu(int cpu, enum cpumask_idx idx);
 int cpumask_init_cpus(char *buf, enum cpumask_idx idx);
-int cpumask_init_cpus_type(int count, enum cpumask_idx idx, unsigned char **cmasks, enum core_type type);
+int cpumask_init_cpus_type(char * buf, enum cpumask_idx idx, unsigned char **cmasks, enum core_type type);
 int cpumask_nr_cpus(enum cpumask_idx idx);
 int cpumask_has_cpu(enum cpumask_idx idx);
 
