@@ -23,7 +23,6 @@
 #include <libxml/tree.h>
 
 #define CONFIG_FILE_NAME "intel_lpmd_config.xml"
-#define MAX_FILE_NAME_PATH	128
 
 static void save_string_or_zero(char * tmp_value, char * dst_string, int dest_size)
 {
@@ -428,31 +427,64 @@ err:			xmlFree (tmp_value);
 	return LPMD_SUCCESS;
 }
 
-int lpmd_get_config(lpmd_config_t *lpmd_config)
+int match_config_file(int family, int model, int tdp, char *save_file_name)
 {
 	char file_name[MAX_FILE_NAME_PATH];
+	struct stat s;
+	int ret;
+
+	snprintf(file_name, MAX_FILE_NAME_PATH,
+		 "%s/intel_lpmd_config_F%d_M%d_T%d.xml", TDCONFDIR, family,
+		 model, tdp);
+
+	lpmd_log_msg ("Looking for config file %s\n", file_name);
+	ret = stat (file_name, &s);
+	if (!ret) {
+		strncpy(save_file_name, file_name, MAX_FILE_NAME_PATH);
+		return ret;
+	}
+
+	snprintf(file_name, MAX_FILE_NAME_PATH,
+		 "%s/intel_lpmd_config_F%d_M%d.xml", TDCONFDIR, family, model);
+
+	lpmd_log_msg("Looking for config file %s\n", file_name);
+
+	ret = stat(file_name, &s);
+	if (!ret) {
+		strncpy(save_file_name, file_name, MAX_FILE_NAME_PATH);
+		return ret;
+	}
+
+	return ret;
+}
+
+int lpmd_get_config(lpmd_config_t *lpmd_config)
+{
+	char file_name_str[MAX_FILE_NAME_PATH];
 	xmlNode *root_element;
 	xmlNode *cur_node;
+	char *file_name;
 	struct stat s;
 	xmlDoc *doc;
 
 	if (!lpmd_config)
 		return LPMD_ERROR;
 
-
-	snprintf(file_name, MAX_FILE_NAME_PATH, "%s/intel_lpmd_config_F%d_M%d_T%d.xml",
-			 TDCONFDIR, lpmd_config->cpu_family, lpmd_config->cpu_model, lpmd_config->tdp);
-
-	lpmd_log_msg ("Looking for config file %s\n", file_name);
-	if (!stat (file_name, &s))
+	/*
+	 * If a config file was already found skip looking for it the second
+	 * time.
+	 */
+	if (strcmp(lpmd_config->file_name, "")) {
+		file_name = lpmd_config->file_name;
 		goto process_xml;
+	}
 
-	snprintf(file_name, MAX_FILE_NAME_PATH, "%s/intel_lpmd_config_F%d_M%d.xml",
-			 TDCONFDIR, lpmd_config->cpu_family, lpmd_config->cpu_model);
-	lpmd_log_msg ("Looking for config file %s\n", file_name);
-	if (!stat (file_name, &s))
-		goto process_xml;
+	file_name = file_name_str;
 
+	/*
+	 * If a model specific config file was not found use the generic
+	 * config file.
+	 */
 	snprintf (file_name, MAX_FILE_NAME_PATH, "%s/%s", TDCONFDIR, CONFIG_FILE_NAME);
 
 	lpmd_log_msg ("Reading configuration file %s\n", file_name);
@@ -461,6 +493,8 @@ int lpmd_get_config(lpmd_config_t *lpmd_config)
 		lpmd_log_msg ("error: could not find file %s\n", file_name);
 		return LPMD_ERROR;
 	}
+
+	strncpy(lpmd_config->file_name, file_name, MAX_FILE_NAME_PATH - 1);
 
 process_xml:
 	doc = xmlReadFile (file_name, NULL, 0);

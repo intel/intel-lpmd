@@ -105,6 +105,7 @@ typedef struct {
 } message_capsul_t;
 
 #define MAX_STR_LENGTH		256
+#define MAX_FILE_NAME_PATH	128
 #define MAX_CONFIG_STATES	10
 #define MAX_STATE_NAME		32
 #define MAX_CONFIG_LEN		64
@@ -227,6 +228,7 @@ typedef struct {
 	char cpu_config[MAX_CONFIG_LEN];
 	int config_state_count;
 	int tdp;
+	char file_name[MAX_FILE_NAME_PATH];
 
 	int balance_slider_def_ac;
 	int slider_offset_def_ac;
@@ -319,6 +321,7 @@ void update_reason(int reason);
 int intel_dbus_server_init(gboolean (*exit_handler)(void));
 
 /* lpmd_config.c */
+int match_config_file(int family, int model, int tdp, char *save_file_name);
 int lpmd_get_config(lpmd_config_t *lpmd_config);
 
 /* lpmd_state_machine.c */
@@ -372,6 +375,7 @@ int check_cpu_hotplug(void);
 int detect_supported_platform(lpmd_config_t *lpmd_config);
 int detect_cpu_topo(lpmd_config_t *lpmd_config);
 int detect_lpm_cpus(char *cmd_cpus);
+int get_tdp(void);
 
 int is_cpu_ecore(int cpu);
 int is_cpu_pcore(int cpu);

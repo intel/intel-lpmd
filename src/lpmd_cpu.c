@@ -49,7 +49,8 @@ static struct cpu_model_entry id_table[] = {
 int detect_supported_platform(lpmd_config_t *lpmd_config)
 {
 	unsigned int eax, ebx, ecx, edx;
-	unsigned int max_level, family, model, stepping;
+	unsigned int max_level, family, model, stepping, tdp;
+	char file_name[MAX_FILE_NAME_PATH] = "\0";
 	int val;
 
 	cpuid(0, eax, ebx, ecx, edx);
@@ -69,8 +70,15 @@ int detect_supported_platform(lpmd_config_t *lpmd_config)
 	if (family == 6)
 		model += ((eax >> 16) & 0xf) << 4;
 
+	tdp = get_tdp();
+
 	lpmd_log_info("%u CPUID levels; family:model:stepping 0x%x:%x:%x (%u:%u:%u)\n",
 			max_level, family, model, stepping, family, model, stepping);
+
+	if (!match_config_file(family, model, tdp, file_name)) {
+		lpmd_log_info("Found a config file matching the platform model - skipping platform check\n");
+		goto end;
+	}
 
 	if (!do_platform_check()) {
 		lpmd_log_info("Ignore platform check\n");
@@ -125,6 +133,11 @@ int detect_supported_platform(lpmd_config_t *lpmd_config)
 end:
 	lpmd_config->cpu_family = family;
 	lpmd_config->cpu_model = model;
+	lpmd_config->tdp = tdp;
+	if (file_name[0] != '\0')
+		strncpy(lpmd_config->file_name, file_name, MAX_FILE_NAME_PATH);
+	else
+		lpmd_config->file_name[0] = '\0';
 
 	return 0;
 }
@@ -206,7 +219,7 @@ int is_cpu_lcore(int cpu)
 }
 
 #define PATH_RAPL	"/sys/class/powercap"
-static int get_tdp(void)
+int get_tdp(void)
 {
 	FILE *filep;
 	DIR *dir;
@@ -368,11 +381,11 @@ int detect_cpu_topo(lpmd_config_t *lpmd_config)
 		}
 	}
 
-	tdp = get_tdp();
-	lpmd_log_info("Detected %d Pcores, %d Ecores, %d Lcores, TDP %dW\n", pcores, ecores, lcores, tdp);
-	ret = snprintf(lpmd_config->cpu_config, MAX_CONFIG_LEN - 1, " %dP%dE%dL-%dW ", pcores, ecores, lcores, tdp);
-
-	lpmd_config->tdp = tdp;
+	lpmd_log_info("Detected %d Pcores, %d Ecores, %d Lcores, TDP %dW\n",
+		      pcores, ecores, lcores, lpmd_config->tdp);
+	ret = snprintf(lpmd_config->cpu_config, MAX_CONFIG_LEN - 1,
+		       " %dP%dE%dL-%dW ", pcores, ecores, lcores,
+		       lpmd_config->tdp);
 
 	return 0;
 }
