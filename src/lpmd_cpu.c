@@ -40,6 +40,7 @@ static struct cpu_model_entry id_table[] = {
 		{ 6, 0xbf }, // Raptorlake S
 		{ 6, 0xaa }, // Meteorlake
 		{ 6, 0xac }, // Meteorlake
+		{ 6, 0xb5 }, // ArrowLake
 		{ 6, 0xbd }, // Lunarlake
 		{ 6, 0xcc }, // Pantherlake
 		{ 0, 0 } // Last Invalid entry
