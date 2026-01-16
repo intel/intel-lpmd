@@ -69,7 +69,7 @@ PKG_CHECK_MODULES(libnlgenl30, [libnl-genl-3.0], libnlgenl30=yes, libnlgenl30=no
 
 PKG_CHECK_MODULES([SYSTEMD], [libsystemd], [],
       [PKG_CHECK_MODULES([SYSTEMD], [libsystemd-daemon], [],
-       AC_MSG_ERROR([libsystemd support requested but found]))])
+       AC_MSG_ERROR([libsystemd support requested but not found]))])
 
 PKG_CHECK_MODULES(UPOWER, upower-glib)
 
