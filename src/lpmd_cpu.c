@@ -96,7 +96,7 @@ int detect_supported_platform(lpmd_config_t *lpmd_config)
 		return -1;
 	}
 
-	if (val != 2) {
+	if (val != 2 && val != 8) {
 		lpmd_log_info("Non-Mobile PM profile detected. %s returns %d\n", PATH_PM_PROFILE, val);
 		return -1;
 	}
