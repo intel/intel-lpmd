@@ -38,7 +38,7 @@ AS_IF(["x$with_systemdsystemunitdir" != xno], [
         AC_SUBST([systemdsystemunitdir], [$with_systemdsystemunitdir])
 ])
 
-AM_CONDITIONAL(HAVE_SYSTEMD, [test -n "$with_systemdsystemunitdir" -a "x$with_systemdsystemunitdir" != xno ])
+AM_CONDITIONAL(HAVE_SYSTEMD, [test -n "$with_systemdsystemunitdir" && test "x$with_systemdsystemunitdir" != xno])
 
 # print configuration
 echo
