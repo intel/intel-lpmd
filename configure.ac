@@ -18,11 +18,11 @@ AM_MAINTAINER_MODE([enable])
 GTK_DOC_CHECK([1.11],[--flavour no-tmpl])
 
 AC_ARG_WITH(dbus-sys-dir, AS_HELP_STRING([--with-dbus-sys-dir=DIR], [where D-BUS system.d directory is]))
-if test -n "$with_dbus_sys_dir" ; then
+AS_IF([test -n "$with_dbus_sys_dir"], [
     DBUS_SYS_DIR="$with_dbus_sys_dir"
-else
+], [
     DBUS_SYS_DIR="/etc/dbus-1/system.d"
-fi
+])
 AC_SUBST(DBUS_SYS_DIR)
 
 # paths
@@ -34,9 +34,9 @@ PKG_PROG_PKG_CONFIG
 AC_ARG_WITH([systemdsystemunitdir],
         AS_HELP_STRING([--with-systemdsystemunitdir=DIR], [Directory for systemd service files]),
         [], [with_systemdsystemunitdir=$($PKG_CONFIG --variable=systemdsystemunitdir systemd)])
-if test "x$with_systemdsystemunitdir" != xno; then
+AS_IF(["x$with_systemdsystemunitdir" != xno], [
         AC_SUBST([systemdsystemunitdir], [$with_systemdsystemunitdir])
-fi
+])
 
 AM_CONDITIONAL(HAVE_SYSTEMD, [test -n "$with_systemdsystemunitdir" -a "x$with_systemdsystemunitdir" != xno ])
 
