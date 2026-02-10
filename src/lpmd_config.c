@@ -114,7 +114,7 @@ static void lpmd_parse_state(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *config
 	}
 }
 
-static int is_wildcard(char *str)
+int is_wildcard(char *str)
 {
 	if (!str)
 		return 1;

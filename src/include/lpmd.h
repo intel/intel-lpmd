@@ -323,6 +323,7 @@ int intel_dbus_server_init(gboolean (*exit_handler)(void));
 /* lpmd_config.c */
 int match_config_file(int family, int model, int tdp, char *save_file_name);
 int lpmd_get_config(lpmd_config_t *lpmd_config);
+int is_wildcard(char *str);
 
 /* lpmd_state_machine.c */
 int update_lpmd_state(int state);

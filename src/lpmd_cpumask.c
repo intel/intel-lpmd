@@ -228,7 +228,7 @@ int cpumask_init_cpus_type(char * buf, enum cpumask_idx idx, unsigned char **cma
 	int nr_cpus = 0;
 	char * end;
 
-	if (!strncmp(buf, "ALL", strlen("ALL")) || !strncmp(buf, "all", strlen("all")))
+	if (!strncmp(buf, "ALL", strlen("ALL")) || !strncmp(buf, "all", strlen("all")) || is_wildcard(buf))
 		count = count_cpu_type_cores(cmasks[type]);
 	else {
 		errno = 0;

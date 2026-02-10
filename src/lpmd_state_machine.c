@@ -638,7 +638,8 @@ static int build_state_cpumask_activecpus(lpmd_config_state_t *state)
 		return -2;
 
 	if (!strncmp(state->active_cpus, "all", sizeof("all")) ||
-	    !strncmp(state->active_cpus, "ALL", sizeof("ALL"))) {
+	    !strncmp(state->active_cpus, "ALL", sizeof("ALL")) ||
+	    is_wildcard(state->active_cpus)) {
 		state->cpumask_idx = CPUMASK_ONLINE;
 		return 0;
 	}
