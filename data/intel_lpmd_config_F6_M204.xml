@@ -152,13 +152,13 @@ for Intel Energy Optimizer (LPMD) daemon
 			<ID> 2 </ID>
 			<Name> UTIL_IDLE_SUSTAIN </Name>
 			<WLTType> 2 </WLTType>
-			<ActiveCpus> * </ActiveCpus>
+			<ActiveCPUs> * </ActiveCPUs>
 		</State>
 		<State>
 			<ID> 3 </ID>
 			<Name> UTIL_IDLE_BURSTY </Name>
 			<WLTType> 3 </WLTType>
-			<ActiveCpus> * </ActiveCpus>
+			<ActiveCPUs> * </ActiveCPUs>
 		</State>
 	</States>
 
