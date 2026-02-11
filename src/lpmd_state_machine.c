@@ -174,15 +174,15 @@ static int get_config_state_interval(lpmd_config_t *config, int idx)
 {
 	lpmd_config_state_t *state = &config->config_states[idx];
 
+	/* wlt proxy updates polling separately */
+	if (config->wlt_proxy_enable)
+		return 0;
+
 	/* Start polling only when needed */
 	if (!polling_enabled) {
 		config->data.polling_interval = -1;
 		return 0;
 	}
-
-	/* wlt proxy updates polling separately */
-	if (config->wlt_proxy_enable)
-		return 0;
 
 	/* Always start with minumum polling interval for a new state */
 	if (idx != current_idx) {
