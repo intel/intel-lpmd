@@ -120,14 +120,13 @@ int detect_supported_platform(lpmd_config_t *lpmd_config)
 
 	/* Unsupported model */
 	if (!id_table[val].family) {
-		lpmd_log_info("Platform not supported yet.\n");
-		lpmd_log_debug("Supported platforms:\n");
+		lpmd_log_info("Platform model %d not in supported platform list. Attempt fallback to generic config.\n", model);
+		lpmd_log_debug("Supported platforms (with optimized configs):\n");
 		val = 0;
 		while (id_table[val].family) {
 			lpmd_log_debug("\tfamily %d model %d\n", id_table[val].family, id_table[val].model);
 			val++;
 		}
-		return -1;
 	}
 
 end:
