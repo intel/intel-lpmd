@@ -177,9 +177,11 @@ static int process_cpu_isolate(lpmd_config_state_t *state)
 		return 1;
 
 	if (!cpumask_equal(state->cpumask_idx, CPUMASK_ONLINE)) {
-		if (lpmd_write_str ("/sys/fs/cgroup/lpm/cpuset.cpus", get_cpu_isolation_str(state->cpumask_idx), LPMD_LOG_DEBUG))
+		if (lpmd_write_str ("/sys/fs/cgroup/lpm/cpuset.cpus.exclusive", get_cpu_isolation_str(state->cpumask_idx), LPMD_LOG_DEBUG))
 			return 1;
 		if (lpmd_write_str ("/sys/fs/cgroup/lpm/cpuset.cpus.partition", "isolated", LPMD_LOG_DEBUG))
+			return 1;
+		if (lpmd_write_str ("/sys/fs/cgroup/lpm/cpuset.cpus", get_cpu_isolation_str(state->cpumask_idx), LPMD_LOG_DEBUG))
 			return 1;
 	} else {
 		if (lpmd_write_str ("/sys/fs/cgroup/lpm/cpuset.cpus", get_cpu_isolation_str(CPUMASK_ONLINE), LPMD_LOG_DEBUG))
