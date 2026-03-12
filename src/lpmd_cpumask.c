@@ -243,19 +243,21 @@ int cpumask_init_cpus_type(char * buf, enum cpumask_idx idx, unsigned char **cma
 		cpumask_add_cpu(current, idx);
 		next = get_next_cpu_cmask(current + 1, type, cmasks[type]);
 		if(next == current) /* Couldn't find next core of the provided type */
-			return nr_cpus;
+			goto blacklist;
 		nr_cpus++;
 		current = next;
 	}
 
-	return nr_cpus;
+blacklist:
+	cpumask_blacklist(idx);
+
+	return CPU_COUNT_S(size_cpumask, cpumasks[idx].mask);
 }
 
 int cpumask_init_cpus(char *buf, enum cpumask_idx idx)
 {
 	unsigned int start, end;
 	char *next;
-	int nr_cpus = 0;
 
 	if (buf[0] == '\0')
 		return 0;
@@ -279,7 +281,6 @@ int cpumask_init_cpus(char *buf, enum cpumask_idx idx)
 		start = strtoul (next, &next, 10);
 
 		cpumask_add_cpu (start, idx);
-		nr_cpus++;
 
 		if (*next == '\0')
 			break;
@@ -304,10 +305,8 @@ int cpumask_init_cpus(char *buf, enum cpumask_idx idx)
 		if (end <= start)
 			goto error;
 
-		while (++start <= end) {
+		while (++start <= end)
 			cpumask_add_cpu (start, idx);
-			nr_cpus++;
-		}
 
 		if (*next == ',')
 			next += 1;
@@ -315,7 +314,9 @@ int cpumask_init_cpus(char *buf, enum cpumask_idx idx)
 			goto error;
 	}
 
-	return nr_cpus;
+	cpumask_blacklist(idx);
+
+	return CPU_COUNT_S(size_cpumask, cpumasks[idx].mask);
 error:
 	lpmd_log_error ("CPU string malformed: %s\n", buf);
 	return -1;
@@ -546,6 +547,35 @@ set_val: if (j == 7) {
 	cpumasks[idx].hexvals = vals;
 	return cpumasks[idx].hexvals;
 }
+
+int cpumask_blacklist(enum cpumask_idx idx)
+{
+	if (!cpumasks[idx].mask)
+		alloc_cpu_set (&cpumasks[idx].mask);
+
+	/* Return due to blacklist not getting initialized yet. */
+	if (!cpumasks[CPUMASK_BLACKLIST].mask) {
+		alloc_cpu_set (&cpumasks[CPUMASK_BLACKLIST].mask);
+		return LPMD_ERROR;
+	}
+
+	/* Return due to blacklist being empty. */
+	if (!CPU_COUNT_S(size_cpumask, cpumasks[CPUMASK_BLACKLIST].mask))
+		return LPMD_ERROR;
+
+	/* Otherwise clear blacklisted cpus from the chosen cpumask */
+	for (int i = 0 ; i < topo_max_cpus ; i++)
+		if (CPU_ISSET_S(i, size_cpumask, cpumasks[CPUMASK_BLACKLIST].mask))
+			CPU_CLR_S(i, size_cpumask, cpumasks[idx].mask);
+
+	if (!CPU_COUNT_S(size_cpumask, cpumasks[idx].mask)) {
+		lpmd_log_error("%s : cpumask[%d] is empty after blacklisting due to unavailable cpus\n", cpumasks[idx].name, idx);
+		lpmd_log_error("It's possible another cgroup claimed all cores required by cpumask[%d]\n", idx);
+	}
+
+	return LPMD_SUCCESS;
+}
+
 
 char *get_proc_irq_str(enum cpumask_idx idx)
 {

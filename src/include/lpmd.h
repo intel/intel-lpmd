@@ -414,6 +414,7 @@ void free_cpu_type_masks(lpmd_config_t *lpmd_config);
 int allocate_cpu_type_masks(lpmd_config_t *lpmd_config);
 
 int cpumask_add_cpu(int cpu, enum cpumask_idx idx);
+int cpumask_blacklist(enum cpumask_idx idx);
 int cpumask_init_cpus(char *buf, enum cpumask_idx idx);
 int cpumask_init_cpus_type(char * buf, enum cpumask_idx idx, unsigned char **cmasks, enum core_type type);
 int cpumask_nr_cpus(enum cpumask_idx idx);

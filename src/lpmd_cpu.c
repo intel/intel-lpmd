@@ -382,6 +382,9 @@ int detect_cpu_topo(lpmd_config_t *lpmd_config)
 		}
 	}
 
+	/* Clear the CPUs claimed by other cgroups from the ONLINE mask */
+	cpumask_blacklist(CPUMASK_ONLINE);
+
 	lpmd_log_info("Detected %d Pcores, %d Ecores, %d Lcores, TDP %dW\n",
 		      pcores, ecores, lcores, lpmd_config->tdp);
 	ret = snprintf(lpmd_config->cpu_config, MAX_CONFIG_LEN - 1,
