@@ -441,23 +441,33 @@ static int cpumask_to_hexstr(cpu_set_t *mask, char *str, int size)
 	return 0;
 }
 
-char* get_cpus_str(enum cpumask_idx idx, bool refresh)
+int get_cached_value_init(enum cpumask_idx idx, bool refresh,
+				   char **cached_str, const char *cached_name)
 {
 	if (!cpumasks[idx].mask)
-		return NULL;
+		return LPMD_ERROR;
 
 	if (!CPU_COUNT_S(size_cpumask, cpumasks[idx].mask))
-		return NULL;
+		return LPMD_ERROR;
 
-	if (cpumasks[idx].str) {
+	if (*cached_str) {
 		if (!refresh)
-			return cpumasks[idx].str;
+			return LPMD_SUCCESS;
 	} else {
-		cpumasks[idx].str = calloc (MAX_STR_LENGTH, 1);
+		*cached_str = calloc (MAX_STR_LENGTH, 1);
 	}
 
-	if (!cpumasks[idx].str)
-		err (3, "STR_ALLOC");
+	if (!(*cached_str))
+		err (3, "%s_ALLOC", cached_name);
+
+	return LPMD_SUCCESS;
+}
+
+char* get_cpus_str(enum cpumask_idx idx, bool refresh)
+{
+	int ret = get_cached_value_init(idx, refresh, &cpumasks[idx].str, "STR");
+	if (ret)
+		return NULL;
 
 	cpumask_to_str (cpumasks[idx].mask, cpumasks[idx].str, MAX_STR_LENGTH);
 	return cpumasks[idx].str;
@@ -465,22 +475,9 @@ char* get_cpus_str(enum cpumask_idx idx, bool refresh)
 
 char* get_cpus_hexstr(enum cpumask_idx idx, bool refresh)
 {
-	if (!cpumasks[idx].mask)
+	int ret = get_cached_value_init(idx, refresh, &cpumasks[idx].hexstr, "HEXSTR");
+	if (ret)
 		return NULL;
-
-	if (!CPU_COUNT_S(size_cpumask, cpumasks[idx].mask))
-		return NULL;
-
-	if (cpumasks[idx].hexstr) {
-		/* Already was allocated, it's okay to use the cached version */
-		if (!refresh)
-			return cpumasks[idx].hexstr;
-	} else {
-		cpumasks[idx].hexstr = calloc (MAX_STR_LENGTH, 1);
-	}
-
-	if (!cpumasks[idx].hexstr)
-		err (3, "STR_ALLOC");
 
 	cpumask_to_hexstr (cpumasks[idx].mask, cpumasks[idx].hexstr, MAX_STR_LENGTH);
 	return cpumasks[idx].hexstr;
@@ -489,22 +486,11 @@ char* get_cpus_hexstr(enum cpumask_idx idx, bool refresh)
 static char* get_cpus_str_reverse(enum cpumask_idx idx, bool refresh)
 {
 	cpu_set_t *mask;
+	int ret;
 
-	if (!cpumasks[idx].mask)
+	ret = get_cached_value_init(idx, refresh, &cpumasks[idx].str_reverse, "STR_REVERSE");
+	if (ret)
 		return NULL;
-
-	if (!CPU_COUNT_S(size_cpumask, cpumasks[idx].mask))
-		return NULL;
-
-	if (cpumasks[idx].str_reverse) {
-		if (!refresh)
-			return cpumasks[idx].str_reverse;
-	} else {
-		cpumasks[idx].str_reverse = calloc (MAX_STR_LENGTH, 1);
-	}
-
-	if (!cpumasks[idx].str_reverse)
-		err (3, "STR_ALLOC");
 
 	alloc_cpu_set (&mask);
 	CPU_XOR_S(size_cpumask, mask, cpumasks[idx].mask, cpumasks[CPUMASK_ONLINE].mask);
