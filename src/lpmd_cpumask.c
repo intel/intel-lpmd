@@ -572,7 +572,8 @@ int cpumask_blacklist(enum cpumask_idx idx)
 	cpumasks[idx].hexvals = get_cpus_hexvals(idx, true);
 
 	if (!CPU_COUNT_S(size_cpumask, cpumasks[idx].mask)) {
-		lpmd_log_error("%s : cpumask[%d] is empty after blacklisting due to unavailable cpus\n", cpumasks[idx].name, idx);
+		char *state_name = user_cpumask_idx_to_state_name(idx);
+		lpmd_log_error("%s: cpumask[%d] is empty after blacklisting due to unavailable cpus\n", state_name, idx);
 		lpmd_log_error("It's possible another cgroup claimed all cores required by cpumask[%d]\n", idx);
 	}
 

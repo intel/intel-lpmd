@@ -298,6 +298,21 @@ void update_reason(int reason)
 	lpmd_config.data.need_update |= 1 << reason;
 }
 
+/*
+ * This function should only work for user defined states - the ones located in
+ * config files inside the <State> tag. Others like the default ones can share
+ * their cpumasks with other states and therefore can't be uniquely identified
+ * by their cpumask idx.
+ */
+char *user_cpumask_idx_to_state_name(enum cpumask_idx idx) {
+
+	for (int i = 0 ; i < MAX_STATES ; i++) {
+		if (lpmd_config.config_states[i].cpumask_idx == idx)
+			return lpmd_config.config_states[i].name;
+	}
+	return NULL;
+}
+
 // LPMD processing thread. This is callback to pthread lpmd_core_main
 static void* lpmd_core_main_loop(void *arg)
 {

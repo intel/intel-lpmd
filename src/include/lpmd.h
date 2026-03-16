@@ -329,6 +329,8 @@ void lpmd_set_auto(void);
 int is_on_battery(void);
 int get_ppd_mode(void);
 
+char *user_cpumask_idx_to_state_name(enum cpumask_idx idx);
+
 /* lpmd_proc.c: init func */
 int lpmd_main(void);
 void update_reason(int reason);
