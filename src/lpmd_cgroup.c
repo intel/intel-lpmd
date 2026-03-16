@@ -115,10 +115,10 @@ finish: if (ret >= 0) {
 
 static int restore_systemd_cgroup(void)
 {
-	int size;
+	int size = get_max_cpus() / 8;
 	uint8_t *vals;
 
-	vals = get_cgroup_systemd_vals(CPUMASK_ONLINE, &size);
+	vals = get_cgroup_systemd_vals(CPUMASK_ONLINE);
 	if (!vals)
 		return -1;
 
@@ -131,11 +131,11 @@ static int restore_systemd_cgroup(void)
 
 static int update_systemd_cgroup(lpmd_config_state_t *state)
 {
-	int size;
+	int size = get_max_cpus() / 8;
 	uint8_t *vals;
 	int ret;
 
-	vals = get_cgroup_systemd_vals(state->cpumask_idx, &size);
+	vals = get_cgroup_systemd_vals(state->cpumask_idx);
 	if (!vals)
 		return -1;
 

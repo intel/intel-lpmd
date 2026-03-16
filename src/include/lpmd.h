@@ -427,7 +427,7 @@ char* get_cpus_hexstr(enum cpumask_idx idx);
 char *get_proc_irq_str(enum cpumask_idx idx);
 char *get_irqbalance_str(enum cpumask_idx idx);
 char *get_cpu_isolation_str(enum cpumask_idx idx);
-uint8_t *get_cgroup_systemd_vals(enum cpumask_idx idx, int *size);
+uint8_t *get_cgroup_systemd_vals(enum cpumask_idx idx);
 
 /* socket.c */
 int socket_init_connection(char *name);

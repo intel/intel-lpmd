@@ -502,11 +502,12 @@ static char* get_cpus_str_reverse(enum cpumask_idx idx)
 	return cpumasks[idx].str_reverse;
 }
 
-static uint8_t *get_cpus_hexvals(enum cpumask_idx idx, int *size)
+static uint8_t *get_cpus_hexvals(enum cpumask_idx idx)
 {
-	int i, j, k;
+	int size = topo_max_cpus / 8;
 	uint8_t v = 0;
 	uint8_t *vals;
+	int i, j, k;
 
 	if (!cpumasks[idx].mask)
 		return NULL;
@@ -514,12 +515,10 @@ static uint8_t *get_cpus_hexvals(enum cpumask_idx idx, int *size)
 	if (!CPU_COUNT_S(size_cpumask, cpumasks[idx].mask))
 		return NULL;
 
-	*size = topo_max_cpus / 8;
-
 	if (cpumasks[idx].hexvals)
 		return cpumasks[idx].hexvals;
 
-	vals = calloc (*size, 1);
+	vals = calloc (size, 1);
 	if (!vals)
 		return NULL;
 
@@ -527,7 +526,7 @@ static uint8_t *get_cpus_hexvals(enum cpumask_idx idx, int *size)
 		j = i % 8;
 		k = i / 8;
 
-		if (k >= *size) {
+		if (k >= size) {
 			lpmd_log_error ("size too big\n");
 			free(vals);
 			return NULL;
@@ -565,7 +564,7 @@ char *get_cpu_isolation_str(enum cpumask_idx idx)
 		return get_cpus_str_reverse(idx);
 }
 
-uint8_t *get_cgroup_systemd_vals(enum cpumask_idx idx, int *size)
+uint8_t *get_cgroup_systemd_vals(enum cpumask_idx idx)
 {
-	return get_cpus_hexvals(idx, size);
+	return get_cpus_hexvals(idx);
 }
