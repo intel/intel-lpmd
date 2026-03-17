@@ -152,6 +152,7 @@ int is_cpu_atom(int cpu)
 
 	if (cpu_migrate(cpu) < 0) {
 		lpmd_log_error("Failed to migrated to cpu%d\n", cpu);
+		cpumask_add_cpu(cpu, CPUMASK_BLACKLIST);
 		return -1;
 	}
 
@@ -169,7 +170,8 @@ static int is_cpu_in_l3(int cpu)
 
 	if (cpu_migrate(cpu) < 0) {
 		lpmd_log_error("Failed to migrated to cpu%d\n", cpu);
-		err (1, "cpu migrate");
+		cpumask_add_cpu(cpu, CPUMASK_BLACKLIST);
+		return -1;
 	}
 
 	for(subleaf = 0;; subleaf++) {

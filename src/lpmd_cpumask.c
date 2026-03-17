@@ -43,6 +43,7 @@ static struct lpm_cpus cpumasks[CPUMASK_MAX] = {
 		[CPUMASK_HFI] = { .name = "HFI Low Power", },
 		[CPUMASK_HFI_BANNED] = { .name = "HFI BANNED", },
 		[CPUMASK_HFI_LAST] = { .name = "HFI LAST", },
+		[CPUMASK_BLACKLIST] = { .name = "Blacklist", },
 };
 
 int is_cpu_online(int cpu)
