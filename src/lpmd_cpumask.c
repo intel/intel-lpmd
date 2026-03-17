@@ -441,7 +441,7 @@ static int cpumask_to_hexstr(cpu_set_t *mask, char *str, int size)
 	return 0;
 }
 
-char* get_cpus_str(enum cpumask_idx idx)
+char* get_cpus_str(enum cpumask_idx idx, bool refresh)
 {
 	if (!cpumasks[idx].mask)
 		return NULL;
@@ -449,10 +449,13 @@ char* get_cpus_str(enum cpumask_idx idx)
 	if (!CPU_COUNT_S(size_cpumask, cpumasks[idx].mask))
 		return NULL;
 
-	if (cpumasks[idx].str)
-		return cpumasks[idx].str;
+	if (cpumasks[idx].str) {
+		if (!refresh)
+			return cpumasks[idx].str;
+	} else {
+		cpumasks[idx].str = calloc (MAX_STR_LENGTH, 1);
+	}
 
-	cpumasks[idx].str = calloc (MAX_STR_LENGTH, 1);
 	if (!cpumasks[idx].str)
 		err (3, "STR_ALLOC");
 
@@ -460,7 +463,7 @@ char* get_cpus_str(enum cpumask_idx idx)
 	return cpumasks[idx].str;
 }
 
-char* get_cpus_hexstr(enum cpumask_idx idx)
+char* get_cpus_hexstr(enum cpumask_idx idx, bool refresh)
 {
 	if (!cpumasks[idx].mask)
 		return NULL;
@@ -468,10 +471,14 @@ char* get_cpus_hexstr(enum cpumask_idx idx)
 	if (!CPU_COUNT_S(size_cpumask, cpumasks[idx].mask))
 		return NULL;
 
-	if (cpumasks[idx].hexstr)
-		return cpumasks[idx].hexstr;
+	if (cpumasks[idx].hexstr) {
+		/* Already was allocated, it's okay to use the cached version */
+		if (!refresh)
+			return cpumasks[idx].hexstr;
+	} else {
+		cpumasks[idx].hexstr = calloc (MAX_STR_LENGTH, 1);
+	}
 
-	cpumasks[idx].hexstr = calloc (MAX_STR_LENGTH, 1);
 	if (!cpumasks[idx].hexstr)
 		err (3, "STR_ALLOC");
 
@@ -479,7 +486,7 @@ char* get_cpus_hexstr(enum cpumask_idx idx)
 	return cpumasks[idx].hexstr;
 }
 
-static char* get_cpus_str_reverse(enum cpumask_idx idx)
+static char* get_cpus_str_reverse(enum cpumask_idx idx, bool refresh)
 {
 	cpu_set_t *mask;
 
@@ -489,10 +496,13 @@ static char* get_cpus_str_reverse(enum cpumask_idx idx)
 	if (!CPU_COUNT_S(size_cpumask, cpumasks[idx].mask))
 		return NULL;
 
-	if (cpumasks[idx].str_reverse)
-		return cpumasks[idx].str_reverse;
+	if (cpumasks[idx].str_reverse) {
+		if (!refresh)
+			return cpumasks[idx].str_reverse;
+	} else {
+		cpumasks[idx].str_reverse = calloc (MAX_STR_LENGTH, 1);
+	}
 
-	cpumasks[idx].str_reverse = calloc (MAX_STR_LENGTH, 1);
 	if (!cpumasks[idx].str_reverse)
 		err (3, "STR_ALLOC");
 
@@ -504,7 +514,7 @@ static char* get_cpus_str_reverse(enum cpumask_idx idx)
 	return cpumasks[idx].str_reverse;
 }
 
-static uint8_t *get_cpus_hexvals(enum cpumask_idx idx)
+static uint8_t *get_cpus_hexvals(enum cpumask_idx idx, bool refresh)
 {
 	int size = topo_max_cpus / 8;
 	uint8_t v = 0;
@@ -518,7 +528,8 @@ static uint8_t *get_cpus_hexvals(enum cpumask_idx idx)
 		return NULL;
 
 	if (cpumasks[idx].hexvals)
-		return cpumasks[idx].hexvals;
+		if (!refresh)
+			return cpumasks[idx].hexvals;
 
 	vals = calloc (size, 1);
 	if (!vals)
@@ -568,6 +579,12 @@ int cpumask_blacklist(enum cpumask_idx idx)
 		if (CPU_ISSET_S(i, size_cpumask, cpumasks[CPUMASK_BLACKLIST].mask))
 			CPU_CLR_S(i, size_cpumask, cpumasks[idx].mask);
 
+	/* Update any relevant cached data. */
+	cpumasks[idx].hexstr = get_cpus_hexstr(idx, true);
+	cpumasks[idx].str = get_cpus_str(idx, true);
+	cpumasks[idx].str_reverse = get_cpus_str_reverse(idx, true);
+	cpumasks[idx].hexvals = get_cpus_hexvals(idx, true);
+
 	if (!CPU_COUNT_S(size_cpumask, cpumasks[idx].mask)) {
 		lpmd_log_error("%s : cpumask[%d] is empty after blacklisting due to unavailable cpus\n", cpumasks[idx].name, idx);
 		lpmd_log_error("It's possible another cgroup claimed all cores required by cpumask[%d]\n", idx);
@@ -579,23 +596,23 @@ int cpumask_blacklist(enum cpumask_idx idx)
 
 char *get_proc_irq_str(enum cpumask_idx idx)
 {
-	return get_cpus_hexstr(idx);
+	return get_cpus_hexstr(idx, false);
 }
 
 char *get_irqbalance_str(enum cpumask_idx idx)
 {
-	return get_cpus_str_reverse(idx);
+	return get_cpus_str_reverse(idx, false);
 }
 
 char *get_cpu_isolation_str(enum cpumask_idx idx)
 {
 	if (idx == CPUMASK_ONLINE)
-		return get_cpus_str(idx);
+		return get_cpus_str(idx, false);
 	else
-		return get_cpus_str_reverse(idx);
+		return get_cpus_str_reverse(idx, false);
 }
 
 uint8_t *get_cgroup_systemd_vals(enum cpumask_idx idx)
 {
-	return get_cpus_hexvals(idx);
+	return get_cpus_hexvals(idx, false);
 }

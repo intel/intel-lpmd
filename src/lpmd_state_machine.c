@@ -370,9 +370,9 @@ static void dump_data(lpmd_config_t *config, int idx)
 	}
 
 	if (state->cpumask_idx != CPUMASK_NONE)
-		offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "CPUMASK [%s] ", get_cpus_hexstr(state->cpumask_idx));
+		offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "CPUMASK [%s] ", get_cpus_hexstr(state->cpumask_idx, false));
 	else
-		offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "CPUMASK [%s] ", get_cpus_hexstr(CPUMASK_ONLINE));
+		offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "CPUMASK [%s] ", get_cpus_hexstr(CPUMASK_ONLINE, false));
 
 	offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "ITMT [%d] ", get_itmt());
 

@@ -516,7 +516,7 @@ int detect_lpm_cpus(char *cmd_cpus)
 
 end: if (cpumask_has_cpu(CPUMASK_LPM_DEFAULT))
 		lpmd_log_info ("\tUse CPU %s as Default Low Power CPUs (%s)\n",
-						get_cpus_str (CPUMASK_LPM_DEFAULT), str);
+						get_cpus_str (CPUMASK_LPM_DEFAULT, false), str);
 
 	return 0;
 }

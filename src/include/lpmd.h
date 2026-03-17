@@ -424,8 +424,8 @@ int cpumask_equal(enum cpumask_idx idx1, enum cpumask_idx idx2);
 void cpumask_copy(enum cpumask_idx source, enum cpumask_idx dest);
 void cpumask_exclude_copy(enum cpumask_idx source, enum cpumask_idx dest, enum cpumask_idx exlude);
 
-char *get_cpus_str(enum cpumask_idx idx);
-char* get_cpus_hexstr(enum cpumask_idx idx);
+char* get_cpus_str(enum cpumask_idx idx, bool refresh);
+char* get_cpus_hexstr(enum cpumask_idx idx, bool refresh);
 char *get_proc_irq_str(enum cpumask_idx idx);
 char *get_irqbalance_str(enum cpumask_idx idx);
 char *get_cpu_isolation_str(enum cpumask_idx idx);
