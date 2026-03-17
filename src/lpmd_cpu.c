@@ -368,15 +368,15 @@ int detect_cpu_topo(lpmd_config_t *lpmd_config)
 	for (i = 0; i < get_max_cpus(); i++) {
 		if (!is_cpu_online(i))
 			continue;
-		if (is_cpu_pcore(i)) {
+		if (is_cpu_pcore(i) > 0) {
 			pcores++;
 			lpmd_config->core_type_masks[P_CORE][i / 8] |= 1 << (i % 8);
 		}
-		else if (is_cpu_ecore(i)) {
+		else if (is_cpu_ecore(i) > 0) {
 			ecores++;
 			lpmd_config->core_type_masks[E_CORE][i / 8] |= 1 << (i % 8);
 		}
-		else if (is_cpu_lcore(i)) {
+		else if (is_cpu_lcore(i) > 0) {
 			lcores++;
 			lpmd_config->core_type_masks[L_CORE][i / 8] |= 1 << (i % 8);
 		}
