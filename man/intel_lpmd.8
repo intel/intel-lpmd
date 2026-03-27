@@ -21,7 +21,7 @@
 .\"
 .\" Copyright (C) 2012 Intel Corporation. All rights reserved.
 .\"
-.TH intel_lpmd "8" "1 Jun 2023"
+.TH intel_lpmd "8" "08 Apr 2026"
 
 .SH NAME
 intel_lpmd \- Intel Energy Optimizer (LPMD) Daemon
@@ -31,25 +31,24 @@ intel_lpmd \- Intel Energy Optimizer (LPMD) Daemon
 
 .SH DESCRIPTION
 .B intel_lpmd
-is a Linux daemon used for energy optimization on Intel hybrid systems.
-This daemon uses a configuration file "intel_lpmd_config.xml".
-Based on the configuration, it will choose right set of CPUs
-to enable. For example, this daemon can monitor system utilization
-and choose a set of low power CPUs to enable and disable the rest.
-This enable disable of CPUs are done using Linux cpuset feature
-of intel power clamp driver.
+is a Linux daemon used for energy optimization on Intel hybrid systems. This
+daemon uses a configuration file called "intel_lpmd_config.xml". The other
+installed configuration files are to be treated as best practice templates. The
+main configuration file should be edited by the user to enable LPMD and it's
+desired functionalities. Based on the configuration and system utilization LPMD
+can:
 
-There is a control utility distributed along with this daemon.
-This control utility is called "intel_lpmd_control". This utility
-can be used to set different modes for this daemon.
-For example:
-intel_lpmd_control ON
-	To turn on low power mode operation.
-intel_lpmd_control OFF
-	To turn off low power mode operation.
-intel_lpmd_control AUTO
-	To turn on low power mode operation in auto mode, which
-	allows low power mode based on system utilization.
+- choose the best set of CPU cores to enable for a given moment in time
+
+- choose the best EPP (energe performance preference) and EPB (energy
+performance bias) value
+
+- pick the best SoC power slider settings
+
+There is a control utility distributed along with this daemon. It's called
+"intel_lpmd_control" and it can be used to change modes in the running LPMD
+instance.
+
 .SH OPTIONS
 .TP
 .B -h --help
@@ -88,8 +87,13 @@ Run intel_lpmd with log directed to stdout
 .B intel_lpmd --systemd --dbus-enable
 Run intel_lpmd as a service with logs directed to system journal
 
+.TP
+.B sudo systemctl enable intel_lpmd.service --now
+Enable and run intel_lpmd as a systemd service that's persistent after system
+reboot.
+
 .SH SEE ALSO
-intel_lpmd_config.xml(5)
+intel_lpmd_config.xml(5), intel_lpmd_control(8)
 
 .SH AUTHOR
 Written by Zhang Rui <rui.zhang@intel.com>
