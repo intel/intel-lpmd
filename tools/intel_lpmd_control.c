@@ -51,8 +51,40 @@ main(int argc, char **argv)
 	if (argc < 2) {
 		fprintf (stderr, "intel_lpmd_control: missing control command\n");
 		fprintf (stderr, "syntax:\n");
-		fprintf (stderr, "intel_lpmd_control ON|OFF|AUTO\n");
+		fprintf (stderr, "intel_lpmd_control ON|OFF|AUTO|STATUS\n");
 		exit (0);
+	}
+
+	connection = g_bus_get_sync(G_BUS_TYPE_SYSTEM, NULL, &error);
+	if (connection == NULL)
+		return FALSE;
+
+	if (!strncmp (argv[1], "STATUS", 6)) {
+		g_autoptr(GVariant) result = NULL;
+
+		result = g_dbus_connection_call_sync (connection,
+						      INTEL_LPMD_SERVICE_NAME,
+						      INTEL_LPMD_SERVICE_OBJECT_PATH,
+						      INTEL_LPMD_SERVICE_INTERFACE,
+						      "GetState",
+						      NULL,
+						      G_VARIANT_TYPE ("(s)"),
+						      G_DBUS_CALL_FLAGS_NONE,
+						      -1,
+						      NULL,
+						      &error);
+
+		if (error != NULL) {
+			g_warning ("Fail on connecting lpmd: %s", error->message);
+			exit (1);
+		}
+
+		const gchar *state;
+
+		g_variant_get (result, "(&s)", &state);
+		g_print ("%s\n", state);
+
+		return 0;
 	}
 
 	if (!strncmp (argv[1], "ON", 2))
@@ -65,10 +97,6 @@ main(int argc, char **argv)
 		g_warning ("intel_lpmd_control: Invalid command");
 		exit (1);
 	}
-
-	connection = g_bus_get_sync(G_BUS_TYPE_SYSTEM, NULL, &error);
-	if (connection == NULL)
-		return FALSE;
 
 	g_dbus_connection_call_sync (connection,
 				     INTEL_LPMD_SERVICE_NAME,
