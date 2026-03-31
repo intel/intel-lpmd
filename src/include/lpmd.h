@@ -284,6 +284,8 @@ enum power_profile_daemon_mode {
 	PPD_INVALID
 };
 
+#define DEF_POLLING_INTERVAL	100
+
 /* lpmd_main.c */
 int in_debug_mode(void);
 int do_platform_check(void);

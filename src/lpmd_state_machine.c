@@ -396,6 +396,14 @@ int lpmd_enter_next_state(void)
 	}
 
 	idx = choose_next_state(config);
+
+	/*
+	 * After switching power profiles polling gets disabled and needs to be
+	 * updated.
+	 */
+	if (config->data.polling_interval == -1 && polling_enabled && idx != DEFAULT_OFF)
+		get_config_state_interval(config, idx);
+
 	/* No action needed, keep previous idx and interval */
 	if (idx == STATE_NONE)
 		goto end;
