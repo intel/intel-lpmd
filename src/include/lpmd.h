@@ -34,6 +34,7 @@
 #include <gmodule.h>
 
 extern gint watcher_id;
+extern gchar *config_file_path;
 
 // Log macros
 enum log_level {

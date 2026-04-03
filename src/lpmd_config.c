@@ -506,6 +506,20 @@ int match_config_file(int family, int model, int tdp, char *save_file_name)
 	struct stat s;
 	int ret;
 
+	/*
+	 * Handle the cmdline case first because if it was specified and it
+	 * exists then there is no reason to look for the files installed by
+	 * default.
+	 */
+	if (config_file_path) {
+		lpmd_log_msg("Looking for cmdline specified config file %s\n", config_file_path);
+		ret = stat (config_file_path, &s);
+		if (!ret) {
+			strncpy(save_file_name, config_file_path, MAX_FILE_NAME_PATH);
+			return ret;
+		}
+	}
+
 	snprintf(file_name, MAX_FILE_NAME_PATH,
 		 "%s/intel_lpmd_config_F%d_M%d_T%d.xml", TDCONFDIR, family,
 		 model, tdp);
