@@ -7,7 +7,13 @@ the system into Low Power Mode by activating the power-efficient CPUs and
 disabling the rest, and restores the system from Low Power Mode by activating
 all CPUs.
 
-## Usage
+## Before You Start
+
+**Please note** that the installed configuration files serve as templates of
+best practices for specific platform models and disable lpmd by default. For
+LPMD to start the user is expected to either edit the main
+"intel_lpmd_config.xml" config file or after starting the program, enable LPMD
+by using the intel_lpmd_control tool.
 
 Refer to the man pages for command line arguments and XML configurations:
 
