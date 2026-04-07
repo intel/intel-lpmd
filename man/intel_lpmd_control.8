@@ -21,7 +21,7 @@
 .\"
 .\" Copyright (C) 2025 Intel Corporation. All rights reserved.
 .\"
-.TH intel_lpmd_control "8" "7 Mar 2025"
+.TH intel_lpmd_control "8" "8 Apr 2026"
 
 .SH NAME
 intel_lpmd_control \- Control utility for the Intel Low Power Mode Daemon (LPMD)
@@ -31,7 +31,9 @@ intel_lpmd_control \- Control utility for the Intel Low Power Mode Daemon (LPMD)
 
 .SH DESCRIPTION
 .B intel_lpmd_control
-is a command-line utility used to control the Intel Low Power Mode Daemon (LPMD). It allows users to enable, disable, or set the daemon to automatic mode based on system utilization.
+is a command-line utility used to control the Intel Low Power Mode Daemon
+(LPMD). It allows users to enable, disable, or set the daemon to automatic mode
+based on system utilization.
 
 .SH OPTIONS
 .TP
@@ -42,7 +44,8 @@ Enables low power mode operation.
 Disables low power mode operation.
 .TP
 .B AUTO
-Enables low power mode operation in automatic mode, allowing system utilization to determine low power state activation.
+Enables operation in automatic mode, allowing system utilization to determine
+low power state activation.
 
 .SH EXAMPLES
 .TP
@@ -56,7 +59,7 @@ Turns off low power mode operation.
 Turns on low power mode operation in automatic mode.
 
 .SH SEE ALSO
-.B intel_lpmd(8)
+.B intel_lpmd_config.xml(5), intel_lpmd(8)
 
 .SH AUTHOR
 Written by Deepak Sundar <deepak.sundar@intel.com>
