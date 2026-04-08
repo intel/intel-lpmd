@@ -86,40 +86,12 @@ specifies the system utilization threshold for entering Low Power Mode.
 The system workload is considered to fit the lp_mode_cpus capacity when system
 utilization is under this threshold.
 Setting to 0 or leaving this empty disables the utilization monitor.
-
 .PP
 .B util_exit_threshold
 specifies the CPU utilization threshold for exiting Low Power Mode.
 The system workload is considered to not fit the lp_mode_cpus capacity when
 the utilization of the busiest lp_mode_cpus is above this threshold.
 Setting to 0 or leaving this empty disables the utilization monitor.
-.PP
-.B EntryDelayMS
-specifies the sample interval used by the utilization Monitor when system
-wants to enter Low Power Mode based on system utilization.
-Setting to 0 or leaving this empty will cause the utilization Monitor to use
-the default interval, 1000 milli seconds.
-.PP
-.B ExitDelayMS
-specifies the sample interval used by the utilization Monitor when system
-wants to exit Low Power Mode based on CPU utilization.
-Setting to 0 or leaving this empty will cause the utilization Monitor to use
-the adaptive value. The adaptive interval is based on CPU utilization.
-The busier the CPU is, the shorter interval the utilization monitor uses.
-.PP
-.B EntryHystMS
-specifies a hysteresis threshold when system is in Low Power Mode.
-If set, when the previous average time stayed in Low Power Mode is lower than
-this value, the current enter Low Power Mode request will be ignored because
-it is expected that the system will exit Low Power Mode soon.
-Setting to 0 or leaving this empty disables this hysteresis algorithm.
-.PP
-.B ExitHystMS
-specifies a hysteresis threshold when system is not in Low Power Mode.
-If set, when the previous average time stayed out of Low-Power-Mode is lower
-than this value, the current exit Low Power Mode request will be ignored
-because it is expected that the system will enter Low Power Mode soon.
-Setting to 0 or leaving this empty disables this hysteresis algorithm.
 .PP
 .B IgnoreITMT
 Avoid changing scheduler ITMT flag. This means that during transition to
@@ -273,30 +245,6 @@ The configuration file format conforms to XML specifications.
 	<util_exit_threshold>Example threshold</util_exit_threshold>
 
 	<!--
-		Entry delay. Minimum delay in non Low Power mode to
-		enter LPM mode.
-	-->
-	<EntryDelayMS>Example delay</EntryDelayMS>
-
-	<!--
-		Exit delay. Minimum delay in Low Power mode to
-		exit LPM mode.
-	-->
-	<ExitDelayMS>Example delay</ExitDelayMS>
-
-	<!--
-		Lowest hyst average in-LP-mode time in msec to enter LP mode
-		0: to disable hyst support
-	-->
-	<EntryHystMS>Example hyst</EntryHystMS>
-
-	<!--
-		Lowest hyst average out-of-LP-mode time in msec to exit LP mode
-		0: to disable hyst support
-	-->
-	<ExitHystMS>Example hyst</ExitHystMS>
-
-	<!--
 		EPP to use in Low Power Mode
 		0-255: Valid EPP value to use in Low Power Mode
 		   -1: Don't change EPP in Low Power Mode
@@ -323,14 +271,6 @@ util_entry_threshold: 0. Disable utilization monitor.
 .IP \(bu 2
 util_exit_threshold: 0. Disable utilization monitor.
 .IP \(bu 2
-EntryDelayMS: 0. Do not take effect when utilization monitor is disabled.
-.IP \(bu 2
-ExitDelayMS: 0. Do not take effect when utilization monitor is disabled.
-.IP \(bu 2
-EntryHystMS: 0. Do not take effect when utilization monitor is disabled.
-.IP \(bu 2
-ExitHystMS: 0. Do not take effect when utilization monitor is disabled.
-.IP \(bu 2
 lp_mode_epp: -1. Do not change EPP when entering Low Power Mode.
 
 .sp 1
@@ -343,10 +283,6 @@ lp_mode_epp: -1. Do not change EPP when entering Low Power Mode.
 	<HfiSuvEnable>0</HfiSuvEnable>
 	<util_entry_threshold>0</util_entry_threshold>
 	<util_exit_threshold>0</util_exit_threshold>
-	<EntryDelayMS>0</EntryDelayMS>
-	<ExitDelayMS>0</ExitDelayMS>
-	<EntryHystMS>0</EntryHystMS>
-	<ExitHystMS>0</ExitHystMS>
 	<lp_mode_epp>-1</lp_mode_epp>
 </Configuration>
 .PP
@@ -365,14 +301,6 @@ util_entry_threshold: 5. Enter Low Power Mode when system utilization is lower t
 .IP \(bu 2
 util_exit_threshold: 95. Exit Low Power Mode when the utilization of any of the lp_mode_cpus is higher than 95%.
 .IP \(bu 2
-EntryDelayMS: 0. Resample every 1000ms when system is out of Low Power Mode.
-.IP \(bu 2
-ExitDelayMS: 0. Resample adaptively based on the utilization of lp_mode_cpus when system is in Low Power Mode.
-.IP \(bu 2
-EntryHystMS: 2000. Ignore the current Enter Low Power Mode request when the previous average time stayed in Low Power Mode is lower than 2000ms.
-.IP \(bu 2
-ExitHystMS: 3000. Ignore the current Exit Low Power Mode request when the previous average time stayed out of Low Power Mode is lower than 3000ms.
-.IP \(bu 2
 lp_mode_epp: -1. Do not change EPP when entering Low Power Mode.
 
 .sp 1
@@ -385,10 +313,38 @@ lp_mode_epp: -1. Do not change EPP when entering Low Power Mode.
 	<HfiSuvEnable>1</HfiSuvEnable>
 	<util_entry_threshold>5</util_entry_threshold>
 	<util_exit_threshold>95</util_exit_threshold>
-	<EntryDelayMS>0</EntryDelayMS>
-	<ExitDelayMS>0</ExitDelayMS>
-	<EntryHystMS>2000</EntryHystMS>
-	<ExitHystMS>3000</ExitHystMS>
 	<lp_mode_epp>-1</lp_mode_epp>
 </Configuration>
 .EE
+
+.SH Currently unimplemented options
+.PP
+.B EntryDelayMS
+specifies the sample interval used by the utilization Monitor when system
+wants to enter Low Power Mode based on system utilization.
+Setting to 0 or leaving this empty will cause the utilization Monitor to use
+the default interval, 1000 milli seconds.
+.PP
+.B ExitDelayMS
+specifies the sample interval used by the utilization Monitor when system
+wants to exit Low Power Mode based on CPU utilization.
+Setting to 0 or leaving this empty will cause the utilization Monitor to use
+the adaptive value. The adaptive interval is based on CPU utilization.
+The busier the CPU is, the shorter interval the utilization monitor uses.
+.PP
+.B EntryHystMS
+specifies a hysteresis threshold when system is in Low Power Mode.
+If set, when the previous average time stayed in Low Power Mode is lower than
+this value, the current enter Low Power Mode request will be ignored because
+it is expected that the system will exit Low Power Mode soon.
+Setting to 0 or leaving this empty disables this hysteresis algorithm.
+.PP
+.B ExitHystMS
+specifies a hysteresis threshold when system is not in Low Power Mode.
+If set, when the previous average time stayed out of Low-Power-Mode is lower
+than this value, the current exit Low Power Mode request will be ignored
+because it is expected that the system will enter Low Power Mode soon.
+Setting to 0 or leaving this empty disables this hysteresis algorithm.
+
+.SH SEE ALSO
+intel_lpmd(8), intel_lpmd_control(8)
