@@ -252,6 +252,78 @@ int lpmd_read_int(const char *name, int *val, int print_level)
 
 }
 
+int lpmd_write_yn(const char *name, int val, int print_level)
+{
+	char str[5];
+	int ret;
+
+	if (!name)
+		return 0;
+
+	ret = snprintf(str, 4, "%d", val);
+	if (ret < 0)
+		return 1;
+
+	return _write_str (name, str, print_level, 2, "r+");
+}
+
+int lpmd_read_yn(const char *name, int *val, int print_level)
+{
+	char prefix[16];
+	FILE *filep;
+	int i, ret;
+
+	if (!name || !val)
+		return 1;
+
+	if (print_level >= 15)
+		return 1;
+
+	if (print_level < 0) {
+		prefix[0] = '\0';
+	}
+	else {
+		for (i = 0; i < print_level; i++)
+			prefix[i] = '\t';
+		prefix[i] = '\0';
+	}
+
+	filep = fopen (name, "r");
+	if (!filep) {
+		lpmd_log_error ("%sOpen %s failed\n", prefix, name);
+		return 1;
+	}
+
+	ret = fgetc(filep);
+	if (ret == EOF) {
+		if (feof(filep)) {
+			lpmd_log_error ("%sRead %s failed due to EOF\n", prefix, name);
+		} else if (ferror(filep)) {
+			lpmd_log_error ("%sRead %s failed, error %s\n", prefix, name, strerror(errno));
+		}
+		fclose (filep);
+		return 1;
+	}
+
+	fclose (filep);
+
+	if (ret == 'Y') {
+		*val = 1;
+	} else if (ret == 'N') {
+		*val = 0;
+	} else {
+		lpmd_log_error ("%sRead %s failed, read %c\n", prefix, name, ret);
+		return 1;
+	}
+
+	if (print_level >= 0)
+		lpmd_log_debug ("%sRead \"%c\" from %s\n", prefix, *val, name);
+
+	return 0;
+
+}
+
+
 /*
  * lpmd_open does not require print on success
  * print_level: -1: don't print on error

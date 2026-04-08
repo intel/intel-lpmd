@@ -410,6 +410,8 @@ int lpmd_write_str_append(const char *name, char *str, int print_level);
 int lpmd_write_int(const char *name, int val, int print_level);
 int lpmd_open(const char *name, int print_level);
 int lpmd_read_int(const char *name, int *val, int print_level);
+int lpmd_read_yn(const char *name, int *val, int print_level);
+int lpmd_write_yn(const char *name, int val, int print_level);
 char* get_time(void);
 void time_start(void);
 char* time_delta(void);

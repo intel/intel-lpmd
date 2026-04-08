@@ -21,7 +21,7 @@
 #include "lpmd.h"
 
 /* ITMT Management */
-#define PATH_ITMT_CONTROL "/proc/sys/kernel/sched_itmt_enabled"
+#define PATH_ITMT_CONTROL "/sys/kernel/debug/x86/sched_itmt_enabled"
 
 static int has_itmt;
 static int saved_itmt = SETTING_IGNORE;
@@ -33,13 +33,13 @@ int get_itmt(void)
 	if (!has_itmt)
 		return -1;
 
-	lpmd_read_int(PATH_ITMT_CONTROL, &val, -1);
+	lpmd_read_yn(PATH_ITMT_CONTROL, &val, -1);
 	return val;
 }
 
 int itmt_init(void)
 {
-	if (lpmd_read_int(PATH_ITMT_CONTROL, &saved_itmt, -1))
+	if (lpmd_read_yn(PATH_ITMT_CONTROL, &saved_itmt, -1))
 		lpmd_log_debug("ITMT not detected\n");
 	else
 		has_itmt = 1;
@@ -57,10 +57,10 @@ int process_itmt(lpmd_config_state_t *state)
 			lpmd_log_debug("Ignore ITMT\n");
 			return 0;
 		case SETTING_RESTORE:
-			return lpmd_write_int(PATH_ITMT_CONTROL, saved_itmt, -1);
+			return lpmd_write_yn(PATH_ITMT_CONTROL, saved_itmt, -1);
 		default:
 			lpmd_log_debug ("%s ITMT\n", state->itmt_state ? "Enable" : "Disable");
-			return lpmd_write_int(PATH_ITMT_CONTROL, state->itmt_state, -1);
+			return lpmd_write_yn(PATH_ITMT_CONTROL, state->itmt_state, -1);
 	}
 }
 
