@@ -21,7 +21,7 @@
 .\"
 .\" Copyright (C) 2012 Intel Corporation. All rights reserved.
 .\"
-.TH intel_lpmd_config.xml "5" "1 Jun 2023"
+.TH intel_lpmd_config.xml "5" "8 Apr 2026"
 
 .SH NAME
 intel_lpmd_config.xml \- Configuration file for intel_lpmd
@@ -30,18 +30,22 @@ $(TDCONFDIR)/etc/intel_lpmd/intel_lpmd_config.xml
 
 .SH DESCRIPTION
 .B intel_lpmd_config.xml
-is a configuration file for the Intel Low Power Mode Daemon.
-It is used to describe the lp_mode_cpus to use in Low Power Mode,
-as well as the way to restrict work to those CPUs. It also describes
-if and how the HFI monitor and utilization monitor works. The location
-of this file depends on the configuration option used during build time.
+is a configuration file for the Intel Low Power Mode Daemon. It's used to
+describe states and rules of switching between the states. These states are
+custom, user defined sets of parameters that the platform should use for optimal
+performance and energy saving. The rules of switching refer to what system
+information dictates whether a change of state is needed or not. It can be
+either information from a hardware source or software calculated if the hardware
+features are not supported.
+
 .PP
 .B lp_mode_cpus
-is a set of active CPUs when system is in Low Power Mode.
-This usually equals a group of most power efficient CPUs on a platform to
-achieve best power saving. When not specified, intel_lpmd tool can detect this
-automatically. E.g. it uses an E-core Module on Intel Alderlake platform, and
-it uses the Low Power E-cores on SoC Die on Intel Meteorlake platform.
+is a set of active CPUs when system is in Low Power Mode. This usually equals a
+group of most power efficient CPUs on a platform to achieve best power saving.
+When not specified, intel_lpmd tool can detect this automatically. E.g. it uses
+L-cores on Intel PantherLake platform, the E-core Module on Intel Alderlake
+platform, and it uses the Low Power E-cores on SoC Die on Intel Meteorlake
+platform.
 .PP
 .B Mode
 specifies the way to migrate the tasks to the lp_mode_cpus.
@@ -56,20 +60,14 @@ lp_mode_cpus only.
 Mode 2: Force idle injection to the non-lp_mode_cpus and leverage the
 scheduler to schedule the other tasks to the lp_mode_cpus.
 .PP
-.B PerformanceDef
-specifies the default behavior when power setting is set to Performance.
+.B PerformanceDef / BalancedDef / PowersaverDef
+specifies the default behavior for a given power profile.
 .IP \(bu 2
 -1 : Never enter Low Power Mode.
 .IP \(bu 2
 0 : opportunistic Low Power Mode enter/exit based on HFI/Utilization request.
 .IP \(bu 2
 1 : Always stay in Low Power Mode.
-.PP
-.B BalancedDef
-specifies the default behavior when power setting is set to Balanced.
-.PP
-.B PowersaverDef
-specifies the default behavior when power setting is set to Power saver.
 .PP
 .B HfiLpmEnable
 specifies if the HFI monitor can capture the HFI hints for Low Power Mode.
@@ -127,16 +125,18 @@ Setting to 0 or leaving this empty disables this hysteresis algorithm.
 Avoid changing scheduler ITMT flag. This means that during transition to
 low power mode, ITMT flag is not changed. This reduces latency during
 switching. This flag is not used when configuration uses "State" based
-configuration, where this flag can be defined per state.
+configuration, where this flag can be defined per state. ITMT is only relevant
+for platforms before Lunar Lake and the debugfs file is not present on later
+platforms.
 .PP
 .B States
 Allows one to define per platform low power states. Each state defines
 has an entry condition and set of parameters to use.
 
 .SH State Definition
-There can be multiple State configuration can be present. Each
-configuration is valid for a platform. A State header defines parameters,
-which are used to match a platform.
+There can be multiple state configurations present. Each configuration is valid
+for a platform. A state header defines parameters, which are used to match a
+platform.
 .B CPUFamily
 CPU generation to match.
 .PP
@@ -160,7 +160,7 @@ A name for the state.
 .PP
 .B EntrySystemLoadThres
 System Entry load threshold in percent. System utilization is different
-based on the number of CPUs are active in a configuration. This value
+based on the number of active CPUs in a configuration. This value
 is calculated from /proc/stat sysfs. To enter into this state, the
 system utilization must be less or equal to this value.
 .PP
@@ -186,13 +186,14 @@ EPP to apply for this state. -1 to ignore.
 EPB to apply for this state. -1 to ignore.
 .PP
 .B ITMTState
-Set the state of ITMT flag. -1 to ignore.
+Set the state of ITMT flag. -1 to ignore. ITMT is only relevant for platforms
+before MTL and the debugfs file is not present on later platforms.
 .PP
 .B IRQMigrate
 Migrate IRQs to the active CPUs in this state. -1 to ignore.
 .PP
 .B MinPollInterval
-Minimum polling interval in milli seconds.
+Minimum polling interval in milliseconds.
 .PP
 .B MaxPollInterval
 Maximum polling interval in milli seconds. This is optional,
