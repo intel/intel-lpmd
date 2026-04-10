@@ -28,12 +28,15 @@ static int saved_itmt = SETTING_IGNORE;
 
 int get_itmt(void)
 {
-	int val;
+	int val, ret;
 
 	if (!has_itmt)
 		return -1;
 
-	lpmd_read_int(PATH_ITMT_CONTROL, &val, -1);
+	ret = lpmd_read_int(PATH_ITMT_CONTROL, &val, -1);
+	if (ret)
+		return -1;
+
 	return val;
 }
 
