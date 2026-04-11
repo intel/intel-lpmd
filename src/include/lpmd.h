@@ -335,7 +335,7 @@ int wlt_exit(void);
 int wlt_update(int fd);
 
 /* lpmd_misc.c */
-int itmt_init(void);
+void itmt_init(void);
 int get_itmt(void);
 int process_itmt(lpmd_config_state_t *state);
 

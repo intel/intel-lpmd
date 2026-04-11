@@ -408,9 +408,7 @@ int lpmd_main(void)
 	if (ret)
 		return ret;
 
-	ret = itmt_init();
-	if (ret)
-		return ret;
+	itmt_init();
 
 	ret = epp_epb_init();
 	if (ret)

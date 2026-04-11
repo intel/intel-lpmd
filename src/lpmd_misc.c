@@ -48,22 +48,20 @@ int get_itmt(void)
 	return val;
 }
 
-int itmt_init(void)
+void itmt_init(void)
 {
 
 	if (lpmd_read_yn(PATH_ITMT_CONTROL_DEBUGFS, &saved_itmt, -1)) {
 		lpmd_log_debug("ITMT debugfs not detected\n");
 	} else {
 		has_itmt = 1;
-		return 0;
+		return;
 	}
 
 	if (lpmd_read_int(PATH_ITMT_CONTROL, &saved_itmt, -1))
 		lpmd_log_debug("ITMT not detected\n");
 	else
 		has_itmt = 1;
-
-	return 0;
 }
 
 int process_itmt(lpmd_config_state_t *state)
