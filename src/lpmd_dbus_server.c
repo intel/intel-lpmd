@@ -155,6 +155,23 @@ lpmd_dbus_handle_method_call(GDBusConnection       *connection,
 		return;
 	}
 
+	if (g_strcmp0(method_name, "GetState") == 0) {
+		const char *state_names[] = {
+			[LPMD_OFF] = "OFF",
+			[LPMD_ON] = "ON",
+			[LPMD_AUTO] = "AUTO",
+			[LPMD_FREEZE] = "FREEZE",
+			[LPMD_RESTORE] = "RESTORE",
+			[LPMD_TERMINATE] = "TERMINATE",
+		};
+		int state = get_lpmd_state();
+		const char *name = (state >= 0 && state <= LPMD_TERMINATE) ? state_names[state] : "UNKNOWN";
+
+		g_dbus_method_invocation_return_value(invocation,
+						     g_variant_new("(s)", name));
+		return;
+	}
+
 	g_set_error(&error,
 		    G_DBUS_ERROR,
 		    G_DBUS_ERROR_UNKNOWN_METHOD,
