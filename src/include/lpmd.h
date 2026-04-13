@@ -86,6 +86,19 @@ static int dummy_printf(const char *__restrict __format, ...)
 #define LPMD_ERROR		-1
 #define LPMD_FATAL_ERROR		-2
 
+/* Slider parameter types for explicit type-safe validation */
+enum slider_param_type {
+	SLIDER_TYPE_BALANCE,
+	SLIDER_TYPE_OFFSET,
+	SLIDER_TYPE_MAX
+};
+
+// Slider validation defines
+#define SLIDER_BALANCE_MIN	1
+#define SLIDER_BALANCE_MAX	5
+#define SLIDER_OFFSET_MIN	0
+#define SLIDER_OFFSET_MAX	6
+
 // Dbus related
 /* Well-known name for this service. */
 #define INTEL_LPMD_SERVICE_NAME        	"org.freedesktop.intel_lpmd"
@@ -180,6 +193,7 @@ typedef struct {
 	int itmt_state;
 	int irq_migrate;
 
+	/* balance: 1-5, offset: 0-6, or -1 to disable */
 	int balance_slider_ac;
 	int slider_offset_ac;
 	int balance_slider_dc;
@@ -230,6 +244,7 @@ typedef struct {
 	int tdp;
 	char file_name[MAX_FILE_NAME_PATH];
 
+	/* balance: 1-5, offset: 0-6, or -1 to disable */
 	int balance_slider_def_ac;
 	int slider_offset_def_ac;
 	int balance_slider_def_dc;

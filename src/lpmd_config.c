@@ -24,6 +24,82 @@
 
 #define CONFIG_FILE_NAME "intel_lpmd_config.xml"
 
+static int validate_slider_value(int value, const char *param_name, int state_id,
+				   int min_val, int max_val)
+{
+	/* -1 is a special value meaning "ignore/disable" */
+	if (value == -1)
+		return LPMD_SUCCESS;  /* Valid */
+
+	if (value < min_val || value > max_val) {
+		if (state_id >= 0) {
+			/* State-level parameter */
+			lpmd_log_error("Invalid %s value: %d in state ID %d. "
+					"Valid range: %d-%d or %d to disable\n",
+					param_name, value, state_id,
+					min_val, max_val, -1);
+		} else {
+			/* Global/default parameter */
+			lpmd_log_error("Invalid %s (global default) value: %d. "
+					"Valid range: %d-%d or %d to disable\n",
+					param_name, value,
+					min_val, max_val, -1);
+		}
+		return LPMD_ERROR;  /* Invalid */
+	}
+
+	return LPMD_SUCCESS;  /* Valid */
+}
+
+/*
+ * Helper function to parse and validate slider parameters.
+ * Handles both parsing (with error checking) and range validation in one call.
+ * Returns 0 on success, LPMD_ERROR on failure (fail-fast approach).
+ */
+static int read_slider_and_validate(int *dest_ptr, const char *src_value,
+				    const char *param_name, int state_id,
+				    enum slider_param_type type)
+{
+	char *endptr;
+	int value;
+
+	errno = 0;
+	value = strtol(src_value, &endptr, 10);
+
+	/* Check for parsing errors */
+	if (errno == ERANGE || endptr == src_value) {
+		if (state_id >= 0) {
+			lpmd_log_error("Failed to parse %s value: '%s' is not a valid integer in state ID %d\n",
+				param_name, src_value, state_id);
+		} else {
+			lpmd_log_error("Failed to parse %s value: '%s' is not a valid integer\n",
+				param_name, src_value);
+		}
+		return LPMD_ERROR;
+	}
+
+	/* Validate the parsed value based on type */
+	switch (type) {
+	case SLIDER_TYPE_OFFSET:
+		if (validate_slider_value(value, param_name, state_id,
+					SLIDER_OFFSET_MIN, SLIDER_OFFSET_MAX) != LPMD_SUCCESS)
+			return LPMD_ERROR;
+		break;
+	case SLIDER_TYPE_BALANCE:
+		if (validate_slider_value(value, param_name, state_id,
+					SLIDER_BALANCE_MIN, SLIDER_BALANCE_MAX) != LPMD_SUCCESS)
+			return LPMD_ERROR;
+		break;
+	default:
+		lpmd_log_error("Unexpected slider type value: %d\n", type);
+		return LPMD_ERROR;
+	}
+
+	/* Success - update the destination pointer */
+	*dest_ptr = value;
+	return LPMD_SUCCESS;
+}
+
 static void save_string_or_zero(char * tmp_value, char * dst_string, int dest_size)
 {
 	if (!strncmp (tmp_value, "-1", strlen ("-1")))
@@ -37,6 +113,7 @@ static void lpmd_parse_state(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *config
 	xmlNode *cur_node = NULL;
 	char *tmp_value;
 	char *pos;
+	int ret = 0;
 	lpmd_config_state_t *state = &config->config_states[idx];
 
 	if (!doc || !a_node || !state)
@@ -101,16 +178,17 @@ static void lpmd_parse_state(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *config
 		if (!strncmp((const char*)cur_node->name, "ActiveCPUs", strlen("ActiveCPUs")))
 			save_string_or_zero(tmp_value, state->active_cpus, sizeof(state->active_cpus));
 		if (!strncmp((const char*)cur_node->name, "BalanceSliderAC", strlen("BalanceSliderAC")))
-			state->balance_slider_ac = strtol (tmp_value, &pos, 10);
+			ret = read_slider_and_validate(&state->balance_slider_ac, tmp_value, "BalanceSliderAC", state->id, SLIDER_TYPE_BALANCE);
 		if (!strncmp((const char*)cur_node->name, "SliderOffsetAC", strlen("SliderOffsetAC")))
-			state->slider_offset_ac = strtol (tmp_value, &pos, 10);
-
+			ret = read_slider_and_validate(&state->slider_offset_ac, tmp_value, "SliderOffsetAC", state->id, SLIDER_TYPE_OFFSET);
 		if (!strncmp((const char*)cur_node->name, "BalanceSliderDC", strlen("BalanceSliderDC")))
-			state->balance_slider_dc = strtol (tmp_value, &pos, 10);
+			ret = read_slider_and_validate(&state->balance_slider_dc, tmp_value, "BalanceSliderDC", state->id, SLIDER_TYPE_BALANCE);
 		if (!strncmp((const char*)cur_node->name, "SliderOffsetDC", strlen("SliderOffsetDC")))
-			state->slider_offset_dc = strtol (tmp_value, &pos, 10);
+			ret = read_slider_and_validate(&state->slider_offset_dc, tmp_value, "SliderOffsetDC", state->id, SLIDER_TYPE_OFFSET);
 
 		xmlFree(tmp_value);
+		if (ret)
+			return;
 	}
 }
 
@@ -216,6 +294,7 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_co
 	xmlNode *cur_node = NULL;
 	char *tmp_value;
 	char *pos;
+	int config_error = 0;  /* Track if we encountered a parsing error */
 
 	if (!doc || !a_node || !lpmd_config)
 		return LPMD_ERROR;
@@ -390,21 +469,24 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_co
 					lpmd_parse_states(doc, cur_node->children, lpmd_config);
 				}
 				else if (!strncmp((const char*)cur_node->name, "BalancedSliderAC", strlen ("BalancedSliderAC"))) {
-					errno = 0;
-					lpmd_config->balance_slider_def_ac = strtol (tmp_value, &pos, 10);
-
+					if (read_slider_and_validate(&lpmd_config->balance_slider_def_ac, tmp_value, "BalancedSliderAC", -1, SLIDER_TYPE_BALANCE) != 0) {
+						goto err;
+					}
 				}
 				else if (!strncmp((const char*)cur_node->name, "BalancedSliderDC", strlen ("BalancedSliderDC"))) {
-					errno = 0;
-					lpmd_config->balance_slider_def_dc = strtol (tmp_value, &pos, 10);
+					if (read_slider_and_validate(&lpmd_config->balance_slider_def_dc, tmp_value, "BalancedSliderDC", -1, SLIDER_TYPE_BALANCE) != 0) {
+						goto err;
+					}
 				}
 				else if (!strncmp((const char*)cur_node->name, "SliderOffsetAC", strlen ("SliderOffsetAC"))) {
-					errno = 0;
-					lpmd_config->slider_offset_def_ac = strtol (tmp_value, &pos, 10);
+					if (read_slider_and_validate(&lpmd_config->slider_offset_def_ac, tmp_value, "SliderOffsetAC", -1, SLIDER_TYPE_OFFSET) != 0) {
+						goto err;
+					}
 				}
 				else if (!strncmp((const char*)cur_node->name, "SliderOffsetDC", strlen ("SliderOffsetDC"))) {
-					errno = 0;
-					lpmd_config->slider_offset_def_dc = strtol (tmp_value, &pos, 10);
+					if (read_slider_and_validate(&lpmd_config->slider_offset_def_dc, tmp_value, "SliderOffsetDC", -1, SLIDER_TYPE_OFFSET) != 0) {
+						goto err;
+					}
 				}
 				else {
 					if (!strncmp((const char*)cur_node->name, "HfiSuvEnable", strlen("HfiSuvEnable"))) {
@@ -416,13 +498,19 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_co
 				}
 				xmlFree (tmp_value);
 				continue;
-err:			xmlFree (tmp_value);
-				lpmd_log_error ("node type: Element, name: %s value: %s\n", cur_node->name,
-								tmp_value);
-				return LPMD_ERROR;
+err:
+			lpmd_log_error("node type: Element, name: %s value: %s\n", cur_node->name,
+				tmp_value);
+			xmlFree(tmp_value);
+			config_error = 1;  /* Mark that a parsing error occurred */
+			break;  /* Exit loop and validate before returning error */
 			}
 		}
 	}
+
+	/* If a parsing error occurred, return error */
+	if (config_error)
+		return LPMD_ERROR;
 
 	return LPMD_SUCCESS;
 }
