@@ -146,19 +146,19 @@ for Intel Energy Optimizer (LPMD) daemon
 			<ID> 1 </ID>
 			<Name> UTIL_IDLE </Name>
 			<WLTType> 1 </WLTType>
-			<ActiveCPUs>16-19</ActiveCPUs>
+			<ActiveCPUs>12-15</ActiveCPUs>
 		</State>
 		<State>
 			<ID> 2 </ID>
 			<Name> UTIL_IDLE_SUSTAIN </Name>
 			<WLTType> 2 </WLTType>
-			<ActiveCPUs>0-19</ActiveCPUs>
+			<ActiveCPUs>0-15</ActiveCPUs>
 		</State>
 		<State>
 			<ID> 3 </ID>
 			<Name> UTIL_IDLE_BURSTY </Name>
 			<WLTType> 3 </WLTType>
-			<ActiveCPUs>0-19</ActiveCPUs>
+			<ActiveCPUs>0-15</ActiveCPUs>
 		</State>
 	</States>
 
@@ -183,6 +183,30 @@ for Intel Energy Optimizer (LPMD) daemon
 			<Name> UTIL_IDLE_BURSTY </Name>
 			<WLTType> 3 </WLTType>
 			<ActiveCPUs>0-11</ActiveCPUs>
+		</State>
+	</States>
+
+	<States>
+		<CPUFamily> 6 </CPUFamily>
+		<CPUModel> 204 </CPUModel>
+		<CPUConfig> 4P0E4L-25W </CPUConfig>
+		<State>
+			<ID> 1 </ID>
+			<Name> UTIL_IDLE </Name>
+			<WLTType> 1 </WLTType>
+			<ActiveCPUs>4-7</ActiveCPUs>
+		</State>
+		<State>
+			<ID> 2 </ID>
+			<Name> UTIL_IDLE_SUSTAIN </Name>
+			<WLTType> 2 </WLTType>
+			<ActiveCPUs>0-7</ActiveCPUs>
+		</State>
+		<State>
+			<ID> 3 </ID>
+			<Name> UTIL_IDLE_BURSTY </Name>
+			<WLTType> 3 </WLTType>
+			<ActiveCPUs>0-7</ActiveCPUs>
 		</State>
 	</States>
 

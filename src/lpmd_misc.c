@@ -22,33 +22,52 @@
 
 /* ITMT Management */
 #define PATH_ITMT_CONTROL "/proc/sys/kernel/sched_itmt_enabled"
+#define PATH_ITMT_CONTROL_DEBUGFS "/sys/kernel/debug/x86/sched_itmt_enabled"
 
 static int has_itmt;
 static int saved_itmt = SETTING_IGNORE;
 
 int get_itmt(void)
 {
-	int val;
+	int val, ret;
 
 	if (!has_itmt)
 		return -1;
 
-	lpmd_read_int(PATH_ITMT_CONTROL, &val, -1);
+ 	ret = lpmd_read_yn(PATH_ITMT_CONTROL_DEBUGFS, &val, -1);
+	if (!ret)
+		return val;
+
+	lpmd_log_debug("Read ITMT debugfs failed, fallback to sysctl\n");
+	ret = lpmd_read_int(PATH_ITMT_CONTROL, &val, -1);
+	if (ret) {
+		lpmd_log_error("Read ITMT sysctl failed\n");
+			return -1;
+	}
+
 	return val;
 }
 
-int itmt_init(void)
+void itmt_init(void)
 {
+
+	if (lpmd_read_yn(PATH_ITMT_CONTROL_DEBUGFS, &saved_itmt, -1)) {
+		lpmd_log_debug("ITMT debugfs not detected\n");
+	} else {
+		has_itmt = 1;
+		return;
+	}
+
 	if (lpmd_read_int(PATH_ITMT_CONTROL, &saved_itmt, -1))
 		lpmd_log_debug("ITMT not detected\n");
 	else
 		has_itmt = 1;
-
-	return 0;
 }
 
 int process_itmt(lpmd_config_state_t *state)
 {
+	int ret;
+
 	if (!has_itmt)
 		return 0;
 
@@ -57,10 +76,16 @@ int process_itmt(lpmd_config_state_t *state)
 			lpmd_log_debug("Ignore ITMT\n");
 			return 0;
 		case SETTING_RESTORE:
-			return lpmd_write_int(PATH_ITMT_CONTROL, saved_itmt, -1);
+			ret = lpmd_write_yn(PATH_ITMT_CONTROL_DEBUGFS, saved_itmt, -1);
+			if (ret)
+				return lpmd_write_int(PATH_ITMT_CONTROL, saved_itmt, -1);
+			return ret;
 		default:
 			lpmd_log_debug ("%s ITMT\n", state->itmt_state ? "Enable" : "Disable");
-			return lpmd_write_int(PATH_ITMT_CONTROL, state->itmt_state, -1);
+			ret = lpmd_write_yn(PATH_ITMT_CONTROL_DEBUGFS, state->itmt_state, -1);
+			if (ret)
+				return lpmd_write_int(PATH_ITMT_CONTROL, state->itmt_state, -1);
+			return ret;
 	}
 }
 

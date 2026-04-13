@@ -284,6 +284,8 @@ enum power_profile_daemon_mode {
 	PPD_INVALID
 };
 
+#define DEF_POLLING_INTERVAL	100
+
 /* lpmd_main.c */
 int in_debug_mode(void);
 int do_platform_check(void);
@@ -333,7 +335,7 @@ int wlt_exit(void);
 int wlt_update(int fd);
 
 /* lpmd_misc.c */
-int itmt_init(void);
+void itmt_init(void);
 int get_itmt(void);
 int process_itmt(lpmd_config_state_t *state);
 
@@ -408,6 +410,8 @@ int lpmd_write_str_append(const char *name, char *str, int print_level);
 int lpmd_write_int(const char *name, int val, int print_level);
 int lpmd_open(const char *name, int print_level);
 int lpmd_read_int(const char *name, int *val, int print_level);
+int lpmd_read_yn(const char *name, int *val, int print_level);
+int lpmd_write_yn(const char *name, int val, int print_level);
 char* get_time(void);
 void time_start(void);
 char* time_delta(void);

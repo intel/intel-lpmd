@@ -150,6 +150,9 @@ static void power_profiles_changed_cb(void)
 		} else {
 			lpmd_log_warn("Ignore unsupported power profile: %s\n", active_profile);
 		}
+
+		if (lpmd_config.wlt_proxy_enable)
+			lpmd_config.data.polling_interval = DEF_POLLING_INTERVAL;
 	}
 }
 
@@ -300,7 +303,7 @@ static void* lpmd_core_main_loop(void *arg)
 {
 	int n;
 
-	lpmd_config.data.polling_interval = 100;
+	lpmd_config.data.polling_interval = DEF_POLLING_INTERVAL;
 
 	for (;;) {
 
@@ -405,9 +408,7 @@ int lpmd_main(void)
 	if (ret)
 		return ret;
 
-	ret = itmt_init();
-	if (ret)
-		return ret;
+	itmt_init();
 
 	ret = epp_epb_init();
 	if (ret)
