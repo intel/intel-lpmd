@@ -493,6 +493,11 @@ int lpmd_main(void)
 				}
 			}
 		}
+		if (lpmd_config.wlt_notification_delay != -1) {
+			if (wlt_set_notification_delay(lpmd_config.wlt_notification_delay) != LPMD_SUCCESS) {
+				lpmd_log_error ("Error setting WLT notification delay. wlt_notification_delay set to default value\n");
+			}
+		}
 	}
 
 	pthread_attr_init (&lpmd_attr);

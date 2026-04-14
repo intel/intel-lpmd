@@ -61,7 +61,9 @@ static void lpmd_parse_state(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *config
 			snprintf(state->name, MAX_STATE_NAME - 1, "%s", tmp_value);
 			state->name[MAX_STATE_NAME - 1] = '\0';
 		}
-		if (!strncmp((const char*)cur_node->name, "WLTType", strlen("WLTType")))
+		if (!strncmp((const char*)cur_node->name, "WLTTypeMask", strlen("WLTTypeMask")))
+			state->wlt_type_mask = strtol (tmp_value, &pos, 10);
+		else if (!strncmp((const char*)cur_node->name, "WLTType", strlen("WLTType")))
 			state->wlt_type = strtol (tmp_value, &pos, 10);
 		if (!strncmp((const char*)cur_node->name, "EntrySystemLoadThres", strlen("EntrySystemLoadThres")))
 			state->entry_system_load_thres = strtol (tmp_value, &pos, 10);
@@ -207,6 +209,7 @@ static void lpmd_init_config(lpmd_config_t *config)
 	config->slider_offset_def_ac = -1;
 	config->slider_offset_def_dc = -1;
 	config->wlt_hint_mask = -1;
+	config->wlt_notification_delay = -1;
 }
 
 static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_config)
@@ -243,6 +246,12 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, lpmd_config_t *lpmd_co
 					lpmd_config->wlt_hint_enable = strtol (tmp_value, &pos, 10);
 					if (errno || *pos != '\0'
 							|| (lpmd_config->wlt_hint_enable != 1 && lpmd_config->wlt_hint_enable != 0))
+						goto err;
+				}
+				else if (!strncmp((const char*)cur_node->name, "WLTHintNotificationDelay", strlen("WLTHintNotificationDelay"))) {
+					errno = 0;
+					lpmd_config->wlt_notification_delay = strtol (tmp_value, &pos, 10);
+					if (errno || *pos != '\0' || lpmd_config->wlt_notification_delay < 0)
 						goto err;
 				}
 				else if (!strncmp((const char*)cur_node->name, "WLTHintMask", strlen("WLTHintMask"))) {

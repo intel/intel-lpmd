@@ -77,6 +77,8 @@ specifies if the HFI monitor can capture the HFI hints for survivability mode.
 .PP
 .B WLTHintEnable
 Enable use of hardware Workload type hints.
+.B WLTHintNotificationDelay
+Set hardware workload notification delay in milliseconds.
 .PP
 .B WLTProxyEnable
 Enable use of Proxy Workload type hints.
@@ -146,6 +148,11 @@ EnterCPULoadThres is checked before EntrySystemLoadThres to match a state.
 Workload type value to enter into this state. If this value is defined
 then utilization based entry triggers are not used. To use this
 WLTHintEnable must be enabled, so that hardware notifications are enabled.
+.PP
+.B WLTTypeMask
+Mask of workload type values to enter into this state. This has higher priority
+than WLTType. If this value is defined then utilization based entry triggers
+are not used.
 .PP
 .B ActiveCPUs
 Active CPUs in this state. The list can be comma separated or use "-" for

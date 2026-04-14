@@ -156,6 +156,7 @@ typedef struct {
 	int valid;
 	char name[MAX_STATE_NAME];
 	int wlt_type;
+	int wlt_type_mask;
 	int entry_system_load_thres;
 	int exit_system_load_thres;
 	int exit_system_load_hyst;
@@ -198,6 +199,7 @@ typedef struct {
 	int powersaver_def;
 	int hfi_lpm_enable;
 	int wlt_hint_enable;
+	int wlt_notification_delay;
 	int wlt_hint_poll_enable;
 	int wlt_proxy_enable;
 	int wlt_hint_mask;
@@ -338,6 +340,7 @@ int hfi_update(void);
 int wlt_init(void);
 int wlt_exit(void);
 int wlt_update(int fd);
+int wlt_set_notification_delay(int delay);
 
 /* lpmd_misc.c */
 void itmt_init(void);

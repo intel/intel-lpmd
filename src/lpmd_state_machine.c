@@ -91,6 +91,7 @@ int lpmd_init_config_state(lpmd_config_state_t *state)
 	state->name[0] = '\0';
 
 	state->wlt_type = -1;
+	state->wlt_type_mask = -1;
 
 	state->entry_system_load_thres = 0;
 	state->exit_system_load_thres = 0;
@@ -141,6 +142,13 @@ static int config_state_match(lpmd_config_t *config, int idx)
 	if (!state->valid)
 		return 0;
 
+	if (state->wlt_type_mask != -1) {
+		if (config->wlt_hint_mask != -1)
+			wlt_index &= config->wlt_hint_mask;
+
+		if (!(state->wlt_type_mask & (1 << wlt_index)))
+			return 0;
+	}
 	if (state->wlt_type != -1) {
 		if (config->wlt_hint_mask != -1)
 			wlt_index &= config->wlt_hint_mask;
@@ -220,6 +228,9 @@ static void dump_state(lpmd_config_state_t *state, char *str, int debug)
 
 	if (state->wlt_type)
 		offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "WLT [%2d] ", state->wlt_type);
+
+	if (state->wlt_type_mask)
+		offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "WLTMASK [%2d] ", state->wlt_type_mask);
 
 	if (state->entry_system_load_thres)
 		offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "SYS [%6d] ", state->entry_system_load_thres / 100);
@@ -431,6 +442,7 @@ static void dump_states(lpmd_config_t *lpmd_config)
 	lpmd_log_info ("Mode:%d\n", lpmd_config->mode);
 	lpmd_log_info ("HFI LPM Enable:%d\n", lpmd_config->hfi_lpm_enable);
 	lpmd_log_info ("WLT Hint Enable:%d\n", lpmd_config->wlt_hint_enable);
+	lpmd_log_info ("WLT Hint Notification Delay:%d\n", lpmd_config->wlt_notification_delay);
 	lpmd_log_info ("WLT Proxy Enable:%d\n", lpmd_config->wlt_proxy_enable);
 	lpmd_log_info ("WLT Proxy Enable:%d\n", lpmd_config->wlt_hint_poll_enable);
 	lpmd_log_info ("WLT Hint mask:%d\n", lpmd_config->wlt_hint_mask);
@@ -464,6 +476,7 @@ static void dump_states(lpmd_config_t *lpmd_config)
 		lpmd_log_info ("\tentry_gfx_load_thres:%d\n", state->enter_gfx_load_thres);
 		lpmd_log_info ("\texit_gfx_load_thres:%d\n", state->exit_gfx_load_thres);
 		lpmd_log_info ("\tWLT Type:%d\n", state->wlt_type);
+		lpmd_log_info ("\tWLT Type Mask:%d\n", state->wlt_type_mask);
 		lpmd_log_info ("\tmin_poll_interval:%d\n", state->min_poll_interval);
 		lpmd_log_info ("\tmax_poll_interval:%d\n", state->max_poll_interval);
 		lpmd_log_info ("\tpoll_interval_increment:%d\n", state->poll_interval_increment);
@@ -594,7 +607,7 @@ static int config_states_update_config(lpmd_config_t *config)
 		if (state->cpumask_idx == CPUMASK_HFI)
 			config->hfi_lpm_enable = 1;
 
-		if (state->wlt_type != -1)
+		if (state->wlt_type != -1 || state->wlt_type_mask != -1)
 			config->wlt_hint_enable = 1;
 
 		if (state->entry_system_load_thres)

@@ -120,3 +120,25 @@ int wlt_init (void)
 
 	return fd;
 }
+
+int wlt_set_notification_delay(int delay)
+{
+	char delay_str[64];
+	int fd;
+
+	// Set notification delay
+	fd = open(WORKLOAD_NOTIFICATION_DELAY_ATTRIBUTE, O_RDWR);
+	if (fd < 0)
+		return -1;
+
+	snprintf(delay_str, sizeof(delay_str), "%d\n", delay);
+
+	if (write(fd, delay_str, strlen(delay_str)) < 0) {
+		close(fd);
+		return -1;
+	}
+
+	close(fd);
+
+	return 0;
+}
