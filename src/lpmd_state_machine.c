@@ -376,8 +376,8 @@ static void dump_data(lpmd_config_t *config, int idx)
 
 	offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "ITMT [%d] ", get_itmt());
 
-	get_epp_epb(&epp, epp_str, 32, &epb);
-	if (epp == -1)
+	int ret = get_epp_epb(&epp, epp_str, 32, &epb);
+	if (ret || epp == -1)
 		offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "EPB [%d] EPP[%s] ", epb, epp_str);
 	else
 		offset += snprintf(buf + offset , MAX_STR_LENGTH - offset, "EPB [%d] EPP[%d] ", epb, epp);

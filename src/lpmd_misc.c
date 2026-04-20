@@ -381,6 +381,7 @@ static char *get_ppd_default_epp(void)
 int get_epp_epb(int *epp, char *epp_str, int size, int *epb)
 {
 	char path[MAX_STR_LENGTH];
+	int ret;
 
 	*epp = -1;
 	epp_str[0] = '\0';
@@ -389,9 +390,10 @@ int get_epp_epb(int *epp, char *epp_str, int size, int *epb)
 	get_epp (path, epp, epp_str, size);
 	epp_str[size - 1] = '\0';
 
+	*epb = -1;
 	snprintf(path, MAX_STR_LENGTH, "/sys/devices/system/cpu/cpu%d/power/energy_perf_bias", 0);
-	lpmd_read_int(path, epb, -1);
-	return 0;
+	ret = lpmd_read_int(path, epb, -1);
+	return ret;
 }
 
 int process_epp_epb(lpmd_config_state_t *state)
