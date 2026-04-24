@@ -170,6 +170,8 @@ static int process_cpu_cgroupv2(lpmd_config_state_t *state)
 	}
 }
 
+static enum cpumask_idx last_applied_cpumask = CPUMASK_NONE;
+
 /* Support for cgroup based cpu isolation */
 static int process_cpu_isolate(lpmd_config_state_t *state)
 {
@@ -193,6 +195,7 @@ static int process_cpu_isolate(lpmd_config_state_t *state)
 
 int cgroup_cleanup(void)
 {
+	last_applied_cpumask = CPUMASK_NONE;
 	DIR *dir = opendir("/sys/fs/cgroup/lpm");
 	if (dir) {
 		closedir(dir);
@@ -213,15 +216,28 @@ int cgroup_init(lpmd_config_t *config)
 
 int process_cgroup(lpmd_config_state_t *state, enum lpm_cpu_process_mode mode)
 {
+	int ret;
+
 	if (state->cpumask_idx == CPUMASK_NONE) {
 		lpmd_log_debug ("Ignore cgroup processing\n");
 		return 0;
 	}
 
+	if (last_applied_cpumask != CPUMASK_NONE &&
+	    cpumask_equal (state->cpumask_idx, last_applied_cpumask)) {
+		lpmd_log_debug ("Skip cgroup: cpumask unchanged\n");
+		return 0;
+	}
+
 	lpmd_log_info ("Process Cgroup ...\n");
 	if (mode == LPM_CPU_CGROUPV2)
-		return process_cpu_cgroupv2(state);
-	if (mode == LPM_CPU_ISOLATE)
-		return process_cpu_isolate(state);
-	return 0;
+		ret = process_cpu_cgroupv2(state);
+	else if (mode == LPM_CPU_ISOLATE)
+		ret = process_cpu_isolate(state);
+	else
+		ret = 0;
+
+	if (!ret)
+		last_applied_cpumask = state->cpumask_idx;
+	return ret;
 }
