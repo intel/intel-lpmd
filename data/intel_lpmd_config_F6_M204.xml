@@ -74,7 +74,7 @@ for Intel Energy Optimizer (LPMD) daemon
 	<!--
 		Use WLT hint Mask
 		0 : Non
-		* : Value to AND with with the hardware hint
+		* : Value to AND with the hardware hint
 	-->
 	<WLTHintMask>15</WLTHintMask>
 

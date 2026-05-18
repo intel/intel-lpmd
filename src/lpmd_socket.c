@@ -1,26 +1,10 @@
-/*
- * lpmd_socket.c: Intel Low Power Daemon socket helpers
- *
- * Copyright (C) 2023 Intel Corporation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
- *
- * This file is used to send messages to IRQ daemon via sockets.
- */
+// SPDX-License-Identifier: GPL-2.0-or-later
+/* Copyright (C) 2026 Intel Corporation */
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
+
 #include <stdio.h>
 #include <err.h>
 #include <stdlib.h>
@@ -61,22 +45,22 @@ int socket_init_connection(char *name)
 	if (!name)
 		return 0;
 
-	memset (&addr, 0, sizeof(struct sockaddr_un));
-	socket_fd = socket (AF_LOCAL, SOCK_STREAM, 0);
+	memset(&addr, 0, sizeof(struct sockaddr_un));
+	socket_fd = socket(AF_LOCAL, SOCK_STREAM, 0);
 	if (socket_fd < 0) {
-		perror ("Error opening socket");
+		perror("Error opening socket");
 		return 0;
 	}
 	addr.sun_family = AF_UNIX;
 
-	snprintf (addr.sun_path, sizeof(addr.sun_path), "%s", name);
+	snprintf(addr.sun_path, sizeof(addr.sun_path), "%s", name);
 
-	if (connect (socket_fd, (struct sockaddr*) &addr, sizeof(addr)) < 0) {
+	if (connect(socket_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
 		/* Try connect to abstract */
-		memset (&addr, 0, sizeof(struct sockaddr_un));
+		memset(&addr, 0, sizeof(struct sockaddr_un));
 		addr.sun_family = AF_UNIX;
-		if (connect (socket_fd, (struct sockaddr*) &addr, sizeof(addr)) < 0) {
-			close (socket_fd);
+		if (connect(socket_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+			close(socket_fd);
 			return 0;
 		}
 	}
@@ -84,32 +68,32 @@ int socket_init_connection(char *name)
 	return socket_fd;
 }
 
-static struct msghdr* create_credentials_msg()
+static struct msghdr *create_credentials_msg(void)
 {
 	struct ucred *credentials;
 	struct msghdr *msg;
 	struct cmsghdr *cmsg;
 
-	credentials = malloc (sizeof(struct ucred));
+	credentials = malloc(sizeof(struct ucred));
 	if (!credentials)
 		return NULL;
 
-	credentials->pid = getpid ();
-	credentials->uid = geteuid ();
-	credentials->gid = getegid ();
+	credentials->pid = getpid();
+	credentials->uid = geteuid();
+	credentials->gid = getegid();
 
-	msg = malloc (sizeof(struct msghdr));
+	msg = malloc(sizeof(struct msghdr));
 	if (!msg) {
-		free (credentials);
+		free(credentials);
 		return msg;
 	}
 
-	memset (msg, 0, sizeof(struct msghdr));
+	memset(msg, 0, sizeof(struct msghdr));
 	msg->msg_iovlen = 1;
-	msg->msg_control = malloc (CMSG_SPACE(sizeof(struct ucred)));
+	msg->msg_control = malloc(CMSG_SPACE(sizeof(struct ucred)));
 	if (!msg->msg_control) {
-		free (credentials);
-		free (msg);
+		free(credentials);
+		free(msg);
 		return NULL;
 	}
 
@@ -119,9 +103,9 @@ static struct msghdr* create_credentials_msg()
 	cmsg->cmsg_level = SOL_SOCKET;
 	cmsg->cmsg_type = SCM_CREDENTIALS;
 	cmsg->cmsg_len = CMSG_LEN(sizeof(struct ucred));
-	memcpy (CMSG_DATA(cmsg), credentials, sizeof(struct ucred));
+	memcpy(CMSG_DATA(cmsg), credentials, sizeof(struct ucred));
 
-	free (credentials);
+	free(credentials);
 	return msg;
 }
 
@@ -136,31 +120,30 @@ int socket_send_cmd(char *name, char *data)
 	if (!name || !data)
 		return LPMD_ERROR;
 
-	socket_fd = socket_init_connection (name);
+	socket_fd = socket_init_connection(name);
 	if (!socket_fd)
 		return LPMD_ERROR;
 
-	msg = create_credentials_msg ();
+	msg = create_credentials_msg();
 	if (!msg)
 		return LPMD_ERROR;
 
-	iov.iov_base = (void*) data;
-	iov.iov_len = strlen (data);
+	iov.iov_base = (void *)data;
+	iov.iov_len = strlen(data);
 	msg->msg_iov = &iov;
 
-	if (sendmsg (socket_fd, msg, 0) < 0) {
-		free (msg->msg_control);
-		free (msg);
+	if (sendmsg(socket_fd, msg, 0) < 0) {
+		free(msg->msg_control);
+		free(msg);
 		return LPMD_ERROR;
 	}
 
-	ret = read (socket_fd, buf, MAX_STR_LENGTH);
+	ret = read(socket_fd, buf, MAX_STR_LENGTH);
 	if (ret < 0)
-		lpmd_log_debug ("read failed\n");
+		lpmd_log_debug("read failed\n");
 
-	close (socket_fd);
-	free (msg->msg_control);
-	free (msg);
+	close(socket_fd);
+	free(msg->msg_control);
+	free(msg);
 	return LPMD_SUCCESS;
 }
-

@@ -1,25 +1,6 @@
-/*
- * util.c: intel_lpmd utilization monitor
- *
- * Copyright (C) 2023 Intel Corporation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
- *
- * This file contains logic similar to "top" program to get utilization from
- * /proc/sys kernel interface.
- */
+// SPDX-License-Identifier: GPL-2.0-or-later
+/* Copyright(c) 2022 Intel Corporation. All rights reserved. */
+
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <err.h>
@@ -39,7 +20,6 @@
 #include "lpmd.h"
 
 #define PATH_PROC_STAT "/proc/stat"
-
 
 enum type_stat {
 	STAT_CPU,
@@ -117,7 +97,8 @@ static int get_gfx_util_sysfs(unsigned long long time_ms)
 	unsigned long long gfx_util, sam_util;
 	int ret;
 
-	gfx_util = sam_util = -1;
+	gfx_util = -1;
+	sam_util = -1;
 
 	fp = fopen(path_gfx_rc6, "r");
 	if (fp) {
@@ -167,7 +148,7 @@ static int parse_gfx_util_sysfs(void)
 	if (!gfx_sysfs_available)
 		return 1;
 
-	clock_gettime (CLOCK_MONOTONIC, &ts_cur);
+	clock_gettime(CLOCK_MONOTONIC, &ts_cur);
 
 	if (!ts_prev.tv_sec && !ts_prev.tv_nsec) {
 		ret = probe_gfx_util_sysfs();
@@ -179,7 +160,8 @@ static int parse_gfx_util_sysfs(void)
 		return 0;
 	}
 
-	time_ms = (ts_cur.tv_sec - ts_prev.tv_sec) * 1000 + (ts_cur.tv_nsec - ts_prev.tv_nsec) / 1000000;
+	time_ms = (ts_cur.tv_sec - ts_prev.tv_sec) * 1000 +
+		   (ts_cur.tv_nsec - ts_prev.tv_nsec) / 1000000;
 
 	ts_prev = ts_cur;
 	busy_gfx = get_gfx_util_sysfs(time_ms);
@@ -191,10 +173,8 @@ static int parse_gfx_util_sysfs(void)
 #define MSR_PKG_ANY_GFXE_C0_RES	0x65A
 static int parse_gfx_util_msr(void)
 {
-	static uint64_t val_prev;
-	uint64_t val;
-	static uint64_t tsc_prev;
-	uint64_t tsc;
+	static uint64_t val_prev, tsc_prev;
+	uint64_t _busy_gfx, val, tsc;
 	int cpu;
 
 	busy_gfx = -1;
@@ -214,9 +194,7 @@ static int parse_gfx_util_msr(void)
 		return 0;
 	}
 
-	if (val > val_prev && tsc >tsc_prev) {
-		uint64_t _busy_gfx;
-
+	if (val > val_prev && tsc > tsc_prev) {
 		_busy_gfx = abs(val - val_prev) * 10000ULL / abs(tsc - tsc_prev);
 		if (_busy_gfx < INT_MAX)
 			busy_gfx = (int)_busy_gfx;
@@ -226,7 +204,7 @@ static int parse_gfx_util_msr(void)
 	val_prev = val;
 	return 0;
 err:
-	lpmd_log_debug("parse_gfx_util_msr failed\n");
+	lpmd_log_debug("%s failed\n", __func__);
 	return 1;
 }
 
@@ -270,32 +248,32 @@ static int parse_proc_stat(void)
 	int sys_idx = count - 1;
 	size_t size = sizeof(struct proc_stat_info) * count;
 
-	filep = fopen (PATH_PROC_STAT, "r");
+	filep = fopen(PATH_PROC_STAT, "r");
 	if (!filep)
 		return 1;
 
 	if (!proc_stat_prev)
-		proc_stat_prev = calloc(sizeof(struct proc_stat_info), count);
+		proc_stat_prev = calloc(count, sizeof(struct proc_stat_info));
 
 	if (!proc_stat_prev) {
-		fclose (filep);
+		fclose(filep);
 		return 1;
 	}
 
 	if (!proc_stat_cur)
-		proc_stat_cur = calloc(sizeof(struct proc_stat_info), count);
+		proc_stat_cur = calloc(count, sizeof(struct proc_stat_info));
 
 	if (!proc_stat_cur) {
 		free(proc_stat_prev);
-		fclose (filep);
+		fclose(filep);
 		proc_stat_prev = NULL;
 		return 1;
 	}
 
-	memcpy (proc_stat_prev, proc_stat_cur, size);
-	memset (proc_stat_cur, 0, size);
+	memcpy(proc_stat_prev, proc_stat_cur, size);
+	memset(proc_stat_cur, 0, size);
 
-	while (!feof (filep)) {
+	while (!feof(filep)) {
 		int idx;
 		char *tmpline = NULL;
 		struct proc_stat_info *info;
@@ -307,68 +285,66 @@ static int parse_proc_stat(void)
 		tmpline = NULL;
 		size = 0;
 
-		if (getline (&tmpline, &size, filep) <= 0) {
-			free (tmpline);
+		if (getline(&tmpline, &size, filep) <= 0) {
+			free(tmpline);
 			break;
 		}
 
-		line = strdup (tmpline);
+		line = strdup(tmpline);
 
-		p = strtok (line, " ");
+		p = strtok(line, " ");
 
-		if (strncmp (p, "cpu", 3)) {
-			free (tmpline);
-			free (line);
+		if (strncmp(p, "cpu", 3)) {
+			free(tmpline);
+			free(line);
 			continue;
 		}
 
-		ret = sscanf (p, "cpu%d", &cpu);
-		if (ret == -1 && !(strncmp (p, "cpu", 3))) {
+		ret = sscanf(p, "cpu%d", &cpu);
+		if (ret == -1 && !(strncmp(p, "cpu", 3))) {
 			/* Read system line */
 			info = &proc_stat_cur[sys_idx];
-		}
-		else if (ret == 1) {
+		} else if (ret == 1) {
 			info = &proc_stat_cur[cpu];
-		}
-		else {
-			free (tmpline);
-			free (line);
+		} else {
+			free(tmpline);
+			free(line);
 			continue;
 		}
 
 		info->valid = 1;
 		idx = STAT_CPU;
 
-		while (p != NULL) {
+		while (p) {
 			if (idx >= STAT_MAX)
 				break;
 
 			if (idx == STAT_CPU) {
 				idx++;
-				p = strtok (NULL, " ");
+				p = strtok(NULL, " ");
 				continue;
 			}
 
-			if (sscanf (p, "%llu", &info->stat[idx]) <= 0)
+			if (sscanf(p, "%llu", &info->stat[idx]) <= 0)
 				lpmd_log_debug("Failed to parse /proc/stat, defer update in next snapshot.");
 
-			p = strtok (NULL, " ");
+			p = strtok(NULL, " ");
 			idx++;
 		}
 
-		free (tmpline);
-		free (line);
+		free(tmpline);
+		free(line);
 	}
 
-	fclose (filep);
-	busy_sys = calculate_busypct (&proc_stat_cur[sys_idx], &proc_stat_prev[sys_idx]);
+	fclose(filep);
+	busy_sys = calculate_busypct(&proc_stat_cur[sys_idx], &proc_stat_prev[sys_idx]);
 
 	busy_cpu = 0;
 	for (i = 1; i <= get_max_online_cpu(); i++) {
 		if (!proc_stat_cur[i].valid)
 			continue;
 
-		val = calculate_busypct (&proc_stat_cur[i], &proc_stat_prev[i]);
+		val = calculate_busypct(&proc_stat_cur[i], &proc_stat_prev[i]);
 		if (busy_cpu < val)
 			busy_cpu = val;
 	}
@@ -376,10 +352,10 @@ static int parse_proc_stat(void)
 	return 0;
 }
 
-int util_update(lpmd_config_t *lpmd_config)
+int util_update(struct lpmd_config_t *lpmd_config)
 {
 	if (lpmd_config->util_sys_enable || lpmd_config->util_cpu_enable) {
-		parse_proc_stat ();
+		parse_proc_stat();
 		lpmd_config->data.util_sys = busy_sys;
 		lpmd_config->data.util_cpu = busy_cpu;
 	}

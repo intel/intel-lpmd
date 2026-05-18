@@ -1,25 +1,5 @@
-/*
- * lpmd_dbus_server.c: Dbus server for intel_lpmd
- *
- * Copyright (C) 2023 Intel Corporation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
- *
- * This file contains function to start dbus server and provide callbacks for
- * dbus messages.
- */
+// SPDX-License-Identifier: GPL-2.0-or-later
+/* Copyright (C) 2026 Intel Corporation */
 
 #include <gio/gio.h>
 #include <glib.h>
@@ -56,51 +36,50 @@ static gboolean
 // Dbus object initialization
 static void pref_object_init(PrefObject *obj)
 {
-	g_assert (obj != NULL);
+	g_assert(obj);
 }
 
 // Dbus object class initialization
 static void pref_object_class_init(PrefObjectClass *_class)
 {
-	g_assert (_class != NULL);
+	g_assert(_class);
 }
 
 static gboolean dbus_interface_terminate(PrefObject *obj, GError **error)
 {
-	lpmd_log_debug ("intel_lpmd_dbus_interface_terminate\n");
-	lpmd_terminate ();
+	lpmd_log_debug("intel_lpmd_dbus_interface_terminate\n");
+	lpmd_terminate();
 	if (intel_lpmd_dbus_exit_callback)
-		intel_lpmd_dbus_exit_callback ();
+		intel_lpmd_dbus_exit_callback();
 
 	return TRUE;
 }
 
 static gboolean dbus_interface_l_pm__fo_rc_e__on(PrefObject *obj, GError **error)
 {
-	lpmd_log_debug ("intel_lpmd_dbus_interface_lpm_enter\n");
-	lpmd_force_on ();
+	lpmd_log_debug("intel_lpmd_dbus_interface_lpm_enter\n");
+	lpmd_force_on();
 
 	return TRUE;
 }
 
 static gboolean dbus_interface_l_pm__fo_rc_e__of_f(PrefObject *obj, GError **error)
 {
-	lpmd_log_debug ("intel_lpmd_dbus_interface_lpm_exit\n");
-	lpmd_force_off ();
+	lpmd_log_debug("intel_lpmd_dbus_interface_lpm_exit\n");
+	lpmd_force_off();
 
 	return TRUE;
 }
 
 static gboolean dbus_interface_l_pm__au_to(PrefObject *obj, GError **error)
 {
-	lpmd_set_auto ();
+	lpmd_set_auto();
 	return TRUE;
 }
 
 #pragma GCC diagnostic push
 
 static GDBusInterfaceVTable interface_vtable;
-extern gint watcher_id;
 
 static GDBusNodeInfo *
 lpmd_dbus_load_introspection(const gchar *filename, GError **error)
@@ -110,22 +89,21 @@ lpmd_dbus_load_introspection(const gchar *filename, GError **error)
 
 	path = g_build_filename("/org/freedesktop/intel_lpmd", filename, NULL);
 	data = g_resources_lookup_data(path, G_RESOURCE_LOOKUP_FLAGS_NONE, error);
-	if (data == NULL)
+	if (!data)
 		return NULL;
 
 	return g_dbus_node_info_new_for_xml((gchar *)g_bytes_get_data(data, NULL), error);
 }
 
-
 static void
 lpmd_dbus_handle_method_call(GDBusConnection       *connection,
-			    const gchar           *sender,
-			    const gchar           *object_path,
-			    const gchar           *interface_name,
-			    const gchar           *method_name,
-			    GVariant              *parameters,
-			    GDBusMethodInvocation *invocation,
-			    gpointer               user_data)
+			     const gchar           *sender,
+			     const gchar           *object_path,
+			     const gchar           *interface_name,
+			     const gchar           *method_name,
+			     GVariant              *parameters,
+			     GDBusMethodInvocation *invocation,
+			     gpointer               user_data)
 {
 	PrefObject *obj = PREF_OBJECT(user_data);
 	g_autoptr(GError) error = NULL;
@@ -156,7 +134,7 @@ lpmd_dbus_handle_method_call(GDBusConnection       *connection,
 	}
 
 	if (g_strcmp0(method_name, "GetState") == 0) {
-		const char *state_names[] = {
+		static const char * const state_names[] = {
 			[LPMD_OFF] = "OFF",
 			[LPMD_ON] = "ON",
 			[LPMD_AUTO] = "AUTO",
@@ -168,7 +146,7 @@ lpmd_dbus_handle_method_call(GDBusConnection       *connection,
 		const char *name = (state >= 0 && state <= LPMD_TERMINATE) ? state_names[state] : "UNKNOWN";
 
 		g_dbus_method_invocation_return_value(invocation,
-						     g_variant_new("(s)", name));
+						      g_variant_new("(s)", name));
 		return;
 	}
 
@@ -182,48 +160,49 @@ lpmd_dbus_handle_method_call(GDBusConnection       *connection,
 
 static GVariant *
 lpmd_dbus_handle_get_property(GDBusConnection  *connection,
-			     const gchar      *sender,
-			     const gchar      *object_path,
-			     const gchar      *interface_name,
-			     const gchar      *property_name,
-			     GError          **error,
-			     gpointer          user_data)
+			      const gchar      *sender,
+			      const gchar      *object_path,
+			      const gchar      *interface_name,
+			      const gchar      *property_name,
+			      GError          **error,
+			      gpointer          user_data)
 {
 	return NULL;
 }
 
 static gboolean
 lpmd_dbus_handle_set_property(GDBusConnection  *connection,
-			     const gchar      *sender,
-			     const gchar      *object_path,
-			     const gchar      *interface_name,
-			     const gchar      *property_name,
-			     GVariant         *value,
-			     GError          **error,
-			     gpointer          user_data) {
+			      const gchar      *sender,
+			      const gchar      *object_path,
+			      const gchar      *interface_name,
+			      const gchar      *property_name,
+			      GVariant         *value,
+			      GError          **error,
+			      gpointer          user_data)
+{
 	return TRUE;
 }
 
-
 static void
 lpmd_dbus_on_bus_acquired(GDBusConnection *connection,
-			 const gchar     *name,
-			 gpointer         user_data) {
-	guint registration_id;
-	GDBusProxy *proxy_id = NULL;
-	GError *error = NULL;
+			  const gchar     *name,
+			  gpointer         user_data)
+{
 	GDBusNodeInfo *introspection_data = NULL;
+	GDBusProxy *proxy_id = NULL;
+	guint registration_id;
+	GError *error = NULL;
 
-	if (user_data == NULL) {
+	if (!user_data) {
 		lpmd_log_error("user_data is NULL\n");
 		return;
 	}
 
 	introspection_data = lpmd_dbus_load_introspection("src/intel_lpmd_dbus_interface.xml",
-							 &error);
-	if (introspection_data == NULL || error != NULL) {
+							  &error);
+	if (!introspection_data || error) {
 		lpmd_log_error("Couldn't create introspection data: %s:\n",
-			      error->message);
+			       error->message);
 		return;
 	}
 
@@ -244,33 +223,34 @@ lpmd_dbus_on_bus_acquired(GDBusConnection *connection,
 					 NULL,
 					 &error);
 	g_assert(registration_id > 0);
-	g_assert(proxy_id != NULL);
+	g_assert(proxy_id);
 }
 
 static void
 lpmd_dbus_on_name_acquired(GDBusConnection *connection,
-			  const gchar     *name,
-			  gpointer         user_data) {
+			   const gchar     *name,
+			   gpointer         user_data)
+{
 }
 
 static void
 lpmd_dbus_on_name_lost(GDBusConnection *connection,
-		      const gchar     *name,
-		      gpointer         user_data)
+		       const gchar     *name,
+		       gpointer         user_data)
 {
 	g_warning("Lost the name %s\n", name);
 	exit(1);
 }
 
-
 // Set up Dbus server with GDBus
-int intel_dbus_server_init(gboolean (*exit_handler)(void)) {
+int intel_dbus_server_init(gboolean (*exit_handler)(void))
+{
 	PrefObject *value_obj;
 
 	intel_lpmd_dbus_exit_callback = exit_handler;
 
 	value_obj = PREF_OBJECT(g_object_new(PREF_TYPE_OBJECT, NULL));
-	if (value_obj == NULL) {
+	if (!value_obj) {
 		lpmd_log_error("Failed to create one Value instance:\n");
 		return LPMD_FATAL_ERROR;
 	}
@@ -290,4 +270,5 @@ int intel_dbus_server_init(gboolean (*exit_handler)(void)) {
 
 	return LPMD_SUCCESS;
 }
+
 #pragma GCC diagnostic pop
