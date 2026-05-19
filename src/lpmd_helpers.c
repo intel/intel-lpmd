@@ -296,7 +296,7 @@ int lpmd_read_yn(const char *name, int *val, int print_level)
 	}
 
 	if (print_level >= 0)
-		lpmd_log_debug("%sRead \"%c\" from %s\n", prefix, *val, name);
+		lpmd_log_debug("%sRead \"%d\" from %s\n", prefix, *val, name);
 
 	return 0;
 }
