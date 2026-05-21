@@ -407,8 +407,11 @@ int lpmd_main(void)
 	if (ret)
 		goto cleanup;
 
-	if (!has_hfi_capability())
-		lpmd_config.hfi_lpm_enable = 0;
+	if (lpmd_config.hfi_lpm_enable && !has_hfi_capability()) {
+		lpmd_log_error("System doesn't support HFI but it was used in the config file!\n");
+		ret = LPMD_CONFIGURATION_ERROR;
+		goto cleanup;
+	}
 
 	/* Must done after init_cpu() */
 	lpmd_build_config_states(&lpmd_config);
