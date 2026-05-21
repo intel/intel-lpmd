@@ -1,6 +1,6 @@
 .\" SPDX-License-Identifier: GPL-2.0-or-later
 .\" Copyright (C) 2026 Intel Corporation
-.TH intel_lpmd_config.xml "5" "8 Apr 2026"
+.TH intel_lpmd_config.xml "5" "21 May 2026"
 
 .SH NAME
 intel_lpmd_config.xml \- Configuration file for intel_lpmd
@@ -16,6 +16,45 @@ performance and energy saving. The rules of switching refer to what system
 information dictates whether a change of state is needed or not. It can be
 either information from a hardware source or software calculated if the hardware
 features are not supported.
+
+.SH VALID CONFIGURATION COMBINATIONS
+LPMD can run in a couple of general configuration combinations. They generally
+are centered around what the main source driving a change is:
+
+.PP
+.B WLT
+- has the most subchoices in how it can run. Simply setting it to enabled will
+run LPMD in an event based mode, changing states only when WLT changes. A
+polling mode can also be used that periodically checks WLT instead. On older
+systems that don't have WLT support a proxy system can be used. It calculates a
+synthetic WLT value based on various utlization metrics. WLT is not compatible
+with the utilization source and only compatible with HFI if HFI is specified
+inside individual custom states.
+
+.PP
+.B Utilization
+- based on system, CPU or GFX usage can be used to switch to different states
+(custom or default ones). Not compatible with WLT or HFI. Only compatible with
+HFI if it's used in individual custom states.
+
+.PP
+.B HFI
+- without any custom states it manages what CPUs should be used based on HFI
+hardware hints. In this configuration it's not compatible with other sources
+(WLT or utilization). It can be used in individual custom states inside the
+'ActiveCPUs' tag. Then the CPU management will be outsourced to HFI hints, while
+custom state changes along EPP, EPB values will be left to the other source
+chosen.
+
+.PP
+.B Exemptions
+- An exemption to WLT and UTIL compatibility is made if GFX UTIL source is used.
+Look at Lunar Lake config (model 189) as an example.
+
+.SH AVAILABLE CONFIGURATION OPTIONS
+Below are listed all the available configuration tags that can be specified in
+the config file and read by LPMD. Look at the previous paragraph to see what
+sets of features might be mutually exclusive.
 
 .PP
 .B lp_mode_cpus
