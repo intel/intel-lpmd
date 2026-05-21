@@ -205,16 +205,9 @@ struct lpmd_config_t {
 	int wlt_hint_poll_enable;
 	int wlt_proxy_enable;
 	int wlt_hint_mask;
-
-	union {
-		struct {
-			uint32_t util_sys_enable:1;
-			uint32_t util_cpu_enable:1;
-			uint32_t util_gfx_enable:1;
-			uint32_t util_reserved:29;
-		};
-		uint32_t util_enable;
-	};
+	int util_sys_enable;
+	int util_cpu_enable;
+	int util_gfx_enable;
 	int util_entry_threshold;
 	int util_exit_threshold;
 	int util_entry_delay;
