@@ -67,9 +67,10 @@ static int dummy_printf(const char *__restrict __format, ...)
 #endif
 
 // Common return value defines
-#define LPMD_SUCCESS		0
-#define LPMD_ERROR		-1
+#define LPMD_SUCCESS			0
+#define LPMD_ERROR			-1
 #define LPMD_FATAL_ERROR		-2
+#define LPMD_CONFIGURATION_ERROR	-3
 
 /* Slider parameter types for explicit type-safe validation */
 enum slider_param_type {
