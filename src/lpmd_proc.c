@@ -472,6 +472,7 @@ int lpmd_main(void)
 	    wlt_proxy_init() != LPMD_SUCCESS) {
 		lpmd_config.wlt_proxy_enable = 0;
 		lpmd_log_error("Error setting up WLT Proxy. wlt_proxy_enable disabled\n");
+		return LPMD_ERROR;
 	}
 
 	if (lpmd_config.wlt_hint_enable && !lpmd_config.hfi_lpm_enable) {
