@@ -199,6 +199,7 @@ struct lpmd_config_t {
 	int powersaver_def;
 	int hfi_lpm_enable;
 	int wlt_hint_enable;
+	int util_monitor;
 	int wlt_notification_delay;
 	int wlt_hint_poll_enable;
 	int wlt_proxy_enable;

@@ -159,8 +159,6 @@ static int config_state_match(struct lpmd_config_t *config, int idx)
 	return 1;
 }
 
-static int polling_enabled;
-
 static int get_config_state_interval(struct lpmd_config_t *config, int idx)
 {
 	struct lpmd_config_state_t *state = &config->config_states[idx];
@@ -169,8 +167,8 @@ static int get_config_state_interval(struct lpmd_config_t *config, int idx)
 	if (config->wlt_proxy_enable)
 		return 0;
 
-	/* Start polling only when needed */
-	if (!polling_enabled) {
+	/* Start polling only when needed for the util monitor */
+	if (!config->util_monitor) {
 		config->data.polling_interval = -1;
 		return 0;
 	}
@@ -444,7 +442,7 @@ int lpmd_enter_next_state(void)
 	 * After switching power profiles polling gets disabled and needs to be
 	 * updated.
 	 */
-	if (config->data.polling_interval == -1 && polling_enabled && idx != DEFAULT_OFF)
+	if (config->data.polling_interval == -1 && config->util_monitor && idx != DEFAULT_OFF)
 		get_config_state_interval(config, idx);
 
 	/* No action needed, keep previous idx and interval */
@@ -764,7 +762,7 @@ int lpmd_build_config_states(struct lpmd_config_t *lpmd_config)
 
 		if (state->entry_system_load_thres ||
 		    state->enter_cpu_load_thres || state->enter_gfx_load_thres)
-			polling_enabled = 1;
+			lpmd_config->util_monitor = 1;
 
 		if (state->min_poll_interval <= 0)
 			state->min_poll_interval = state->max_poll_interval > DEFAULT_POLL_RATE_MS ?
