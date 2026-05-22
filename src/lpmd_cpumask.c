@@ -371,14 +371,17 @@ static int cpumask_to_str(cpu_set_t *mask, char *buf, int length)
 	for (i = 0; i < topo_max_cpus; i++) {
 		if (!CPU_ISSET_S(i, size_cpumask, mask))
 			continue;
-		if (length - 1 < offset) {
+		if (length < offset) {
 			lpmd_log_debug("%s: Too many cpus\n", __func__);
 			return 1;
 		}
-		offset += snprintf(buf + offset, length - 1 - offset, "%d,", i);
+		offset += snprintf(buf + offset, length - offset, "%d,", i);
 	}
+
+	/* Clear last comma for clean CPU string */
 	if (offset)
 		buf[offset - 1] = '\0';
+
 	return 0;
 }
 

@@ -116,8 +116,7 @@ static void lpmd_parse_state(xmlDoc *doc, xmlNode *a_node, struct lpmd_config_t 
 		if (!strncmp((const char *)cur_node->name, "ID", strlen("ID")))
 			state->id = strtol(tmp_value, &pos, 10);
 		if (!strncmp((const char *)cur_node->name, "Name", strlen("Name"))) {
-			snprintf(state->name, MAX_STATE_NAME - 1, "%s", tmp_value);
-			state->name[MAX_STATE_NAME - 1] = '\0';
+			snprintf(state->name, MAX_STATE_NAME, "%s", tmp_value);
 		}
 		if (!strncmp((const char *)cur_node->name, "WLTTypeMask", strlen("WLTTypeMask")))
 			state->wlt_type_mask = strtol(tmp_value, &pos, 10);
@@ -227,10 +226,9 @@ static void lpmd_parse_states(xmlDoc *doc, xmlNode *a_node, struct lpmd_config_t
 
 		if (!strncmp((const char *)cur_node->name, "CPUConfig", strlen("CPUConfig"))) {
 			if (is_wildcard(tmp_value))
-				strncpy(cpu_config, lpmd_config->cpu_config, MAX_CONFIG_LEN);
+				snprintf(cpu_config, MAX_CONFIG_LEN, "%s", lpmd_config->cpu_config);
 			else
-				snprintf(cpu_config, MAX_CONFIG_LEN - 1, "%s", tmp_value);
-			cpu_config[MAX_CONFIG_LEN - 1] = '\0';
+				snprintf(cpu_config, MAX_CONFIG_LEN, "%s", tmp_value);
 		}
 
 		if (tmp_value)
@@ -522,7 +520,7 @@ int match_config_file(int family, int model, int tdp, char *save_file_name)
 	lpmd_log_msg("Looking for config file %s\n", file_name);
 	ret = stat(file_name, &s);
 	if (!ret) {
-		strncpy(save_file_name, file_name, MAX_FILE_NAME_PATH);
+		snprintf(save_file_name, MAX_FILE_NAME_PATH, "%s", file_name);
 		return ret;
 	}
 
@@ -533,7 +531,7 @@ int match_config_file(int family, int model, int tdp, char *save_file_name)
 
 	ret = stat(file_name, &s);
 	if (!ret) {
-		strncpy(save_file_name, file_name, MAX_FILE_NAME_PATH);
+		snprintf(save_file_name, MAX_FILE_NAME_PATH, "%s", file_name);
 		return ret;
 	}
 

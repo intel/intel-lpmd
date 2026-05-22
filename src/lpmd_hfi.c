@@ -259,7 +259,6 @@ static void __handle_event(struct nlattr *cap, int *index,
 		str = update_one_cpu(perf_cap);
 		*offset += snprintf(buf + *offset, MAX_STR_LENGTH -
 				    *offset, " TYPE [%s]", str);
-		buf[MAX_STR_LENGTH - 1] = '\0';
 		lpmd_log_debug("\t\t\t%s\n", buf);
 
 		*index = 0;
