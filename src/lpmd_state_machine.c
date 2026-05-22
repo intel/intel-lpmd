@@ -670,21 +670,21 @@ static int build_state_cpumask_activecpus(struct lpmd_config_state_t *state)
 	if (state->active_cpus[0] == '\0')
 		return -2;
 
-	if (!strncmp(state->active_cpus, "all", sizeof("all")) ||
-	    !strncmp(state->active_cpus, "ALL", sizeof("ALL")) ||
+	if (!strcmp(state->active_cpus, "all") ||
+	    !strcmp(state->active_cpus, "ALL") ||
 	    is_wildcard(state->active_cpus)) {
 		state->cpumask_idx = CPUMASK_ONLINE;
 		return 0;
 	}
 
-	if (!strncmp(state->active_cpus, "lp", sizeof("lp")) ||
-	    !strncmp(state->active_cpus, "LP", sizeof("LP"))) {
+	if (!strcmp(state->active_cpus, "lp") ||
+	    !strcmp(state->active_cpus, "LP")) {
 		state->cpumask_idx = CPUMASK_LPM_DEFAULT;
 		return 0;
 	}
 
-	if (!strncmp(state->active_cpus, "hfi", sizeof("hfi")) ||
-	    !strncmp(state->active_cpus, "HFI", sizeof("HFI"))) {
+	if (!strcmp(state->active_cpus, "hfi") ||
+	    !strcmp(state->active_cpus, "HFI")) {
 		state->cpumask_idx = CPUMASK_HFI;
 		state->steady = 0;
 		return 0;

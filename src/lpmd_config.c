@@ -113,58 +113,58 @@ static void lpmd_parse_state(xmlDoc *doc, xmlNode *a_node, struct lpmd_config_t 
 		if (!tmp_value)
 			continue;
 
-		if (!strncmp((const char *)cur_node->name, "ID", strlen("ID")))
+		if (!strcmp((const char *)cur_node->name, "ID"))
 			state->id = strtol(tmp_value, &pos, 10);
-		if (!strncmp((const char *)cur_node->name, "Name", strlen("Name"))) {
+		if (!strcmp((const char *)cur_node->name, "Name")) {
 			snprintf(state->name, MAX_STATE_NAME, "%s", tmp_value);
 		}
-		if (!strncmp((const char *)cur_node->name, "WLTTypeMask", strlen("WLTTypeMask")))
+		if (!strcmp((const char *)cur_node->name, "WLTTypeMask"))
 			state->wlt_type_mask = strtol(tmp_value, &pos, 10);
-		else if (!strncmp((const char *)cur_node->name, "WLTType", strlen("WLTType")))
+		else if (!strcmp((const char *)cur_node->name, "WLTType"))
 			state->wlt_type = strtol(tmp_value, &pos, 10);
-		if (!strncmp((const char *)cur_node->name, "EntrySystemLoadThres", strlen("EntrySystemLoadThres")))
+		if (!strcmp((const char *)cur_node->name, "EntrySystemLoadThres"))
 			state->entry_system_load_thres = strtol(tmp_value, &pos, 10);
-		if (!strncmp((const char *)cur_node->name, "ExitSystemLoadThres", strlen("ExitSystemLoadThres")))
+		if (!strcmp((const char *)cur_node->name, "ExitSystemLoadThres"))
 			state->exit_system_load_thres = strtol(tmp_value, &pos, 10);
-		if (!strncmp((const char *)cur_node->name, "ExitSystemLoadhysteresis", strlen("ExitSystemLoadhysteresis")))
+		if (!strcmp((const char *)cur_node->name, "ExitSystemLoadhysteresis"))
 			state->exit_system_load_hyst = strtol(tmp_value, &pos, 10);
-		if (!strncmp((const char *)cur_node->name, "EnterCPULoadThres", strlen("EnterCPULoadThres")))
+		if (!strcmp((const char *)cur_node->name, "EnterCPULoadThres"))
 			state->enter_cpu_load_thres = strtol(tmp_value, &pos, 10);
-		if (!strncmp((const char *)cur_node->name, "ExitCPULoadThres", strlen("ExitCPULoadThres")))
+		if (!strcmp((const char *)cur_node->name, "ExitCPULoadThres"))
 			state->exit_cpu_load_thres = strtol(tmp_value, &pos, 10);
-		if (!strncmp((const char *)cur_node->name, "EnterGFXLoadThres", strlen("EnterGFXLoadThres")))
+		if (!strcmp((const char *)cur_node->name, "EnterGFXLoadThres"))
 			state->enter_gfx_load_thres = strtol(tmp_value, &pos, 10);
-		if (!strncmp((const char *)cur_node->name, "ExitGFXLoadThres", strlen("ExitGFXLoadThres")))
+		if (!strcmp((const char *)cur_node->name, "ExitGFXLoadThres"))
 			state->exit_gfx_load_thres = strtol(tmp_value, &pos, 10);
-		if (!strncmp((const char *)cur_node->name, "MinPollInterval", strlen("MinPollInterval")))
+		if (!strcmp((const char *)cur_node->name, "MinPollInterval"))
 			state->min_poll_interval = strtol(tmp_value, &pos, 10);
-		if (!strncmp((const char *)cur_node->name, "MaxPollInterval", strlen("MaxPollInterval")))
+		if (!strcmp((const char *)cur_node->name, "MaxPollInterval"))
 			state->max_poll_interval = strtol(tmp_value, &pos, 10);
-		if (!strncmp((const char *)cur_node->name, "PollIntervalIncrement", strlen("PollIntervalIncrement")))
+		if (!strcmp((const char *)cur_node->name, "PollIntervalIncrement"))
 			state->poll_interval_increment = strtol(tmp_value, &pos, 10);
-		if (!strncmp((const char *)cur_node->name, "EPP", strlen("EPP")))
+		if (!strcmp((const char *)cur_node->name, "EPP"))
 			state->epp = strtol(tmp_value, &pos, 10);
-		if (!strncmp((const char *)cur_node->name, "EPB", strlen("EPB")))
+		if (!strcmp((const char *)cur_node->name, "EPB"))
 			state->epb = strtol(tmp_value, &pos, 10);
-		if (!strncmp((const char *)cur_node->name, "ITMTState", strlen("ITMTState")))
+		if (!strcmp((const char *)cur_node->name, "ITMTState"))
 			state->itmt_state = strtol(tmp_value, &pos, 10);
-		if (!strncmp((const char *)cur_node->name, "IRQMigrate", strlen("IRQMigrate")))
+		if (!strcmp((const char *)cur_node->name, "IRQMigrate"))
 			state->irq_migrate = strtol(tmp_value, &pos, 10);
-		if (!strncmp((const char *)cur_node->name, "ActivePcores", strlen("ActivePcores")))
+		if (!strcmp((const char *)cur_node->name, "ActivePcores"))
 			save_string_or_zero(tmp_value, state->active_p_cores, sizeof(state->active_p_cores));
-		if (!strncmp((const char *)cur_node->name, "ActiveEcores", strlen("ActiveEcores")))
+		if (!strcmp((const char *)cur_node->name, "ActiveEcores"))
 			save_string_or_zero(tmp_value, state->active_e_cores, sizeof(state->active_e_cores));
-		if (!strncmp((const char *)cur_node->name, "ActiveLcores", strlen("ActiveLcores")))
+		if (!strcmp((const char *)cur_node->name, "ActiveLcores"))
 			save_string_or_zero(tmp_value, state->active_l_cores, sizeof(state->active_l_cores));
-		if (!strncmp((const char *)cur_node->name, "ActiveCPUs", strlen("ActiveCPUs")))
+		if (!strcmp((const char *)cur_node->name, "ActiveCPUs"))
 			save_string_or_zero(tmp_value, state->active_cpus, sizeof(state->active_cpus));
-		if (!strncmp((const char *)cur_node->name, "BalanceSliderAC", strlen("BalanceSliderAC")))
+		if (!strcmp((const char *)cur_node->name, "BalanceSliderAC"))
 			ret = read_slider_and_validate(&state->balance_slider_ac, tmp_value, "BalanceSliderAC", state->id, SLIDER_TYPE_BALANCE);
-		if (!strncmp((const char *)cur_node->name, "SliderOffsetAC", strlen("SliderOffsetAC")))
+		if (!strcmp((const char *)cur_node->name, "SliderOffsetAC"))
 			ret = read_slider_and_validate(&state->slider_offset_ac, tmp_value, "SliderOffsetAC", state->id, SLIDER_TYPE_OFFSET);
-		if (!strncmp((const char *)cur_node->name, "BalanceSliderDC", strlen("BalanceSliderDC")))
+		if (!strcmp((const char *)cur_node->name, "BalanceSliderDC"))
 			ret = read_slider_and_validate(&state->balance_slider_dc, tmp_value, "BalanceSliderDC", state->id, SLIDER_TYPE_BALANCE);
-		if (!strncmp((const char *)cur_node->name, "SliderOffsetDC", strlen("SliderOffsetDC")))
+		if (!strcmp((const char *)cur_node->name, "SliderOffsetDC"))
 			ret = read_slider_and_validate(&state->slider_offset_dc, tmp_value, "SliderOffsetDC", state->id, SLIDER_TYPE_OFFSET);
 
 		xmlFree(tmp_value);
@@ -234,14 +234,13 @@ static void lpmd_parse_states(xmlDoc *doc, xmlNode *a_node, struct lpmd_config_t
 		if (tmp_value)
 			xmlFree(tmp_value);
 
-		if (strncmp((const char *)cur_node->name, "State", strlen("State")))
+		if (strcmp((const char *)cur_node->name, "State"))
 			continue;
 
 		/* Must check cpu family/model/config first to make sure the states applies */
 		if (cpu_family != lpmd_config->cpu_family ||
 		    cpu_model != lpmd_config->cpu_model ||
-		    strncmp(cpu_config, lpmd_config->cpu_config,
-			    MAX_CONFIG_LEN)) {
+		    strcmp(cpu_config, lpmd_config->cpu_config)) {
 			lpmd_log_info("Ignore unsupported states for CPU family:%d,model%d,config:%s\n",
 				      cpu_family, cpu_model, cpu_config);
 			return;
@@ -295,107 +294,90 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, struct lpmd_config_t *
 		if (!tmp_value)
 			continue;
 
-		if (!strncmp((const char *)cur_node->name, "Mode", strlen("Mode"))) {
+		if (!strcmp((const char *)cur_node->name, "Mode")) {
 			errno = 0;
 			lpmd_config->mode = strtol(tmp_value, &pos, 10);
 			if (errno || *pos != '\0' ||
 			    lpmd_config->mode > LPM_CPU_MODE_MAX ||
 			    lpmd_config->mode < 0)
 				goto err;
-		} else if (!strncmp((const char *)cur_node->name,
-				    "HfiLpmEnable", strlen("HfiLpmEnable"))) {
+		} else if (!strcmp((const char *)cur_node->name, "HfiLpmEnable")) {
 			errno = 0;
 			lpmd_config->hfi_lpm_enable = strtol(tmp_value, &pos, 10);
 			if (errno || *pos != '\0' ||
 			    (lpmd_config->hfi_lpm_enable != 1 &&
 			     lpmd_config->hfi_lpm_enable != 0))
 				goto err;
-		} else if (!strncmp((const char *)cur_node->name,
-				    "WLTHintEnable", strlen("WLtHintEnable"))) {
+		} else if (!strcmp((const char *)cur_node->name, "WLTHintEnable")) {
 			errno = 0;
 			lpmd_config->wlt_hint_enable = strtol(tmp_value, &pos, 10);
 			if (errno || *pos != '\0' ||
 			    (lpmd_config->wlt_hint_enable != 1 &&
 			     lpmd_config->wlt_hint_enable != 0))
 				goto err;
-		} else if (!strncmp((const char *)cur_node->name, "WLTHintMask",
-				    strlen("WLTHintMask"))) {
+		} else if (!strcmp((const char *)cur_node->name, "WLTHintMask")) {
 			errno = 0;
 			lpmd_config->wlt_hint_mask = strtol(tmp_value, &pos, 10);
-		} else if (!strncmp((const char *)cur_node->name, "WLTHintNotificationDelay",
-			   strlen("WLTHintNotificationDelay"))) {
+		} else if (!strcmp((const char *)cur_node->name, "WLTHintNotificationDelay")) {
 			errno = 0;
 			lpmd_config->wlt_notification_delay = strtol(tmp_value, &pos, 10);
-                } else if (!strncmp((const char *)cur_node->name,
-				    "WLTHintPollEnable",
-				    strlen("WLtHintPollEnable"))) {
+		} else if (!strcmp((const char *)cur_node->name, "WLTHintPollEnable")) {
 			errno = 0;
 			lpmd_config->wlt_hint_poll_enable = strtol(tmp_value, &pos, 10);
 			if (errno || *pos != '\0' ||
 			    (lpmd_config->wlt_hint_poll_enable != 1 &&
 			     lpmd_config->wlt_hint_poll_enable != 0))
 				goto err;
-		} else if (!strncmp((const char *)cur_node->name,
-				    "WLTProxyEnable",
-				    strlen("WLTProxyEnable"))) {
+		} else if (!strcmp((const char *)cur_node->name, "WLTProxyEnable")) {
 			errno = 0;
 			lpmd_config->wlt_proxy_enable = strtol(tmp_value, &pos, 10);
 			if (errno || *pos != '\0' ||
 			    (lpmd_config->wlt_proxy_enable != 1 &&
 			     lpmd_config->wlt_proxy_enable != 0))
 				goto err;
-		} else if (!strncmp((const char *)cur_node->name,
-				    "EntryDelayMS", strlen("EntryDelayMS"))) {
+		} else if (!strcmp((const char *)cur_node->name, "EntryDelayMS")) {
 			errno = 0;
 			lpmd_config->util_entry_delay = strtol(tmp_value, &pos, 10);
 			if (errno || *pos != '\0' ||
 			    lpmd_config->util_entry_delay < 0 ||
 			    lpmd_config->util_entry_delay > UTIL_DELAY_MAX)
 				goto err;
-		} else if (!strncmp((const char *)cur_node->name, "ExitDelayMS",
-				    strlen("ExitDelayMS"))) {
+		} else if (!strcmp((const char *)cur_node->name, "ExitDelayMS")) {
 			errno = 0;
 			lpmd_config->util_exit_delay = strtol(tmp_value, &pos, 10);
 			if (errno || *pos != '\0' ||
 			    lpmd_config->util_exit_delay < 0 ||
 			    lpmd_config->util_exit_delay > UTIL_DELAY_MAX)
 				goto err;
-		} else if (!strncmp((const char *)cur_node->name,
-				    "util_entry_threshold",
-				    strlen("util_entry_threshold"))) {
+		} else if (!strcmp((const char *)cur_node->name, "util_entry_threshold")) {
 			errno = 0;
 			lpmd_config->util_entry_threshold = strtol(tmp_value, &pos, 10);
 			if (errno || *pos != '\0' ||
 			    lpmd_config->util_entry_threshold < 0 ||
 			    lpmd_config->util_entry_threshold > 100)
 				goto err;
-		} else if (!strncmp((const char *)cur_node->name,
-				    "util_exit_threshold",
-				    strlen("util_exit_threshold"))) {
+		} else if (!strcmp((const char *)cur_node->name, "util_exit_threshold")) {
 			errno = 0;
 			lpmd_config->util_exit_threshold = strtol(tmp_value, &pos, 10);
 			if (errno || *pos != '\0' ||
 			    lpmd_config->util_exit_threshold < 0 ||
 			    lpmd_config->util_exit_threshold > 100)
 				goto err;
-		} else if (!strncmp((const char *)cur_node->name, "EntryHystMS",
-				    strlen("EntryHystMS"))) {
+		} else if (!strcmp((const char *)cur_node->name, "EntryHystMS")) {
 			errno = 0;
 			lpmd_config->util_entry_hyst = strtol(tmp_value, &pos, 10);
 			if (errno || *pos != '\0' ||
 			    lpmd_config->util_entry_hyst < 0 ||
 			    lpmd_config->util_entry_hyst > UTIL_HYST_MAX)
 				goto err;
-		} else if (!strncmp((const char *)cur_node->name, "ExitHystMS",
-				    strlen("ExitHystMS"))) {
+		} else if (!strcmp((const char *)cur_node->name, "ExitHystMS")) {
 			errno = 0;
 			lpmd_config->util_exit_hyst = strtol(tmp_value, &pos, 10);
 			if (errno || *pos != '\0' ||
 			    lpmd_config->util_exit_hyst < 0 ||
 			    lpmd_config->util_exit_hyst > UTIL_HYST_MAX)
 				goto err;
-		} else if (!strncmp((const char *)cur_node->name, "lp_mode_epp",
-				    strlen("lp_mode_epp"))) {
+		} else if (!strcmp((const char *)cur_node->name, "lp_mode_epp")) {
 			errno = 0;
 			lpmd_config->lp_mode_epp = strtol(tmp_value, &pos, 10);
 			if (errno || *pos != '\0' ||
@@ -404,24 +386,20 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, struct lpmd_config_t *
 				goto err;
 			if (lpmd_config->lp_mode_epp < 0)
 				lpmd_config->lp_mode_epp = -1;
-		} else if (!strncmp((const char *)cur_node->name, "IgnoreITMT",
-				    strlen("IgnoreITMT"))) {
+		} else if (!strcmp((const char *)cur_node->name, "IgnoreITMT")) {
 			errno = 0;
 			lpmd_config->ignore_itmt = strtol(tmp_value, &pos, 10);
 			if (errno || *pos != '\0' ||
 			    lpmd_config->ignore_itmt < 0 ||
 			    lpmd_config->ignore_itmt > 1)
 				goto err;
-		} else if (!strncmp((const char *)cur_node->name,
-				    "lp_mode_cpus", strlen("lp_mode_cpus"))) {
-			if (!strncmp(tmp_value, "-1", strlen("-1")))
+		} else if (!strcmp((const char *)cur_node->name, "lp_mode_cpus")) {
+			if (!strcmp(tmp_value, "-1"))
 				lpmd_config->lp_mode_cpus[0] = '\0';
 			else
 				copy_user_string(tmp_value, lpmd_config->lp_mode_cpus,
 						 sizeof(lpmd_config->lp_mode_cpus));
-		} else if (!strncmp((const char *)cur_node->name,
-				    "PerformanceDef",
-				    strlen("PerformanceDef"))) {
+		} else if (!strcmp((const char *)cur_node->name, "PerformanceDef")) {
 			errno = 0;
 			lpmd_config->performance_def = strtol(tmp_value, &pos, 10);
 			if (errno || *pos != '\0')
@@ -434,8 +412,7 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, struct lpmd_config_t *
 				lpmd_config->performance_def = LPM_AUTO;
 			else
 				goto err;
-		} else if (!strncmp((const char *)cur_node->name, "BalancedDef",
-				    strlen("BalancedDef"))) {
+		} else if (!strcmp((const char *)cur_node->name, "BalancedDef")) {
 			errno = 0;
 			lpmd_config->balanced_def = strtol(tmp_value, &pos, 10);
 			if (errno || *pos != '\0')
@@ -448,8 +425,7 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, struct lpmd_config_t *
 				lpmd_config->balanced_def = LPM_AUTO;
 			else
 				goto err;
-		} else if (!strncmp((const char *)cur_node->name,
-				    "PowersaverDef", strlen("PowersaverDef"))) {
+		} else if (!strcmp((const char *)cur_node->name, "PowersaverDef")) {
 			errno = 0;
 			lpmd_config->powersaver_def = strtol(tmp_value, &pos, 10);
 			if (errno || *pos != '\0')
@@ -462,28 +438,27 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, struct lpmd_config_t *
 				lpmd_config->powersaver_def = LPM_AUTO;
 			else
 				goto err;
-		} else if (!strncmp((const char *)cur_node->name, "States",
-				    strlen("States"))) {
+		} else if (!strcmp((const char *)cur_node->name, "States")) {
 			errno = 0;
 			lpmd_parse_states(doc, cur_node->children, lpmd_config);
-		} else if (!strncmp((const char *)cur_node->name, "BalancedSliderAC", strlen("BalancedSliderAC"))) {
+		} else if (!strcmp((const char *)cur_node->name, "BalancedSliderAC")) {
 			if (read_slider_and_validate(&lpmd_config->balance_slider_def_ac,
 						     tmp_value, "BalancedSliderAC", -1, SLIDER_TYPE_BALANCE) != 0)
 				goto err;
-		} else if (!strncmp((const char *)cur_node->name, "BalancedSliderDC", strlen("BalancedSliderDC"))) {
+		} else if (!strcmp((const char *)cur_node->name, "BalancedSliderDC")) {
 			if (read_slider_and_validate(&lpmd_config->balance_slider_def_dc,
 						     tmp_value, "BalancedSliderDC", -1, SLIDER_TYPE_BALANCE) != 0)
 				goto err;
-		} else if (!strncmp((const char *)cur_node->name, "SliderOffsetAC", strlen("SliderOffsetAC"))) {
+		} else if (!strcmp((const char *)cur_node->name, "SliderOffsetAC")) {
 			if (read_slider_and_validate(&lpmd_config->slider_offset_def_ac,
 						     tmp_value, "SliderOffsetAC", -1, SLIDER_TYPE_OFFSET) != 0)
 				goto err;
-		} else if (!strncmp((const char *)cur_node->name, "SliderOffsetDC", strlen("SliderOffsetDC"))) {
+		} else if (!strcmp((const char *)cur_node->name, "SliderOffsetDC")) {
 			if (read_slider_and_validate(&lpmd_config->slider_offset_def_dc,
 						     tmp_value, "SliderOffsetDC", -1, SLIDER_TYPE_OFFSET) != 0)
 				goto err;
 		} else {
-			if (!strncmp((const char *)cur_node->name, "HfiSuvEnable", strlen("HfiSuvEnable"))) {
+			if (!strcmp((const char *)cur_node->name, "HfiSuvEnable")) {
 				lpmd_log_debug("Ignore deprecated HfiSuvEnable setting\n");
 			} else {
 				lpmd_log_info("Invalid configuration data\n");
@@ -594,7 +569,7 @@ process_xml:
 		if (cur_node->type != XML_ELEMENT_NODE)
 			continue;
 
-		if (strncmp((const char *)cur_node->name, "Configuration", strlen("Configuration")))
+		if (strcmp((const char *)cur_node->name, "Configuration"))
 			continue;
 
 		if (lpmd_fill_config(doc, cur_node->children, lpmd_config) != LPMD_SUCCESS) {
