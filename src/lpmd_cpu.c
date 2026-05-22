@@ -223,6 +223,7 @@ int get_tdp(void)
 		if (strlen(entry->d_name) > 100)
 			continue;
 
+		/* Match intel-rapl:1, intel-rapl-mmio etc. */
 		if (strncmp(entry->d_name, "intel-rapl", strlen("intel-rapl")))
 			continue;
 
@@ -237,6 +238,7 @@ int get_tdp(void)
 		if (ret <= 0)
 			continue;
 
+		/* Match package-0, package-1 etc. */
 		if (strncmp(str, "package", strlen("package")))
 			continue;
 

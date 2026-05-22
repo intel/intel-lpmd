@@ -73,6 +73,7 @@ static int probe_gfx_util_sysfs(void)
 
 	fclose(fp);
 
+	/* buf is not null terminated - needs strncmp() */
 	if (ret >= strlen("gt0-rc") && !strncmp(buf, "gt0-rc", strlen("gt0-rc"))) {
 		if (!access("/sys/class/drm/card0/device/tile0/gt0/gtidle/idle_residency_ms", R_OK))
 			path_gfx_rc6 = "/sys/class/drm/card0/device/tile0/gt0/gtidle/idle_residency_ms";
@@ -294,6 +295,7 @@ static int parse_proc_stat(void)
 
 		p = strtok(line, " ");
 
+		/* Match 'cpu' prefix */
 		if (strncmp(p, "cpu", 3)) {
 			free(tmpline);
 			free(line);
@@ -301,6 +303,8 @@ static int parse_proc_stat(void)
 		}
 
 		ret = sscanf(p, "cpu%d", &cpu);
+
+		/* Match 'cpu' prefix */
 		if (ret == -1 && !(strncmp(p, "cpu", 3))) {
 			/* Read system line */
 			info = &proc_stat_cur[sys_idx];

@@ -228,6 +228,7 @@ int irq_init(void)
 		do {
 			entry = readdir(dir);
 			if (entry) {
+				/* Match patterns like irqbalance%d.sock */
 				if (!strncmp(entry->d_name, "irqbalance", 10)) {
 					ret = sscanf(entry->d_name, "irqbalance%d.sock", &irqbalance_pid);
 					if (!ret)

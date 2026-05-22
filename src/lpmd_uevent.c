@@ -29,8 +29,10 @@ static int has_cpu_uevent(void)
 	lpmd_log_debug("Receive uevent: %s\n", buffer);
 
 	while (i < len) {
+		/* Match uevents starting with dev_path */
 		if (strlen(buffer + i) > dev_path_len &&
 		    !strncmp(buffer + i, dev_path, dev_path_len)) {
+			/* Match paths prefixed with cpu_path */
 			if (!strncmp(buffer + i + dev_path_len, cpu_path,
 				     strlen(cpu_path))) {
 				lpmd_log_debug("\tMatches: %s\n",
