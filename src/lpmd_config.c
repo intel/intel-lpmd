@@ -571,7 +571,7 @@ int lpmd_get_config(struct lpmd_config_t *lpmd_config)
 		return LPMD_ERROR;
 	}
 
-	strncpy(lpmd_config->file_name, file_name, MAX_FILE_NAME_PATH - 1);
+	snprintf(lpmd_config->file_name, MAX_FILE_NAME_PATH, "%s", file_name);
 
 process_xml:
 	doc = xmlReadFile(file_name, NULL, 0);
