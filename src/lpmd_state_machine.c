@@ -582,7 +582,6 @@ static int build_default_states(struct lpmd_config_t *config)
 		state->steady = 0;
 		state->valid = 1;
 
-		config->config_state_count = 1;
 		return 0;
 	}
 
