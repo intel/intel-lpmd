@@ -226,9 +226,33 @@ struct lpmd_config_t {
 	int wlt_hint_poll_enable;
 	int wlt_proxy_enable;
 	int wlt_hint_mask;
-	int util_sys_enable;
-	int util_cpu_enable;
-	int util_gfx_enable;
+	int use_process_cpuset;
+
+	/* Optional per-CPU-model overrides for the process_cpuset.xml
+	 * <ClassDefaults> block. Populated when the matching <States>
+	 * stanza in intel_lpmd_config_*.xml contains a <ClassDefaults>
+	 * child. Empty strings mean "use the value from process_cpuset.xml
+	 * (or its built-in fallback)". Token syntax matches <ActiveCores>:
+	 * comma- or whitespace-separated "ActivePcores" / "ActiveEcores" /
+	 * "ActiveLcores". */
+	char pc_class_default_realtime[MAX_CONFIG_LEN];
+	char pc_class_default_user_interactive[MAX_CONFIG_LEN];
+	char pc_class_default_user_initiated[MAX_CONFIG_LEN];
+	char pc_class_default_utility[MAX_CONFIG_LEN];
+	char pc_class_default_background[MAX_CONFIG_LEN];
+	char pc_class_default_gp_cpu[MAX_CONFIG_LEN];
+	char pc_class_default_gp_gpu[MAX_CONFIG_LEN];
+	char pc_class_default_gp_hybrid[MAX_CONFIG_LEN];
+
+	union {
+		struct {
+			uint32_t util_sys_enable:1;
+			uint32_t util_cpu_enable:1;
+			uint32_t util_gfx_enable:1;
+			uint32_t util_reserved:29;
+		};
+		uint32_t util_enable;
+	};
 	int util_entry_threshold;
 	int util_exit_threshold;
 	int util_entry_delay;
@@ -447,6 +471,26 @@ int cpumask_free(enum cpumask_idx idx);
 int cpumask_reset(enum cpumask_idx idx);
 
 void free_cpu_type_masks(struct lpmd_config_t *lpmd_config);
+int allocate_cpu_type_masks(struct lpmd_config_t *lpmd_config);
+
+/* lpmd_process_cpuset.c */
+int  lpmd_process_cpuset_init(struct lpmd_config_t *config);
+void lpmd_process_cpuset_uninit(void);
+void lpmd_process_cpuset_unbind_all(void);
+void lpmd_process_cpuset_rescan(void);
+void lpmd_process_cpuset_print_unbound(int user_only);
+void lpmd_process_cpuset_print_bound(void);
+int  lpmd_process_cpuset_add_process(const char *name, const char *classification);
+int  lpmd_process_cpuset_set_focus_pid(pid_t pid);
+int  lpmd_process_cpuset_set_focus_helper_present(int present);
+
+/* Kernel proc-connector (event-driven classification). Returns the
+ * NETLINK_CONNECTOR fd to add to the main poll loop on success, or -1
+ * if the kernel feature is unavailable / lacks CAP_NET_ADMIN. */
+int  lpmd_process_cpuset_proc_connector_init(void);
+int  lpmd_process_cpuset_proc_connector_fd(void);
+void lpmd_process_cpuset_proc_connector_handle(void);
+void lpmd_process_cpuset_proc_connector_uninit(void);
 int allocate_cpu_type_masks(struct lpmd_config_t *lpmd_config);
 
 int cpumask_add_cpu(int cpu, enum cpumask_idx idx);

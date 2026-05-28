@@ -89,6 +89,7 @@ LPMD_SRCS = \
 	src/lpmd_util.c \
 	src/lpmd_wlt.c \
 	src/process_cpuset.c \
+	src/lpmd_process_cpuset.c \
 	src/wlt_proxy/spike_mgmt.c \
 	src/wlt_proxy/state_machine.c \
 	src/wlt_proxy/state_manager.c \
