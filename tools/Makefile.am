@@ -3,4 +3,4 @@
 AM_CFLAGS = $(GLIB_CFLAGS)
 LDADD = $(GLIB_LIBS)
 
-bin_PROGRAMS = intel_lpmd_control
+bin_PROGRAMS = intel_lpmd_control intel_lpmd_focus_helper
