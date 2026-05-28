@@ -357,6 +357,8 @@ void cpumask_exclude_copy(enum cpumask_idx source, enum cpumask_idx dest, enum c
 
 		if (CPU_ISSET_S(i, size_cpumask, cpumasks[exclude].mask))
 			continue;
+
+		cpumask_add_cpu(i, dest);
 	}
 }
 
