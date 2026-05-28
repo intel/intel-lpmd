@@ -475,6 +475,7 @@ int allocate_cpu_type_masks(struct lpmd_config_t *lpmd_config);
 
 /* lpmd_process_cpuset.c */
 int  lpmd_process_cpuset_init(struct lpmd_config_t *config);
+
 void lpmd_process_cpuset_uninit(void);
 void lpmd_process_cpuset_unbind_all(void);
 void lpmd_process_cpuset_rescan(void);
@@ -491,7 +492,6 @@ int  lpmd_process_cpuset_proc_connector_init(void);
 int  lpmd_process_cpuset_proc_connector_fd(void);
 void lpmd_process_cpuset_proc_connector_handle(void);
 void lpmd_process_cpuset_proc_connector_uninit(void);
-int allocate_cpu_type_masks(struct lpmd_config_t *lpmd_config);
 
 int cpumask_add_cpu(int cpu, enum cpumask_idx idx);
 int cpumask_blacklist(enum cpumask_idx idx);

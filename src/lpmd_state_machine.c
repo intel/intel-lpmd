@@ -25,12 +25,13 @@ static int lpmd_state = LPMD_OFF;
 static int saved_lpmd_state = LPMD_OFF;
 
 static char *lpmd_state_name[] = {
-	[LPMD_ON]		= "     ON",
-	[LPMD_OFF]		= "    OFF",
-	[LPMD_AUTO]		= "   AUTO",
-	[LPMD_FREEZE]		= " FREEZE",
-	[LPMD_RESTORE]		= "RESTORE",
-	[LPMD_TERMINATE]	= "   TERM",
+	[LPMD_ON]		= "             ON",
+	[LPMD_OFF]		= "            OFF",
+	[LPMD_AUTO]		= "           AUTO",
+	[LPMD_PROCESS_PRECONFIG]= "PROCESS-PRECONF",
+	[LPMD_FREEZE]		= "         FREEZE",
+	[LPMD_RESTORE]		= "        RESTORE",
+	[LPMD_TERMINATE]	= "           TERM",
 };
 
 int update_lpmd_state(int new)
@@ -284,6 +285,7 @@ static int choose_next_state(struct lpmd_config_t *config)
 	case LPMD_ON:
 		return DEFAULT_ON;
 	case LPMD_OFF:
+	case LPMD_PROCESS_PRECONFIG:
 	case LPMD_TERMINATE:
 		return DEFAULT_OFF;
 	}

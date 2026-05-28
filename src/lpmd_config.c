@@ -185,6 +185,53 @@ int is_wildcard(char *str)
 	return 0;
 }
 
+static void lpmd_parse_class_defaults(xmlDoc *doc, xmlNode *a_node, struct lpmd_config_t *lpmd_config)
+{
+	xmlNode *cur_node;
+	char *val;
+	struct {
+		const char *tag;
+		char       *dst;
+		size_t      cap;
+	} map[] = {
+		{ "Realtime",          lpmd_config->pc_class_default_realtime,
+		  sizeof(lpmd_config->pc_class_default_realtime) },
+		{ "UserInteractive",   lpmd_config->pc_class_default_user_interactive,
+		  sizeof(lpmd_config->pc_class_default_user_interactive) },
+		{ "UserInitiated",     lpmd_config->pc_class_default_user_initiated,
+		  sizeof(lpmd_config->pc_class_default_user_initiated) },
+		{ "Utility",           lpmd_config->pc_class_default_utility,
+		  sizeof(lpmd_config->pc_class_default_utility) },
+		{ "Background",        lpmd_config->pc_class_default_background,
+		  sizeof(lpmd_config->pc_class_default_background) },
+		{ "GameProfileCPU",    lpmd_config->pc_class_default_gp_cpu,
+		  sizeof(lpmd_config->pc_class_default_gp_cpu) },
+		{ "GameProfileGPU",    lpmd_config->pc_class_default_gp_gpu,
+		  sizeof(lpmd_config->pc_class_default_gp_gpu) },
+		{ "GameProfileHybrid", lpmd_config->pc_class_default_gp_hybrid,
+		  sizeof(lpmd_config->pc_class_default_gp_hybrid) },
+	};
+
+	if (!doc || !a_node || !lpmd_config)
+		return;
+
+	for (cur_node = a_node; cur_node; cur_node = cur_node->next) {
+		if (cur_node->type != XML_ELEMENT_NODE || !cur_node->name)
+			continue;
+		val = (char *)xmlNodeListGetString(doc, cur_node->xmlChildrenNode, 1);
+		if (!val)
+			continue;
+		for (size_t i = 0; i < sizeof(map) / sizeof(map[0]); i++) {
+			if (!strcmp((const char *)cur_node->name, map[i].tag)) {
+				snprintf(map[i].dst, map[i].cap, "%s", val);
+				map[i].dst[map[i].cap - 1] = '\0';
+				break;
+			}
+		}
+		xmlFree(val);
+	}
+}
+
 static void lpmd_parse_states(xmlDoc *doc, xmlNode *a_node, struct lpmd_config_t *lpmd_config)
 {
 	int cpu_family = -1, cpu_model = -1, config_state_count = 0;
@@ -234,7 +281,19 @@ static void lpmd_parse_states(xmlDoc *doc, xmlNode *a_node, struct lpmd_config_t
 		if (tmp_value)
 			xmlFree(tmp_value);
 
-		if (strcmp((const char *)cur_node->name, "State"))
+		/* <ClassDefaults> may appear inside <States> as a sibling
+		 * of <State>; gate it on the same CPU family/model/config
+		 * match as the State entries themselves.
+		 */
+		if (!strncmp ((const char*) cur_node->name, "ClassDefaults", strlen ("ClassDefaults"))) {
+			if (cpu_family != lpmd_config->cpu_family || cpu_model  != lpmd_config->cpu_model  ||
+			    strncmp(cpu_config, lpmd_config->cpu_config, MAX_CONFIG_LEN))
+			    continue;
+			lpmd_parse_class_defaults(doc, cur_node->children, lpmd_config);
+			continue;
+		}
+
+		if (strncmp((const char *)cur_node->name, "State", strlen("State")))
 			continue;
 
 		/* Must check cpu family/model/config first to make sure the states applies */
@@ -347,7 +406,13 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, struct lpmd_config_t *
 			    (lpmd_config->wlt_proxy_enable != 1 &&
 			     lpmd_config->wlt_proxy_enable != 0))
 				goto err;
-		} else if (!strcmp((const char *)cur_node->name, "EntryDelayMS")) {
+		} else if (!strncmp((const char*)cur_node->name, "UseProcessCPUSet", strlen("UseProcessCPUSet"))) {
+			errno = 0;
+			lpmd_config->use_process_cpuset = strtol (tmp_value, &pos, 10);
+			if (errno || *pos != '\0' || (lpmd_config->use_process_cpuset != 1 && lpmd_config->use_process_cpuset != 0))
+				goto err;
+		} else if (!strncmp((const char *)cur_node->name,
+				    "EntryDelayMS", strlen("EntryDelayMS"))) {
 			errno = 0;
 			lpmd_config->util_entry_delay = strtol(tmp_value, &pos, 10);
 			if (errno || *pos != '\0' ||
