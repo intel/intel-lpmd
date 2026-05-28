@@ -82,6 +82,11 @@ void lpmd_set_auto(void)
 	lpmd_send_message(LPM_AUTO, 0, NULL);
 }
 
+void lpmd_set_process_preconfig(void)
+{
+	lpmd_send_message (LPM_PROCESS_PRECONFIG, 0, NULL);
+}
+
 #define LPMD_NUM_OF_POLL_FDS	5
 
 static pthread_t lpmd_core_main;

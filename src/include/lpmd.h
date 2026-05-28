@@ -112,7 +112,7 @@ enum slider_param_type {
 #define INTEL_LPMD_SERVICE_INTERFACE	"org.freedesktop.intel_lpmd"
 
 enum message_name_t {
-	TERMINATE, LPM_FORCE_ON, LPM_FORCE_OFF, LPM_AUTO, HFI_EVENT,
+	TERMINATE, LPM_FORCE_ON, LPM_FORCE_OFF, LPM_AUTO, LPM_PROCESS_PRECONFIG, HFI_EVENT,
 };
 
 #define MAX_MSG_SIZE		512
@@ -133,6 +133,7 @@ enum lpmd_states {
 	LPMD_OFF,
 	LPMD_ON,
 	LPMD_AUTO,
+	LPMD_PROCESS_PRECONFIG,
 	LPMD_FREEZE,
 	LPMD_RESTORE,
 	LPMD_TERMINATE,
@@ -351,6 +352,7 @@ void lpmd_terminate(void);
 void lpmd_force_on(void);
 void lpmd_force_off(void);
 void lpmd_set_auto(void);
+void lpmd_set_process_preconfig(void);
 
 int is_on_battery(void);
 int get_ppd_mode(void);

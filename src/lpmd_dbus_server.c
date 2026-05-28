@@ -31,7 +31,73 @@ static gboolean
 dbus_interface_l_pm__au_to(PrefObject *obj, GError **error);
 
 static gboolean
+dbus_interface_l_pm__ba_si_c(PrefObject *obj, GError **error);
+
+static gboolean
 (*intel_lpmd_dbus_exit_callback)(void);
+
+/*
+ * Tracking for the user-session focus helper (intel_lpmd_focus_helper).
+ * When the helper calls LPM_FOCUS_HELPER_READY(1) we record its unique
+ * bus name and start a NameOwner watch. If that name disappears
+ * (helper crashed / exited / lost the session) we automatically flip
+ * the focus-helper-present flag back to 0 so USER_INITIATED reverts
+ * to mirroring USER_INTERACTIVE.
+ */
+static guint  g_focus_helper_watch_id;
+static gchar *g_focus_helper_owner;
+
+static void
+focus_helper_vanished(GDBusConnection *connection,
+		      const gchar     *name,
+		      gpointer         user_data)
+{
+	(void)connection;
+	(void)user_data;
+	lpmd_log_info("focus helper %s vanished; reverting\n",
+		      name ? name : "(unknown)");
+	(void)lpmd_process_cpuset_set_focus_helper_present(0);
+	if (g_focus_helper_watch_id) {
+		g_bus_unwatch_name(g_focus_helper_watch_id);
+		g_focus_helper_watch_id = 0;
+	}
+	g_clear_pointer(&g_focus_helper_owner, g_free);
+}
+
+static void
+focus_helper_track(GDBusConnection *connection, const gchar *sender)
+{
+	/* Drop any prior watch -- a fresh READY supersedes the previous
+	 * helper instance. */
+	if (g_focus_helper_watch_id) {
+		g_bus_unwatch_name(g_focus_helper_watch_id);
+		g_focus_helper_watch_id = 0;
+	}
+	g_clear_pointer(&g_focus_helper_owner, g_free);
+
+	if (!connection || !sender || !*sender)
+		return;
+
+	g_focus_helper_owner = g_strdup(sender);
+	g_focus_helper_watch_id = g_bus_watch_name_on_connection(
+		connection, sender,
+		G_BUS_NAME_WATCHER_FLAGS_NONE,
+		NULL,			/* name_appeared (already here) */
+		focus_helper_vanished,
+		NULL, NULL);
+	lpmd_log_debug("focus helper tracked: %s (watch_id=%u)\n",
+		       sender, g_focus_helper_watch_id);
+}
+
+static void
+focus_helper_untrack(void)
+{
+	if (g_focus_helper_watch_id) {
+		g_bus_unwatch_name(g_focus_helper_watch_id);
+		g_focus_helper_watch_id = 0;
+	}
+	g_clear_pointer(&g_focus_helper_owner, g_free);
+}
 
 // Dbus object initialization
 static void pref_object_init(PrefObject *obj)
@@ -74,6 +140,12 @@ static gboolean dbus_interface_l_pm__fo_rc_e__of_f(PrefObject *obj, GError **err
 static gboolean dbus_interface_l_pm__au_to(PrefObject *obj, GError **error)
 {
 	lpmd_set_auto();
+	return TRUE;
+}
+
+static gboolean dbus_interface_l_pm__ba_si_c(PrefObject *obj, GError **error)
+{
+	lpmd_set_process_preconfig ();
 	return TRUE;
 }
 
@@ -133,11 +205,18 @@ lpmd_dbus_handle_method_call(GDBusConnection       *connection,
 		return;
 	}
 
+	if (g_strcmp0(method_name, "LPM_PROCESS_PRECONFIG") == 0) {
+		g_dbus_method_invocation_return_value(invocation, NULL);
+		dbus_interface_l_pm__ba_si_c(obj, &error);
+		return;
+	}
+
 	if (g_strcmp0(method_name, "GetState") == 0) {
 		static const char * const state_names[] = {
 			[LPMD_OFF] = "OFF",
 			[LPMD_ON] = "ON",
 			[LPMD_AUTO] = "AUTO",
+			[LPMD_PROCESS_PRECONFIG] = "PROCESS-PRECONFIG",
 			[LPMD_FREEZE] = "FREEZE",
 			[LPMD_RESTORE] = "RESTORE",
 			[LPMD_TERMINATE] = "TERMINATE",
@@ -147,6 +226,72 @@ lpmd_dbus_handle_method_call(GDBusConnection       *connection,
 
 		g_dbus_method_invocation_return_value(invocation,
 						      g_variant_new("(s)", name));
+		return;
+	}
+
+	if (g_strcmp0(method_name, "LPM_LIST_UNBOUND_PROCS") == 0) {
+		g_dbus_method_invocation_return_value(invocation, NULL);
+		lpmd_process_cpuset_print_unbound(0);
+		return;
+	}
+
+	if (g_strcmp0(method_name, "LPM_LIST_UNBOUND_USER_PROCS") == 0) {
+		g_dbus_method_invocation_return_value(invocation, NULL);
+		lpmd_process_cpuset_print_unbound(1);
+		return;
+	}
+
+	if (g_strcmp0(method_name, "LPM_LIST_BOUND_PROCS") == 0) {
+		g_dbus_method_invocation_return_value(invocation, NULL);
+		lpmd_process_cpuset_print_bound();
+		return;
+	}
+
+	if (g_strcmp0(method_name, "LPM_UNBIND_ALL") == 0) {
+		g_dbus_method_invocation_return_value(invocation, NULL);
+		lpmd_process_cpuset_unbind_all();
+		return;
+	}
+
+	if (g_strcmp0(method_name, "LPM_ADD_NEW_PROCESS") == 0) {
+		const gchar *pname = NULL;
+		const gchar *pclass = NULL;
+		gint result;
+
+		g_variant_get(parameters, "(&s&s)", &pname, &pclass);
+		result = lpmd_process_cpuset_add_process(pname, pclass);
+		g_dbus_method_invocation_return_value(invocation,
+						      g_variant_new("(i)", result));
+		return;
+	}
+
+	if (g_strcmp0(method_name, "LPM_SET_FOCUS_PID") == 0) {
+		gint pid = 0;
+		gint result;
+
+		g_variant_get(parameters, "(i)", &pid);
+		result = lpmd_process_cpuset_set_focus_pid((pid_t)pid);
+		g_dbus_method_invocation_return_value(invocation,
+						      g_variant_new("(i)", result));
+		return;
+	}
+
+	if (g_strcmp0(method_name, "LPM_FOCUS_HELPER_READY") == 0) {
+		gint present = 0;
+		gint result;
+
+		g_variant_get(parameters, "(i)", &present);
+		result = lpmd_process_cpuset_set_focus_helper_present(present);
+		/* On success, start (or stop) tracking the helper's unique
+		 * bus name so we can auto-revert if it dies. */
+		if (result == 0) {
+			if (present)
+				focus_helper_track(connection, sender);
+			else
+				focus_helper_untrack();
+		}
+		g_dbus_method_invocation_return_value(invocation,
+						      g_variant_new("(i)", result));
 		return;
 	}
 
