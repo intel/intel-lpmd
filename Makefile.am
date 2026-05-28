@@ -69,6 +69,7 @@ intel_lpmd_SOURCES = \
 	src/wlt_proxy/state_machine.c \
 	src/wlt_proxy/state_util.c \
 	src/wlt_proxy/state_manager.c \
+	src/process_cpuset.c \
 	lpmd-resource.c
 
 man8_MANS = man/intel_lpmd.8 man/intel_lpmd_control.8
