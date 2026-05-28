@@ -1,0 +1,40 @@
+<?xml version="1.0"?>
+<!--
+  User-editable per-process CPU affinity overrides for intel_lpmd.
+
+  This file is layered on top of the system-shipped process_cpuset.xml at
+  daemon startup. <Process> entries here ADD to (or REPLACE by <Name>)
+  the entries from the system file. <ClassDefaults>, <CpuGroups>, and
+  <DefaultProcess> may also be overridden.
+
+  Edits made via:
+      intel_lpmd_control ADD-PROCESS <name> <classification>
+  are persisted into this file. Manual edits are preserved as long as
+  the <ProcessCpusetConfig> root remains valid; the daemon never touches
+  the system file.
+
+ Classification rule (low priority -> high):
+    background         - no user interaction, no display output
+                         (system services, daemons, indexers, ...)
+    utility            - non-interactive helper work above background
+                         (system telemetry, periodic indexers, ...)
+    user_initiated     - user-launched, not actively driving the UI
+                         (builds, downloads, conversions, ...)
+    user_interactive   - user-facing UI / display / shell
+                         (compositor, browsers, terminals, IDEs, ...)
+    realtime           - latency-sensitive media / audio engines
+    GameProfileCPU     - CPU-bound game workloads
+    GameProfileGPU     - GPU-bound game workloads
+    GameProfileHybrid  - mixed CPU/GPU game workloads
+-->
+
+<ProcessCpusetConfig>
+
+    <!-- Example:
+    <Process>
+        <Name>my_app</Name>
+        <Classification>user_interactive</Classification>
+    </Process>
+    -->
+
+</ProcessCpusetConfig>
