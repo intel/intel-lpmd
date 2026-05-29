@@ -485,6 +485,8 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, struct lpmd_config_t *
 				lpmd_config->performance_def = LPM_FORCE_OFF;
 			else if (lpmd_config->performance_def == 1)
 				lpmd_config->performance_def = LPM_FORCE_ON;
+			else if (lpmd_config->performance_def == 2)
+				lpmd_config->performance_def = LPM_PROCESS_PRECONFIG;
 			else if (!lpmd_config->performance_def)
 				lpmd_config->performance_def = LPM_AUTO;
 			else
@@ -498,6 +500,8 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, struct lpmd_config_t *
 				lpmd_config->balanced_def = LPM_FORCE_OFF;
 			else if (lpmd_config->balanced_def == 1)
 				lpmd_config->balanced_def = LPM_FORCE_ON;
+			else if (lpmd_config->balanced_def == 2)
+				lpmd_config->balanced_def = LPM_PROCESS_PRECONFIG;
 			else if (!lpmd_config->balanced_def)
 				lpmd_config->balanced_def = LPM_AUTO;
 			else
@@ -511,6 +515,8 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, struct lpmd_config_t *
 				lpmd_config->powersaver_def = LPM_FORCE_OFF;
 			else if (lpmd_config->powersaver_def == 1)
 				lpmd_config->powersaver_def = LPM_FORCE_ON;
+			else if (lpmd_config->powersaver_def == 2)
+				lpmd_config->powersaver_def = LPM_PROCESS_PRECONFIG;
 			else if (!lpmd_config->powersaver_def)
 				lpmd_config->powersaver_def = LPM_AUTO;
 			else
