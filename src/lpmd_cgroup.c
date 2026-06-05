@@ -198,7 +198,7 @@ int cgroup_cleanup(void)
 	DIR *dir;
 
 	last_applied_cpumask = CPUMASK_NONE;
-	*dir = opendir("/sys/fs/cgroup/lpm");
+	dir = opendir("/sys/fs/cgroup/lpm");
 	if (dir) {
 		closedir(dir);
 		rmdir("/sys/fs/cgroup/lpm");
