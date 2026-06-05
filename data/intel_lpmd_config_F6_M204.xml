@@ -31,6 +31,7 @@ for Intel Energy Optimizer (LPMD) daemon
 		-1: force off. (Never enter Low Power Mode)
 		 1: force on. (Always stay in Low Power Mode)
 		 0: auto. (opportunistic Low Power Mode enter/exit)
+		 2: Process-CPU affinity based Low Power Mode enter/exit
 	-->
 	<PerformanceDef>-1</PerformanceDef>
 
@@ -39,14 +40,16 @@ for Intel Energy Optimizer (LPMD) daemon
 		-1: force off. (Never enter Low Power Mode)
 		 1: force on. (Always stay in Low Power Mode)
 		 0: auto. (opportunistic Low Power Mode enter/exit)
+		 2: Process-CPU affinity based Low Power Mode enter/exit
 	-->
-	<BalancedDef>-1</BalancedDef>
+	<BalancedDef>2</BalancedDef>
 
 	<!--
 		Default behavior when Power saver setting is used
 		-1: force off. (Never enter Low Power Mode)
 		 1: force on. (Always stay in Low Power Mode)
 		 0: auto. (opportunistic Low Power Mode enter/exit)
+		 2: Process-CPU affinity based Low Power Mode enter/exit
 	-->
 	<PowersaverDef>-1</PowersaverDef>
 
@@ -74,7 +77,7 @@ for Intel Energy Optimizer (LPMD) daemon
 	<!--
 		Use WLT hint Mask
 		0 : Non
-		* : Value to AND with the hardware hint
+		* : Value to AND with with the hardware hint
 	-->
 	<WLTHintMask>15</WLTHintMask>
 
@@ -131,6 +134,13 @@ for Intel Energy Optimizer (LPMD) daemon
 	<IgnoreITMT>0</IgnoreITMT>
 
 	<!--
+		Use pre configured process-CPU affinity settings to determine LP mode enter/exit
+		0: disable UseProcessCPUSet upon LP-mode enter and re-enable UseProcessCPUSet upon LP-mode exit
+		1: do not touch UseProcessCPUSet setting during LP-mode enter/exit
+	-->
+	<UseProcessCPUSet>1</UseProcessCPUSet>
+
+	<!--
 		Slider default configuration for AC and DC
 	-->
 	<BalancedSliderAC>1</BalancedSliderAC>
@@ -142,6 +152,20 @@ for Intel Energy Optimizer (LPMD) daemon
 		<CPUFamily> 6 </CPUFamily>
 		<CPUModel> 204 </CPUModel>
 		<CPUConfig> * </CPUConfig>
+		-->
+		  Optional per-CPU-model override of process_cpuset.xml's
+		  ClassDefaults. Each child accepts the same token list as
+		  ActiveCores ("ActivePcores" / "ActiveEcores" /
+		  "ActiveLcores", comma- or whitespace-separated). Any class
+		  not listed here keeps the value from process_cpuset.xml
+		  (or its built-in fallback).
+		-->
+		<ClassDefaults>
+			<Realtime>ActivePcores, ActiveEcores, ActiveLcores</Realtime>
+			<UserInteractive>ActiveEcores, ActiveLcores</UserInteractive>
+			<UserInitiated>ActiveLcores</UserInitiated>
+			<Background>ActiveLcores</Background>
+		</ClassDefaults>
 		<State>
 			<ID> 1 </ID>
 			<Name> UTIL_IDLE </Name>
@@ -166,6 +190,20 @@ for Intel Energy Optimizer (LPMD) daemon
 		<CPUFamily> 6 </CPUFamily>
 		<CPUModel> 204 </CPUModel>
 		<CPUConfig> 4P0E4L-25W </CPUConfig>
+		<!--
+		  Optional per-CPU-model override of process_cpuset.xml's
+		  <ClassDefaults>. Each child accepts the same token list as
+		  <ActiveCores> ("ActivePcores" / "ActiveEcores" /
+		  "ActiveLcores", comma- or whitespace-separated). Any class
+		  not listed here keeps the value from process_cpuset.xml
+		  (or its built-in fallback).
+		-->
+		<ClassDefaults>
+			<Realtime>ActivePcores, ActiveEcores, ActiveLcores</Realtime>
+			<UserInteractive>ActiveEcores, ActiveLcores</UserInteractive>
+			<UserInitiated>ActiveLcores</UserInitiated>
+			<Background>ActiveLcores</Background>
+		</ClassDefaults>
 		<State>
 			<ID> 1 </ID>
 			<Name> UTIL_IDLE </Name>
