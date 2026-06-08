@@ -475,7 +475,8 @@ int lpmd_main(void)
 	}
 
 	if (lpmd_config.wlt_hint_enable && !lpmd_config.hfi_lpm_enable) {
-		lpmd_config.util_enable = 0;
+		if (!lpmd_config.util_gfx_enable && lpmd_config.wlt_hint_poll_enable)
+			lpmd_config.util_enable = 0;
 		if (!lpmd_config.wlt_proxy_enable) {
 			poll_fds[poll_fd_cnt].fd = wlt_init();
 			if (poll_fds[poll_fd_cnt].fd > 0) {
