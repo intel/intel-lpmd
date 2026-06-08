@@ -1,22 +1,5 @@
-/*
- * thermal.c: thermal netlink event header
- *
- * Copyright (C) 2023 Intel Corporation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
- */
+/* SPDX-License-Identifier: GPL-2.0 */
+
 #ifndef _UAPI_LINUX_THERMAL_H
 #define _UAPI_LINUX_THERMAL_H
 
@@ -65,11 +48,13 @@ enum thermal_genl_attr {
 	THERMAL_GENL_ATTR_CAPACITY_CPU_EFF,
 	__THERMAL_GENL_ATTR_MAX,
 };
+
 #define THERMAL_GENL_ATTR_MAX (__THERMAL_GENL_ATTR_MAX - 1)
 
 enum thermal_genl_sampling {
 	THERMAL_GENL_SAMPLING_TEMP, __THERMAL_GENL_SAMPLING_MAX,
 };
+
 #define THERMAL_GENL_SAMPLING_MAX (__THERMAL_GENL_SAMPLING_MAX - 1)
 
 /* Events of thermal_genl_family */
@@ -90,6 +75,7 @@ enum thermal_genl_event {
 	THERMAL_GENL_EVENT_CAPACITY_CHANGE, /* CPU capacity changed */
 	__THERMAL_GENL_EVENT_MAX,
 };
+
 #define THERMAL_GENL_EVENT_MAX (__THERMAL_GENL_EVENT_MAX - 1)
 
 /* Commands supported by the thermal_genl_family */
@@ -102,6 +88,7 @@ enum thermal_genl_cmd {
 	THERMAL_GENL_CMD_CDEV_GET, /* List of cdev id */
 	__THERMAL_GENL_CMD_MAX,
 };
+
 #define THERMAL_GENL_CMD_MAX (__THERMAL_GENL_CMD_MAX - 1)
 
 #endif /* _UAPI_LINUX_THERMAL_H */

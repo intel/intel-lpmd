@@ -1,22 +1,6 @@
-/*
- * lpmd_misc.c: processing misc PowerManagement features
- *
- * Copyright (C) 2025 Intel Corporation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
- */
+// SPDX-License-Identifier: GPL-2.0-or-later
+/* Copyright (C) 2026 Intel Corporation */
+
 #define _GNU_SOURCE
 #include "lpmd.h"
 
@@ -34,7 +18,7 @@ int get_itmt(void)
 	if (!has_itmt)
 		return -1;
 
- 	ret = lpmd_read_yn(PATH_ITMT_CONTROL_DEBUGFS, &val, -1);
+	ret = lpmd_read_yn(PATH_ITMT_CONTROL_DEBUGFS, &val, -1);
 	if (!ret)
 		return val;
 
@@ -50,7 +34,6 @@ int get_itmt(void)
 
 void itmt_init(void)
 {
-
 	if (lpmd_read_yn(PATH_ITMT_CONTROL_DEBUGFS, &saved_itmt, -1)) {
 		lpmd_log_debug("ITMT debugfs not detected\n");
 	} else {
@@ -64,7 +47,7 @@ void itmt_init(void)
 		has_itmt = 1;
 }
 
-int process_itmt(lpmd_config_state_t *state)
+int process_itmt(struct lpmd_config_state_t *state)
 {
 	int ret;
 
@@ -72,20 +55,20 @@ int process_itmt(lpmd_config_state_t *state)
 		return 0;
 
 	switch (state->itmt_state) {
-		case SETTING_IGNORE:
-			lpmd_log_debug("Ignore ITMT\n");
-			return 0;
-		case SETTING_RESTORE:
-			ret = lpmd_write_yn(PATH_ITMT_CONTROL_DEBUGFS, saved_itmt, -1);
-			if (ret)
-				return lpmd_write_int(PATH_ITMT_CONTROL, saved_itmt, -1);
-			return ret;
-		default:
-			lpmd_log_debug ("%s ITMT\n", state->itmt_state ? "Enable" : "Disable");
-			ret = lpmd_write_yn(PATH_ITMT_CONTROL_DEBUGFS, state->itmt_state, -1);
-			if (ret)
-				return lpmd_write_int(PATH_ITMT_CONTROL, state->itmt_state, -1);
-			return ret;
+	case SETTING_IGNORE:
+		lpmd_log_debug("Ignore ITMT\n");
+		return 0;
+	case SETTING_RESTORE:
+		ret = lpmd_write_yn(PATH_ITMT_CONTROL_DEBUGFS, saved_itmt, -1);
+		if (ret)
+			return lpmd_write_int(PATH_ITMT_CONTROL, saved_itmt, -1);
+		return ret;
+	default:
+		lpmd_log_debug("%s ITMT\n", state->itmt_state ? "Enable" : "Disable");
+		ret = lpmd_write_yn(PATH_ITMT_CONTROL_DEBUGFS, state->itmt_state, -1);
+		if (ret)
+			return lpmd_write_int(PATH_ITMT_CONTROL, state->itmt_state, -1);
+		return ret;
 	}
 }
 
@@ -102,14 +85,16 @@ static int slider_unavailable;
 #define PATH_SOC_BALANCE_SLIDER	"/sys/module/processor_thermal_soc_slider/parameters/slider_balance"
 #define PATH_SOC_OFFSET		"/sys/module/processor_thermal_soc_slider/parameters/slider_offset"
 
-static void init_slider_path()
+static void init_slider_path(void)
 {
-	DIR *dir;
 	struct dirent *entry;
+	DIR *dir;
 	int ret;
 
 	snprintf(soc_sld_path, MAX_STR_LENGTH, "%s", PATH_PLATFORM_PROFILE);
-	if ((dir = opendir(soc_sld_path)) == NULL) {
+
+	dir = opendir(soc_sld_path);
+	if (!dir) {
 		lpmd_log_debug("Cannot find %s\n", soc_sld_path);
 		goto slider_failed;
 	}
@@ -118,11 +103,11 @@ static void init_slider_path()
 		if (strlen(entry->d_name) > 100)
 			continue;
 		if (strncmp(entry->d_name, "platform-profile",
-				strlen("platform-profile")))
+			    strlen("platform-profile")))
 			continue;
 
 		snprintf(soc_sld_path, MAX_STR_LENGTH, "%s/%s/name",
-				PATH_PLATFORM_PROFILE, entry->d_name);
+			 PATH_PLATFORM_PROFILE, entry->d_name);
 
 		ret = lpmd_read_str(soc_sld_path, soc_sld_profile, MAX_STR_LENGTH);
 		if (ret)
@@ -130,7 +115,7 @@ static void init_slider_path()
 
 		if (!strncmp(soc_sld_profile, NAME_SOC_SLD, strlen(NAME_SOC_SLD))) {
 			snprintf(soc_sld_path, MAX_STR_LENGTH, "%s/%s/profile",
-					PATH_PLATFORM_PROFILE, entry->d_name);
+				 PATH_PLATFORM_PROFILE, entry->d_name);
 			slider_available = 1;
 			break;
 		}
@@ -144,7 +129,7 @@ static void init_slider_path()
 	}
 
 	lpmd_log_info("\tAvailable at %s/%s, use profile [%s]\n",
-			PATH_PLATFORM_PROFILE, entry->d_name, soc_sld_profile);
+		      PATH_PLATFORM_PROFILE, entry->d_name, soc_sld_profile);
 
 	return;
 
@@ -158,7 +143,7 @@ static int update_balance_slider(int slider)
 	int ret;
 	static int current_slider = -1;
 
-	lpmd_log_debug("update_balance_slider\n");
+	lpmd_log_debug("%s\n", __func__);
 
 	if (slider < 0)
 		return 0;
@@ -231,9 +216,9 @@ static int update_slider_offset(int offset)
 	return 0;
 }
 
-void process_balance_slider_default_update(lpmd_config_t *config)
+void process_balance_slider_default_update(struct lpmd_config_t *config)
 {
-	lpmd_log_debug("process_balance_slider_default_update\n");
+	lpmd_log_debug("%s\n", __func__);
 
 	if (is_on_battery()) {
 		if (config->balance_slider_def_dc >= 0)
@@ -244,9 +229,9 @@ void process_balance_slider_default_update(lpmd_config_t *config)
 	}
 }
 
-void process_slider_offset_default_update(lpmd_config_t *config)
+void process_slider_offset_default_update(struct lpmd_config_t *config)
 {
-	lpmd_log_debug("process_slider_offset_default_update\n");
+	lpmd_log_debug("%s\n", __func__);
 
 	if (is_on_battery()) {
 		if (config->slider_offset_def_dc >= 0)
@@ -257,9 +242,9 @@ void process_slider_offset_default_update(lpmd_config_t *config)
 	}
 }
 
-static int process_balance_slider(lpmd_config_state_t *state)
+static int process_balance_slider(struct lpmd_config_state_t *state)
 {
-	lpmd_log_debug("process_balance_slider\n");
+	lpmd_log_debug("%s\n", __func__);
 
 	if (is_on_battery())
 		return update_balance_slider(state->balance_slider_dc);
@@ -267,9 +252,9 @@ static int process_balance_slider(lpmd_config_state_t *state)
 		return update_balance_slider(state->balance_slider_ac);
 }
 
-static int process_slider_offset(lpmd_config_state_t *state)
+static int process_slider_offset(struct lpmd_config_state_t *state)
 {
-	lpmd_log_debug("process_slider_offset\n");
+	lpmd_log_debug("%s\n", __func__);
 
 	if (is_on_battery())
 		return update_slider_offset(state->slider_offset_dc);
@@ -277,7 +262,7 @@ static int process_slider_offset(lpmd_config_state_t *state)
 		return update_slider_offset(state->slider_offset_ac);
 }
 
-void process_slider(lpmd_config_t *config, lpmd_config_state_t *state)
+void process_slider(struct lpmd_config_t *config, struct lpmd_config_state_t *state)
 {
 	int ret;
 
@@ -297,6 +282,7 @@ struct cpu_info {
 	int epp;
 	int epb;
 };
+
 static struct cpu_info *saved_cpu_info;
 
 static int get_epp(char *path, int *val, char *str, int size)
@@ -305,28 +291,28 @@ static int get_epp(char *path, int *val, char *str, int size)
 	int epp;
 	int ret;
 
-	filep = fopen (path, "r");
+	filep = fopen(path, "r");
 	if (!filep)
 		return 1;
 
-	ret = fscanf (filep, "%d", &epp);
+	ret = fscanf(filep, "%d", &epp);
 	if (ret == 1) {
 		*val = epp;
 		ret = 0;
 		goto end;
 	}
 
-	ret = fread (str, 1, size, filep);
-	if (ret <= 0)
+	ret = fread(str, 1, size, filep);
+	if (ret <= 0) {
 		ret = 1;
-	else {
+	} else {
 		if (ret >= size)
 			ret = size - 1;
 		str[ret - 1] = '\0';
 		ret = 0;
 	}
 end:
-	fclose (filep);
+	fclose(filep);
 	return ret;
 }
 
@@ -335,26 +321,26 @@ static int set_epp(char *path, int val, char *str)
 	FILE *filep;
 	int ret;
 
-	filep = fopen (path, "r+");
+	filep = fopen(path, "r+");
 	if (!filep)
 		return 1;
 
-	if (val >= 0)
-		ret = fprintf (filep, "%d", val);
-	else if (str && str[0] != '\0')
-		ret = fprintf (filep, "%s", str);
-	else {
-		fclose (filep);
+	if (val >= 0) {
+		ret = fprintf(filep, "%d", val);
+	} else if (str && str[0] != '\0') {
+		ret = fprintf(filep, "%s", str);
+	} else {
+		fclose(filep);
 		return 1;
 	}
 
-	fclose (filep);
+	fclose(filep);
 
 	if (ret <= 0) {
 		if (val >= 0)
-			lpmd_log_error ("Write \"%d\" to %s failed, ret %d\n", val, path, ret);
+			lpmd_log_error("Write \"%d\" to %s failed, ret %d\n", val, path, ret);
 		else
-			lpmd_log_error ("Write \"%s\" to %s failed, ret %d\n", str, path, ret);
+			lpmd_log_error("Write \"%s\" to %s failed, ret %d\n", str, path, ret);
 	}
 	return !(ret > 0);
 }
@@ -381,30 +367,33 @@ static char *get_ppd_default_epp(void)
 int get_epp_epb(int *epp, char *epp_str, int size, int *epb)
 {
 	char path[MAX_STR_LENGTH];
+	int ret;
 
 	*epp = -1;
 	epp_str[0] = '\0';
 	/* CPU0 is always online */
-	snprintf (path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cpufreq/energy_performance_preference", 0);
-	get_epp (path, epp, epp_str, size);
+	snprintf(path, sizeof(path),
+		 "/sys/devices/system/cpu/cpu%d/cpufreq/energy_performance_preference", 0);
+	get_epp(path, epp, epp_str, size);
 	epp_str[size - 1] = '\0';
 
+	*epb = -1;
 	snprintf(path, MAX_STR_LENGTH, "/sys/devices/system/cpu/cpu%d/power/energy_perf_bias", 0);
-	lpmd_read_int(path, epb, -1);
-	return 0;
+	ret = lpmd_read_int(path, epb, -1);
+	return ret;
 }
 
-int process_epp_epb(lpmd_config_state_t *state)
+int process_epp_epb(struct lpmd_config_state_t *state)
 {
-	int max_cpus = get_max_cpus ();
-	int c;
-	int ret;
+	int max_cpus = get_max_cpus();
 	char path[MAX_STR_LENGTH];
+	int ret;
+	int c;
 
 	if (state->epp == SETTING_IGNORE)
-		lpmd_log_info ("Ignore EPP\n");
+		lpmd_log_info("Ignore EPP\n");
 	if (state->epb == SETTING_IGNORE)
-		lpmd_log_info ("Ignore EPB\n");
+		lpmd_log_info("Ignore EPB\n");
 	if (state->epp == SETTING_IGNORE && state->epb == SETTING_IGNORE)
 		return 0;
 
@@ -412,7 +401,7 @@ int process_epp_epb(lpmd_config_state_t *state)
 		int val;
 		char *str = NULL;
 
-		if (!is_cpu_online (c))
+		if (!is_cpu_online(c))
 			continue;
 
 		if (state->epp != SETTING_IGNORE) {
@@ -428,13 +417,16 @@ int process_epp_epb(lpmd_config_state_t *state)
 				val = state->epp;
 			}
 
-			snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cpufreq/energy_performance_preference", c);
-			ret = set_epp (path, val, str);
+			snprintf(path, sizeof(path),
+				 "/sys/devices/system/cpu/cpu%d/cpufreq/energy_performance_preference", c);
+			ret = set_epp(path, val, str);
 			if (!ret) {
 				if (val != -1)
-					lpmd_log_debug ("Set CPU%d EPP to 0x%x\n", c, val);
+					lpmd_log_debug("Set CPU%d EPP to 0x%x\n",
+						       c, val);
 				else
-					lpmd_log_debug ("Set CPU%d EPP to %s\n", c, saved_cpu_info[c].epp_str);
+					lpmd_log_debug("Set CPU%d EPP to %s\n",
+						       c, saved_cpu_info[c].epp_str);
 			}
 		}
 
@@ -444,10 +436,11 @@ int process_epp_epb(lpmd_config_state_t *state)
 			else
 				val = state->epb;
 
-			snprintf (path, MAX_STR_LENGTH, "/sys/devices/system/cpu/cpu%d/power/energy_perf_bias", c);
+			snprintf(path, MAX_STR_LENGTH,
+				 "/sys/devices/system/cpu/cpu%d/power/energy_perf_bias", c);
 			ret = lpmd_write_int(path, val, -1);
 			if (!ret)
-				lpmd_log_debug ("Set CPU%d EPB to 0x%x\n", c, val);
+				lpmd_log_debug("Set CPU%d EPB to 0x%x\n", c, val);
 		}
 	}
 	return 0;
@@ -455,36 +448,39 @@ int process_epp_epb(lpmd_config_state_t *state)
 
 int epp_epb_init(void)
 {
-	int max_cpus = get_max_cpus ();
-	int c;
-	int ret;
+	int max_cpus = get_max_cpus();
 	char path[MAX_STR_LENGTH];
+	int ret;
+	int c;
 
-	saved_cpu_info = calloc (max_cpus, sizeof(struct cpu_info));
+	saved_cpu_info = calloc(max_cpus, sizeof(struct cpu_info));
 
 	for (c = 0; c < max_cpus; c++) {
 		saved_cpu_info[c].epp_str[0] = '\0';
 		saved_cpu_info[c].epp = -1;
 
-		if (!is_cpu_online (c))
+		if (!is_cpu_online(c))
 			continue;
 
-		snprintf (path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cpufreq/energy_performance_preference", c);
-		ret = get_epp (path, &saved_cpu_info[c].epp, saved_cpu_info[c].epp_str, MAX_EPP_STRING_LENGTH);
+		snprintf(path, sizeof(path),
+			 "/sys/devices/system/cpu/cpu%d/cpufreq/energy_performance_preference", c);
+		ret = get_epp(path, &saved_cpu_info[c].epp,
+			      saved_cpu_info[c].epp_str, MAX_EPP_STRING_LENGTH);
 		if (!ret) {
 			if (saved_cpu_info[c].epp != -1)
-				lpmd_log_debug ("CPU%d EPP: 0x%x\n", c, saved_cpu_info[c].epp);
+				lpmd_log_debug("CPU%d EPP: 0x%x\n", c, saved_cpu_info[c].epp);
 			else
-				lpmd_log_debug ("CPU%d EPP: %s\n", c, saved_cpu_info[c].epp_str);
+				lpmd_log_debug("CPU%d EPP: %s\n", c, saved_cpu_info[c].epp_str);
 		}
 
-		snprintf(path, MAX_STR_LENGTH, "/sys/devices/system/cpu/cpu%d/power/energy_perf_bias", c);
+		snprintf(path, MAX_STR_LENGTH,
+			 "/sys/devices/system/cpu/cpu%d/power/energy_perf_bias", c);
 		ret = lpmd_read_int(path, &saved_cpu_info[c].epb, -1);
 		if (ret) {
 			saved_cpu_info[c].epb = -1;
 			continue;
 		}
-		lpmd_log_debug ("CPU%d EPB: 0x%x\n", c, saved_cpu_info[c].epb);
+		lpmd_log_debug("CPU%d EPB: 0x%x\n", c, saved_cpu_info[c].epb);
 	}
 	return 0;
 }

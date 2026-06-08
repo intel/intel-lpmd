@@ -1,22 +1,5 @@
-/*
- * lpmd_cpumask.c: helper functions for cpumask handlingf
- *
- * Copyright (C) 2025 Intel Corporation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
- */
+// SPDX-License-Identifier: GPL-2.0-or-later
+/* Copyright (C) 2026 Intel Corporation */
 
 #define _GNU_SOURCE
 #include <err.h>
@@ -43,6 +26,7 @@ static struct lpm_cpus cpumasks[CPUMASK_MAX] = {
 		[CPUMASK_HFI] = { .name = "HFI Low Power", },
 		[CPUMASK_HFI_BANNED] = { .name = "HFI BANNED", },
 		[CPUMASK_HFI_LAST] = { .name = "HFI LAST", },
+		[CPUMASK_BLACKLIST] = { .name = "Blacklist", },
 };
 
 int is_cpu_online(int cpu)
@@ -82,8 +66,8 @@ static size_t alloc_cpu_set(cpu_set_t **cpu_set)
 	size_t size;
 
 	_cpu_set = CPU_ALLOC((topo_max_cpus + 1));
-	if (_cpu_set == NULL)
-		err (3, "CPU_ALLOC");
+	if (!_cpu_set)
+		err(3, "CPU_ALLOC");
 	size = CPU_ALLOC_SIZE((topo_max_cpus + 1));
 	CPU_ZERO_S(size, _cpu_set);
 
@@ -93,8 +77,8 @@ static size_t alloc_cpu_set(cpu_set_t **cpu_set)
 		size_cpumask = size;
 
 	if (size_cpumask && size_cpumask != size) {
-		lpmd_log_error ("Conflict cpumask size %zu vs. %zu\n", size, size_cpumask);
-		exit (-1);
+		lpmd_log_error("Conflict cpumask size %zu vs. %zu\n", size, size_cpumask);
+		exit(-1);
 	}
 	return size;
 }
@@ -104,7 +88,7 @@ int cpu_migrate(int cpu)
 	cpu_set_t *mask;
 	int ret;
 
-	alloc_cpu_set (&mask);
+	alloc_cpu_set(&mask);
 	CPU_SET_S(cpu, size_cpumask, mask);
 	ret = sched_setaffinity(0, size_cpumask, mask);
 	CPU_FREE(mask);
@@ -137,7 +121,7 @@ int cpumask_free(enum cpumask_idx idx)
 {
 	if (!cpumasks[idx].mask)
 		return 0;
-		
+
 	cpumask_reset(idx);
 	free(cpumasks[idx].mask);
 	cpumasks[idx].mask = NULL;
@@ -151,11 +135,11 @@ int cpumask_reset(enum cpumask_idx idx)
 	else
 		CPU_ZERO_S(size_cpumask, cpumasks[idx].mask);
 
-	free (cpumasks[idx].str);
-	free (cpumasks[idx].str_reverse);
-	free (cpumasks[idx].hexstr);
-	free (cpumasks[idx].hexstr_reverse);
-	free (cpumasks[idx].hexvals);
+	free(cpumasks[idx].str);
+	free(cpumasks[idx].str_reverse);
+	free(cpumasks[idx].hexstr);
+	free(cpumasks[idx].hexstr_reverse);
+	free(cpumasks[idx].hexvals);
 	cpumasks[idx].str = NULL;
 	cpumasks[idx].str_reverse = NULL;
 	cpumasks[idx].hexstr = NULL;
@@ -166,22 +150,99 @@ int cpumask_reset(enum cpumask_idx idx)
 
 int cpumask_add_cpu(int cpu, enum cpumask_idx idx)
 {
-	if (idx != CPUMASK_ONLINE && !is_cpu_online (cpu))
+	if (idx != CPUMASK_ONLINE && !is_cpu_online(cpu))
 		return 0;
 
 	if (!cpumasks[idx].mask)
-		alloc_cpu_set (&cpumasks[idx].mask);
+		alloc_cpu_set(&cpumasks[idx].mask);
 
 	CPU_SET_S(cpu, size_cpumask, cpumasks[idx].mask);
 
 	return LPMD_SUCCESS;
 }
 
+void free_cpu_type_masks(struct lpmd_config_t *lpmd_config)
+{
+	int i;
+
+	for (i = 0 ; i < CORE_TYPES_COUNT ; i++)
+		free(lpmd_config->core_type_masks[i]);
+}
+
+int allocate_cpu_type_masks(struct lpmd_config_t *lpmd_config)
+{
+	int i;
+
+	for (i = 0 ; i < CORE_TYPES_COUNT ; i++) {
+		lpmd_config->core_type_masks[i] = malloc(get_max_cpus() / 8);
+		if (!lpmd_config->core_type_masks[i]) {
+			free_cpu_type_masks(lpmd_config);
+			return -1;
+		}
+	}
+	return 0;
+}
+
+static unsigned int count_cpu_type_cores(unsigned char *bitmask)
+{
+	unsigned int count = 0;
+	int i;
+
+	for (i = 0 ; i < get_max_cpus() ; i++) {
+		if (!!(bitmask[i / 8] & (1 << (i % 8))))
+			count++;
+	}
+	return count;
+}
+
+static unsigned int get_next_cpu_cmask(unsigned int id, enum core_type type, unsigned char *cmask)
+{
+	bool ret;
+	int i;
+
+	for (i = id ; i < get_max_cpus() ; i++) {
+		ret = !!(cmask[i / 8] & (1 << (i % 8)));
+		if (ret)
+			return i;
+	}
+	return id;
+}
+
+int cpumask_init_cpus_type(char *buf, enum cpumask_idx idx, unsigned char **cmasks, enum core_type type)
+{
+	unsigned int current, next, count;
+	int nr_cpus = 0;
+	char *end;
+
+	if (!strncmp(buf, "ALL", strlen("ALL")) || !strncmp(buf, "all", strlen("all")) || is_wildcard(buf)) {
+		count = count_cpu_type_cores(cmasks[type]);
+	} else {
+		errno = 0;
+		count = strtol(buf, &end, 10);
+		if (errno || *end != '\0' || !count)
+			return 0;
+	}
+
+	current = get_next_cpu_cmask(0, type, cmasks[type]);
+	while (nr_cpus != count) {
+		cpumask_add_cpu(current, idx);
+		next = get_next_cpu_cmask(current + 1, type, cmasks[type]);
+		if(next == current) /* Couldn't find next core of the provided type */
+			goto blacklist;
+		nr_cpus++;
+		current = next;
+	}
+
+blacklist:
+	cpumask_blacklist(idx);
+
+	return CPU_COUNT_S(size_cpumask, cpumasks[idx].mask);
+}
+
 int cpumask_init_cpus(char *buf, enum cpumask_idx idx)
 {
 	unsigned int start, end;
 	char *next;
-	int nr_cpus = 0;
 
 	if (buf[0] == '\0')
 		return 0;
@@ -202,10 +263,9 @@ int cpumask_init_cpus(char *buf, enum cpumask_idx idx)
 		if (*next == '-') /* no negative cpu numbers */
 			goto error;
 
-		start = strtoul (next, &next, 10);
+		start = strtoul(next, &next, 10);
 
-		cpumask_add_cpu (start, idx);
-		nr_cpus++;
+		cpumask_add_cpu(start, idx);
 
 		if (*next == '\0')
 			break;
@@ -217,8 +277,7 @@ int cpumask_init_cpus(char *buf, enum cpumask_idx idx)
 
 		if (*next == '-') {
 			next += 1; /* start range */
-		}
-		else if (*next == '.') {
+		} else if (*next == '.') {
 			next += 1;
 			if (*next == '.')
 				next += 1; /* start range */
@@ -226,14 +285,12 @@ int cpumask_init_cpus(char *buf, enum cpumask_idx idx)
 				goto error;
 		}
 
-		end = strtoul (next, &next, 10);
+		end = strtoul(next, &next, 10);
 		if (end <= start)
 			goto error;
 
-		while (++start <= end) {
-			cpumask_add_cpu (start, idx);
-			nr_cpus++;
-		}
+		while (++start <= end)
+			cpumask_add_cpu(start, idx);
 
 		if (*next == ',')
 			next += 1;
@@ -241,9 +298,11 @@ int cpumask_init_cpus(char *buf, enum cpumask_idx idx)
 			goto error;
 	}
 
-	return nr_cpus;
+	cpumask_blacklist(idx);
+
+	return CPU_COUNT_S(size_cpumask, cpumasks[idx].mask);
 error:
-	lpmd_log_error ("CPU string malformed: %s\n", buf);
+	lpmd_log_error("CPU string malformed: %s\n", buf);
 	return -1;
 }
 
@@ -287,7 +346,7 @@ void cpumask_copy(enum cpumask_idx source, enum cpumask_idx dest)
 	}
 }
 
-void cpumask_exclude_copy(enum cpumask_idx source, enum cpumask_idx dest, enum cpumask_idx exlude)
+void cpumask_exclude_copy(enum cpumask_idx source, enum cpumask_idx dest, enum cpumask_idx exclude)
 {
 	int i;
 
@@ -296,9 +355,10 @@ void cpumask_exclude_copy(enum cpumask_idx source, enum cpumask_idx dest, enum c
 		if (!CPU_ISSET_S(i, size_cpumask, cpumasks[source].mask))
 			continue;
 
-		if (CPU_ISSET_S(i, size_cpumask, cpumasks[exlude].mask))
+		if (CPU_ISSET_S(i, size_cpumask, cpumasks[exclude].mask))
 			continue;
 
+		cpumask_add_cpu(i, dest);
 	}
 }
 
@@ -312,10 +372,10 @@ static int cpumask_to_str(cpu_set_t *mask, char *buf, int length)
 		if (!CPU_ISSET_S(i, size_cpumask, mask))
 			continue;
 		if (length - 1 < offset) {
-			lpmd_log_debug ("cpumask_to_str: Too many cpus\n");
+			lpmd_log_debug("%s: Too many cpus\n", __func__);
 			return 1;
 		}
-		offset += snprintf (buf + offset, length - 1 - offset, "%d,", i);
+		offset += snprintf(buf + offset, length - 1 - offset, "%d,", i);
 	}
 	if (offset)
 		buf[offset - 1] = '\0';
@@ -366,74 +426,73 @@ static int cpumask_to_hexstr(cpu_set_t *mask, char *str, int size)
 	return 0;
 }
 
-char* get_cpus_str(enum cpumask_idx idx)
+int get_cached_value_init(enum cpumask_idx idx, bool refresh,
+			  char **cached_str, const char *cached_name)
 {
 	if (!cpumasks[idx].mask)
-		return NULL;
+		return LPMD_ERROR;
 
 	if (!CPU_COUNT_S(size_cpumask, cpumasks[idx].mask))
+		return LPMD_ERROR;
+
+	if (*cached_str) {
+		if (!refresh)
+			return LPMD_SUCCESS;
+	} else {
+		*cached_str = calloc(MAX_STR_LENGTH, 1);
+	}
+
+	if (!(*cached_str))
+		err(3, "%s_ALLOC", cached_name);
+
+	return LPMD_SUCCESS;
+}
+
+char *get_cpus_str(enum cpumask_idx idx, bool refresh)
+{
+	int ret = get_cached_value_init(idx, refresh, &cpumasks[idx].str, "STR");
+
+	if (ret)
 		return NULL;
 
-	if (cpumasks[idx].str)
-		return cpumasks[idx].str;
-
-	cpumasks[idx].str = calloc (MAX_STR_LENGTH, 1);
-	if (!cpumasks[idx].str)
-		err (3, "STR_ALLOC");
-
-	cpumask_to_str (cpumasks[idx].mask, cpumasks[idx].str, MAX_STR_LENGTH);
+	cpumask_to_str(cpumasks[idx].mask, cpumasks[idx].str, MAX_STR_LENGTH);
 	return cpumasks[idx].str;
 }
 
-char* get_cpus_hexstr(enum cpumask_idx idx)
+char *get_cpus_hexstr(enum cpumask_idx idx, bool refresh)
 {
-	if (!cpumasks[idx].mask)
+	int ret = get_cached_value_init(idx, refresh, &cpumasks[idx].hexstr, "HEXSTR");
+
+	if (ret)
 		return NULL;
 
-	if (!CPU_COUNT_S(size_cpumask, cpumasks[idx].mask))
-		return NULL;
-
-	if (cpumasks[idx].hexstr)
-		return cpumasks[idx].hexstr;
-
-	cpumasks[idx].hexstr = calloc (MAX_STR_LENGTH, 1);
-	if (!cpumasks[idx].hexstr)
-		err (3, "STR_ALLOC");
-
-	cpumask_to_hexstr (cpumasks[idx].mask, cpumasks[idx].hexstr, MAX_STR_LENGTH);
+	cpumask_to_hexstr(cpumasks[idx].mask, cpumasks[idx].hexstr, MAX_STR_LENGTH);
 	return cpumasks[idx].hexstr;
 }
 
-static char* get_cpus_str_reverse(enum cpumask_idx idx)
+static char *get_cpus_str_reverse(enum cpumask_idx idx, bool refresh)
 {
 	cpu_set_t *mask;
+	int ret;
 
-	if (!cpumasks[idx].mask)
+	ret = get_cached_value_init(idx, refresh, &cpumasks[idx].str_reverse, "STR_REVERSE");
+	if (ret)
 		return NULL;
 
-	if (!CPU_COUNT_S(size_cpumask, cpumasks[idx].mask))
-		return NULL;
-
-	if (cpumasks[idx].str_reverse)
-		return cpumasks[idx].str_reverse;
-
-	cpumasks[idx].str_reverse = calloc (MAX_STR_LENGTH, 1);
-	if (!cpumasks[idx].str_reverse)
-		err (3, "STR_ALLOC");
-
-	alloc_cpu_set (&mask);
+	alloc_cpu_set(&mask);
 	CPU_XOR_S(size_cpumask, mask, cpumasks[idx].mask, cpumasks[CPUMASK_ONLINE].mask);
-	cpumask_to_str (mask, cpumasks[idx].str_reverse, MAX_STR_LENGTH);
+	cpumask_to_str(mask, cpumasks[idx].str_reverse, MAX_STR_LENGTH);
 	CPU_FREE(mask);
 
 	return cpumasks[idx].str_reverse;
 }
 
-static uint8_t *get_cpus_hexvals(enum cpumask_idx idx, int *size)
+static uint8_t *get_cpus_hexvals(enum cpumask_idx idx, bool refresh)
 {
-	int i, j, k;
+	int size = topo_max_cpus / 8;
 	uint8_t v = 0;
 	uint8_t *vals;
+	int i, j, k;
 
 	if (!cpumasks[idx].mask)
 		return NULL;
@@ -441,12 +500,11 @@ static uint8_t *get_cpus_hexvals(enum cpumask_idx idx, int *size)
 	if (!CPU_COUNT_S(size_cpumask, cpumasks[idx].mask))
 		return NULL;
 
-	*size = topo_max_cpus / 8;
-
 	if (cpumasks[idx].hexvals)
-		return cpumasks[idx].hexvals;
+		if (!refresh)
+			return cpumasks[idx].hexvals;
 
-	vals = calloc (*size, 1);
+	vals = calloc(size, 1);
 	if (!vals)
 		return NULL;
 
@@ -454,8 +512,8 @@ static uint8_t *get_cpus_hexvals(enum cpumask_idx idx, int *size)
 		j = i % 8;
 		k = i / 8;
 
-		if (k >= *size) {
-			lpmd_log_error ("size too big\n");
+		if (k >= size) {
+			lpmd_log_error("size too big\n");
 			free(vals);
 			return NULL;
 		}
@@ -464,7 +522,8 @@ static uint8_t *get_cpus_hexvals(enum cpumask_idx idx, int *size)
 			goto set_val;
 
 		v |= 1 << j;
-set_val: if (j == 7) {
+set_val:
+		if (j == 7) {
 			vals[k] = v;
 			v = 0;
 		}
@@ -474,25 +533,62 @@ set_val: if (j == 7) {
 	return cpumasks[idx].hexvals;
 }
 
+int cpumask_blacklist(enum cpumask_idx idx)
+{
+	char *state_name;
+
+	if (!cpumasks[idx].mask)
+		alloc_cpu_set(&cpumasks[idx].mask);
+
+	/* Return due to blacklist not getting initialized yet. */
+	if (!cpumasks[CPUMASK_BLACKLIST].mask) {
+		alloc_cpu_set(&cpumasks[CPUMASK_BLACKLIST].mask);
+		return LPMD_ERROR;
+	}
+
+	/* Return due to blacklist being empty. */
+	if (!CPU_COUNT_S(size_cpumask, cpumasks[CPUMASK_BLACKLIST].mask))
+		return LPMD_ERROR;
+
+	/* Otherwise clear blacklisted cpus from the chosen cpumask */
+	for (int i = 0 ; i < topo_max_cpus ; i++)
+		if (CPU_ISSET_S(i, size_cpumask, cpumasks[CPUMASK_BLACKLIST].mask))
+			CPU_CLR_S(i, size_cpumask, cpumasks[idx].mask);
+
+	/* Update any relevant cached data. */
+	cpumasks[idx].hexstr = get_cpus_hexstr(idx, true);
+	cpumasks[idx].str = get_cpus_str(idx, true);
+	cpumasks[idx].str_reverse = get_cpus_str_reverse(idx, true);
+	cpumasks[idx].hexvals = get_cpus_hexvals(idx, true);
+
+	if (!CPU_COUNT_S(size_cpumask, cpumasks[idx].mask)) {
+		state_name = user_cpumask_idx_to_state_name(idx);
+		lpmd_log_error("%s: cpumask[%d] is empty after blacklisting due to unavailable cpus\n", state_name, idx);
+		lpmd_log_error("It's possible another cgroup claimed all cores required by cpumask[%d]\n", idx);
+	}
+
+	return LPMD_SUCCESS;
+}
+
 char *get_proc_irq_str(enum cpumask_idx idx)
 {
-	return get_cpus_hexstr(idx);
+	return get_cpus_hexstr(idx, false);
 }
 
 char *get_irqbalance_str(enum cpumask_idx idx)
 {
-	return get_cpus_str_reverse(idx);
+	return get_cpus_str_reverse(idx, false);
 }
 
 char *get_cpu_isolation_str(enum cpumask_idx idx)
 {
 	if (idx == CPUMASK_ONLINE)
-		return get_cpus_str(idx);
+		return get_cpus_str(idx, false);
 	else
-		return get_cpus_str_reverse(idx);
+		return get_cpus_str_reverse(idx, false);
 }
 
-uint8_t *get_cgroup_systemd_vals(enum cpumask_idx idx, int *size)
+uint8_t *get_cgroup_systemd_vals(enum cpumask_idx idx)
 {
-	return get_cpus_hexvals(idx, size);
+	return get_cpus_hexvals(idx, false);
 }

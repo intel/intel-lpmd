@@ -1,27 +1,10 @@
-/*
- * lpmd_hfi.c: intel_lpmd HFI monitor
- *
- * Copyright (C) 2023 Intel Corporation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
- *
- * This file processes HFI messages from the firmware. When the EE column for
- * a CPU is 255, that CPU will be in allowed list to run all thread.
- */
+// SPDX-License-Identifier: GPL-2.0-or-later
+/* Copyright(c) 2023 Intel Corporation */
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
+
 #include <stdio.h>
 #include <err.h>
 #include <stdlib.h>
@@ -86,32 +69,33 @@ static int seq_check_handler(struct nl_msg *msg, void *arg)
 }
 
 static int send_and_recv_msgs(struct hfi_event_data *drv, struct nl_msg *msg,
-								int (*valid_handler)(struct nl_msg*, void*), void *valid_data)
+			      int (*valid_handler)(struct nl_msg*, void*),
+			      void *valid_data)
 {
 	struct nl_cb *cb;
 	int err = -ENOMEM;
 
-	cb = nl_cb_clone (drv->nl_cb);
+	cb = nl_cb_clone(drv->nl_cb);
 	if (!cb)
 		goto out;
 
-	err = nl_send_auto_complete (drv->nl_handle, msg);
+	err = nl_send_auto_complete(drv->nl_handle, msg);
 	if (err < 0)
 		goto out;
 
 	err = 1;
 
-	nl_cb_err (cb, NL_CB_CUSTOM, error_handler, &err);
-	nl_cb_set (cb, NL_CB_FINISH, NL_CB_CUSTOM, finish_handler, &err);
-	nl_cb_set (cb, NL_CB_ACK, NL_CB_CUSTOM, ack_handler, &err);
+	nl_cb_err(cb, NL_CB_CUSTOM, error_handler, &err);
+	nl_cb_set(cb, NL_CB_FINISH, NL_CB_CUSTOM, finish_handler, &err);
+	nl_cb_set(cb, NL_CB_ACK, NL_CB_CUSTOM, ack_handler, &err);
 
 	if (valid_handler)
-		nl_cb_set (cb, NL_CB_VALID, NL_CB_CUSTOM, valid_handler, valid_data);
+		nl_cb_set(cb, NL_CB_VALID, NL_CB_CUSTOM, valid_handler, valid_data);
 
 	while (err > 0)
-		err = nl_recvmsgs (drv->nl_handle, cb);
-out: nl_cb_put (cb);
-	nlmsg_free (msg);
+		err = nl_recvmsgs(drv->nl_handle, cb);
+out: nl_cb_put(cb);
+	nlmsg_free(msg);
 	return err;
 }
 
@@ -124,48 +108,52 @@ static int family_handler(struct nl_msg *msg, void *arg)
 {
 	struct family_data *res = arg;
 	struct nlattr *tb[CTRL_ATTR_MAX + 1];
-	struct genlmsghdr *gnlh = nlmsg_data (nlmsg_hdr (msg));
+	struct genlmsghdr *gnlh = nlmsg_data(nlmsg_hdr(msg));
 	struct nlattr *mcgrp;
 	int i;
 
-	nla_parse (tb, CTRL_ATTR_MAX, genlmsg_attrdata (gnlh, 0), genlmsg_attrlen (gnlh, 0), NULL);
+	nla_parse(tb, CTRL_ATTR_MAX, genlmsg_attrdata(gnlh, 0),
+		  genlmsg_attrlen(gnlh, 0), NULL);
 	if (!tb[CTRL_ATTR_MCAST_GROUPS])
 		return NL_SKIP;
 
-	nla_for_each_nested (mcgrp, tb[CTRL_ATTR_MCAST_GROUPS], i)
-	{
+	nla_for_each_nested(mcgrp, tb[CTRL_ATTR_MCAST_GROUPS], i) {
 		struct nlattr *tb2[CTRL_ATTR_MCAST_GRP_MAX + 1];
-		nla_parse (tb2, CTRL_ATTR_MCAST_GRP_MAX, nla_data (mcgrp), nla_len (mcgrp), NULL);
-		if (!tb2[CTRL_ATTR_MCAST_GRP_NAME] || !tb2[CTRL_ATTR_MCAST_GRP_ID]
-				|| strncmp (nla_data (tb2[CTRL_ATTR_MCAST_GRP_NAME]), res->group,
-							nla_len (tb2[CTRL_ATTR_MCAST_GRP_NAME])) != 0)
+
+		nla_parse(tb2, CTRL_ATTR_MCAST_GRP_MAX,
+			  nla_data(mcgrp), nla_len(mcgrp), NULL);
+		if (!tb2[CTRL_ATTR_MCAST_GRP_NAME] ||
+		    !tb2[CTRL_ATTR_MCAST_GRP_ID] ||
+		    strncmp(nla_data(tb2[CTRL_ATTR_MCAST_GRP_NAME]), res->group,
+			    nla_len(tb2[CTRL_ATTR_MCAST_GRP_NAME])) != 0)
 			continue;
-		res->id = nla_get_u32 (tb2[CTRL_ATTR_MCAST_GRP_ID]);
+		res->id = nla_get_u32(tb2[CTRL_ATTR_MCAST_GRP_ID]);
 		break;
 	};
 
 	return 0;
 }
 
-static int nl_get_multicast_id(struct hfi_event_data *drv, const char *family, const char *group)
+static int nl_get_multicast_id(struct hfi_event_data *drv, const char *family,
+			       const char *group)
 {
 	struct nl_msg *msg;
 	int ret = -1;
 	struct family_data res = { group, -ENOENT };
 
-	msg = nlmsg_alloc ();
+	msg = nlmsg_alloc();
 	if (!msg)
 		return -ENOMEM;
-	genlmsg_put (msg, 0, 0, genl_ctrl_resolve (drv->nl_handle, "nlctrl"), 0, 0, CTRL_CMD_GETFAMILY,
-					0);
-	NLA_PUT_STRING (msg, CTRL_ATTR_FAMILY_NAME, family);
+	genlmsg_put(msg, 0, 0, genl_ctrl_resolve(drv->nl_handle, "nlctrl"),
+		    0, 0, CTRL_CMD_GETFAMILY, 0);
+	NLA_PUT_STRING(msg, CTRL_ATTR_FAMILY_NAME, family);
 
-	ret = send_and_recv_msgs (drv, msg, family_handler, &res);
+	ret = send_and_recv_msgs(drv, msg, family_handler, &res);
 	msg = NULL;
 	if (ret == 0)
 		ret = res.id;
 
-nla_put_failure: nlmsg_free (msg);
+nla_put_failure: nlmsg_free(msg);
 	return ret;
 }
 
@@ -206,48 +194,88 @@ static char *update_one_cpu(struct perf_cap *perf_cap)
 
 static void process_one_event(int first, int last, int nr)
 {
-
 	/* Need to update more CPUs */
-	if (nr == 16 && last != get_max_online_cpu ())
+	if (nr == 16 && last != get_max_online_cpu())
 		return;
 
 	if (cpumask_has_cpu(CPUMASK_HFI)) {
 		/* Ignore duplicate event */
-		if (cpumask_equal (CPUMASK_HFI_LAST, CPUMASK_HFI )) {
-			lpmd_log_debug ("\tDuplicated HFI LPM hints ignored\n\n");
+		if (cpumask_equal(CPUMASK_HFI_LAST, CPUMASK_HFI)) {
+			lpmd_log_debug("\tDuplicated HFI LPM hints ignored\n\n");
 			return;
 		}
-		lpmd_log_debug ("\tDetect HFI LPM event\n");
+		lpmd_log_debug("\tDetect HFI LPM event\n");
 		update_reason(UPDATE_HFI);
 		cpumask_copy(CPUMASK_HFI, CPUMASK_HFI_LAST);
-	}
-	else if (cpumask_has_cpu(CPUMASK_HFI_BANNED)) {
+	} else if (cpumask_has_cpu(CPUMASK_HFI_BANNED)) {
 		cpumask_exclude_copy(CPUMASK_ONLINE, CPUMASK_HFI, CPUMASK_HFI_BANNED);
 		/* Ignore duplicate event */
-		if (cpumask_equal (CPUMASK_HFI_LAST, CPUMASK_HFI )) {
-			lpmd_log_debug ("\tDuplicated HFI BANNED hints ignored\n\n");
+		if (cpumask_equal(CPUMASK_HFI_LAST, CPUMASK_HFI)) {
+			lpmd_log_debug("\tDuplicated HFI BANNED hints ignored\n\n");
 			return;
 		}
-		lpmd_log_debug ("\tDetect HFI LPM event with banned CPUs\n");
+		lpmd_log_debug("\tDetect HFI LPM event with banned CPUs\n");
 		update_reason(UPDATE_HFI);
 		cpumask_copy(CPUMASK_HFI, CPUMASK_HFI_LAST);
-	}
-	else if (cpumask_has_cpu(CPUMASK_HFI_LAST)) {
-		lpmd_log_debug ("\tHFI LPM recover\n");
+	} else if (cpumask_has_cpu(CPUMASK_HFI_LAST)) {
+		lpmd_log_debug("\tHFI LPM recover\n");
 //		 Don't override the DETECT_LPM_CPU_DEFAULT so it is auto recovered
 		cpumask_copy(CPUMASK_ONLINE, CPUMASK_HFI);
 		update_reason(UPDATE_HFI);
-		cpumask_reset (CPUMASK_HFI_LAST);
+		cpumask_reset(CPUMASK_HFI_LAST);
+	} else {
+		lpmd_log_info("\t\t\tUnsupported HFI event ignored\n");
 	}
-	else {
-		lpmd_log_info ("\t\t\tUnsupported HFI event ignored\n");
+}
+
+static void __handle_event(struct nlattr *cap, int *index,
+			   int *offset, char *buf, struct perf_cap *perf_cap,
+			   int *first_cpu, int *last_cpu, int *nr_cpus)
+{
+	switch (*index) {
+	case 0:
+		*offset += snprintf(buf + *offset, MAX_STR_LENGTH -
+				    *offset, "\tCPU %3d: ", nla_get_u32(cap));
+		perf_cap->cpu = nla_get_u32(cap);
+		break;
+	case 1:
+		*offset += snprintf(buf + *offset, MAX_STR_LENGTH -
+				    *offset, " PERF [%4d] ", nla_get_u32(cap));
+		perf_cap->perf = nla_get_u32(cap);
+		break;
+	case 2:
+		*offset += snprintf(buf + *offset, MAX_STR_LENGTH -
+				    *offset, " EFF [%4d] ", nla_get_u32(cap));
+		perf_cap->eff = nla_get_u32(cap);
+		break;
+	default:
+		break;
+	}
+	*index += 1;
+
+	if (*index == 3) {
+		char *str;
+
+		str = update_one_cpu(perf_cap);
+		*offset += snprintf(buf + *offset, MAX_STR_LENGTH -
+				    *offset, " TYPE [%s]", str);
+		buf[MAX_STR_LENGTH - 1] = '\0';
+		lpmd_log_debug("\t\t\t%s\n", buf);
+
+		*index = 0;
+		*offset = 0;
+
+		if (*first_cpu == -1)
+			*first_cpu = perf_cap->cpu;
+		*last_cpu = perf_cap->cpu;
+		*nr_cpus += 1;
 	}
 }
 
 static int handle_event(struct nl_msg *n, void *arg)
 {
-	struct nlmsghdr *nlh = nlmsg_hdr (n);
-	struct genlmsghdr *genlhdr = genlmsg_hdr (nlh);
+	struct nlmsghdr *nlh = nlmsg_hdr(n);
+	struct genlmsghdr *genlhdr = genlmsg_hdr(nlh);
 	struct nlattr *attrs[THERMAL_GENL_ATTR_MAX + 1];
 	struct nlattr *cap;
 	struct perf_cap perf_cap;
@@ -258,62 +286,26 @@ static int handle_event(struct nl_msg *n, void *arg)
 	if (genlhdr->cmd != THERMAL_GENL_EVENT_CAPACITY_CHANGE)
 		return 0;
 
-	if (genlmsg_parse (nlh, 0, attrs, THERMAL_GENL_ATTR_MAX, NULL))
+	if (genlmsg_parse(nlh, 0, attrs, THERMAL_GENL_ATTR_MAX, NULL))
 		return -1;
 
-	perf_cap.cpu = perf_cap.perf = perf_cap.eff = -1;
+	perf_cap.eff = -1;
+	perf_cap.perf = -1;
+	perf_cap.cpu = -1;
 
-	nla_for_each_nested (cap, attrs[THERMAL_GENL_ATTR_CAPACITY], j)
-	{
-
-		switch (index) {
-			case 0:
-				offset += snprintf (buf + offset, MAX_STR_LENGTH - offset, "\tCPU %3d: ",
-									nla_get_u32 (cap));
-				perf_cap.cpu = nla_get_u32 (cap);
-				break;
-			case 1:
-				offset += snprintf (buf + offset, MAX_STR_LENGTH - offset, " PERF [%4d] ",
-									nla_get_u32 (cap));
-				perf_cap.perf = nla_get_u32 (cap);
-				break;
-			case 2:
-				offset += snprintf (buf + offset, MAX_STR_LENGTH - offset, " EFF [%4d] ",
-									nla_get_u32 (cap));
-				perf_cap.eff = nla_get_u32 (cap);
-				break;
-			default:
-				break;
-		}
-		index++;
-
-		if (index == 3) {
-			char *str;
-
-			str = update_one_cpu (&perf_cap);
-			offset += snprintf (buf + offset, MAX_STR_LENGTH - offset, " TYPE [%s]", str);
-			buf[MAX_STR_LENGTH - 1] = '\0';
-			lpmd_log_debug ("\t\t\t%s\n", buf);
-
-			index = 0;
-			offset = 0;
-
-			if (first_cpu == -1)
-				first_cpu = perf_cap.cpu;
-			last_cpu = perf_cap.cpu;
-			nr_cpus++;
-		}
-	}
-	process_one_event (first_cpu, last_cpu, nr_cpus);
+	nla_for_each_nested(cap, attrs[THERMAL_GENL_ATTR_CAPACITY], j)
+		__handle_event(cap, &index, &offset, buf, &perf_cap,
+			       &first_cpu, &last_cpu, &nr_cpus);
+	process_one_event(first_cpu, last_cpu, nr_cpus);
 
 	return 0;
 }
 
-static int done = 0;
+static int done;
 
 int hfi_kill(void)
 {
-	nl_socket_free (drv.nl_handle);
+	nl_socket_free(drv.nl_handle);
 	done = 1;
 	return 0;
 }
@@ -323,7 +315,7 @@ int hfi_update(void)
 	int err = 0;
 
 	while (!err)
-		err = nl_recvmsgs (drv.nl_handle, drv.nl_cb);
+		err = nl_recvmsgs(drv.nl_handle, drv.nl_cb);
 
 	return 0;
 }
@@ -336,45 +328,46 @@ int hfi_init(void)
 
 	cpumask_reset(CPUMASK_HFI_LAST);
 
-	signal (SIGPIPE, SIG_IGN);
+	signal(SIGPIPE, SIG_IGN);
 
-	sock = nl_socket_alloc ();
+	sock = nl_socket_alloc();
 	if (!sock) {
-		lpmd_log_error ("nl_socket_alloc failed\n");
+		lpmd_log_error("nl_socket_alloc failed\n");
 		goto err_proc;
 	}
 
-	if (genl_connect (sock)) {
-		lpmd_log_error ("genl_connect(sk_event) failed\n");
+	if (genl_connect(sock)) {
+		lpmd_log_error("genl_connect(sk_event) failed\n");
 		goto err_proc;
 	}
 
 	drv.nl_handle = sock;
-	drv.nl_cb = cb = nl_cb_alloc (NL_CB_DEFAULT);
-	if (drv.nl_cb == NULL) {
-		lpmd_log_error ("Failed to allocate netlink callbacks");
+	cb = nl_cb_alloc(NL_CB_DEFAULT);
+	drv.nl_cb = cb;
+	if (!drv.nl_cb) {
+		lpmd_log_error("Failed to allocate netlink callbacks");
 		goto err_proc;
 	}
 
-	mcast_id = nl_get_multicast_id (&drv, THERMAL_GENL_FAMILY_NAME,
-	THERMAL_GENL_EVENT_GROUP_NAME);
+	mcast_id = nl_get_multicast_id(&drv, THERMAL_GENL_FAMILY_NAME,
+				       THERMAL_GENL_EVENT_GROUP_NAME);
 	if (mcast_id < 0) {
-		lpmd_log_error ("nl_get_multicast_id failed\n");
+		lpmd_log_error("nl_get_multicast_id failed\n");
 		goto err_proc;
 	}
 
-	if (nl_socket_add_membership (sock, mcast_id)) {
-		lpmd_log_error ("nl_socket_add_membership failed");
+	if (nl_socket_add_membership(sock, mcast_id)) {
+		lpmd_log_error("nl_socket_add_membership failed");
 		goto err_proc;
 	}
 
-	nl_cb_set (cb, NL_CB_SEQ_CHECK, NL_CB_CUSTOM, seq_check_handler, &done);
-	nl_cb_set (cb, NL_CB_VALID, NL_CB_CUSTOM, handle_event, NULL);
+	nl_cb_set(cb, NL_CB_SEQ_CHECK, NL_CB_CUSTOM, seq_check_handler, &done);
+	nl_cb_set(cb, NL_CB_VALID, NL_CB_CUSTOM, handle_event, NULL);
 
-	nl_socket_set_nonblocking (sock);
+	nl_socket_set_nonblocking(sock);
 
 	if (drv.nl_handle)
-		return nl_socket_get_fd (drv.nl_handle);
+		return nl_socket_get_fd(drv.nl_handle);
 
 err_proc: return -1;
 }

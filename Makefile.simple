@@ -1,0 +1,179 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+# Install paths (matching automake defaults)
+prefix          ?= /usr/local
+sbindir         ?= $(prefix)/sbin
+confdir         ?= $(prefix)/etc/intel_lpmd
+rundir          ?= $(prefix)/var/run/intel_lpmd
+systemd_unitdir ?= /usr/lib/systemd/system
+dbus_sysdir     ?= /etc/dbus-1/system.d
+mandir          ?= $(prefix)/share/man
+
+ifeq ($(srctree),)
+srctree := $(patsubst %/,%,$(dir $(CURDIR)))
+srctree := $(patsubst %/,%,$(dir $(srctree)))
+srctree := $(patsubst %/,%,$(dir $(srctree)))
+srctree := $(patsubst %/,%,$(dir $(srctree)))
+endif
+
+# Do not use make's built-in rules
+MAKEFLAGS += -r
+
+VERSION = 0.1.0
+
+# pkg-config dependencies
+ifeq ($(shell pkg-config --exists glib-2.0 gio-2.0 gio-unix-2.0 gmodule-2.0 && echo yes),yes)
+  GLIB_CFLAGS := $(shell pkg-config --cflags glib-2.0 gio-2.0 gio-unix-2.0 gmodule-2.0)
+  GLIB_LIBS   := $(shell pkg-config --libs   glib-2.0 gio-2.0 gio-unix-2.0 gmodule-2.0)
+else
+  $(error No glib-2.0 pkg-config found, please install libglib2.0-dev/glib2-devel)
+endif
+
+ifeq ($(shell pkg-config --exists libxml-2.0 && echo yes),yes)
+  XML2_CFLAGS := $(shell pkg-config --cflags libxml-2.0)
+  XML2_LIBS   := $(shell pkg-config --libs   libxml-2.0)
+else
+  $(error No libxml-2.0 pkg-config found, please install libxml2-dev/libxml2-devel)
+endif
+
+ifeq ($(shell pkg-config --exists upower-glib && echo yes),yes)
+  UPOWER_CFLAGS := $(shell pkg-config --cflags upower-glib)
+  UPOWER_LIBS   := $(shell pkg-config --libs   upower-glib)
+else
+  $(error No upower-glib pkg-config found, please install libupower-glib-dev/upower-devel)
+endif
+
+ifeq ($(shell pkg-config --exists libnl-3.0 libnl-genl-3.0 && echo yes),yes)
+  NL3_CFLAGS := $(shell pkg-config --cflags libnl-3.0 libnl-genl-3.0)
+  NL3_LIBS   := $(shell pkg-config --libs   libnl-3.0 libnl-genl-3.0)
+else
+  $(error No libnl-3.0 pkg-config found, please install libnl-3-dev libnl-genl-3-dev/libnl3-devel)
+endif
+
+ifeq ($(shell pkg-config --exists libsystemd && echo yes),yes)
+  SYSTEMD_CFLAGS := $(shell pkg-config --cflags libsystemd)
+  SYSTEMD_LIBS   := $(shell pkg-config --libs   libsystemd)
+else
+  $(error No libsystemd pkg-config found, please install libsystemd-dev/systemd-devel)
+endif
+
+override CFLAGS += -O2 -Wall -g -DGDBUS=1 \
+	-DGLIB_SUPPORT \
+	-DGETTEXT_PACKAGE=\"intel_lpmd\" \
+	-DPACKAGE_VERSION=\"$(VERSION)\" \
+	-DTDCONFDIR=\"$(confdir)\" \
+	-DTDRUNDIR=\"$(rundir)\" \
+	-DTDLOCALEDIR=\"$(prefix)/share/locale\" \
+	-I. -Isrc/include -Isrc/wlt_proxy/include \
+	$(GLIB_CFLAGS) $(XML2_CFLAGS) $(UPOWER_CFLAGS) $(NL3_CFLAGS) $(SYSTEMD_CFLAGS)
+
+override LDFLAGS += \
+	$(GLIB_LIBS) $(XML2_LIBS) $(UPOWER_LIBS) $(NL3_LIBS) $(SYSTEMD_LIBS) -lm
+
+# Source files
+LPMD_SRCS = \
+	src/lpmd_cgroup.c \
+	src/lpmd_config.c \
+	src/lpmd_cpu.c \
+	src/lpmd_cpumask.c \
+	src/lpmd_dbus_server.c \
+	src/lpmd_helpers.c \
+	src/lpmd_hfi.c \
+	src/lpmd_irq.c \
+	src/lpmd_main.c \
+	src/lpmd_misc.c \
+	src/lpmd_proc.c \
+	src/lpmd_socket.c \
+	src/lpmd_state_machine.c \
+	src/lpmd_uevent.c \
+	src/lpmd_util.c \
+	src/lpmd_wlt.c \
+	src/wlt_proxy/spike_mgmt.c \
+	src/wlt_proxy/state_machine.c \
+	src/wlt_proxy/state_manager.c \
+	src/wlt_proxy/state_util.c \
+	src/wlt_proxy/wlt_proxy.c
+
+LPMD_OBJS = $(LPMD_SRCS:.c=.o) lpmd-resource.o
+CTRL_OBJS = tools/intel_lpmd_control.o
+
+ALL_TARGETS := intel_lpmd intel_lpmd_control
+ALL_PROGRAMS := $(patsubst %,$(OUTPUT)%,$(ALL_TARGETS))
+
+all: $(ALL_PROGRAMS)
+
+# Generated files
+config.h: FORCE
+	$(QUIET_GEN)echo '/* Auto-generated - do not edit */' > $@ && \
+	echo '#define GDBUS 1' >> $@ && \
+	echo '#define GETTEXT_PACKAGE "intel_lpmd"' >> $@ && \
+	echo '#define PACKAGE_VERSION "$(VERSION)"' >> $@
+
+lpmd-resource.c: lpmd-resource.gresource.xml src/intel_lpmd_dbus_interface.xml
+	$(QUIET_GEN)glib-compile-resources --sourcedir=. --generate-source \
+		--target=$@ $<
+
+prepare: config.h lpmd-resource.c
+
+%.o: %.c | prepare
+	$(Q)mkdir -p $(dir $@)
+	$(QUIET_CC)$(CC) $(CFLAGS) -c -o $@ $<
+
+$(OUTPUT)intel_lpmd: $(LPMD_OBJS)
+	$(QUIET_LINK)$(CC) $(CFLAGS) $^ $(LDFLAGS) -o $@
+
+$(OUTPUT)intel_lpmd_control: $(CTRL_OBJS)
+	$(QUIET_LINK)$(CC) $(CFLAGS) $< $(GLIB_LIBS) -o $@
+
+$(OUTPUT)intel_lpmd_focus_helper: $(FOCUS_OBJS)
+	$(QUIET_LINK)$(CC) $(CFLAGS) $< $(GLIB_LIBS) -o $@
+
+DATA_CONFIGS = \
+	data/intel_lpmd_config.xml \
+	data/intel_lpmd_config_examples.xml \
+	data/intel_lpmd_config_experimental.xml \
+	data/intel_lpmd_config_F6_M170.xml \
+	data/intel_lpmd_config_F6_M189.xml \
+	data/intel_lpmd_config_F6_M204.xml
+
+MAN_PAGES = \
+	man/intel_lpmd.8 \
+	man/intel_lpmd_control.8 \
+	man/intel_lpmd_config.xml.5
+
+install: $(ALL_PROGRAMS)
+	install -d -m 755 $(DESTDIR)$(sbindir)
+	install $(OUTPUT)intel_lpmd $(DESTDIR)$(sbindir)
+	install $(OUTPUT)intel_lpmd_control $(DESTDIR)$(sbindir)
+	install -d -m 755 $(DESTDIR)$(confdir)
+	install -m 644 $(DATA_CONFIGS) $(DESTDIR)$(confdir)
+	install -d -m 755 $(DESTDIR)$(rundir)
+	install -d -m 755 $(DESTDIR)$(systemd_unitdir)
+	sed 's|@sbindir@|$(sbindir)|g' data/intel_lpmd.service.in > \
+		$(DESTDIR)$(systemd_unitdir)/intel_lpmd.service
+	install -d -m 755 $(DESTDIR)$(dbus_sysdir)
+	install -m 644 data/org.freedesktop.intel_lpmd.conf $(DESTDIR)$(dbus_sysdir)
+	install -d -m 755 $(DESTDIR)$(mandir)/man5
+	install -m 644 man/intel_lpmd_config.xml.5 $(DESTDIR)$(mandir)/man5/
+	install -d -m 755 $(DESTDIR)$(mandir)/man8
+	install -m 644 man/intel_lpmd.8 $(DESTDIR)$(mandir)/man8/
+	install -m 644 man/intel_lpmd_control.8 $(DESTDIR)$(mandir)/man8/
+
+uninstall:
+	rm -f $(DESTDIR)$(sbindir)/intel_lpmd
+	rm -f $(DESTDIR)$(sbindir)/intel_lpmd_control
+	rm -rf $(DESTDIR)$(confdir)
+	rm -f $(DESTDIR)$(systemd_unitdir)/intel_lpmd.service
+	rm -f $(DESTDIR)$(dbus_sysdir)/org.freedesktop.intel_lpmd.conf
+	rm -f $(DESTDIR)$(mandir)/man5/intel_lpmd_config.xml.5
+	rm -f $(DESTDIR)$(mandir)/man8/intel_lpmd.8
+	rm -f $(DESTDIR)$(mandir)/man8/intel_lpmd_control.8
+	@echo "Note: $(DESTDIR)$(rundir) not removed (may contain runtime data)"
+
+clean:
+	rm -f $(ALL_PROGRAMS) config.h lpmd-resource.c
+	find $(or $(OUTPUT),.) -name '*.o' -delete -o -name '\.*.d' -delete
+
+FORCE:
+
+.PHONY: all install uninstall clean FORCE prepare

@@ -1,26 +1,5 @@
-.\" intel_lpmd_config.xml(5) manual page
-.\"
-.\" This is free documentation; you can redistribute it and/or
-.\" modify it under the terms of the GNU General Public License as
-.\" published by the Free Software Foundation; either version 2 of
-.\" the License, or (at your option) any later version.
-.\"
-.\" The GNU General Public License's references to "object code"
-.\" and "executables" are to be interpreted as the output of any
-.\" document formatting or typesetting system, including
-.\" intermediate and printed output.
-.\"
-.\" This manual is distributed in the hope that it will be useful,
-.\" but WITHOUT ANY WARRANTY; without even the implied warranty of
-.\" MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-.\" GNU General Public License for more details.
-.\"
-.\" You should have received a copy of the GNU General Public Licence along
-.\" with this manual; if not, write to the Free Software Foundation, Inc.,
-.\" 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
-.\"
-.\" Copyright (C) 2012 Intel Corporation. All rights reserved.
-.\"
+.\" SPDX-License-Identifier: GPL-2.0-or-later
+.\" Copyright (C) 2026 Intel Corporation
 .TH intel_lpmd_config.xml "5" "8 Apr 2026"
 
 .SH NAME
@@ -77,6 +56,8 @@ specifies if the HFI monitor can capture the HFI hints for survivability mode.
 .PP
 .B WLTHintEnable
 Enable use of hardware Workload type hints.
+.B WLTHintNotificationDelay
+Set hardware workload notification delay in milliseconds.
 .PP
 .B WLTProxyEnable
 Enable use of Proxy Workload type hints.
@@ -146,6 +127,11 @@ EnterCPULoadThres is checked before EntrySystemLoadThres to match a state.
 Workload type value to enter into this state. If this value is defined
 then utilization based entry triggers are not used. To use this
 WLTHintEnable must be enabled, so that hardware notifications are enabled.
+.PP
+.B WLTTypeMask
+Mask of workload type values to enter into this state. This has higher priority
+than WLTType. If this value is defined then utilization based entry triggers
+are not used.
 .PP
 .B ActiveCPUs
 Active CPUs in this state. The list can be comma separated or use "-" for

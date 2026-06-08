@@ -102,5 +102,16 @@ for Intel Energy Optimizer (LPMD) daemon
 	-->
 	<IgnoreITMT>0</IgnoreITMT>
 
+	<!--
+		Slider default configuration for AC and DC (for platforms after Panther Lake onwards)
+		These are default values used when platform-specific configs are unavailable.
+		AC: Plugged into power adapter
+		DC: Running on battery
+	-->
+	<BalancedSliderAC>1</BalancedSliderAC>
+	<BalancedSliderDC>3</BalancedSliderDC>
+	<SliderOffsetAC>0</SliderOffsetAC>
+	<SliderOffsetDC>3</SliderOffsetDC>
+
 </Configuration>
 

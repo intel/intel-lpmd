@@ -1,22 +1,6 @@
-/*
- * lpmd_helper.c: helper functions
- *
- * Copyright (C) 2023 Intel Corporation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
- */
+// SPDX-License-Identifier: GPL-2.0-or-later
+/* Copyright (C) 2026 Intel Corporation */
+
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <err.h>
@@ -52,14 +36,14 @@ int lpmd_read_str(char *path, char *str, int size)
 	FILE *filep;
 	int ret;
 
-	filep = fopen (path, "r");
+	filep = fopen(path, "r");
 	if (!filep) {
 		lpmd_log_error("Cannot open %s\n", path);
 		return 1;
 	}
 
-	ret = fread (str, 1, size, filep);
-        fclose (filep);
+	ret = fread(str, 1, size, filep);
+	fclose(filep);
 
 	if (ret <= 0)
 		return 1;
@@ -68,14 +52,14 @@ int lpmd_read_str(char *path, char *str, int size)
 		ret = size - 1;
 	str[ret - 1] = '\0';
 
-	lpmd_log_debug ("Read \"%s\" from %s\n", str, path);
+	lpmd_log_debug("Read \"%s\" from %s\n", str, path);
 	return 0;
 }
 
 static int _write_str(const char *name, char *str, int print_level, int log_level, const char *mode)
 {
-	FILE *filep;
 	char prefix[16];
+	FILE *filep;
 	int i, ret;
 
 	if (print_level >= 15)
@@ -83,42 +67,41 @@ static int _write_str(const char *name, char *str, int print_level, int log_leve
 
 	if (print_level <= 0) {
 		prefix[0] = '\0';
-	}
-	else {
+	} else {
 		for (i = 0; i < print_level; i++)
 			prefix[i] = '\t';
 		prefix[i] = '\0';
 	}
 
-	filep = fopen (name, mode);
+	filep = fopen(name, mode);
 	if (!filep) {
-		lpmd_log_error ("%sOpen %s failed\n", prefix, name);
+		lpmd_log_error("%sOpen %s failed\n", prefix, name);
 		return 1;
 	}
 
-	ret = fprintf (filep, "%s", str);
+	ret = fprintf(filep, "%s", str);
 	if (ret <= 0) {
-		lpmd_log_error ("%sWrite \"%s\" to %s failed, strlen %zu, ret %d\n", prefix, str, name,
-						strlen (str), ret);
-		fclose (filep);
+		lpmd_log_error("%sWrite \"%s\" to %s failed, strlen %zu, ret %d\n",
+			       prefix, str, name, strlen(str), ret);
+		fclose(filep);
 		return 1;
 	}
 
 	switch (print_level) {
-		case LPMD_LOG_INFO:
-			lpmd_log_info ("%sWrite \"%s\" to %s\n", prefix, str, name);
-			break;
-		case LPMD_LOG_DEBUG:
-			lpmd_log_debug ("%sWrite \"%s\" to %s\n", prefix, str, name);
-			break;
-		case LPMD_LOG_MSG:
-			lpmd_log_msg ("%sWrite \"%s\" to %s\n", prefix, str, name);
-			break;
-		default:
-			break;
+	case LPMD_LOG_INFO:
+		lpmd_log_info("%sWrite \"%s\" to %s\n", prefix, str, name);
+		break;
+	case LPMD_LOG_DEBUG:
+		lpmd_log_debug("%sWrite \"%s\" to %s\n", prefix, str, name);
+		break;
+	case LPMD_LOG_MSG:
+		lpmd_log_msg("%sWrite \"%s\" to %s\n", prefix, str, name);
+		break;
+	default:
+		break;
 	}
 
-	fclose (filep);
+	fclose(filep);
 	return 0;
 }
 
@@ -127,7 +110,7 @@ int lpmd_write_str(const char *name, char *str, int print_level)
 	if (!name || !str)
 		return 0;
 
-	return _write_str (name, str, print_level, 2, "r+");
+	return _write_str(name, str, print_level, 2, "r+");
 }
 
 int lpmd_write_str_append(const char *name, char *str, int print_level)
@@ -135,7 +118,7 @@ int lpmd_write_str_append(const char *name, char *str, int print_level)
 	if (!name || !str)
 		return 0;
 
-	return _write_str (name, str, print_level, 2, "a+");
+	return _write_str(name, str, print_level, 2, "a+");
 }
 
 int lpmd_write_str_verbose(const char *name, char *str, int print_level)
@@ -143,7 +126,7 @@ int lpmd_write_str_verbose(const char *name, char *str, int print_level)
 	if (!name || !str)
 		return 0;
 
-	return _write_str (name, str, print_level, 3, "r+");
+	return _write_str(name, str, print_level, 3, "r+");
 }
 
 int lpmd_write_int(const char *name, int val, int print_level)
@@ -156,62 +139,60 @@ int lpmd_write_int(const char *name, int val, int print_level)
 	if (!name)
 		return 1;
 
-	clock_gettime (CLOCK_MONOTONIC, &tp1);
+	clock_gettime(CLOCK_MONOTONIC, &tp1);
 
 	if (print_level >= 15)
 		return 1;
 
 	if (print_level < 0) {
 		prefix[0] = '\0';
-	}
-	else {
+	} else {
 		for (i = 0; i < print_level; i++)
 			prefix[i] = '\t';
 		prefix[i] = '\0';
 	}
 
-	filep = fopen (name, "r+");
+	filep = fopen(name, "r+");
 	if (!filep) {
-		lpmd_log_error ("%sOpen %s failed\n", prefix, name);
+		lpmd_log_error("%sOpen %s failed\n", prefix, name);
 		return 1;
 	}
 
-	ret = fprintf (filep, "%d", val);
+	ret = fprintf(filep, "%d", val);
 	if (ret <= 0) {
-		lpmd_log_error ("%sWrite \"%d\" to %s failed, ret %d\n", prefix, val, name, ret);
-		fclose (filep);
+		lpmd_log_error("%sWrite \"%d\" to %s failed, ret %d\n", prefix, val, name, ret);
+		fclose(filep);
 		return 1;
 	}
 
-	clock_gettime (CLOCK_MONOTONIC, &tp2);
+	clock_gettime(CLOCK_MONOTONIC, &tp2);
 
 	switch (print_level) {
-		case LPMD_LOG_INFO:
-			lpmd_log_info ("%sWrite \"%d\" to %s (%lu ns)\n", prefix, val, name,
-							1000000000 * (tp2.tv_sec - tp1.tv_sec) + tp2.tv_nsec - tp1.tv_nsec);
-			break;
-		case LPMD_LOG_DEBUG:
-			lpmd_log_debug ("%sWrite \"%d\" to %s (%lu ns)\n", prefix, val, name,
-							1000000000 * (tp2.tv_sec - tp1.tv_sec) + tp2.tv_nsec - tp1.tv_nsec);
-			break;
-		case LPMD_LOG_MSG:
-			lpmd_log_msg ("%sWrite \"%d\" to %s (%lu ns)\n", prefix, val, name,
-							1000000000 * (tp2.tv_sec - tp1.tv_sec) + tp2.tv_nsec - tp1.tv_nsec);
-			break;
-		default:
-			break;
+	case LPMD_LOG_INFO:
+		lpmd_log_info("%sWrite \"%d\" to %s (%lu ns)\n", prefix, val, name,
+			      1000000000 * (tp2.tv_sec - tp1.tv_sec) + tp2.tv_nsec - tp1.tv_nsec);
+		break;
+	case LPMD_LOG_DEBUG:
+		lpmd_log_debug("%sWrite \"%d\" to %s (%lu ns)\n", prefix, val, name,
+			       1000000000 * (tp2.tv_sec - tp1.tv_sec) + tp2.tv_nsec - tp1.tv_nsec);
+		break;
+	case LPMD_LOG_MSG:
+		lpmd_log_msg("%sWrite \"%d\" to %s (%lu ns)\n", prefix, val, name,
+			     1000000000 * (tp2.tv_sec - tp1.tv_sec) + tp2.tv_nsec - tp1.tv_nsec);
+		break;
+	default:
+		break;
 	}
 
-	fclose (filep);
+	fclose(filep);
 	return 0;
-
 }
 
 int lpmd_read_int(const char *name, int *val, int print_level)
 {
-	FILE *filep;
 	char prefix[16];
 	int i, t, ret;
+	FILE *filep;
 
 	if (!name || !val)
 		return 1;
@@ -221,35 +202,33 @@ int lpmd_read_int(const char *name, int *val, int print_level)
 
 	if (print_level < 0) {
 		prefix[0] = '\0';
-	}
-	else {
+	} else {
 		for (i = 0; i < print_level; i++)
 			prefix[i] = '\t';
 		prefix[i] = '\0';
 	}
 
-	filep = fopen (name, "r");
+	filep = fopen(name, "r");
 	if (!filep) {
-		lpmd_log_error ("%sOpen %s failed\n", prefix, name);
+		lpmd_log_error("%sOpen %s failed\n", prefix, name);
 		return 1;
 	}
 
-	ret = fscanf (filep, "%d", &t);
+	ret = fscanf(filep, "%d", &t);
 	if (ret != 1) {
-		lpmd_log_error ("%sRead %s failed, ret %d\n", prefix, name, ret);
-		fclose (filep);
+		lpmd_log_error("%sRead %s failed, ret %d\n", prefix, name, ret);
+		fclose(filep);
 		return 1;
 	}
 
-	fclose (filep);
+	fclose(filep);
 
 	*val = t;
 
 	if (print_level >= 0)
-		lpmd_log_debug ("%sRead \"%d\" from %s\n", prefix, *val, name);
+		lpmd_log_debug("%sRead \"%d\" from %s\n", prefix, *val, name);
 
 	return 0;
-
 }
 
 int lpmd_write_yn(const char *name, int val, int print_level)
@@ -264,7 +243,7 @@ int lpmd_write_yn(const char *name, int val, int print_level)
 	if (ret < 0)
 		return 1;
 
-	return _write_str (name, str, print_level, 2, "r+");
+	return _write_str(name, str, print_level, 2, "r+");
 }
 
 int lpmd_read_yn(const char *name, int *val, int print_level)
@@ -281,48 +260,46 @@ int lpmd_read_yn(const char *name, int *val, int print_level)
 
 	if (print_level < 0) {
 		prefix[0] = '\0';
-	}
-	else {
+	} else {
 		for (i = 0; i < print_level; i++)
 			prefix[i] = '\t';
 		prefix[i] = '\0';
 	}
 
-	filep = fopen (name, "r");
+	filep = fopen(name, "r");
 	if (!filep) {
-		lpmd_log_error ("%sOpen %s failed\n", prefix, name);
+		lpmd_log_error("%sOpen %s failed\n", prefix, name);
 		return 1;
 	}
 
 	ret = fgetc(filep);
 	if (ret == EOF) {
-		if (feof(filep)) {
-			lpmd_log_error ("%sRead %s failed due to EOF\n", prefix, name);
-		} else if (ferror(filep)) {
-			lpmd_log_error ("%sRead %s failed, error %s\n", prefix, name, strerror(errno));
-		}
-		fclose (filep);
+		if (feof(filep))
+			lpmd_log_error("%sRead %s failed due to EOF\n", prefix,
+				       name);
+		else if (ferror(filep))
+			lpmd_log_error("%sRead %s failed, error %s\n", prefix,
+				       name, strerror(errno));
+		fclose(filep);
 		return 1;
 	}
 
-	fclose (filep);
+	fclose(filep);
 
 	if (ret == 'Y') {
 		*val = 1;
 	} else if (ret == 'N') {
 		*val = 0;
 	} else {
-		lpmd_log_error ("%sRead %s failed, read %c\n", prefix, name, ret);
+		lpmd_log_error("%sRead %s failed, read %c\n", prefix, name, ret);
 		return 1;
 	}
 
 	if (print_level >= 0)
-		lpmd_log_debug ("%sRead \"%c\" from %s\n", prefix, *val, name);
+		lpmd_log_debug("%sRead \"%d\" from %s\n", prefix, *val, name);
 
 	return 0;
-
 }
-
 
 /*
  * lpmd_open does not require print on success
@@ -342,46 +319,46 @@ int lpmd_open(const char *name, int print_level)
 
 	if (print_level < 0) {
 		prefix[0] = '\0';
-	}
-	else {
+	} else {
 		for (i = 0; i < print_level; i++)
 			prefix[i] = '\t';
 		prefix[i] = '\0';
 	}
 
-	filep = fopen (name, "r");
+	filep = fopen(name, "r");
 	if (!filep) {
 		if (print_level >= 0)
-			lpmd_log_error ("%sOpen %s failed\n", prefix, name);
+			lpmd_log_error("%sOpen %s failed\n", prefix, name);
 		return 1;
 	}
 
-	fclose (filep);
+	fclose(filep);
 	return 0;
 }
 
-char* get_time(void)
+char *get_time(void)
 {
 	static time_t time_cur;
 
-	time_cur = time (NULL);
-	return ctime (&time_cur);
+	time_cur = time(NULL);
+	return ctime(&time_cur);
 }
 
 static struct timespec timespec;
 static char time_buf[MAX_STR_LENGTH];
 void time_start(void)
 {
-	clock_gettime (CLOCK_MONOTONIC, &timespec);
+	clock_gettime(CLOCK_MONOTONIC, &timespec);
 }
 
-char* time_delta(void)
+char *time_delta(void)
 {
 	static struct timespec tp1;
-	clock_gettime (CLOCK_MONOTONIC, &tp1);
-	snprintf (time_buf, MAX_STR_LENGTH, "%ld ns",
-				1000000000 * (tp1.tv_sec - timespec.tv_sec) + tp1.tv_nsec - timespec.tv_nsec);
-	memset (&timespec, 0, sizeof(timespec));
+
+	clock_gettime(CLOCK_MONOTONIC, &tp1);
+	snprintf(time_buf, MAX_STR_LENGTH, "%ld ns",
+		 1000000000 * (tp1.tv_sec - timespec.tv_sec) + tp1.tv_nsec - timespec.tv_nsec);
+	memset(&timespec, 0, sizeof(timespec));
 	return time_buf;
 }
 

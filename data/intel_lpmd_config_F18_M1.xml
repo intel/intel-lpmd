@@ -74,7 +74,7 @@ for Intel Energy Optimizer (LPMD) daemon
 	<!--
 		Use WLT hint Mask
 		0 : Non
-		* : Value to AND with the hardware hint
+		* : Value to AND with with the hardware hint
 	-->
 	<WLTHintMask>15</WLTHintMask>
 
@@ -139,8 +139,8 @@ for Intel Energy Optimizer (LPMD) daemon
 	<SliderOffsetDC>3</SliderOffsetDC>
 
 	<States>
-		<CPUFamily> 6 </CPUFamily>
-		<CPUModel> 204 </CPUModel>
+		<CPUFamily> 18 </CPUFamily>
+		<CPUModel> 1 </CPUModel>
 		<CPUConfig> * </CPUConfig>
 		<State>
 			<ID> 1 </ID>
@@ -159,30 +159,6 @@ for Intel Energy Optimizer (LPMD) daemon
 			<Name> UTIL_IDLE_BURSTY </Name>
 			<WLTType> 3 </WLTType>
 			<ActiveCPUs> * </ActiveCPUs>
-		</State>
-	</States>
-
-	<States>
-		<CPUFamily> 6 </CPUFamily>
-		<CPUModel> 204 </CPUModel>
-		<CPUConfig> 4P0E4L-25W </CPUConfig>
-		<State>
-			<ID> 1 </ID>
-			<Name> UTIL_IDLE </Name>
-			<WLTType> 1 </WLTType>
-			<ActiveCPUs>4-7</ActiveCPUs>
-		</State>
-		<State>
-			<ID> 2 </ID>
-			<Name> UTIL_IDLE_SUSTAIN </Name>
-			<WLTType> 2 </WLTType>
-			<ActiveCPUs>0-7</ActiveCPUs>
-		</State>
-		<State>
-			<ID> 3 </ID>
-			<Name> UTIL_IDLE_BURSTY </Name>
-			<WLTType> 3 </WLTType>
-			<ActiveCPUs>0-7</ActiveCPUs>
 		</State>
 	</States>
 
