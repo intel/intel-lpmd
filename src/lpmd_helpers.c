@@ -336,32 +336,6 @@ int lpmd_open(const char *name, int print_level)
 	return 0;
 }
 
-char *get_time(void)
-{
-	static time_t time_cur;
-
-	time_cur = time(NULL);
-	return ctime(&time_cur);
-}
-
-static struct timespec timespec;
-static char time_buf[MAX_STR_LENGTH];
-void time_start(void)
-{
-	clock_gettime(CLOCK_MONOTONIC, &timespec);
-}
-
-char *time_delta(void)
-{
-	static struct timespec tp1;
-
-	clock_gettime(CLOCK_MONOTONIC, &tp1);
-	snprintf(time_buf, MAX_STR_LENGTH, "%ld ns",
-		 1000000000 * (tp1.tv_sec - timespec.tv_sec) + tp1.tv_nsec - timespec.tv_nsec);
-	memset(&timespec, 0, sizeof(timespec));
-	return time_buf;
-}
-
 uint64_t read_msr(int cpu, uint32_t msr)
 {
 	char msr_file_name[64];

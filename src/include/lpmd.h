@@ -345,6 +345,9 @@ int util_update(struct lpmd_config_t *lpmd_config);
 int hfi_init(void);
 int hfi_kill(void);
 int hfi_update(void);
+unsigned long hfi_time_delta(void);
+int hfi_timeout_over(int timeout_ms);
+void hfi_timeout_state_action(int state);
 
 /* lpmd_wlt.c */
 int wlt_init(void);
@@ -436,8 +439,5 @@ int lpmd_open(const char *name, int print_level);
 int lpmd_read_int(const char *name, int *val, int print_level);
 int lpmd_read_yn(const char *name, int *val, int print_level);
 int lpmd_write_yn(const char *name, int val, int print_level);
-char *get_time(void);
-void time_start(void);
-char *time_delta(void);
 uint64_t read_msr(int cpu, uint32_t msr);
 #endif

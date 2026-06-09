@@ -192,6 +192,37 @@ static char *update_one_cpu(struct perf_cap *perf_cap)
 	return "NOR";
 }
 
+static struct timespec hfi_timer;
+static void hfi_time_start(void)
+{
+	clock_gettime(CLOCK_MONOTONIC, &hfi_timer);
+}
+
+static void hfi_time_stop(void)
+{
+	memset(&hfi_timer, 0, sizeof(hfi_timer));
+}
+
+unsigned long hfi_time_delta(void)
+{
+	static struct timespec tp1;
+
+	clock_gettime(CLOCK_MONOTONIC, &tp1);
+	unsigned long delta = 1000000000 * (tp1.tv_sec - hfi_timer.tv_sec) + tp1.tv_nsec - hfi_timer.tv_nsec;
+	return delta;
+}
+
+int hfi_timeout_over(int timeout_ms)
+{
+	unsigned long timer = hfi_time_delta();
+
+	if (!timer)
+		return -1;
+
+	/* hfi_time_delta() returns nano seconds */
+	return ((timer / 1000000) > timeout_ms);
+}
+
 static void process_one_event(int first, int last, int nr)
 {
 	/* Need to update more CPUs */
