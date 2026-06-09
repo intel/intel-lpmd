@@ -168,6 +168,15 @@ static int get_config_state_interval(struct lpmd_config_t *config, int idx)
 		return 0;
 
 	/*
+	 * TODO: make HFI timeout value dynamic so it adjusts to how quickly
+	 * states switch
+	 */
+
+	/* HFI timer has static polling interval */
+	if (hfi_timeout == HFI_TIMEOUT_TIMER)
+		return 0;
+
+	/*
 	 * Enable polling only if either UTIL is the main state change source or
 	 * if WLT is running in polling mode.
 	 */

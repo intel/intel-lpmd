@@ -39,6 +39,9 @@ struct hfi_event_data {
 
 struct hfi_event_data drv;
 
+int hfi_timeout = HFI_TIMEOUT_LP;
+bool going_back_to_perf;
+
 static int ack_handler(struct nl_msg *msg, void *arg)
 {
 	int *err = arg;
@@ -236,7 +239,12 @@ static void process_one_event(int first, int last, int nr)
 			return;
 		}
 		lpmd_log_debug("\tDetect HFI LPM event\n");
-		update_reason(UPDATE_HFI);
+		if (hfi_timeout == HFI_TIMEOUT_PERF) {
+			lpmd_log_debug("\thfi_timeout: LPM event during PERF, start TIMER\n");
+			hfi_timeout = HFI_TIMEOUT_TIMER;
+			hfi_timeout_state_action(hfi_timeout);
+			return;
+		}
 		cpumask_copy(CPUMASK_HFI, CPUMASK_HFI_LAST);
 	} else if (cpumask_has_cpu(CPUMASK_HFI_BANNED)) {
 		cpumask_exclude_copy(CPUMASK_ONLINE, CPUMASK_HFI, CPUMASK_HFI_BANNED);
@@ -246,16 +254,79 @@ static void process_one_event(int first, int last, int nr)
 			return;
 		}
 		lpmd_log_debug("\tDetect HFI LPM event with banned CPUs\n");
-		update_reason(UPDATE_HFI);
 		cpumask_copy(CPUMASK_HFI, CPUMASK_HFI_LAST);
 	} else if (cpumask_has_cpu(CPUMASK_HFI_LAST)) {
 		lpmd_log_debug("\tHFI LPM recover\n");
+		/*
+		 * Set flag to mark that we're going back to PERF during
+		 * timeout running
+		 */
+		if (hfi_timeout == HFI_TIMEOUT_TIMER) {
+			going_back_to_perf = true;
+			return;
+		}
+
 //		 Don't override the DETECT_LPM_CPU_DEFAULT so it is auto recovered
 		cpumask_copy(CPUMASK_ONLINE, CPUMASK_HFI);
-		update_reason(UPDATE_HFI);
 		cpumask_reset(CPUMASK_HFI_LAST);
+
+		/* Set timeout state to HFI PERF */
+		if (hfi_timeout == HFI_TIMEOUT_LP)
+			hfi_timeout = HFI_TIMEOUT_PERF;
 	} else {
 		lpmd_log_info("\t\t\tUnsupported HFI event ignored\n");
+		return;
+	}
+
+	/* Don't update the config states during timeout */
+	if (hfi_timeout < HFI_TIMEOUT_TIMER)
+		update_reason(UPDATE_HFI);
+}
+
+/* Action tied to a specific state in the hfi timeout state machine */
+void hfi_timeout_state_action(int state)
+{
+	switch (state) {
+	case HFI_TIMEOUT_TIMER:
+		/* Start timer and polling */
+		hfi_time_start();
+		set_polling(DEF_POLLING_INTERVAL);
+		/* Cache the LP cpumask to apply after the timeout finishes */
+		cpumask_copy(CPUMASK_HFI, CPUMASK_HFI_CACHED);
+		/*
+		 * Writing something to CPUMASK_HFI_LAST is required so that the
+		 * 'going to performance' event can be caught. In this case the
+		 * LP cpumask is written there even though it's not applied and
+		 * LPMD keeps using the performance cpumask.
+		 */
+		cpumask_copy(CPUMASK_HFI, CPUMASK_HFI_LAST);
+		/*
+		 * Save online cpumask to CPUMASK_HFI since this state assumes
+		 * HFI is in performance mode, waiting to switch to LPM. In case
+		 * an update happens due to state change this cpumask might be
+		 * written to the current cgroup.
+		 */
+		cpumask_copy(CPUMASK_ONLINE, CPUMASK_HFI);
+		break;
+	case HFI_TIMEOUT_CACHED:
+		cpumask_copy(CPUMASK_HFI_CACHED, CPUMASK_HFI);
+		hfi_time_stop();
+		reset_polling();
+		update_reason(UPDATE_HFI);
+		cpumask_copy(CPUMASK_HFI, CPUMASK_HFI_LAST);
+		break;
+	case HFI_TIMEOUT_FINAL:
+		hfi_time_stop();
+		reset_polling();
+		going_back_to_perf = false;
+		cpumask_copy(CPUMASK_ONLINE, CPUMASK_HFI);
+		cpumask_reset(CPUMASK_HFI_LAST);
+		break;
+	case HFI_TIMEOUT_LP:
+	case HFI_TIMEOUT_PERF:
+	default:
+		/* No action needed for these events - just gating for other states*/
+		break;
 	}
 }
 

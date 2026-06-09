@@ -36,6 +36,25 @@
 extern gint watcher_id;
 extern gchar *config_file_path;
 
+extern int hfi_timeout;
+extern bool going_back_to_perf;
+
+enum hfi_timeout_states {
+	/* After init or staying in LPM */
+	HFI_TIMEOUT_LP,
+	/* Went into CPUMASK_ONLINE, primed and waiting for LP event */
+	HFI_TIMEOUT_PERF,
+	/* LP event happened, looping in poll() until hfi timeout doesn't run out */
+	HFI_TIMEOUT_TIMER,
+	/* A 'going to performance' event was caught and the switch to LPM is canceled */
+	HFI_TIMEOUT_FINAL,
+	/*
+	 * Timeout is over and no performance event was caught, applying the
+	 * cached LP cpumask.
+	 */
+	HFI_TIMEOUT_CACHED,
+};
+
 // Log macros
 enum log_level {
 	LPMD_LOG_NONE,
@@ -253,6 +272,7 @@ enum cpumask_idx {
 	CPUMASK_HFI,
 	CPUMASK_HFI_BANNED,
 	CPUMASK_HFI_LAST,
+	CPUMASK_HFI_CACHED,
 	CPUMASK_UTIL,
 	CPUMASK_BLACKLIST,
 	CPUMASK_USER,
@@ -297,6 +317,7 @@ enum power_profile_daemon_mode {
 };
 
 #define DEF_POLLING_INTERVAL	100
+#define DEF_HFI_TIMEOUT		1000
 
 /* lpmd_main.c */
 int in_debug_mode(void);
@@ -316,6 +337,7 @@ void lpmd_set_auto(void);
 int is_on_battery(void);
 int get_ppd_mode(void);
 void set_polling(int ms);
+void reset_polling(void);
 
 char *user_cpumask_idx_to_state_name(enum cpumask_idx idx);
 

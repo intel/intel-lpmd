@@ -26,6 +26,7 @@ static struct lpm_cpus cpumasks[CPUMASK_MAX] = {
 		[CPUMASK_HFI] = { .name = "HFI Low Power", },
 		[CPUMASK_HFI_BANNED] = { .name = "HFI BANNED", },
 		[CPUMASK_HFI_LAST] = { .name = "HFI LAST", },
+		[CPUMASK_HFI_CACHED] = { .name = "HFI CACHED", },
 		[CPUMASK_BLACKLIST] = { .name = "Blacklist", },
 };
 

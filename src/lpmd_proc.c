@@ -294,9 +294,18 @@ char *user_cpumask_idx_to_state_name(enum cpumask_idx idx)
 	return NULL;
 }
 
+static int hfi_timeout_cached_polling;
 void set_polling(int ms)
 {
+	if (!hfi_timeout_cached_polling)
+		hfi_timeout_cached_polling = lpmd_config.data.polling_interval;
 	lpmd_config.data.polling_interval = ms;
+}
+
+void reset_polling(void)
+{
+	lpmd_config.data.polling_interval = hfi_timeout_cached_polling;
+	hfi_timeout_cached_polling = 0;
 }
 
 // LPMD processing thread. This is callback to pthread lpmd_core_main
@@ -318,6 +327,23 @@ static void *lpmd_core_main_loop(void *arg)
 		}
 		dump_poll_results(n);
 
+		if (hfi_timeout == HFI_TIMEOUT_TIMER) {
+			int delta = hfi_time_delta();
+			lpmd_log_debug("hfi_timeout: Timer : %dms / %dms\n", delta / 1000000, DEF_HFI_TIMEOUT);
+
+			/* If perf flag was set don't finish the timeout */
+			if (going_back_to_perf) {
+				lpmd_log_debug("hfi_timeout: staying in performance cpumask\n");
+				hfi_timeout = HFI_TIMEOUT_FINAL;
+				hfi_timeout_state_action(hfi_timeout);
+			/* Else check if timeout finished before going to LPM */
+			} else if (hfi_timeout_over(DEF_HFI_TIMEOUT) > 0) {
+				lpmd_log_debug("hfi_timeout: timeout over - moving to LP cpumask\n");
+				hfi_timeout = HFI_TIMEOUT_CACHED;
+				hfi_timeout_state_action(hfi_timeout);
+			}
+		}
+
 		/* Polling time out, update polling data */
 		if (n == 0 && lpmd_config.util_monitor && lpmd_config.data.polling_interval > 0) {
 			update_reason(UPDATE_UTIL);
@@ -333,8 +359,15 @@ static void *lpmd_core_main_loop(void *arg)
 			check_cpu_hotplug();
 
 		/* Update CPUMASK_HFI */
-		if (idx_hfi_fd >= 0 && (poll_fds[idx_hfi_fd].revents & POLLIN))
-			hfi_update();
+		if (idx_hfi_fd >= 0 && (poll_fds[idx_hfi_fd].revents & POLLIN)) {
+			/* Timeout cached updates hfi manually */
+			if (hfi_timeout < HFI_TIMEOUT_FINAL)
+				hfi_update();
+			else if (hfi_timeout == HFI_TIMEOUT_FINAL)
+				hfi_timeout = HFI_TIMEOUT_PERF;
+			else
+				hfi_timeout = HFI_TIMEOUT_LP;
+		}
 
 		/* Update WLT hint */
 		if (idx_wlt_fd >= 0 && (poll_fds[idx_wlt_fd].revents & POLLPRI)) {
