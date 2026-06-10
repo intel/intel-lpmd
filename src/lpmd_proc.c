@@ -294,6 +294,11 @@ char *user_cpumask_idx_to_state_name(enum cpumask_idx idx)
 	return NULL;
 }
 
+void set_polling(int ms)
+{
+	lpmd_config.data.polling_interval = ms;
+}
+
 // LPMD processing thread. This is callback to pthread lpmd_core_main
 static void *lpmd_core_main_loop(void *arg)
 {

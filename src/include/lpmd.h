@@ -315,6 +315,7 @@ void lpmd_set_auto(void);
 
 int is_on_battery(void);
 int get_ppd_mode(void);
+void set_polling(int ms);
 
 char *user_cpumask_idx_to_state_name(enum cpumask_idx idx);
 
