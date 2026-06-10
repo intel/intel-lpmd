@@ -319,7 +319,7 @@ static void *lpmd_core_main_loop(void *arg)
 		dump_poll_results(n);
 
 		/* Polling time out, update polling data */
-		if (n == 0 && lpmd_config.data.polling_interval > 0) {
+		if (n == 0 && lpmd_config.util_monitor && lpmd_config.data.polling_interval > 0) {
 			update_reason(UPDATE_UTIL);
 			util_update(&lpmd_config);
 
