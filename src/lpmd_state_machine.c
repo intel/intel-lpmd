@@ -337,7 +337,7 @@ static int enter_state(struct lpmd_config_t *config, int idx)
 		process_irq(state);
 	}
 
-	process_cgroup(state, config->mode);
+	process_cgroup(config, state);
 
 	return 0;
 }

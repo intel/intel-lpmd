@@ -201,19 +201,35 @@ int cgroup_init(struct lpmd_config_t *config)
 	return 0;
 }
 
-int process_cgroup(struct lpmd_config_state_t *state, enum lpm_cpu_process_mode mode)
+int process_cgroup(struct lpmd_config_t *config, struct lpmd_config_state_t *state)
 {
+	enum lpm_cpu_process_mode mode = config->mode;
 	int ret;
 
 	if (state->cpumask_idx == CPUMASK_NONE) {
-		lpmd_log_debug("Ignore cgroup processing\n");
+		lpmd_log_debug("Ignore cgroup processing - CPUMASK empty\n");
 		return 0;
 	}
 
+	/*
+	 * HFI cpumask can't currently be used with last_applied_cpumask because
+	 * CPUMASK_HFI takes on different values at the same index.
+	 *
+	 * TODO: Rewrite HFI with separate cpumasks instead of using the same
+	 * one.
+	 */
 	if (last_applied_cpumask != CPUMASK_NONE &&
 	    cpumask_equal(state->cpumask_idx, last_applied_cpumask)) {
-		lpmd_log_debug("Skip cgroup: cpumask unchanged\n");
-		return 0;
+		if (state->cpumask_idx == CPUMASK_HFI) {
+			/* Don't update cgroups if HFI is enabled and it wasn't a reason for the update */
+			if (!(config->data.need_update & (1 << UPDATE_HFI))) {
+				lpmd_log_debug("Ignore cgroup processing - HFI enabled\n");
+				return 0;
+			}
+		} else {
+			lpmd_log_debug("Skip cgroup: cpumask unchanged\n");
+			return 0;
+		}
 	}
 
 	lpmd_log_info ("Process Cgroup ...\n");
