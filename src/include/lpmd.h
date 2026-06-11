@@ -124,6 +124,7 @@ enum lpmd_update_reason {
 	UPDATE_HFI,
 	UPDATE_CPUHOTPLUG,
 	UPDATE_WLT,
+	UPDATE_STATE,
 };
 
 struct lpmd_data_t {
@@ -189,7 +190,6 @@ struct lpmd_config_state_t {
 	int entry_load_sys;
 	int entry_load_cpu;
 	int cpumask_idx;
-	int steady;
 };
 
 // lpmd config data

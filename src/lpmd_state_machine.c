@@ -307,9 +307,11 @@ static int get_state_interval(struct lpmd_config_t *config, int idx)
 
 static int need_enter(struct lpmd_config_t *config, int idx)
 {
-	if (idx != current_idx)
+	if (idx != current_idx) {
+		update_reason(UPDATE_STATE);
 		return 1;
-	if (!config->config_states[idx].steady)
+	}
+	if (config->data.need_update & (1 << UPDATE_HFI))
 		return 1;
 
 	return 0;
@@ -322,13 +324,18 @@ static int enter_state(struct lpmd_config_t *config, int idx)
 	state->entry_load_sys = config->data.util_sys;
 	state->entry_load_cpu = config->data.util_cpu;
 
-	process_slider(config, state);
-
-	process_itmt(state);
-
-	process_epp_epb(state);
-
-	process_irq(state);
+	/*
+	 * Some changes shouldn't be applied if non-state changing updates are
+	 * queued:
+	 * 	- HFI manages only cgroups so there is no need to reapply all
+	 * 	  other settings.
+	 */
+	if (config->data.need_update & (1 << UPDATE_STATE)) {
+		process_slider(config, state);
+		process_itmt(state);
+		process_epp_epb(state);
+		process_irq(state);
+	}
 
 	process_cgroup(state, config->mode);
 
@@ -547,7 +554,6 @@ static int build_default_states(struct lpmd_config_t *config)
 	state->epp = SETTING_RESTORE;
 	state->epb = SETTING_RESTORE;
 	state->cpumask_idx = CPUMASK_ONLINE;
-	state->steady = 1;
 	state->valid = 1;
 
 	state = &config->config_states[DEFAULT_ON];
@@ -559,7 +565,6 @@ static int build_default_states(struct lpmd_config_t *config)
 	state->epp = config->lp_mode_epp;
 	state->epb = SETTING_IGNORE;
 	state->cpumask_idx = CPUMASK_LPM_DEFAULT;
-	state->steady = 1;
 	state->valid = 1;
 
 	if (config->config_state_count)
@@ -579,7 +584,6 @@ static int build_default_states(struct lpmd_config_t *config)
 		state->epp = SETTING_IGNORE;
 		state->epb = SETTING_IGNORE;
 		state->cpumask_idx = CPUMASK_HFI;
-		state->steady = 0;
 		state->valid = 1;
 
 		return 0;
@@ -603,7 +607,6 @@ static int build_default_states(struct lpmd_config_t *config)
 	state->epp = config->lp_mode_epp;
 	state->epb = SETTING_IGNORE;
 	state->cpumask_idx = CPUMASK_LPM_DEFAULT;
-	state->steady = 1;
 	state->valid = 1;
 
 	state = &config->config_states[CONFIG_STATE_BASE + 1];
@@ -619,7 +622,6 @@ static int build_default_states(struct lpmd_config_t *config)
 	state->epp = config->lp_mode_epp == SETTING_IGNORE ? SETTING_IGNORE : SETTING_RESTORE;
 	state->epb = SETTING_IGNORE;
 	state->cpumask_idx = CPUMASK_ONLINE;
-	state->steady = 1;
 	state->valid = 1;
 
 	config->config_state_count = 2;
@@ -661,8 +663,6 @@ static int config_states_update_config(struct lpmd_config_t *config)
  */
 static int build_state_cpumask_activecpus(struct lpmd_config_state_t *state)
 {
-	state->steady = 1;
-
 	if (state->cpumask_idx != CPUMASK_NONE)
 		return 0;
 
@@ -685,7 +685,6 @@ static int build_state_cpumask_activecpus(struct lpmd_config_state_t *state)
 	if (!strcmp(state->active_cpus, "hfi") ||
 	    !strcmp(state->active_cpus, "HFI")) {
 		state->cpumask_idx = CPUMASK_HFI;
-		state->steady = 0;
 		return 0;
 	}
 
