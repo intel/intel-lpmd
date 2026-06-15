@@ -186,6 +186,7 @@ struct lpmd_config_state_t {
 	int exit_cpu_load_thres;
 	int enter_gfx_load_thres;
 	int exit_gfx_load_thres;
+	int exit_gfx_load_hyst;
 	int min_poll_interval;
 	int max_poll_interval;
 	int poll_interval_increment;
@@ -214,6 +215,7 @@ struct lpmd_config_state_t {
 	// Private state variables, not configurable
 	int entry_load_sys;
 	int entry_load_cpu;
+	int entry_load_gfx;
 	int cpumask_idx;
 };
 

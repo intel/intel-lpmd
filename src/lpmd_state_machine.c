@@ -86,6 +86,7 @@ int lpmd_init_config_state(struct lpmd_config_state_t *state)
 	state->exit_cpu_load_thres = 0;
 	state->enter_gfx_load_thres = 0;
 	state->exit_gfx_load_thres = 0;
+	state->exit_gfx_load_hyst = 0;
 
 	state->min_poll_interval = 0;
 	state->max_poll_interval = 0;
@@ -109,6 +110,7 @@ int lpmd_init_config_state(struct lpmd_config_state_t *state)
 
 	state->entry_load_sys = 0;
 	state->entry_load_cpu = 0;
+	state->entry_load_gfx = 0;
 	state->cpumask_idx = CPUMASK_NONE;
 
 	state->balance_slider_ac = -1;
@@ -150,8 +152,13 @@ static int config_state_match(struct lpmd_config_t *config, int idx)
 	if (state->enter_cpu_load_thres && state->enter_cpu_load_thres < bcpu)
 		return 0;
 
-	if (state->enter_gfx_load_thres && state->enter_gfx_load_thres < bgfx)
-		return 0;
+	if (state->enter_gfx_load_thres && state->enter_gfx_load_thres < bgfx) {
+		if (!state->exit_gfx_load_hyst)
+			return 0;
+		if ((state->entry_load_gfx + state->exit_gfx_load_hyst) < bgfx ||
+		    (state->enter_gfx_load_thres + state->exit_gfx_load_hyst) < bgfx)
+			return 0;
+	}
 
 	if (state->entry_system_load_thres && state->entry_system_load_thres < bsys) {
 		if (!state->exit_system_load_hyst)
@@ -353,6 +360,7 @@ static int enter_state(struct lpmd_config_t *config, int idx)
 
 	state->entry_load_sys = config->data.util_sys;
 	state->entry_load_cpu = config->data.util_cpu;
+	state->entry_load_gfx = config->data.util_gfx;
 
 	/*
 	 * Some changes shouldn't be applied if non-state changing updates are
@@ -572,6 +580,7 @@ static void dump_states(struct lpmd_config_t *lpmd_config)
 		lpmd_log_info("\texit_cpu_load_thres:%d\n", state->exit_cpu_load_thres);
 		lpmd_log_info("\tentry_gfx_load_thres:%d\n", state->enter_gfx_load_thres);
 		lpmd_log_info("\texit_gfx_load_thres:%d\n", state->exit_gfx_load_thres);
+		lpmd_log_info("\texit_gfx_load_hyst:%d\n", state->exit_gfx_load_hyst);
 		lpmd_log_info("\tWLT Type:%d\n", state->wlt_type);
 		lpmd_log_info("\tWLT Type Mask:%d\n", state->wlt_type_mask);
 		lpmd_log_info("\tmin_poll_interval:%d\n", state->min_poll_interval);

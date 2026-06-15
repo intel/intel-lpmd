@@ -188,7 +188,9 @@ static void lpmd_parse_state(xmlDoc *doc, xmlNode *a_node, struct lpmd_config_t 
 			state->enter_gfx_load_thres = strtol(tmp_value, &pos, 10);
 		if (!strcmp((const char *)cur_node->name, "ExitGFXLoadThres"))
 			state->exit_gfx_load_thres = strtol(tmp_value, &pos, 10);
-		if (!strcmp((const char *)cur_node->name, "MinPollInterval"))
+		if (!strncmp((const char *)cur_node->name, "ExitGFXLoadHysteresis", strlen("ExitGFXLoadHysteresis")))
+			state->exit_gfx_load_hyst = strtol(tmp_value, &pos, 10);
+		if (!strncmp((const char *)cur_node->name, "MinPollInterval", strlen("MinPollInterval")))
 			state->min_poll_interval = strtol(tmp_value, &pos, 10);
 		if (!strcmp((const char *)cur_node->name, "MaxPollInterval"))
 			state->max_poll_interval = strtol(tmp_value, &pos, 10);
