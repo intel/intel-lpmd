@@ -82,6 +82,58 @@ static int read_slider_and_validate(int *dest_ptr, const char *src_value,
 	return LPMD_SUCCESS;
 }
 
+static int read_min_perf_pct_and_validate(int *dest_ptr, const char *src_value,
+					  int state_id)
+{
+	char *endptr;
+	int value;
+
+	errno = 0;
+	value = strtol(src_value, &endptr, 10);
+
+	if (errno == ERANGE || endptr == src_value) {
+		lpmd_log_error("Failed to parse MinPerfPct value: '%s' is not a valid integer in state ID %d\n",
+			       src_value, state_id);
+		return LPMD_ERROR;
+	}
+
+	/* -1 ignore, -2 restore, or explicit percentage in [0, 100] */
+	if (value == SETTING_IGNORE || value == SETTING_RESTORE || (value >= 0 && value <= 100)) {
+		*dest_ptr = value;
+		return LPMD_SUCCESS;
+	}
+
+	lpmd_log_error("Invalid MinPerfPct value: %d in state ID %d. Valid values: 0-100, -1(ignore), -2(restore)\n",
+		       value, state_id);
+	return LPMD_ERROR;
+}
+
+static int read_max_perf_pct_and_validate(int *dest_ptr, const char *src_value,
+				  int state_id)
+{
+	char *endptr;
+	int value;
+
+	errno = 0;
+	value = strtol(src_value, &endptr, 10);
+
+	if (errno == ERANGE || endptr == src_value) {
+		lpmd_log_error("Failed to parse MaxPerfPct value: '%s' is not a valid integer in state ID %d\n",
+			       src_value, state_id);
+		return LPMD_ERROR;
+	}
+
+	/* -1 ignore, -2 restore, or explicit percentage in [0, 100] */
+	if (value == SETTING_IGNORE || value == SETTING_RESTORE || (value >= 0 && value <= 100)) {
+		*dest_ptr = value;
+		return LPMD_SUCCESS;
+	}
+
+	lpmd_log_error("Invalid MaxPerfPct value: %d in state ID %d. Valid values: 0-100, -1(ignore), -2(restore)\n",
+		       value, state_id);
+	return LPMD_ERROR;
+}
+
 static void save_string_or_zero(char *tmp_value, char *dst_string, int dest_size)
 {
 	if (!strncmp(tmp_value, "-1", strlen("-1")))
@@ -146,7 +198,19 @@ static void lpmd_parse_state(xmlDoc *doc, xmlNode *a_node, struct lpmd_config_t 
 			state->epp = strtol(tmp_value, &pos, 10);
 		if (!strcmp((const char *)cur_node->name, "EPB"))
 			state->epb = strtol(tmp_value, &pos, 10);
-		if (!strcmp((const char *)cur_node->name, "ITMTState"))
+		if (!strncmp((const char *)cur_node->name, "MinPerfPctAC", strlen("MinPerfPctAC")) ||
+		    !strncmp((const char *)cur_node->name, "min_perf_pct_ac", strlen("min_perf_pct_ac")))
+			ret = read_min_perf_pct_and_validate(&state->min_perf_pct_ac, tmp_value, state->id);
+		if (!strncmp((const char *)cur_node->name, "MinPerfPctDC", strlen("MinPerfPctDC")) ||
+		    !strncmp((const char *)cur_node->name, "min_perf_pct_dc", strlen("min_perf_pct_dc")))
+			ret = read_min_perf_pct_and_validate(&state->min_perf_pct_dc, tmp_value, state->id);
+		if (!strncmp((const char *)cur_node->name, "MaxPerfPctAC", strlen("MaxPerfPctAC")) ||
+		    !strncmp((const char *)cur_node->name, "max_perf_pct_ac", strlen("max_perf_pct_ac")))
+			ret = read_max_perf_pct_and_validate(&state->max_perf_pct_ac, tmp_value, state->id);
+		if (!strncmp((const char *)cur_node->name, "MaxPerfPctDC", strlen("MaxPerfPctDC")) ||
+		    !strncmp((const char *)cur_node->name, "max_perf_pct_dc", strlen("max_perf_pct_dc")))
+			ret = read_max_perf_pct_and_validate(&state->max_perf_pct_dc, tmp_value, state->id);
+		if (!strncmp((const char *)cur_node->name, "ITMTState", strlen("ITMTState")))
 			state->itmt_state = strtol(tmp_value, &pos, 10);
 		if (!strcmp((const char *)cur_node->name, "IRQMigrate"))
 			state->irq_migrate = strtol(tmp_value, &pos, 10);

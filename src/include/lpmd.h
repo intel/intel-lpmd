@@ -191,6 +191,10 @@ struct lpmd_config_state_t {
 	int poll_interval_increment;
 	int epp;
 	int epb;
+	int min_perf_pct_ac;
+	int min_perf_pct_dc;
+	int max_perf_pct_ac;
+	int max_perf_pct_dc;
 	char active_cpus[MAX_STR_LENGTH];
 	// If active CPUs are specified then
 	// the below counts don't matter
@@ -430,6 +434,10 @@ int process_itmt(struct lpmd_config_state_t *state);
 int epp_epb_init(void);
 int get_epp_epb(int *epp, char *epp_str, int size, int *epb);
 int process_epp_epb(struct lpmd_config_state_t *state);
+int min_perf_pct_init(void);
+int process_min_perf_pct(struct lpmd_config_state_t *state);
+int max_perf_pct_init(void);
+int process_max_perf_pct(struct lpmd_config_state_t *state);
 
 void process_balance_slider_default_update(struct lpmd_config_t *config);
 void process_slider_offset_default_update(struct lpmd_config_t *config);

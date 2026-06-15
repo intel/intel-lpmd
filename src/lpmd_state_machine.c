@@ -93,6 +93,10 @@ int lpmd_init_config_state(struct lpmd_config_state_t *state)
 
 	state->epp = SETTING_IGNORE;
 	state->epb = SETTING_IGNORE;
+	state->min_perf_pct_ac = SETTING_IGNORE;
+	state->min_perf_pct_dc = SETTING_IGNORE;
+	state->max_perf_pct_ac = SETTING_IGNORE;
+	state->max_perf_pct_dc = SETTING_IGNORE;
 	state->active_cpus[0] = '\0';
 	state->cpumask_idx = CPUMASK_NONE;
 
@@ -263,6 +267,14 @@ static void dump_state(struct lpmd_config_state_t *state, char *str, int debug)
 	offset += snprintf(buf + offset, MAX_STR_LENGTH - offset,
 			   "EPP [%d] ", state->epp);
 	offset += snprintf(buf + offset, MAX_STR_LENGTH - offset,
+			   "MIN_PERF_PCT_AC [%d] ", state->min_perf_pct_ac);
+	offset += snprintf(buf + offset, MAX_STR_LENGTH - offset,
+			   "MIN_PERF_PCT_DC [%d] ", state->min_perf_pct_dc);
+	offset += snprintf(buf + offset, MAX_STR_LENGTH - offset,
+			   "MAX_PERF_PCT_AC [%d] ", state->max_perf_pct_ac);
+	offset += snprintf(buf + offset, MAX_STR_LENGTH - offset,
+			   "MAX_PERF_PCT_DC [%d] ", state->max_perf_pct_dc);
+	offset += snprintf(buf + offset, MAX_STR_LENGTH - offset,
 			   "SliderAC [%d] ", state->balance_slider_ac);
 	offset += snprintf(buf + offset, MAX_STR_LENGTH - offset,
 			   "SliderDC [%d] ", state->balance_slider_dc);
@@ -355,6 +367,14 @@ static int enter_state(struct lpmd_config_t *config, int idx)
 		process_irq(state);
 	}
 
+	process_itmt(state);
+
+	process_epp_epb(state);
+	process_min_perf_pct(state);
+	process_max_perf_pct(state);
+
+	process_irq(state);
+
 	process_cgroup(config, state);
 
 	return 0;
@@ -437,6 +457,22 @@ static void dump_data(struct lpmd_config_t *config, int idx)
 	else
 		offset += snprintf(buf + offset, MAX_STR_LENGTH - offset,
 				   "EPB [%d] EPP[%d] ", epb, epp);
+
+	if (state->min_perf_pct_ac != SETTING_IGNORE)
+		offset += snprintf(buf + offset, MAX_STR_LENGTH - offset,
+				   "MIN_PERF_PCT_AC [%d] ", state->min_perf_pct_ac);
+
+	if (state->min_perf_pct_dc != SETTING_IGNORE)
+		offset += snprintf(buf + offset, MAX_STR_LENGTH - offset,
+				   "MIN_PERF_PCT_DC [%d] ", state->min_perf_pct_dc);
+
+	if (state->max_perf_pct_ac != SETTING_IGNORE)
+		offset += snprintf(buf + offset, MAX_STR_LENGTH - offset,
+				   "MAX_PERF_PCT_AC [%d] ", state->max_perf_pct_ac);
+
+	if (state->max_perf_pct_dc != SETTING_IGNORE)
+		offset += snprintf(buf + offset, MAX_STR_LENGTH - offset,
+				   "MAX_PERF_PCT_DC [%d] ", state->max_perf_pct_dc);
 
 	if (config->hfi_lpm_enable)
 		offset += snprintf(buf + offset, MAX_STR_LENGTH - offset,
@@ -543,6 +579,10 @@ static void dump_states(struct lpmd_config_t *lpmd_config)
 		lpmd_log_info("\tpoll_interval_increment:%d\n", state->poll_interval_increment);
 		lpmd_log_info("\tEPP:%d\n", state->epp);
 		lpmd_log_info("\tEPB:%d\n", state->epb);
+		lpmd_log_info("\tMinPerfPctAC:%d\n", state->min_perf_pct_ac);
+		lpmd_log_info("\tMinPerfPctDC:%d\n", state->min_perf_pct_dc);
+		lpmd_log_info("\tMaxPerfPctAC:%d\n", state->max_perf_pct_ac);
+		lpmd_log_info("\tMaxPerfPctDC:%d\n", state->max_perf_pct_dc);
 		lpmd_log_info("\tITMTState:%d\n", state->itmt_state);
 		lpmd_log_info("\tIRQMigrate:%d\n", state->irq_migrate);
 		if (state->active_cpus[0] != '\0')

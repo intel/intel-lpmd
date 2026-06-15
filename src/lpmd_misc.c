@@ -484,3 +484,98 @@ int epp_epb_init(void)
 	}
 	return 0;
 }
+
+/* intel_pstate min perf management */
+#define PATH_INTEL_PSTATE_MIN_PERF_PCT "/sys/devices/system/cpu/intel_pstate/min_perf_pct"
+#define PATH_INTEL_PSTATE_MAX_PERF_PCT "/sys/devices/system/cpu/intel_pstate/max_perf_pct"
+
+static int saved_min_perf_pct = SETTING_IGNORE;
+static int saved_max_perf_pct = SETTING_IGNORE;
+
+int min_perf_pct_init(void)
+{
+	if (lpmd_read_int(PATH_INTEL_PSTATE_MIN_PERF_PCT, &saved_min_perf_pct, -1)) {
+		saved_min_perf_pct = SETTING_IGNORE;
+		lpmd_log_debug("intel_pstate min_perf_pct not available\n");
+		return 0;
+	}
+
+	lpmd_log_debug("Saved min_perf_pct: %d\n", saved_min_perf_pct);
+	return 0;
+}
+
+int process_min_perf_pct(struct lpmd_config_state_t *state)
+{
+	int val;
+	int configured_val;
+
+	if (!state)
+		return 0;
+
+	if (is_on_battery())
+		configured_val = state->min_perf_pct_dc;
+	else
+		configured_val = state->min_perf_pct_ac;
+
+	if (configured_val == SETTING_IGNORE)
+		return 0;
+
+	if (configured_val == SETTING_RESTORE) {
+		if (saved_min_perf_pct == SETTING_IGNORE)
+			return 0;
+		val = saved_min_perf_pct;
+	} else {
+		val = configured_val;
+	}
+
+	if (val < 0 || val > 100) {
+		lpmd_log_error("Invalid min_perf_pct value %d\n", val);
+		return LPMD_ERROR;
+	}
+
+	return lpmd_write_int(PATH_INTEL_PSTATE_MIN_PERF_PCT, val, LPMD_LOG_DEBUG);
+}
+
+int max_perf_pct_init(void)
+{
+	if (lpmd_read_int(PATH_INTEL_PSTATE_MAX_PERF_PCT, &saved_max_perf_pct, -1)) {
+		saved_max_perf_pct = SETTING_IGNORE;
+		lpmd_log_debug("intel_pstate max_perf_pct not available\n");
+		return 0;
+	}
+
+	lpmd_log_debug("Saved max_perf_pct: %d\n", saved_max_perf_pct);
+	return 0;
+}
+
+int process_max_perf_pct(struct lpmd_config_state_t *state)
+{
+	int val;
+	int configured_val;
+
+	if (!state)
+		return 0;
+
+	if (is_on_battery())
+		configured_val = state->max_perf_pct_dc;
+	else
+		configured_val = state->max_perf_pct_ac;
+
+	if (configured_val == SETTING_IGNORE)
+		return 0;
+
+	if (configured_val == SETTING_RESTORE) {
+		if (saved_max_perf_pct == SETTING_IGNORE)
+			return 0;
+		val = saved_max_perf_pct;
+	} else {
+		val = configured_val;
+	}
+
+	if (val < 0 || val > 100) {
+		lpmd_log_error("Invalid max_perf_pct value %d\n", val);
+		return LPMD_ERROR;
+	}
+
+	return lpmd_write_int(PATH_INTEL_PSTATE_MAX_PERF_PCT, val, LPMD_LOG_DEBUG);
+}
