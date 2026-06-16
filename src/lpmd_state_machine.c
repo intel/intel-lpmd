@@ -661,7 +661,8 @@ static int config_states_update_config(struct lpmd_config_t *config)
  * Return 0 on success - either when nothing requires setting up Return -1 on error
  * and -2 if there are no active cpus specified.
  */
-static int build_state_cpumask_activecpus(struct lpmd_config_state_t *state)
+static int build_state_cpumask_activecpus(struct lpmd_config_t *lpmd_config,
+					  struct lpmd_config_state_t *state)
 {
 	if (state->cpumask_idx != CPUMASK_NONE)
 		return 0;
@@ -685,6 +686,7 @@ static int build_state_cpumask_activecpus(struct lpmd_config_state_t *state)
 	if (!strcmp(state->active_cpus, "hfi") ||
 	    !strcmp(state->active_cpus, "HFI")) {
 		state->cpumask_idx = CPUMASK_HFI;
+		lpmd_config->config_states_hfi = true;
 		return 0;
 	}
 
@@ -752,7 +754,7 @@ int lpmd_build_config_states(struct lpmd_config_t *lpmd_config)
 	for (i = CONFIG_STATE_BASE; i < CONFIG_STATE_BASE + lpmd_config->config_state_count; i++) {
 		state = &lpmd_config->config_states[i];
 
-		ret = build_state_cpumask_activecpus(state);
+		ret = build_state_cpumask_activecpus(lpmd_config, state);
 		if (ret == -2)
 			build_state_cpumask_cputypes(state, lpmd_config->core_type_masks);
 		else if (ret)

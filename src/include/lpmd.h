@@ -231,6 +231,7 @@ struct lpmd_config_t {
 	int slider_offset_def_dc;
 
 	bool config_states_present; 	/* Controls how and if hint sources interact */
+	bool config_states_hfi;		/* At least one state has HFI managed CPUs */
 	struct lpmd_config_state_t config_states[MAX_STATES];
 	struct lpmd_data_t data;
 	unsigned char *core_type_masks[CORE_TYPES_COUNT];
@@ -327,7 +328,7 @@ int intel_dbus_server_init(gboolean (*exit_handler)(void));
 int match_config_file(int family, int model, int tdp, char *save_file_name);
 int lpmd_get_config(struct lpmd_config_t *lpmd_config);
 int is_wildcard(char *str);
-int exclude_incompatible_configs(struct lpmd_config_t config);
+int exclude_incompatible_configs(struct lpmd_config_t *config);
 
 /* lpmd_state_machine.c */
 int update_lpmd_state(int state);

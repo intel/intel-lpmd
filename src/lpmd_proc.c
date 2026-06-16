@@ -416,7 +416,7 @@ int lpmd_main(void)
 	/* Must done after init_cpu() */
 	lpmd_build_config_states(&lpmd_config);
 
-	ret = exclude_incompatible_configs(lpmd_config);
+	ret = exclude_incompatible_configs(&lpmd_config);
 	if (ret)
 		goto cleanup;
 

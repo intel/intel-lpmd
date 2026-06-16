@@ -283,6 +283,7 @@ static void lpmd_init_config(struct lpmd_config_t *config)
 	config->wlt_hint_mask = -1;
 	config->wlt_notification_delay = -1;
 	config->config_states_present = FALSE;
+	config->config_states_hfi = FALSE;
 }
 
 static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, struct lpmd_config_t *lpmd_config)
@@ -604,9 +605,14 @@ process_xml:
  * This function works under the assumption that hfi_lpm_enable, wlt_hint_enable
  * and util_monitor struct fields can only take on values 0 or 1.
  */
-int exclude_incompatible_configs(struct lpmd_config_t config)
+int exclude_incompatible_configs(struct lpmd_config_t *config)
 {
 	int config_option_sum;
+
+	if (config->hfi_lpm_enable && config->config_states_present && !config->config_states_hfi) {
+		lpmd_log_warn("HFI enabled but no custom state uses it - disabling!\n");
+		config->hfi_lpm_enable = 0;
+	}
 
 	/*
 	 * If there are no custom config states then only one hint source can
@@ -617,17 +623,17 @@ int exclude_incompatible_configs(struct lpmd_config_t config)
 	 * hint sources to manage CPUs while WLT or util manages the
 	 * state changes.
 	 */
-	if (!config.config_states_present)
-		config_option_sum = config.hfi_lpm_enable + config.wlt_hint_enable + config.util_monitor;
+	if (!config->config_states_present)
+		config_option_sum = config->hfi_lpm_enable + config->wlt_hint_enable + config->util_monitor;
 	else
-		config_option_sum = config.wlt_hint_enable + config.util_monitor;
+		config_option_sum = config->wlt_hint_enable + config->util_monitor;
 
 	if (config_option_sum > 1) {
 		/*
 		 * Exempt the (WLT Polling + GFX) case - these should be
 		 * allowed to coexist.
 		 */
-		if (config.config_states_present && config.wlt_hint_poll_enable && config.util_gfx_enable)
+		if (config->config_states_present && config->wlt_hint_poll_enable && config->util_gfx_enable)
 			return LPMD_SUCCESS;
 
 		lpmd_log_error("Check your configuration file:\n");
