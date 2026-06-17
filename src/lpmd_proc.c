@@ -416,6 +416,10 @@ int lpmd_main(void)
 	/* Must done after init_cpu() */
 	lpmd_build_config_states(&lpmd_config);
 
+	ret = exclude_incompatible_configs(lpmd_config);
+	if (ret)
+		goto cleanup;
+
 	/* Cleanup dynamically allocated core-type cpumasks */
 	free_cpu_type_masks(&lpmd_config);
 

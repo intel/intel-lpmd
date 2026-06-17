@@ -261,6 +261,16 @@ static void lpmd_init_config(struct lpmd_config_t *config)
 	config->performance_def = LPM_FORCE_OFF;
 	config->balanced_def = LPM_FORCE_OFF;
 	config->powersaver_def = LPM_FORCE_OFF;
+
+	/*
+	 * These options should be either 0 or 1, because they indicate whether
+	 * a given mode is enabled or not.
+	 */
+	config->wlt_hint_enable = 0;
+	config->wlt_proxy_enable = 0;
+	config->hfi_lpm_enable = 0;
+	config->util_monitor = 0;
+
 	config->lp_mode_epp = -1;
 	config->data.util_sys = -1;
 	config->data.util_cpu = -1;
@@ -272,6 +282,7 @@ static void lpmd_init_config(struct lpmd_config_t *config)
 	config->slider_offset_def_dc = -1;
 	config->wlt_hint_mask = -1;
 	config->wlt_notification_delay = -1;
+	config->config_states_present = FALSE;
 }
 
 static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, struct lpmd_config_t *lpmd_config)
@@ -441,6 +452,12 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, struct lpmd_config_t *
 		} else if (!strcmp((const char *)cur_node->name, "States")) {
 			errno = 0;
 			lpmd_parse_states(doc, cur_node->children, lpmd_config);
+
+			/*
+			 * Note that LPMD will run with custom states thereby
+			 * changing behavior of hint sources
+			 */
+			lpmd_config->config_states_present = TRUE;
 		} else if (!strcmp((const char *)cur_node->name, "BalancedSliderAC")) {
 			if (read_slider_and_validate(&lpmd_config->balance_slider_def_ac,
 						     tmp_value, "BalancedSliderAC", -1, SLIDER_TYPE_BALANCE) != 0)
@@ -579,6 +596,47 @@ process_xml:
 	}
 
 	xmlFreeDoc(doc);
+
+	return LPMD_SUCCESS;
+}
+
+/*
+ * This function works under the assumption that hfi_lpm_enable, wlt_hint_enable
+ * and util_monitor struct fields can only take on values 0 or 1.
+ */
+int exclude_incompatible_configs(struct lpmd_config_t config)
+{
+	int config_option_sum;
+
+	/*
+	 * If there are no custom config states then only one hint source can
+	 * manage LPMD at the same time. Trying to enable more than one will
+	 * result in undefined behavior or in one to be silently disabled
+	 *
+	 * With custom config states HFI can be used together with other
+	 * hint sources to manage CPUs while WLT or util manages the
+	 * state changes.
+	 */
+	if (!config.config_states_present)
+		config_option_sum = config.hfi_lpm_enable + config.wlt_hint_enable + config.util_monitor;
+	else
+		config_option_sum = config.wlt_hint_enable + config.util_monitor;
+
+	if (config_option_sum > 1) {
+		/*
+		 * Exempt the (WLT Polling + GFX) case - these should be
+		 * allowed to coexist.
+		 */
+		if (config.config_states_present && config.wlt_hint_poll_enable && config.util_gfx_enable)
+			return LPMD_SUCCESS;
+
+		lpmd_log_error("Check your configuration file:\n");
+		lpmd_log_error("\t - Without custom config states HFI, WLT and the util monitor are mutually exclusive!\n");
+		lpmd_log_error("\t - With custom config states WLT and the util monitor are mutually exclusive!\n");
+		lpmd_log_error("Exceptions:\n");
+		lpmd_log_error("\t - WLT is allowed if WTL polling is enabled and GFX util is enabled\n");
+		return LPMD_CONFIGURATION_ERROR;
+	}
 
 	return LPMD_SUCCESS;
 }
