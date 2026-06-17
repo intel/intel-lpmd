@@ -56,6 +56,12 @@ specifies if the HFI monitor can capture the HFI hints for survivability mode.
 .PP
 .B WLTHintEnable
 Enable use of hardware Workload type hints.
+.PP
+.B WLTHintPollEnable
+Use WLT in polling mode in case the regular event based mode is not available.
+Used in the Lunar Lake configuration (model 189). Also allows a special case
+where WLT to coexists with UTIL (if GFX is enabled).
+.PP
 .B WLTHintNotificationDelay
 Set hardware workload notification delay in milliseconds.
 .PP
