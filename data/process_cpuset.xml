@@ -106,14 +106,30 @@
       accepted in per-process <ActiveCores> overrides.
     -->
     <ClassDefaults>
-        <Realtime>ActivePcores,ActiveEcores,ActiveLcores</Realtime>
-        <UserInteractive>ActivePcores, ActiveEcores, ActiveLcores</UserInteractive>
-        <UserInitiated>ActivePcores, ActiveEcores</UserInitiated>
-        <Utility>ActiveEcores, ActiveLcores</Utility>
-        <Background>ActiveLcores</Background>
-        <GameProfileCPU>ActivePcores</GameProfileCPU>
-        <GameProfileGPU>ActiveLcores</GameProfileGPU>
-        <GameProfileHybrid>ActiveEcores,ActiveLcores</GameProfileHybrid>
+        <Realtime>
+            <Cores>ActivePcores,ActiveEcores,ActiveLcores</Cores>
+        </Realtime>
+        <UserInteractive>
+            <Cores>ActivePcores, ActiveEcores, ActiveLcores</Cores>
+        </UserInteractive>
+        <UserInitiated>
+            <Cores>ActivePcores, ActiveEcores</Cores>
+        </UserInitiated>
+        <Utility>
+            <Cores>ActiveEcores, ActiveLcores</Cores>
+        </Utility>
+        <Background>
+            <Cores>ActiveLcores</Cores>
+        </Background>
+        <GameProfileCPU>
+            <Cores>ActivePcores</Cores>
+        </GameProfileCPU>
+        <GameProfileGPU>
+            <Cores>ActiveLcores</Cores>
+        </GameProfileGPU>
+        <GameProfileHybrid>
+            <Cores>ActiveEcores,ActiveLcores</Cores>
+        </GameProfileHybrid>
     </ClassDefaults>
 
     <!--

@@ -161,11 +161,21 @@ for Intel Energy Optimizer (LPMD) daemon
 		  (or its built-in fallback).
 		-->
 		<ClassDefaults>
-			<Realtime>ActivePcores, ActiveEcores, ActiveLcores</Realtime>
-			<UserInteractive>ActiveEcores, ActiveLcores</UserInteractive>
-			<UserInitiated>ActiveLcores</UserInitiated>
-			<Background>ActiveLcores</Background>
-			<Unclassified>ActivePcores, ActiveEcores, ActiveLcores</Unclassified>
+			<Realtime>
+				<Cores>ActivePcores, ActiveEcores, ActiveLcores</Cores>
+			</Realtime>
+			<UserInteractive>
+				<Cores>ActiveEcores, ActiveLcores</Cores>
+			</UserInteractive>
+			<UserInitiated>
+				<Cores>ActiveLcores</Cores>
+			</UserInitiated>
+			<Background>
+				<Cores>ActiveLcores</Cores>
+			</Background>
+			<Unclassified>
+				<Cores>ActivePcores, ActiveEcores, ActiveLcores</Cores>
+			</Unclassified>
 		</ClassDefaults>
 		<State>
 			<ID> 1 </ID>
@@ -200,11 +210,21 @@ for Intel Energy Optimizer (LPMD) daemon
 		  (or its built-in fallback).
 		-->
 		<ClassDefaults>
-			<Realtime>ActivePcores, ActiveEcores, ActiveLcores</Realtime>
-			<UserInteractive>ActiveEcores, ActiveLcores</UserInteractive>
-			<UserInitiated>ActiveEcores, ActiveLcores</UserInitiated>
-			<Background>ActiveLcores</Background>
-			<Unclassified>ActivePcores, ActiveEcores, ActiveLcores</Unclassified>
+			<Realtime>
+				<Cores>ActivePcores, ActiveEcores, ActiveLcores</Cores>
+			</Realtime>
+			<UserInteractive>
+				<Cores>ActiveEcores, ActiveLcores</Cores>
+			</UserInteractive>
+			<UserInitiated>
+				<Cores>ActiveEcores, ActiveLcores</Cores>
+			</UserInitiated>
+			<Background>
+				<Cores>ActiveLcores</Cores>
+			</Background>
+			<Unclassified>
+				<Cores>ActivePcores, ActiveEcores, ActiveLcores</Cores>
+			</Unclassified>
 		</ClassDefaults>
 		<State>
 			<ID> 1 </ID>

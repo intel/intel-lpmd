@@ -253,7 +253,7 @@ int is_wildcard(char *str)
 
 static void lpmd_parse_class_defaults(xmlDoc *doc, xmlNode *a_node, struct lpmd_config_t *lpmd_config)
 {
-	xmlNode *cur_node;
+	xmlNode *cur_node, *child_node;
 	char *val;
 	struct {
 		const char *tag;
@@ -286,9 +286,25 @@ static void lpmd_parse_class_defaults(xmlDoc *doc, xmlNode *a_node, struct lpmd_
 	for (cur_node = a_node; cur_node; cur_node = cur_node->next) {
 		if (cur_node->type != XML_ELEMENT_NODE || !cur_node->name)
 			continue;
-		val = (char *)xmlNodeListGetString(doc, cur_node->xmlChildrenNode, 1);
+
+		/* First, try to find <Cores> child element (new format) */
+		val = NULL;
+		for (child_node = cur_node->children; child_node; child_node = child_node->next) {
+			if (child_node->type == XML_ELEMENT_NODE &&
+			    child_node->name &&
+			    !strcmp((const char *)child_node->name, "Cores")) {
+				val = (char *)xmlNodeListGetString(doc, child_node->xmlChildrenNode, 1);
+				break;
+			}
+		}
+
+		/* Fall back to direct text content (old format) for backward compatibility */
+		if (!val)
+			val = (char *)xmlNodeListGetString(doc, cur_node->xmlChildrenNode, 1);
+
 		if (!val)
 			continue;
+
 		for (size_t i = 0; i < sizeof(map) / sizeof(map[0]); i++) {
 			if (!strcmp((const char *)cur_node->name, map[i].tag)) {
 				snprintf(map[i].dst, map[i].cap, "%s", val);
