@@ -151,10 +151,10 @@ for Intel Energy Optimizer (LPMD) daemon
 	<States>
 		<CPUFamily> 6 </CPUFamily>
 		<CPUModel> 204 </CPUModel>
-		<CPUConfig> * </CPUConfig>
-		-->
+		<CPUConfig> 4P0E4L-25W </CPUConfig>
+		<!--
 		  Optional per-CPU-model override of process_cpuset.xml's
-		  ClassDefaults. Each child accepts the same token list as
+		  <ClassDefaults>. Each child accepts the same token list as
 		  ActiveCores ("ActivePcores" / "ActiveEcores" /
 		  "ActiveLcores", comma- or whitespace-separated). Any class
 		  not listed here keeps the value from process_cpuset.xml
@@ -165,44 +165,7 @@ for Intel Energy Optimizer (LPMD) daemon
 			<UserInteractive>ActiveEcores, ActiveLcores</UserInteractive>
 			<UserInitiated>ActiveLcores</UserInitiated>
 			<Background>ActiveLcores</Background>
-		</ClassDefaults>
-		<State>
-			<ID> 1 </ID>
-			<Name> UTIL_IDLE </Name>
-			<WLTType> 1 </WLTType>
-			<ActiveLcores>ALL</ActiveLcores>
-		</State>
-		<State>
-			<ID> 2 </ID>
-			<Name> UTIL_IDLE_SUSTAIN </Name>
-			<WLTType> 2 </WLTType>
-			<ActiveCPUs> * </ActiveCPUs>
-		</State>
-		<State>
-			<ID> 3 </ID>
-			<Name> UTIL_IDLE_BURSTY </Name>
-			<WLTType> 3 </WLTType>
-			<ActiveCPUs> * </ActiveCPUs>
-		</State>
-	</States>
-
-	<States>
-		<CPUFamily> 6 </CPUFamily>
-		<CPUModel> 204 </CPUModel>
-		<CPUConfig> 4P0E4L-25W </CPUConfig>
-		<!--
-		  Optional per-CPU-model override of process_cpuset.xml's
-		  <ClassDefaults>. Each child accepts the same token list as
-		  <ActiveCores> ("ActivePcores" / "ActiveEcores" /
-		  "ActiveLcores", comma- or whitespace-separated). Any class
-		  not listed here keeps the value from process_cpuset.xml
-		  (or its built-in fallback).
-		-->
-		<ClassDefaults>
-			<Realtime>ActivePcores, ActiveEcores, ActiveLcores</Realtime>
-			<UserInteractive>ActiveEcores, ActiveLcores</UserInteractive>
-			<UserInitiated>ActiveLcores</UserInitiated>
-			<Background>ActiveLcores</Background>
+			<Unclassified>ActivePcores, ActiveEcores, ActiveLcores</Unclassified>
 		</ClassDefaults>
 		<State>
 			<ID> 1 </ID>
@@ -221,6 +184,45 @@ for Intel Energy Optimizer (LPMD) daemon
 			<Name> UTIL_IDLE_BURSTY </Name>
 			<WLTType> 3 </WLTType>
 			<ActiveCPUs>0-7</ActiveCPUs>
+		</State>
+	</States>
+
+	<States>
+		<CPUFamily> 6 </CPUFamily>
+		<CPUModel> 204 </CPUModel>
+		<CPUConfig> * </CPUConfig>
+		-->
+		  Optional per-CPU-model override of process_cpuset.xml's
+		  ClassDefaults. Each child accepts the same token list as
+		  ActiveCores ("ActivePcores" / "ActiveEcores" /
+		  "ActiveLcores", comma- or whitespace-separated). Any class
+		  not listed here keeps the value from process_cpuset.xml
+		  (or its built-in fallback).
+		-->
+		<ClassDefaults>
+			<Realtime>ActivePcores, ActiveEcores, ActiveLcores</Realtime>
+			<UserInteractive>ActiveEcores, ActiveLcores</UserInteractive>
+			<UserInitiated>ActiveEcores, ActiveLcores</UserInitiated>
+			<Background>ActiveLcores</Background>
+			<Unclassified>ActivePcores, ActiveEcores, ActiveLcores</Unclassified>
+		</ClassDefaults>
+		<State>
+			<ID> 1 </ID>
+			<Name> UTIL_IDLE </Name>
+			<WLTType> 1 </WLTType>
+			<ActiveLcores>ALL</ActiveLcores>
+		</State>
+		<State>
+			<ID> 2 </ID>
+			<Name> UTIL_IDLE_SUSTAIN </Name>
+			<WLTType> 2 </WLTType>
+			<ActiveCPUs> * </ActiveCPUs>
+		</State>
+		<State>
+			<ID> 3 </ID>
+			<Name> UTIL_IDLE_BURSTY </Name>
+			<WLTType> 3 </WLTType>
+			<ActiveCPUs> * </ActiveCPUs>
 		</State>
 	</States>
 
