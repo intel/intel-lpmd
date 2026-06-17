@@ -117,6 +117,7 @@ int process_cpuset_set_groups_cpuset(process_cpuset_t *ctx,
 int process_cpuset_override_class_defaults(
 	process_cpuset_t *ctx, const char *realtime,
 	const char *user_interactive, const char *user_initiated,
+	const char *unclassified,
 	const char *utility, const char *background,
 	const char *game_profile_cpu, const char *game_profile_gpu,
 	const char *game_profile_hybrid);
@@ -248,6 +249,30 @@ int process_cpuset_set_focus_helper_present(process_cpuset_t *ctx, int present);
  * maps to.
  */
 void process_cpuset_log_class_defaults(const process_cpuset_t *ctx);
+
+/*
+ * Look up a process name in the loaded config and return its
+ * classification and resolved CPU affinity string.
+ *
+ * @name       : process comm (silently truncated to 15 chars to mirror
+ *               the /proc/<pid>/comm kernel limit). Case-insensitive.
+ * @class_out  : if non-NULL, set to a static classification name string
+ *               (e.g. "background"). Do not free.
+ * @cpus_out   : if non-NULL, filled with a cpuset-style list of the
+ *               resolved AllowedCPUs (e.g. "0-3,8-11"). Falls back to a
+ *               symbolic group expression (e.g. "Pcores+Ecores") when the
+ *               active CPU groups have not been configured yet.
+ * @cpus_cap   : capacity of @cpus_out including the NUL terminator.
+ *
+ * Returns:
+ *   1  named <Process> entry matched
+ *   0  no named entry matched; <DefaultProcess> was used
+ *  -1  not found (no match and no <DefaultProcess>)
+ */
+int process_cpuset_classify_name(const process_cpuset_t *ctx,
+				 const char *name,
+				 const char **class_out,
+				 char *cpus_out, size_t cpus_cap);
 
 #ifdef __cplusplus
 }

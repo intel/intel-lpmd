@@ -266,6 +266,8 @@ static void lpmd_parse_class_defaults(xmlDoc *doc, xmlNode *a_node, struct lpmd_
 		  sizeof(lpmd_config->pc_class_default_user_interactive) },
 		{ "UserInitiated",     lpmd_config->pc_class_default_user_initiated,
 		  sizeof(lpmd_config->pc_class_default_user_initiated) },
+		{ "Unclassified",     lpmd_config->pc_class_default_unclassified,
+		  sizeof(lpmd_config->pc_class_default_unclassified) },
 		{ "Utility",           lpmd_config->pc_class_default_utility,
 		  sizeof(lpmd_config->pc_class_default_utility) },
 		{ "Background",        lpmd_config->pc_class_default_background,

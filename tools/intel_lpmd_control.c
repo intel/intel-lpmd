@@ -34,7 +34,8 @@ int main(int argc, char **argv)
 		fprintf (stderr, "intel_lpmd_control: missing control command\n");
 		fprintf (stderr, "syntax:\n");
 		fprintf (stderr, "intel_lpmd_control ON|OFF|AUTO|PROCESS-PRECONFIG|STATUS|LIST-UNBOUND|LIST-UNBOUND-USER|LIST-BOUND|UNBIND-ALL\n");
-		fprintf (stderr, "intel_lpmd_control ADD-PROCESS <name> <user_interactive|user_initiated|utility|background|realtime|GameProfileCPU|GameProfileGPU|GameProfileHybrid>\n");
+		fprintf (stderr, "intel_lpmd_control ADD-PROCESS <name> <user_interactive|user_initiated|Unclassified|utility|background|realtime|GameProfileCPU|GameProfileGPU|GameProfileHybrid>\n");
+		fprintf (stderr, "intel_lpmd_control GET-PROC-CLASSIFICATION <name>\n");
 		fprintf (stderr, "intel_lpmd_control SET-FOCUS <pid>   (use 0 to clear)\n");
 		exit (0);
 	}
@@ -99,6 +100,39 @@ int main(int argc, char **argv)
 				 "process_cpuset disabled, or persist failed)\n");
 			exit (1);
 		}
+		return 0;
+	}
+
+	if (!strcmp (argv[1], "GET-PROC-CLASSIFICATION")) {
+		g_autoptr(GVariant) result = NULL;
+		const gchar *reply = NULL;
+		gint rc = -1;
+
+		if (argc < 3) {
+			fprintf (stderr,
+				 "GET-PROC-CLASSIFICATION requires <name>\n");
+			exit (1);
+		}
+
+		result = g_dbus_connection_call_sync (connection,
+						      INTEL_LPMD_SERVICE_NAME,
+						      INTEL_LPMD_SERVICE_OBJECT_PATH,
+						      INTEL_LPMD_SERVICE_INTERFACE,
+						      "LPM_GET_PROC_CLASSIFICATION",
+						      g_variant_new ("(s)", argv[2]),
+						      G_VARIANT_TYPE ("(si)"),
+						      G_DBUS_CALL_FLAGS_NONE,
+						      -1,
+						      NULL,
+						      &error);
+		if (error != NULL) {
+			g_warning ("Fail on connecting lpmd: %s", error->message);
+			exit (1);
+		}
+		g_variant_get (result, "(&si)", &reply, &rc);
+		g_print ("%s\n", reply);
+		if (rc < 0)
+			exit (1);
 		return 0;
 	}
 

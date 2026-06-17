@@ -244,6 +244,7 @@ struct lpmd_config_t {
 	char pc_class_default_realtime[MAX_CONFIG_LEN];
 	char pc_class_default_user_interactive[MAX_CONFIG_LEN];
 	char pc_class_default_user_initiated[MAX_CONFIG_LEN];
+	char pc_class_default_unclassified[MAX_CONFIG_LEN];
 	char pc_class_default_utility[MAX_CONFIG_LEN];
 	char pc_class_default_background[MAX_CONFIG_LEN];
 	char pc_class_default_gp_cpu[MAX_CONFIG_LEN];
@@ -494,6 +495,7 @@ void lpmd_process_cpuset_print_bound(void);
 int  lpmd_process_cpuset_add_process(const char *name, const char *classification);
 int  lpmd_process_cpuset_set_focus_pid(pid_t pid);
 int  lpmd_process_cpuset_set_focus_helper_present(int present);
+int  lpmd_process_cpuset_classify(const char *name, char *result, size_t result_cap);
 
 /* Kernel proc-connector (event-driven classification). Returns the
  * NETLINK_CONNECTOR fd to add to the main poll loop on success, or -1

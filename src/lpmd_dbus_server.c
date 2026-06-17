@@ -265,6 +265,18 @@ lpmd_dbus_handle_method_call(GDBusConnection       *connection,
 		return;
 	}
 
+	if (g_strcmp0(method_name, "LPM_GET_PROC_CLASSIFICATION") == 0) {
+		const gchar *pname = NULL;
+		char result[512] = { 0 };
+		gint rc;
+
+		g_variant_get(parameters, "(&s)", &pname);
+		rc = lpmd_process_cpuset_classify(pname, result, sizeof(result));
+		g_dbus_method_invocation_return_value(
+			invocation, g_variant_new("(si)", result, rc));
+		return;
+	}
+
 	if (g_strcmp0(method_name, "LPM_SET_FOCUS_PID") == 0) {
 		gint pid = 0;
 		gint result;

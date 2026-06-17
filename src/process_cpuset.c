@@ -59,6 +59,8 @@ enum classification {
 	CLASS_BACKGROUND = 0,
 	/* Strictly higher priority than background; lower than user_*. */
 	CLASS_UTILITY,
+	/* Catch-all tier for processes that do not match named entries. */
+	CLASS_UNCLASSIFIED,
 	/* User-launched workloads that should run quickly but are not
      * actively driving the UI (e.g. a build kicked off from a
      * terminal). Higher priority than utility, lower than
@@ -475,6 +477,13 @@ static enum classification parse_class(const char *s)
 		return CLASS_BACKGROUND;
 	if (!strcasecmp(s, "utility"))
 		return CLASS_UTILITY;
+	if (!strcasecmp(s, "unclassified") ||
+	    !strcasecmp(s, "unlassified"))
+		return CLASS_UNCLASSIFIED;
+	/* Legacy alias kept for backward compatibility with older
+	 * process_cpuset.xml files that used foreground/background. */
+	if (!strcasecmp(s, "foreground"))
+		return CLASS_USER_INITIATED;
 	if (!strcasecmp(s, "user_initiated"))
 		return CLASS_USER_INITIATED;
 	if (!strcasecmp(s, "user_interactive"))
@@ -497,6 +506,8 @@ static const char *class_str(enum classification c)
 		return "background";
 	case CLASS_UTILITY:
 		return "utility";
+	case CLASS_UNCLASSIFIED:
+		return "Unclassified";
 	case CLASS_USER_INITIATED:
 		return "user_initiated";
 	case CLASS_USER_INTERACTIVE:
@@ -563,12 +574,20 @@ static void parse_class_defaults(xmlDoc *doc, xmlNode *node,
 			continue;
 		if (!strcasecmp((const char *)c->name, "Realtime"))
 			parse_core_spec(val, &defaults[CLASS_REALTIME]);
+		/* Legacy single interactive tier. Mirror to both modern
+		 * user tiers so old configs keep similar behavior. */
+		else if (!strcasecmp((const char *)c->name, "Foreground")) {
+			parse_core_spec(val, &defaults[CLASS_USER_INTERACTIVE]);
+			parse_core_spec(val, &defaults[CLASS_USER_INITIATED]);
+		}
 		else if (!strcasecmp((const char *)c->name, "UserInteractive"))
 			parse_core_spec(val, &defaults[CLASS_USER_INTERACTIVE]);
 		else if (!strcasecmp((const char *)c->name, "UserInitiated"))
 			parse_core_spec(val, &defaults[CLASS_USER_INITIATED]);
 		else if (!strcasecmp((const char *)c->name, "Utility"))
 			parse_core_spec(val, &defaults[CLASS_UTILITY]);
+		else if (!strcasecmp((const char *)c->name, "Unclassified"))
+			parse_core_spec(val, &defaults[CLASS_UNCLASSIFIED]);
 		else if (!strcasecmp((const char *)c->name, "Background"))
 			parse_core_spec(val, &defaults[CLASS_BACKGROUND]);
 		else if (!strcasecmp((const char *)c->name, "GameProfileCPU"))
@@ -1454,6 +1473,8 @@ process_cpuset_t *process_cpuset_new(void)
 	ctx->class_defaults[CLASS_USER_INITIATED].groups =
 		GROUP_PCORES | GROUP_ECORES;
 	ctx->class_defaults[CLASS_UTILITY].groups = GROUP_ECORES | GROUP_LCORES;
+	ctx->class_defaults[CLASS_UNCLASSIFIED].groups =
+		GROUP_PCORES | GROUP_ECORES | GROUP_LCORES;
 	ctx->class_defaults[CLASS_BACKGROUND].groups = GROUP_LCORES;
 	/* GameProfile* placeholders: pick sensible defaults until the
      * runtime grows policy specific to each profile. */
@@ -1630,6 +1651,7 @@ int process_cpuset_set_groups_cpuset(process_cpuset_t *ctx,
 int process_cpuset_override_class_defaults(
 	process_cpuset_t *ctx, const char *realtime,
 	const char *user_interactive, const char *user_initiated,
+	const char *unclassified,
 	const char *utility, const char *background,
 	const char *game_profile_cpu, const char *game_profile_gpu,
 	const char *game_profile_hybrid)
@@ -1641,6 +1663,7 @@ int process_cpuset_override_class_defaults(
 		{ CLASS_REALTIME, realtime },
 		{ CLASS_USER_INTERACTIVE, user_interactive },
 		{ CLASS_USER_INITIATED, user_initiated },
+		{ CLASS_UNCLASSIFIED, unclassified },
 		{ CLASS_UTILITY, utility },
 		{ CLASS_BACKGROUND, background },
 		{ CLASS_GAME_PROFILE_CPU, game_profile_cpu },
@@ -2495,6 +2518,10 @@ static int reapply_attached_class(process_cpuset_t *ctx,
 			(void)affinity_apply(ent->pid, /*all_threads=*/1, mask,
 					     mlen, class_str(target_cls));
 		}
+		/* Keep the stored groups in sync so LIST-BOUND displays the
+		 * correct CPU group names after a class-default change
+		 * (e.g. focus-helper handshake flipping USER_INITIATED). */
+		ent->groups = e.resolved.groups;
 		n++;
 	}
 	return n;
@@ -2575,7 +2602,8 @@ void process_cpuset_log_class_defaults(const process_cpuset_t *ctx)
 {
 	static const enum classification order[] = {
 		CLASS_REALTIME,		CLASS_USER_INTERACTIVE,
-		CLASS_USER_INITIATED,	CLASS_UTILITY,
+		CLASS_USER_INITIATED,	CLASS_UNCLASSIFIED,
+		CLASS_UTILITY,
 		CLASS_BACKGROUND,	CLASS_GAME_PROFILE_CPU,
 		CLASS_GAME_PROFILE_GPU, CLASS_GAME_PROFILE_HYBRID,
 	};
@@ -3182,4 +3210,98 @@ int process_cpuset_release_all(process_cpuset_t *ctx)
 
 	ctx->attached.n = 0;
 	return released;
+}
+
+/*
+ * Look up a process name in the loaded config and return its
+ * classification and resolved CPU affinity string.
+ *
+ * @name       : process comm (truncated to 15 chars like /proc/<pid>/comm).
+ *               The search is case-insensitive.
+ * @class_out  : if non-NULL, set to a static classification name string
+ *               ("background", "utility", ...). Do not free.
+ * @cpus_out   : if non-NULL, filled with a cpuset-style list of the
+ *               resolved AllowedCPUs (e.g. "0-3,8-11"). When the active
+ *               CPU groups have not been set (no P/E/LP-E core info),
+ *               falls back to a symbolic group expression like
+ *               "Pcores+Ecores". Writes at most @cpus_cap bytes.
+ * @cpus_cap   : capacity of @cpus_out including the NUL terminator.
+ *
+ * Returns:
+ *   1  if a named <Process> entry matched
+ *   0  if no named entry matched but <DefaultProcess> was used
+ *  -1  if not found (no match and no <DefaultProcess>)
+ */
+int process_cpuset_classify_name(const process_cpuset_t *ctx,
+				 const char *name,
+				 const char **class_out,
+				 char *cpus_out, size_t cpus_cap)
+{
+	char trunc[16]; /* /proc/comm limit: 15 chars + NUL */
+	const struct proc_entry *e = NULL;
+	uint8_t mask[CPUMASK_BYTES];
+	int is_default = 0;
+
+	if (!ctx || !name || !*name)
+		return -1;
+
+	/* /proc/<pid>/comm truncates comm to 15 chars; mirror that here. */
+	snprintf(trunc, sizeof(trunc), "%s", name);
+
+	/* Case-insensitive name search across all loaded entries. */
+	for (int i = 0; i < ctx->n_entries; i++) {
+		if (!strcasecmp(ctx->entries[i].name, trunc)) {
+			e = &ctx->entries[i];
+			break;
+		}
+	}
+
+	if (!e) {
+		if (ctx->has_default_entry) {
+			e = &ctx->default_entry;
+			is_default = 1;
+		} else {
+			return -1;
+		}
+	}
+
+	if (class_out)
+		*class_out = class_str(e->cls);
+
+	if (cpus_out && cpus_cap) {
+		cpus_out[0] = '\0';
+		memset(mask, 0, sizeof(mask));
+
+		if (build_mask_for(ctx, e, mask, sizeof(mask)) == 0 &&
+		    mask_to_cpulist(mask, sizeof(mask), cpus_out, cpus_cap) > 0) {
+			/* Successfully resolved to a real CPU list. */
+		} else {
+			/*
+			 * CPU groups not configured yet (daemon not running or
+			 * groups not set). Fall back to a symbolic group
+			 * expression so the caller still gets useful info.
+			 */
+			const struct core_spec *spec = &e->resolved;
+			size_t off = 0;
+
+			cpus_out[0] = '\0';
+			if (spec->groups & GROUP_PCORES)
+				off += snprintf(cpus_out + off, cpus_cap - off,
+						"Pcores");
+			if (spec->groups & GROUP_ECORES)
+				off += snprintf(cpus_out + off, cpus_cap - off,
+						"%sEcores", off ? "+" : "");
+			if (spec->groups & GROUP_LCORES)
+				off += snprintf(cpus_out + off, cpus_cap - off,
+						"%sLPEcores", off ? "+" : "");
+			if (spec->cpulist[0])
+				off += snprintf(cpus_out + off, cpus_cap - off,
+						"%s%s", off ? "," : "",
+						spec->cpulist);
+			if (!off)
+				snprintf(cpus_out, cpus_cap, "-");
+		}
+	}
+
+	return is_default ? 0 : 1;
 }

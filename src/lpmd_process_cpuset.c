@@ -194,6 +194,7 @@ int lpmd_process_cpuset_init(struct lpmd_config_t *config)
 	if (config->pc_class_default_realtime[0] ||
 	    config->pc_class_default_user_interactive[0] ||
 	    config->pc_class_default_user_initiated[0] ||
+	    config->pc_class_default_unclassified[0] ||
 	    config->pc_class_default_utility[0] ||
 	    config->pc_class_default_background[0] ||
 	    config->pc_class_default_gp_cpu[0] ||
@@ -203,6 +204,7 @@ int lpmd_process_cpuset_init(struct lpmd_config_t *config)
 			    g_pc_ctx, config->pc_class_default_realtime,
 			    config->pc_class_default_user_interactive,
 			    config->pc_class_default_user_initiated,
+			    config->pc_class_default_unclassified,
 			    config->pc_class_default_utility,
 			    config->pc_class_default_background,
 			    config->pc_class_default_gp_cpu,
@@ -699,24 +701,18 @@ void lpmd_process_cpuset_print_unbound(int user_only)
 		long pid;
 		char path[64];
 		char comm[64];
+		const char *cls = NULL;
+		char cpus[128] = { 0 };
 		FILE *f;
 		size_t n;
 		int is_k;
+		int is_unclassified = 0;
 
 		pid = strtol(de->d_name, &end, 10);
 		if (*end != '\0' || pid <= 0)
 			continue;
 
 		total++;
-		if (g_pc_ctx &&
-		    process_cpuset_is_attached(g_pc_ctx, (pid_t)pid))
-			continue;
-		/* Also skip PIDs already inside a proc_cpuset_*.scope created by
-         * a prior daemon run; those are bound even though this process's
-         * attached set doesn't track them. */
-		if (pid_in_proc_cpuset_scope(pid) == 1)
-			continue;
-
 		is_k = pid_is_kernel_thread(pid);
 		if (user_only && is_k != 0) {
 			if (is_k == 1)
@@ -737,8 +733,26 @@ void lpmd_process_cpuset_print_unbound(int user_only)
 		if (n && comm[n - 1] == '\n')
 			comm[n - 1] = '\0';
 
-		lpmd_log_msg("  pid=%ld %s comm=%s\n", pid,
-			     is_k == 1 ? "[k]" : "[u]", comm);
+		if (g_pc_ctx &&
+		    process_cpuset_classify_name(g_pc_ctx, comm, &cls, cpus,
+						 sizeof(cpus)) >= 0 &&
+		    cls && !strcasecmp(cls, "Unclassified"))
+			is_unclassified = 1;
+
+		if (!is_unclassified) {
+			if (g_pc_ctx &&
+			    process_cpuset_is_attached(g_pc_ctx, (pid_t)pid))
+				continue;
+			/* Also skip PIDs already inside a proc_cpuset_*.scope created by
+         * a prior daemon run; those are bound even though this process's
+         * attached set doesn't track them. */
+			if (pid_in_proc_cpuset_scope(pid) == 1)
+				continue;
+		}
+
+		lpmd_log_msg("  pid=%ld %s comm=%s%s\n", pid,
+			     is_k == 1 ? "[k]" : "[u]", comm,
+			     is_unclassified ? " class=Unclassified" : "");
 		unbound++;
 	}
 	closedir(d);
@@ -761,6 +775,7 @@ void lpmd_process_cpuset_print_unbound(int user_only)
 void lpmd_process_cpuset_print_bound(void)
 {
 	size_t n, i;
+	size_t listed = 0;
 	char p_cpus[256] = { 0 };
 	char e_cpus[256] = { 0 };
 	char l_cpus[256] = { 0 };
@@ -775,7 +790,7 @@ void lpmd_process_cpuset_print_bound(void)
 
 	n = process_cpuset_attached_count(g_pc_ctx);
 	lpmd_log_msg(
-		"process_cpuset: %zu PIDs bound to transient cpuset scopes\n",
+		"process_cpuset: %zu PIDs bound to transient cpuset scopes (excluding Unclassified)\n",
 		n);
 	lpmd_log_msg("  groups: Pcores=[%s] Ecores=[%s] LPEcores=[%s]\n",
 		     p_cpus[0] ? p_cpus : "-", e_cpus[0] ? e_cpus : "-",
@@ -797,6 +812,8 @@ void lpmd_process_cpuset_print_bound(void)
 		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, unit,
 						   sizeof(unit), &cls, &use_p,
 						   &use_e, &use_l) < 0)
+			continue;
+		if (cls && !strcasecmp(cls, "Unclassified"))
 			continue;
 
 		snprintf(path, sizeof(path), "/proc/%d/comm", (int)pid);
@@ -846,5 +863,131 @@ void lpmd_process_cpuset_print_bound(void)
 			"  pid=%d comm=%s class=%s groups=%s cpus=[%s] unit=%s\n",
 			(int)pid, comm, cls, groups_buf, cpus_buf,
 			unit[0] ? unit : "<affinity>");
+		listed++;
 	}
+
+	lpmd_log_msg("process_cpuset: listed %zu bound PIDs after Unclassified filter\n",
+		     listed);
+}
+
+/*
+ * Look up @name in the merged process_cpuset config (system + user XML)
+ * and fill @result with a human-readable classification summary:
+ *
+ *   "process:<NAME>, classification:<CLS>, cpuaffinity:<CPUS>"
+ *
+ * The name is silently truncated to 15 chars to mirror the
+ * /proc/<pid>/comm kernel limit; the search is case-insensitive.
+ *
+ * @result     : output buffer.
+ * @result_cap : capacity of @result including the NUL terminator.
+ *
+ * Returns 0 on success, -1 if process_cpuset is not active or @name
+ * was not found in the config (in that case @result is set to an
+ * informative "not found" string).
+ */
+int lpmd_process_cpuset_classify(const char *name, char *result,
+				 size_t result_cap)
+{
+	char trunc[16]; /* /proc/comm limit: 15 chars + NUL */
+	const char *cls = NULL;
+	struct lpmd_config_t *config = get_lpmd_config();
+	char cpus[512] = { 0 };
+	char conf_sys[MAX_FILE_NAME_PATH];
+	char conf_user[MAX_FILE_NAME_PATH];
+	char p_cpus[256] = { 0 }, e_cpus[256] = { 0 }, l_cpus[256] = { 0 };
+	process_cpuset_t *lookup_ctx;
+	int n;
+	int rc;
+
+	if (!result || !result_cap)
+		return -1;
+	result[0] = '\0';
+
+	if (!name || !*name) {
+		lpmd_log_warn("process_cpuset: classify: missing name\n");
+		snprintf(result, result_cap,
+			 "process:?, classification:not found, cpuaffinity:-");
+		return -1;
+	}
+
+	/* Truncate to /proc/<pid>/comm's 15-char kernel limit. */
+	snprintf(trunc, sizeof(trunc), "%s", name);
+
+	lookup_ctx = process_cpuset_new();
+	if (!lookup_ctx) {
+		snprintf(result, result_cap,
+			 "process:%s, classification:not found, cpuaffinity:-",
+			 trunc);
+		return -1;
+	}
+
+	/*
+	 * Always classify from XML config, not from currently attached/running
+	 * processes. Use the configured policy files under TDCONFDIR.
+	 */
+	snprintf(conf_sys, sizeof(conf_sys), "%s/%s", TDCONFDIR,
+		 PROCESS_CPUSET_CONFIG_FILE);
+	snprintf(conf_user, sizeof(conf_user), "%s/%s", TDCONFDIR,
+		 PROCESS_CPUSET_USER_CONFIG_FILE);
+
+	n = process_cpuset_load_config(lookup_ctx, conf_sys);
+	if (n < 0) {
+		process_cpuset_free(lookup_ctx);
+		snprintf(result, result_cap,
+			 "process:%s, classification:not found, cpuaffinity:-",
+			 trunc);
+		return -1;
+	}
+
+	(void)process_cpuset_load_config_overlay(lookup_ctx, conf_user);
+
+	if (config && (config->pc_class_default_realtime[0] ||
+	    config->pc_class_default_user_interactive[0] ||
+	    config->pc_class_default_user_initiated[0] ||
+	    config->pc_class_default_unclassified[0] ||
+	    config->pc_class_default_utility[0] ||
+	    config->pc_class_default_background[0] ||
+	    config->pc_class_default_gp_cpu[0] ||
+	    config->pc_class_default_gp_gpu[0] ||
+	    config->pc_class_default_gp_hybrid[0])) {
+		(void)process_cpuset_override_class_defaults(
+			lookup_ctx, config->pc_class_default_realtime,
+			config->pc_class_default_user_interactive,
+			config->pc_class_default_user_initiated,
+			config->pc_class_default_unclassified,
+			config->pc_class_default_utility,
+			config->pc_class_default_background,
+			config->pc_class_default_gp_cpu,
+			config->pc_class_default_gp_gpu,
+			config->pc_class_default_gp_hybrid);
+	}
+
+	/* Reuse active runtime P/E/LP-E groups if available. */
+	if (g_pc_ctx &&
+	    process_cpuset_groups_get(g_pc_ctx, p_cpus, sizeof(p_cpus), e_cpus,
+				       sizeof(e_cpus), l_cpus,
+				       sizeof(l_cpus)) == 0) {
+		(void)process_cpuset_set_groups(lookup_ctx,
+					p_cpus[0] ? p_cpus : NULL,
+					e_cpus[0] ? e_cpus : NULL,
+					l_cpus[0] ? l_cpus : NULL);
+	}
+
+	rc = process_cpuset_classify_name(lookup_ctx, trunc, &cls, cpus,
+					  sizeof(cpus));
+	process_cpuset_free(lookup_ctx);
+
+	if (rc < 0) {
+		lpmd_log_info("process_cpuset: classify: '%s' not found\n", trunc);
+		snprintf(result, result_cap,
+			 "process:%s, classification:not found, cpuaffinity:-",
+			 trunc);
+		return -1;
+	}
+
+	snprintf(result, result_cap,
+		 "process:%s, classification:%s, cpuaffinity:%s", trunc,
+		 cls ? cls : "unknown", cpus[0] ? cpus : "-");
+	return 0;
 }
