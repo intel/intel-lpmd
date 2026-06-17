@@ -32,7 +32,7 @@
     realtime           - latency-sensitive media / audio engines
     GameProfileCPU     - CPU-bound game workloads
     GameProfileGPU     - GPU-bound game workloads
-    GameProfileHybrid  - mixed CPU/GPU game workloads
+    GameProfileMixed  - mixed CPU/GPU game workloads
 
 
   Distro-specific notables retained in this single file:
@@ -65,7 +65,7 @@
       background         -> Lcores
       GameProfileCPU     -> Pcores
       GameProfileGPU     -> Pcores + Ecores
-      GameProfileHybrid  -> Pcores + Ecores
+      GameProfileMixed  -> Pcores + Ecores
 
   NOTE: /proc/<pid>/comm is truncated to 15 chars; names below already
         respect that limit.
@@ -94,7 +94,7 @@
           background         -> ActiveLcores
           GameProfileCPU     -> ActivePcores
           GameProfileGPU     -> ActivePcores, ActiveEcores
-          GameProfileHybrid  -> ActivePcores, ActiveEcores
+          GameProfileMixed  -> ActivePcores, ActiveEcores
       Override any of them by editing this block; remove the whole block
       to keep all defaults built-in.
 
@@ -127,9 +127,9 @@
         <GameProfileGPU>
             <Cores>ActiveLcores</Cores>
         </GameProfileGPU>
-        <GameProfileHybrid>
+        <GameProfileMixed>
             <Cores>ActiveEcores,ActiveLcores</Cores>
-        </GameProfileHybrid>
+        </GameProfileMixed>
     </ClassDefaults>
 
     <!--
@@ -143,7 +143,7 @@
         <Classification> required: realtime | user_interactive |
                                    user_initiated | utility |
                                    background | GameProfileCPU |
-                                   GameProfileGPU | GameProfileHybrid
+                                   GameProfileGPU | GameProfileMixed
                                    Most GUI apps should use
                                    user_initiated; intel_lpmd will
                                    promote them to user_interactive
@@ -209,7 +209,7 @@
     -->
 
     <DefaultProcess>
-        <Classification>user_initiated</Classification>
+        <Classification>unclassified</Classification>
         <ActiveCores>ActivePcores, ActiveEcores, ActiveLcores</ActiveCores>
         <AffinityAllThreads>1</AffinityAllThreads>
     </DefaultProcess>
@@ -1556,6 +1556,13 @@
         <!-- GLib proxy auto-config (PAC) helper -->
         <Name>glib-pacrunner</Name>
         <Classification>background</Classification>
+    </Process>
+
+    <!-- Steam Games -->
+    <Process>
+        <Name>StrangeBrigade.</Name>
+        <Classification>GameProfileMixed</Classification>
+        <AffinityAllThreads>1</AffinityAllThreads>
     </Process>
 
 </ProcessCpusetConfig>

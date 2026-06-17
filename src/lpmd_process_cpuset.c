@@ -753,6 +753,55 @@ void lpmd_process_cpuset_print_unbound(int user_only)
 		lpmd_log_msg("  pid=%ld %s comm=%s%s\n", pid,
 			     is_k == 1 ? "[k]" : "[u]", comm,
 			     is_unclassified ? " class=Unclassified" : "");
+
+		/* List all threads in this process */
+		if (is_k != 1) {  /* Only list threads for user processes */
+			char task_path[64];
+			DIR *task_dir;
+			struct dirent *entry;
+
+			snprintf(task_path, sizeof(task_path), "/proc/%ld/task", pid);
+			task_dir = opendir(task_path);
+			if (task_dir) {
+				while ((entry = readdir(task_dir)) != NULL) {
+					pid_t tid;
+					char tid_comm[64] = { 0 };
+					char tid_path[64];
+					FILE *tid_f;
+					size_t tid_len;
+
+					if (entry->d_type != DT_DIR)
+						continue;
+					if (!strcmp(entry->d_name, ".") ||
+					    !strcmp(entry->d_name, ".."))
+						continue;
+					tid = (pid_t)atoi(entry->d_name);
+					if (tid <= 0 || tid == (pid_t)pid)
+						continue;
+
+					/* Read thread name from /proc/<pid>/task/<tid>/comm */
+					snprintf(tid_path, sizeof(tid_path),
+						 "/proc/%ld/task/%d/comm", pid, (int)tid);
+					tid_f = fopen(tid_path, "r");
+					if (tid_f) {
+						if (fgets(tid_comm, sizeof(tid_comm), tid_f)) {
+							tid_len = strlen(tid_comm);
+							if (tid_len && tid_comm[tid_len - 1] == '\n')
+								tid_comm[tid_len - 1] = '\0';
+						}
+						fclose(tid_f);
+					} else {
+						snprintf(tid_comm, sizeof(tid_comm), "<dead>");
+					}
+
+					lpmd_log_msg("\t\tTID=%d comm=%s%s\n", (int)tid,
+						     tid_comm,
+						     is_unclassified ? " class=Unclassified" : "");
+				}
+				closedir(task_dir);
+			}
+		}
+
 		unbound++;
 	}
 	closedir(d);
@@ -808,6 +857,8 @@ void lpmd_process_cpuset_print_bound(void)
 		size_t off;
 		FILE *f;
 		size_t len;
+		DIR *task_dir;
+		struct dirent *entry;
 
 		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, unit,
 						   sizeof(unit), &cls, &use_p,
@@ -859,10 +910,71 @@ void lpmd_process_cpuset_print_bound(void)
 		if (!off)
 			snprintf(cpus_buf, sizeof(cpus_buf), "-");
 
+		/* Print process line */
 		lpmd_log_msg(
-			"  pid=%d comm=%s class=%s groups=%s cpus=[%s] unit=%s\n",
+			"  PID=%d comm=%s class=%s groups=%s cpus=[%s] unit=%s\n",
 			(int)pid, comm, cls, groups_buf, cpus_buf,
 			unit[0] ? unit : "<affinity>");
+
+		/* List all threads in this process */
+		snprintf(path, sizeof(path), "/proc/%d/task", (int)pid);
+		task_dir = opendir(path);
+		if (task_dir) {
+			while ((entry = readdir(task_dir)) != NULL) {
+				pid_t tid;
+				char tid_comm[64] = { 0 };
+				char tid_path[64];
+				char tid_groups_buf[64];
+				FILE *tid_f;
+				size_t tid_len, tid_off;
+
+				if (entry->d_type != DT_DIR)
+					continue;
+				if (!strcmp(entry->d_name, ".") ||
+				    !strcmp(entry->d_name, ".."))
+					continue;
+				tid = (pid_t)atoi(entry->d_name);
+				if (tid <= 0 || tid == pid)
+					continue;
+
+				/* Read thread name from /proc/<pid>/task/<tid>/comm */
+				snprintf(tid_path, sizeof(tid_path),
+					 "/proc/%d/task/%d/comm", (int)pid, (int)tid);
+				tid_f = fopen(tid_path, "r");
+				if (tid_f) {
+					if (fgets(tid_comm, sizeof(tid_comm), tid_f)) {
+						tid_len = strlen(tid_comm);
+						if (tid_len && tid_comm[tid_len - 1] == '\n')
+							tid_comm[tid_len - 1] = '\0';
+					}
+					fclose(tid_f);
+				} else {
+					snprintf(tid_comm, sizeof(tid_comm), "<dead>");
+				}
+
+				/* Threads share the same core groups as their parent process */
+				tid_groups_buf[0] = '\0';
+				tid_off = 0;
+				if (use_p)
+					tid_off += snprintf(tid_groups_buf + tid_off,
+							    sizeof(tid_groups_buf) - tid_off, "Pcores");
+				if (use_e)
+					tid_off += snprintf(tid_groups_buf + tid_off,
+							    sizeof(tid_groups_buf) - tid_off, "%sEcores",
+							    tid_off ? "+" : "");
+				if (use_l)
+					tid_off += snprintf(tid_groups_buf + tid_off,
+							    sizeof(tid_groups_buf) - tid_off, "%sLPEcores",
+							    tid_off ? "+" : "");
+				if (!tid_off)
+					snprintf(tid_groups_buf, sizeof(tid_groups_buf), "none");
+
+				lpmd_log_msg("\t\tTID=%d comm=%s class=%s groups=%s\n", (int)tid,
+					     tid_comm, cls, tid_groups_buf);
+			}
+			closedir(task_dir);
+		}
+
 		listed++;
 	}
 

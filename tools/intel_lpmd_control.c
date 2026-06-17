@@ -34,7 +34,7 @@ int main(int argc, char **argv)
 		fprintf (stderr, "intel_lpmd_control: missing control command\n");
 		fprintf (stderr, "syntax:\n");
 		fprintf (stderr, "intel_lpmd_control ON|OFF|AUTO|PROCESS-PRECONFIG|STATUS|LIST-UNBOUND|LIST-UNBOUND-USER|LIST-BOUND|UNBIND-ALL\n");
-		fprintf (stderr, "intel_lpmd_control ADD-PROCESS <name> <user_interactive|user_initiated|Unclassified|utility|background|realtime|GameProfileCPU|GameProfileGPU|GameProfileHybrid>\n");
+		fprintf (stderr, "intel_lpmd_control ADD-PROCESS <name> <user_interactive|user_initiated|Unclassified|utility|background|realtime|GameProfileCPU|GameProfileGPU|GameProfileMixed>\n");
 		fprintf (stderr, "intel_lpmd_control GET-PROC-CLASSIFICATION <name>\n");
 		fprintf (stderr, "intel_lpmd_control SET-FOCUS <pid>   (use 0 to clear)\n");
 		exit (0);

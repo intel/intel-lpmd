@@ -25,7 +25,7 @@
     realtime           - latency-sensitive media / audio engines
     GameProfileCPU     - CPU-bound game workloads
     GameProfileGPU     - GPU-bound game workloads
-    GameProfileHybrid  - mixed CPU/GPU game workloads
+    GameProfileMixed  - mixed CPU/GPU game workloads
 -->
 
 <ProcessCpusetConfig>

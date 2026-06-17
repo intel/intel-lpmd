@@ -222,6 +222,11 @@ for Intel Energy Optimizer (LPMD) daemon
 			<Background>
 				<Cores>ActiveLcores</Cores>
 			</Background>
+
+			<GameProfileMixed>
+				<Cores>ActiveEcores, ActiveLcores</Cores>
+			</GameProfileMixed>
+
 			<Unclassified>
 				<Cores>ActivePcores, ActiveEcores, ActiveLcores</Cores>
 			</Unclassified>

@@ -276,7 +276,7 @@ static void lpmd_parse_class_defaults(xmlDoc *doc, xmlNode *a_node, struct lpmd_
 		  sizeof(lpmd_config->pc_class_default_gp_cpu) },
 		{ "GameProfileGPU",    lpmd_config->pc_class_default_gp_gpu,
 		  sizeof(lpmd_config->pc_class_default_gp_gpu) },
-		{ "GameProfileHybrid", lpmd_config->pc_class_default_gp_hybrid,
+		{ "GameProfileMixed", lpmd_config->pc_class_default_gp_hybrid,
 		  sizeof(lpmd_config->pc_class_default_gp_hybrid) },
 	};
 
@@ -287,7 +287,7 @@ static void lpmd_parse_class_defaults(xmlDoc *doc, xmlNode *a_node, struct lpmd_
 		if (cur_node->type != XML_ELEMENT_NODE || !cur_node->name)
 			continue;
 
-		/* First, try to find <Cores> child element (new format) */
+		/* Look for <Cores> child element */
 		val = NULL;
 		for (child_node = cur_node->children; child_node; child_node = child_node->next) {
 			if (child_node->type == XML_ELEMENT_NODE &&
@@ -297,10 +297,6 @@ static void lpmd_parse_class_defaults(xmlDoc *doc, xmlNode *a_node, struct lpmd_
 				break;
 			}
 		}
-
-		/* Fall back to direct text content (old format) for backward compatibility */
-		if (!val)
-			val = (char *)xmlNodeListGetString(doc, cur_node->xmlChildrenNode, 1);
 
 		if (!val)
 			continue;

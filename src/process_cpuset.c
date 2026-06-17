@@ -494,7 +494,7 @@ static enum classification parse_class(const char *s)
 		return CLASS_GAME_PROFILE_CPU;
 	if (!strcasecmp(s, "GameProfileGPU"))
 		return CLASS_GAME_PROFILE_GPU;
-	if (!strcasecmp(s, "GameProfileHybrid"))
+	if (!strcasecmp(s, "GameProfileMixed"))
 		return CLASS_GAME_PROFILE_HYBRID;
 	return CLASS_INVALID;
 }
@@ -519,7 +519,7 @@ static const char *class_str(enum classification c)
 	case CLASS_GAME_PROFILE_GPU:
 		return "GameProfileGPU";
 	case CLASS_GAME_PROFILE_HYBRID:
-		return "GameProfileHybrid";
+		return "GameProfileMixed";
 	default:
 		return "invalid";
 	}
@@ -563,13 +563,24 @@ static void parse_cpu_groups(xmlDoc *doc, xmlNode *node, struct cpu_groups *g)
 static void parse_class_defaults(xmlDoc *doc, xmlNode *node,
 				 struct core_spec defaults[])
 {
-	xmlNode *c;
+	xmlNode *c, *child_node;
 	char *val;
 
 	for (c = node; c; c = c->next) {
 		if (c->type != XML_ELEMENT_NODE)
 			continue;
-		val = (char *)xmlNodeListGetString(doc, c->xmlChildrenNode, 1);
+
+		/* Look for <Cores> child element */
+		val = NULL;
+		for (child_node = c->children; child_node; child_node = child_node->next) {
+			if (child_node->type == XML_ELEMENT_NODE &&
+			    child_node->name &&
+			    !strcasecmp((const char *)child_node->name, "Cores")) {
+				val = (char *)xmlNodeListGetString(doc, child_node->xmlChildrenNode, 1);
+				break;
+			}
+		}
+
 		if (!val)
 			continue;
 		if (!strcasecmp((const char *)c->name, "Realtime"))
@@ -595,7 +606,7 @@ static void parse_class_defaults(xmlDoc *doc, xmlNode *node,
 		else if (!strcasecmp((const char *)c->name, "GameProfileGPU"))
 			parse_core_spec(val, &defaults[CLASS_GAME_PROFILE_GPU]);
 		else if (!strcasecmp((const char *)c->name,
-				     "GameProfileHybrid"))
+				     "GameProfileMixed"))
 			parse_core_spec(val,
 					&defaults[CLASS_GAME_PROFILE_HYBRID]);
 		else
@@ -1884,7 +1895,7 @@ int process_cpuset_load_config_overlay(process_cpuset_t *ctx, const char *path)
  * @name           : matched against /proc/<pid>/comm (15-char limit).
  * @classification : "background" / "foreground" / "realtime" /
  *                   "GameProfileCPU" / "GameProfileGPU" /
- *                   "GameProfileHybrid" (case-insensitive).
+ *                   "GameProfileMixed" (case-insensitive).
  *
  * Resolves the CPU mask from the current <ClassDefaults>; literal
  * <ActiveCores> / <AllowSession> / <AffinityAllThreads> are not
