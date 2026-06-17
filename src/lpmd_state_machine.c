@@ -167,15 +167,22 @@ static int get_config_state_interval(struct lpmd_config_t *config, int idx)
 	if (config->wlt_proxy_enable)
 		return 0;
 
-	/* Start polling only when needed for the util monitor */
-	if (!config->util_monitor) {
+	/*
+	 * Enable polling only if either UTIL is the main state change source or
+	 * if WLT is running in polling mode.
+	 */
+	if (!config->util_monitor && !config->wlt_hint_poll_enable) {
 		config->data.polling_interval = -1;
 		return 0;
 	}
 
 	/* Always start with minimum polling interval for a new state */
 	if (idx != current_idx) {
-		config->data.polling_interval = state->min_poll_interval;
+		/* WLT polling manages the polling interval */
+		if (config->wlt_hint_poll_enable && !config->util_monitor)
+			config->data.polling_interval = DEF_POLLING_INTERVAL;
+		else /* UTIL manages the polling interval */
+			config->data.polling_interval = state->min_poll_interval;
 		return 0;
 	}
 
@@ -449,7 +456,9 @@ int lpmd_enter_next_state(void)
 	 * After switching power profiles polling gets disabled and needs to be
 	 * updated.
 	 */
-	if (config->data.polling_interval == -1 && config->util_monitor && idx != DEFAULT_OFF)
+	if (config->data.polling_interval == -1 &&
+	    (config->util_monitor || config->wlt_hint_poll_enable) &&
+	    idx != DEFAULT_OFF)
 		get_config_state_interval(config, idx);
 
 	/* No action needed, keep previous idx and interval */
@@ -484,7 +493,7 @@ static void dump_states(struct lpmd_config_t *lpmd_config)
 	lpmd_log_info("WLT Hint Enable:%d\n", lpmd_config->wlt_hint_enable);
 	lpmd_log_info("WLT Hint Notification Delay:%d\n", lpmd_config->wlt_notification_delay);
 	lpmd_log_info("WLT Proxy Enable:%d\n", lpmd_config->wlt_proxy_enable);
-	lpmd_log_info("WLT Proxy Enable:%d\n", lpmd_config->wlt_hint_poll_enable);
+	lpmd_log_info("WLT Polling Enable:%d\n", lpmd_config->wlt_hint_poll_enable);
 	lpmd_log_info("WLT Hint mask:%d\n", lpmd_config->wlt_hint_mask);
 	lpmd_log_info("Util Enable:%d\n", lpmd_config->util_monitor);
 	lpmd_log_info("Util entry threshold:%d\n", lpmd_config->util_entry_threshold);
