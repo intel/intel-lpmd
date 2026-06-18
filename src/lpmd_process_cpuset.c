@@ -35,6 +35,90 @@
 static process_cpuset_t *g_pc_ctx;
 static int g_pc_connector_fd = -1;
 
+static const struct lpmd_class_tuning_override_t *class_tuning_for_name(
+	const struct lpmd_config_t *config, const char *cls)
+{
+	if (!config || !cls)
+		return NULL;
+	if (!strcasecmp(cls, "realtime"))
+		return &config->pc_class_tuning_realtime;
+	if (!strcasecmp(cls, "user_interactive"))
+		return &config->pc_class_tuning_user_interactive;
+	if (!strcasecmp(cls, "user_initiated"))
+		return &config->pc_class_tuning_user_initiated;
+	if (!strcasecmp(cls, "Unclassified"))
+		return &config->pc_class_tuning_unclassified;
+	if (!strcasecmp(cls, "utility"))
+		return &config->pc_class_tuning_utility;
+	if (!strcasecmp(cls, "background"))
+		return &config->pc_class_tuning_background;
+	if (!strcasecmp(cls, "GameProfileCPU"))
+		return &config->pc_class_tuning_gp_cpu;
+	if (!strcasecmp(cls, "GameProfileGPU"))
+		return &config->pc_class_tuning_gp_gpu;
+	if (!strcasecmp(cls, "GameProfileMixed"))
+		return &config->pc_class_tuning_gp_hybrid;
+	return NULL;
+}
+
+static void apply_class_min_perf_override(const struct lpmd_config_t *config,
+					  const char *cls)
+{
+	const struct lpmd_class_tuning_override_t *ovr;
+	struct lpmd_config_state_t tmp_state;
+	int on_battery;
+
+	ovr = class_tuning_for_name(config, cls);
+	if (!ovr || !ovr->present_mask)
+		return;
+
+	on_battery = is_on_battery();
+	if (on_battery) {
+		if (!(ovr->present_mask & LPMD_CLASS_TUNE_MIN_PERF_PCT_DC))
+			return;
+	} else {
+		if (!(ovr->present_mask & LPMD_CLASS_TUNE_MIN_PERF_PCT_AC))
+			return;
+	}
+
+	lpmd_init_config_state(&tmp_state);
+	if (ovr->present_mask & LPMD_CLASS_TUNE_MIN_PERF_PCT_AC)
+		tmp_state.min_perf_pct_ac = ovr->min_perf_pct_ac;
+	if (ovr->present_mask & LPMD_CLASS_TUNE_MIN_PERF_PCT_DC)
+		tmp_state.min_perf_pct_dc = ovr->min_perf_pct_dc;
+
+	if (process_min_perf_pct(&tmp_state))
+		lpmd_log_warn("process_cpuset: class=%s min_perf_pct apply failed\n",
+			      cls ? cls : "?");
+}
+
+static void apply_class_min_perf_override_for_pid(
+	const struct lpmd_config_t *config, pid_t pid)
+{
+	size_t n, i;
+
+	if (!g_pc_ctx || !config || pid <= 0)
+		return;
+
+	n = process_cpuset_attached_count(g_pc_ctx);
+	for (i = 0; i < n; i++) {
+		pid_t item_pid = 0;
+		char unit[128] = { 0 };
+		const char *cls = NULL;
+		int use_p = 0, use_e = 0, use_l = 0;
+
+		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &item_pid, unit,
+						   sizeof(unit), &cls, &use_p,
+						   &use_e, &use_l) < 0)
+			continue;
+		if (item_pid != pid)
+			continue;
+
+		apply_class_min_perf_override(config, cls);
+		return;
+	}
+}
+
 static void user_xml_path(char *out, size_t cap)
 {
 	snprintf(out, cap, "%s/%s", TDCONFDIR, PROCESS_CPUSET_USER_CONFIG_FILE);
@@ -303,6 +387,8 @@ void lpmd_process_cpuset_unbind_all(void)
 void lpmd_process_cpuset_rescan(void)
 {
 	int n;
+	size_t i, attached_n;
+	struct lpmd_config_t *config;
 
 	if (!g_pc_ctx)
 		return;
@@ -317,6 +403,27 @@ void lpmd_process_cpuset_rescan(void)
 			      n);
 	else if (n < 0)
 		lpmd_log_warn("process_cpuset: rescan failed\n");
+
+	if (n <= 0)
+		return;
+
+	config = get_lpmd_config();
+	if (!config)
+		return;
+
+	attached_n = process_cpuset_attached_count(g_pc_ctx);
+	for (i = 0; i < attached_n; i++) {
+		pid_t pid = 0;
+		char unit[128] = { 0 };
+		const char *cls = NULL;
+		int use_p = 0, use_e = 0, use_l = 0;
+
+		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, unit,
+						   sizeof(unit), &cls, &use_p,
+						   &use_e, &use_l) < 0)
+			continue;
+		apply_class_min_perf_override(config, cls);
+	}
 }
 
 /*
@@ -594,7 +701,11 @@ void lpmd_process_cpuset_proc_connector_handle(void)
 			continue;
 		}
 
-		(void)process_cpuset_apply_pid(g_pc_ctx, pid, 0);
+		if (process_cpuset_apply_pid(g_pc_ctx, pid, 0) == 1) {
+			struct lpmd_config_t *config = get_lpmd_config();
+			if (config)
+				apply_class_min_perf_override_for_pid(config, pid);
+		}
 	}
 }
 

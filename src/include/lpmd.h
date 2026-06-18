@@ -219,6 +219,29 @@ struct lpmd_config_state_t {
 	int cpumask_idx;
 };
 
+enum lpmd_class_tuning_present_bits {
+	LPMD_CLASS_TUNE_MIN_PERF_PCT_AC = 1U << 0,
+	LPMD_CLASS_TUNE_MIN_PERF_PCT_DC = 1U << 1,
+	LPMD_CLASS_TUNE_MAX_PERF_PCT_AC = 1U << 2,
+	LPMD_CLASS_TUNE_MAX_PERF_PCT_DC = 1U << 3,
+	LPMD_CLASS_TUNE_BALANCE_SLIDER_AC = 1U << 4,
+	LPMD_CLASS_TUNE_BALANCE_SLIDER_DC = 1U << 5,
+	LPMD_CLASS_TUNE_SLIDER_OFFSET_AC = 1U << 6,
+	LPMD_CLASS_TUNE_SLIDER_OFFSET_DC = 1U << 7,
+};
+
+struct lpmd_class_tuning_override_t {
+	uint32_t present_mask;
+	int min_perf_pct_ac;
+	int min_perf_pct_dc;
+	int max_perf_pct_ac;
+	int max_perf_pct_dc;
+	int balance_slider_ac;
+	int balance_slider_dc;
+	int slider_offset_ac;
+	int slider_offset_dc;
+};
+
 // lpmd config data
 struct lpmd_config_t {
 	int mode;
@@ -250,6 +273,20 @@ struct lpmd_config_t {
 	char pc_class_default_gp_cpu[MAX_CONFIG_LEN];
 	char pc_class_default_gp_gpu[MAX_CONFIG_LEN];
 	char pc_class_default_gp_hybrid[MAX_CONFIG_LEN];
+
+	/* Optional per-class tuning overrides from <ClassDefaults>. These
+	 * are independent from <State> definitions. Each field is applied
+	 * only when the corresponding present bit is set, so omitted tags
+	 * leave existing settings untouched. */
+	struct lpmd_class_tuning_override_t pc_class_tuning_realtime;
+	struct lpmd_class_tuning_override_t pc_class_tuning_user_interactive;
+	struct lpmd_class_tuning_override_t pc_class_tuning_user_initiated;
+	struct lpmd_class_tuning_override_t pc_class_tuning_unclassified;
+	struct lpmd_class_tuning_override_t pc_class_tuning_utility;
+	struct lpmd_class_tuning_override_t pc_class_tuning_background;
+	struct lpmd_class_tuning_override_t pc_class_tuning_gp_cpu;
+	struct lpmd_class_tuning_override_t pc_class_tuning_gp_gpu;
+	struct lpmd_class_tuning_override_t pc_class_tuning_gp_hybrid;
 
 	union {
 		struct {

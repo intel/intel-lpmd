@@ -251,6 +251,82 @@ int is_wildcard(char *str)
 	return 0;
 }
 
+static void set_class_tuning_bit(struct lpmd_class_tuning_override_t *ovr,
+					 uint32_t bit)
+{
+	if (ovr)
+		ovr->present_mask |= bit;
+}
+
+static void parse_class_tuning_node(xmlDoc *doc, xmlNode *node,
+				    struct lpmd_class_tuning_override_t *ovr)
+{
+	char *val;
+	int ret;
+
+	if (!doc || !node || !ovr || node->type != XML_ELEMENT_NODE || !node->name)
+		return;
+
+	val = (char *)xmlNodeListGetString(doc, node->xmlChildrenNode, 1);
+	if (!val)
+		return;
+
+	ret = 0;
+	if (!strcmp((const char *)node->name, "MinPerfPctAC") ||
+	    !strcmp((const char *)node->name, "min_perf_pct_ac")) {
+		ret = read_min_perf_pct_and_validate(&ovr->min_perf_pct_ac, val, -1);
+		if (!ret)
+			set_class_tuning_bit(ovr, LPMD_CLASS_TUNE_MIN_PERF_PCT_AC);
+	} else if (!strcmp((const char *)node->name, "MinPerfPctDC") ||
+		   !strcmp((const char *)node->name, "min_perf_pct_dc")) {
+		ret = read_min_perf_pct_and_validate(&ovr->min_perf_pct_dc, val, -1);
+		if (!ret)
+			set_class_tuning_bit(ovr, LPMD_CLASS_TUNE_MIN_PERF_PCT_DC);
+	} else if (!strcmp((const char *)node->name, "MaxPerfPctAC") ||
+		   !strcmp((const char *)node->name, "max_perf_pct_ac") ||
+		   !strcmp((const char *)node->name, "MaxPerfAC")) {
+		ret = read_max_perf_pct_and_validate(&ovr->max_perf_pct_ac, val, -1);
+		if (!ret)
+			set_class_tuning_bit(ovr, LPMD_CLASS_TUNE_MAX_PERF_PCT_AC);
+	} else if (!strcmp((const char *)node->name, "MaxPerfPctDC") ||
+		   !strcmp((const char *)node->name, "max_perf_pct_dc") ||
+		   !strcmp((const char *)node->name, "MaxPerfDC")) {
+		ret = read_max_perf_pct_and_validate(&ovr->max_perf_pct_dc, val, -1);
+		if (!ret)
+			set_class_tuning_bit(ovr, LPMD_CLASS_TUNE_MAX_PERF_PCT_DC);
+	} else if (!strcmp((const char *)node->name, "BalanceSliderAC") ||
+		   !strcmp((const char *)node->name, "SliderBalanceAC") ||
+		   !strcmp((const char *)node->name, "SliderBalnceAC")) {
+		ret = read_slider_and_validate(&ovr->balance_slider_ac, val,
+					       "BalanceSliderAC", -1,
+					       SLIDER_TYPE_BALANCE);
+		if (!ret)
+			set_class_tuning_bit(ovr, LPMD_CLASS_TUNE_BALANCE_SLIDER_AC);
+	} else if (!strcmp((const char *)node->name, "BalanceSliderDC") ||
+		   !strcmp((const char *)node->name, "SliderBalanceDC") ||
+		   !strcmp((const char *)node->name, "SliderBalnceDC")) {
+		ret = read_slider_and_validate(&ovr->balance_slider_dc, val,
+					       "BalanceSliderDC", -1,
+					       SLIDER_TYPE_BALANCE);
+		if (!ret)
+			set_class_tuning_bit(ovr, LPMD_CLASS_TUNE_BALANCE_SLIDER_DC);
+	} else if (!strcmp((const char *)node->name, "SliderOffsetAC")) {
+		ret = read_slider_and_validate(&ovr->slider_offset_ac, val,
+					       "SliderOffsetAC", -1,
+					       SLIDER_TYPE_OFFSET);
+		if (!ret)
+			set_class_tuning_bit(ovr, LPMD_CLASS_TUNE_SLIDER_OFFSET_AC);
+	} else if (!strcmp((const char *)node->name, "SliderOffsetDC")) {
+		ret = read_slider_and_validate(&ovr->slider_offset_dc, val,
+					       "SliderOffsetDC", -1,
+					       SLIDER_TYPE_OFFSET);
+		if (!ret)
+			set_class_tuning_bit(ovr, LPMD_CLASS_TUNE_SLIDER_OFFSET_DC);
+	}
+
+	xmlFree(val);
+}
+
 static void lpmd_parse_class_defaults(xmlDoc *doc, xmlNode *a_node, struct lpmd_config_t *lpmd_config)
 {
 	xmlNode *cur_node, *child_node;
@@ -259,56 +335,74 @@ static void lpmd_parse_class_defaults(xmlDoc *doc, xmlNode *a_node, struct lpmd_
 		const char *tag;
 		char       *dst;
 		size_t      cap;
+		struct lpmd_class_tuning_override_t *tuning;
 	} map[] = {
 		{ "Realtime",          lpmd_config->pc_class_default_realtime,
-		  sizeof(lpmd_config->pc_class_default_realtime) },
+		  sizeof(lpmd_config->pc_class_default_realtime),
+		  &lpmd_config->pc_class_tuning_realtime },
 		{ "UserInteractive",   lpmd_config->pc_class_default_user_interactive,
-		  sizeof(lpmd_config->pc_class_default_user_interactive) },
+		  sizeof(lpmd_config->pc_class_default_user_interactive),
+		  &lpmd_config->pc_class_tuning_user_interactive },
 		{ "UserInitiated",     lpmd_config->pc_class_default_user_initiated,
-		  sizeof(lpmd_config->pc_class_default_user_initiated) },
+		  sizeof(lpmd_config->pc_class_default_user_initiated),
+		  &lpmd_config->pc_class_tuning_user_initiated },
 		{ "Unclassified",     lpmd_config->pc_class_default_unclassified,
-		  sizeof(lpmd_config->pc_class_default_unclassified) },
+		  sizeof(lpmd_config->pc_class_default_unclassified),
+		  &lpmd_config->pc_class_tuning_unclassified },
 		{ "Utility",           lpmd_config->pc_class_default_utility,
-		  sizeof(lpmd_config->pc_class_default_utility) },
+		  sizeof(lpmd_config->pc_class_default_utility),
+		  &lpmd_config->pc_class_tuning_utility },
 		{ "Background",        lpmd_config->pc_class_default_background,
-		  sizeof(lpmd_config->pc_class_default_background) },
+		  sizeof(lpmd_config->pc_class_default_background),
+		  &lpmd_config->pc_class_tuning_background },
 		{ "GameProfileCPU",    lpmd_config->pc_class_default_gp_cpu,
-		  sizeof(lpmd_config->pc_class_default_gp_cpu) },
+		  sizeof(lpmd_config->pc_class_default_gp_cpu),
+		  &lpmd_config->pc_class_tuning_gp_cpu },
 		{ "GameProfileGPU",    lpmd_config->pc_class_default_gp_gpu,
-		  sizeof(lpmd_config->pc_class_default_gp_gpu) },
+		  sizeof(lpmd_config->pc_class_default_gp_gpu),
+		  &lpmd_config->pc_class_tuning_gp_gpu },
 		{ "GameProfileMixed", lpmd_config->pc_class_default_gp_hybrid,
-		  sizeof(lpmd_config->pc_class_default_gp_hybrid) },
+		  sizeof(lpmd_config->pc_class_default_gp_hybrid),
+		  &lpmd_config->pc_class_tuning_gp_hybrid },
 	};
 
 	if (!doc || !a_node || !lpmd_config)
 		return;
 
 	for (cur_node = a_node; cur_node; cur_node = cur_node->next) {
+		size_t class_idx;
+
 		if (cur_node->type != XML_ELEMENT_NODE || !cur_node->name)
+			continue;
+
+		for (class_idx = 0; class_idx < sizeof(map) / sizeof(map[0]); class_idx++) {
+			if (!strcmp((const char *)cur_node->name, map[class_idx].tag))
+				break;
+		}
+		if (class_idx == sizeof(map) / sizeof(map[0]))
 			continue;
 
 		/* Look for <Cores> child element */
 		val = NULL;
 		for (child_node = cur_node->children; child_node; child_node = child_node->next) {
-			if (child_node->type == XML_ELEMENT_NODE &&
-			    child_node->name &&
-			    !strcmp((const char *)child_node->name, "Cores")) {
-				val = (char *)xmlNodeListGetString(doc, child_node->xmlChildrenNode, 1);
-				break;
-			}
-		}
+			if (child_node->type != XML_ELEMENT_NODE || !child_node->name)
+				continue;
 
-		if (!val)
-			continue;
-
-		for (size_t i = 0; i < sizeof(map) / sizeof(map[0]); i++) {
-			if (!strcmp((const char *)cur_node->name, map[i].tag)) {
-				snprintf(map[i].dst, map[i].cap, "%s", val);
-				map[i].dst[map[i].cap - 1] = '\0';
-				break;
+			if (!strcmp((const char *)child_node->name, "Cores")) {
+				val = (char *)xmlNodeListGetString(doc,
+							   child_node->xmlChildrenNode,
+							   1);
+				if (!val)
+					continue;
+				snprintf(map[class_idx].dst, map[class_idx].cap, "%s", val);
+				map[class_idx].dst[map[class_idx].cap - 1] = '\0';
+				xmlFree(val);
+				continue;
 			}
+
+			parse_class_tuning_node(doc, child_node,
+						map[class_idx].tuning);
 		}
-		xmlFree(val);
 	}
 }
 
@@ -415,6 +509,24 @@ static void lpmd_init_config(struct lpmd_config_t *config)
 	config->data.util_cpu = -1;
 	config->data.util_gfx = -1;
 	config->data.wlt_hint = -1;
+	memset(&config->pc_class_tuning_realtime, 0,
+	       sizeof(config->pc_class_tuning_realtime));
+	memset(&config->pc_class_tuning_user_interactive, 0,
+	       sizeof(config->pc_class_tuning_user_interactive));
+	memset(&config->pc_class_tuning_user_initiated, 0,
+	       sizeof(config->pc_class_tuning_user_initiated));
+	memset(&config->pc_class_tuning_unclassified, 0,
+	       sizeof(config->pc_class_tuning_unclassified));
+	memset(&config->pc_class_tuning_utility, 0,
+	       sizeof(config->pc_class_tuning_utility));
+	memset(&config->pc_class_tuning_background, 0,
+	       sizeof(config->pc_class_tuning_background));
+	memset(&config->pc_class_tuning_gp_cpu, 0,
+	       sizeof(config->pc_class_tuning_gp_cpu));
+	memset(&config->pc_class_tuning_gp_gpu, 0,
+	       sizeof(config->pc_class_tuning_gp_gpu));
+	memset(&config->pc_class_tuning_gp_hybrid, 0,
+	       sizeof(config->pc_class_tuning_gp_hybrid));
 	config->balance_slider_def_ac = -1;
 	config->balance_slider_def_dc = -1;
 	config->slider_offset_def_ac = -1;

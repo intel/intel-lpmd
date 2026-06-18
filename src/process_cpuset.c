@@ -2904,7 +2904,7 @@ int process_cpuset_apply_pid(process_cpuset_t *ctx, pid_t pid, int dry_run)
 
 	for (int i = 0; i < ctx->n_entries; i++) {
 		const struct proc_entry *e = &ctx->entries[i];
-		if (strcmp(comm, e->name))
+		if (!pid_matches_name(pid, e->name, comm))
 			continue;
 
 		if (loc == PID_LOC_USER_SESS) {

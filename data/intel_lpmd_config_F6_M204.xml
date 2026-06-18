@@ -154,10 +154,18 @@ for Intel Energy Optimizer (LPMD) daemon
 		<CPUConfig> 4P0E4L-25W </CPUConfig>
 		<!--
 		  Optional per-CPU-model override of process_cpuset.xml's
-		  <ClassDefaults>. Each child accepts the same token list as
-		  ActiveCores ("ActivePcores" / "ActiveEcores" /
-		  "ActiveLcores", comma- or whitespace-separated). Any class
-		  not listed here keeps the value from process_cpuset.xml
+		  <ClassDefaults>. Inside each class, <Cores> accepts the same
+		  token list as ActiveCores ("ActivePcores" / "ActiveEcores" /
+		  "ActiveLcores", comma- or whitespace-separated).
+
+		  Optional per-class tuning tags are also supported:
+		    MinPerfPctAC / MinPerfPctDC
+		    MaxPerfPctAC / MaxPerfPctDC (aliases: MaxPerfAC / MaxPerfDC)
+		    BalanceSliderAC / BalanceSliderDC
+		    SliderOffsetAC / SliderOffsetDC
+
+		  Tags omitted in a class are left unchanged (no fallback forced).
+		  Classes not listed here keep values from process_cpuset.xml
 		  (or its built-in fallback).
 		-->
 		<ClassDefaults>
@@ -203,10 +211,18 @@ for Intel Energy Optimizer (LPMD) daemon
 		<CPUConfig> * </CPUConfig>
 		-->
 		  Optional per-CPU-model override of process_cpuset.xml's
-		  ClassDefaults. Each child accepts the same token list as
-		  ActiveCores ("ActivePcores" / "ActiveEcores" /
-		  "ActiveLcores", comma- or whitespace-separated). Any class
-		  not listed here keeps the value from process_cpuset.xml
+		  ClassDefaults. Inside each class, <Cores> accepts the same
+		  token list as ActiveCores ("ActivePcores" / "ActiveEcores" /
+		  "ActiveLcores", comma- or whitespace-separated).
+
+		  Optional per-class tuning tags are also supported:
+		    MinPerfPctAC / MinPerfPctDC
+		    MaxPerfPctAC / MaxPerfPctDC (aliases: MaxPerfAC / MaxPerfDC)
+		    BalanceSliderAC / BalanceSliderDC
+		    SliderOffsetAC / SliderOffsetDC
+
+		  Tags omitted in a class are left unchanged (no fallback forced).
+		  Classes not listed here keep values from process_cpuset.xml
 		  (or its built-in fallback).
 		-->
 		<ClassDefaults>
