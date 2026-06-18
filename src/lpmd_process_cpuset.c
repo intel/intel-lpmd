@@ -21,6 +21,7 @@
 #include <linux/cn_proc.h>
 #include <linux/connector.h>
 #include <linux/netlink.h>
+#include <signal.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -32,8 +33,19 @@
 #define PROCESS_CPUSET_CONFIG_FILE "process_cpuset.xml"
 #define PROCESS_CPUSET_USER_CONFIG_FILE "process_cpuset_user.xml"
 
+struct class_tune_owner_t {
+	char owner_class[64];
+	const char *field_name;
+	int (*class_has_override)(const struct lpmd_config_t *config,
+				      const char *cls);
+	void (*apply_override)(const struct lpmd_config_t *config,
+			       const char *cls);
+	void (*reset_override)(void);
+};
+
 static process_cpuset_t *g_pc_ctx;
 static int g_pc_connector_fd = -1;
+static struct class_tune_owner_t g_min_perf_owner;
 
 static const struct lpmd_class_tuning_override_t *class_tuning_for_name(
 	const struct lpmd_config_t *config, const char *cls)
@@ -92,12 +104,145 @@ static void apply_class_min_perf_override(const struct lpmd_config_t *config,
 			      cls ? cls : "?");
 }
 
-static void apply_class_min_perf_override_for_pid(
-	const struct lpmd_config_t *config, pid_t pid)
+static int pid_is_live(pid_t pid)
+{
+	if (pid <= 0)
+		return 0;
+
+	if (kill(pid, 0) == 0)
+		return 1;
+
+	if (errno == EPERM)
+		return 1;
+
+	return 0;
+}
+
+static int class_has_live_attached_pid(const char *cls)
 {
 	size_t n, i;
 
-	if (!g_pc_ctx || !config || pid <= 0)
+	if (!g_pc_ctx || !cls || !*cls)
+		return 0;
+
+	n = process_cpuset_attached_count(g_pc_ctx);
+	for (i = 0; i < n; i++) {
+		pid_t pid = 0;
+		char unit[128] = { 0 };
+		const char *item_cls = NULL;
+		int use_p = 0, use_e = 0, use_l = 0;
+
+		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, unit,
+					   sizeof(unit), &item_cls,
+					   &use_p, &use_e, &use_l) < 0)
+			continue;
+
+		if (!item_cls || strcasecmp(item_cls, cls))
+			continue;
+
+		if (pid_is_live(pid))
+			return 1;
+	}
+
+	return 0;
+}
+
+static int class_has_min_perf_override(const struct lpmd_config_t *config,
+					 const char *cls)
+{
+	const struct lpmd_class_tuning_override_t *ovr;
+	int on_battery;
+
+	if (!config || !cls || !*cls)
+		return 0;
+
+	ovr = class_tuning_for_name(config, cls);
+	if (!ovr || !ovr->present_mask)
+		return 0;
+
+	on_battery = is_on_battery();
+	if (on_battery)
+		return !!(ovr->present_mask & LPMD_CLASS_TUNE_MIN_PERF_PCT_DC);
+
+	return !!(ovr->present_mask & LPMD_CLASS_TUNE_MIN_PERF_PCT_AC);
+}
+
+static void reset_owned_min_perf_pct_to_zero(void)
+{
+	struct lpmd_config_state_t tmp_state;
+
+	lpmd_init_config_state(&tmp_state);
+	tmp_state.min_perf_pct_ac = 0;
+	tmp_state.min_perf_pct_dc = 0;
+	if (process_min_perf_pct(&tmp_state))
+		lpmd_log_warn("process_cpuset: failed to reset owned min_perf_pct to 0\n");
+}
+
+static void clear_class_tune_owner(struct class_tune_owner_t *owner,
+				    int reset_field)
+{
+	if (!owner || !owner->owner_class[0])
+		return;
+
+	if (reset_field && owner->reset_override)
+		owner->reset_override();
+
+	owner->owner_class[0] = '\0';
+}
+
+static void sync_class_tune_owner(struct class_tune_owner_t *owner,
+				 const struct lpmd_config_t *config,
+				 const char *candidate_cls)
+{
+	if (!owner)
+		return;
+
+	if (owner->owner_class[0] &&
+	    !class_has_live_attached_pid(owner->owner_class)) {
+		if (owner->reset_override)
+			owner->reset_override();
+		lpmd_log_info("process_cpuset: owner class %s has no live tasks, %s reset to 0\n",
+			      owner->owner_class,
+			      owner->field_name ? owner->field_name : "tuning field");
+		owner->owner_class[0] = '\0';
+	}
+
+	if (!candidate_cls || !*candidate_cls)
+		return;
+
+	if (!owner->class_has_override ||
+	    !owner->class_has_override(config, candidate_cls))
+		return;
+
+	if (owner->owner_class[0] &&
+	    strcasecmp(owner->owner_class, candidate_cls))
+		return;
+
+	if (!owner->owner_class[0]) {
+		snprintf(owner->owner_class, sizeof(owner->owner_class),
+			 "%s", candidate_cls);
+		lpmd_log_info("process_cpuset: class %s is now %s owner\n",
+			      owner->owner_class,
+			      owner->field_name ? owner->field_name : "tuning field");
+	}
+
+	if (owner->apply_override)
+		owner->apply_override(config, candidate_cls);
+}
+
+static void sync_min_perf_owner(const struct lpmd_config_t *config,
+			      const char *candidate_cls)
+{
+	sync_class_tune_owner(&g_min_perf_owner, config, candidate_cls);
+}
+
+static void apply_class_tuning_override_for_pid(
+	const struct lpmd_config_t *config, pid_t pid,
+	struct class_tune_owner_t *owner)
+{
+	size_t n, i;
+
+	if (!g_pc_ctx || !config || pid <= 0 || !owner)
 		return;
 
 	n = process_cpuset_attached_count(g_pc_ctx);
@@ -108,16 +253,31 @@ static void apply_class_min_perf_override_for_pid(
 		int use_p = 0, use_e = 0, use_l = 0;
 
 		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &item_pid, unit,
-						   sizeof(unit), &cls, &use_p,
-						   &use_e, &use_l) < 0)
+					   sizeof(unit), &cls, &use_p,
+					   &use_e, &use_l) < 0)
 			continue;
 		if (item_pid != pid)
 			continue;
 
-		apply_class_min_perf_override(config, cls);
+		sync_class_tune_owner(owner, config, cls);
 		return;
 	}
+
+	sync_class_tune_owner(owner, config, NULL);
 }
+
+static void apply_class_min_perf_override_for_pid(
+	const struct lpmd_config_t *config, pid_t pid)
+{
+	apply_class_tuning_override_for_pid(config, pid, &g_min_perf_owner);
+}
+
+static struct class_tune_owner_t g_min_perf_owner = {
+	.field_name = "min_perf_pct",
+	.class_has_override = class_has_min_perf_override,
+	.apply_override = apply_class_min_perf_override,
+	.reset_override = reset_owned_min_perf_pct_to_zero,
+};
 
 static void user_xml_path(char *out, size_t cap)
 {
@@ -339,6 +499,8 @@ int lpmd_process_cpuset_init(struct lpmd_config_t *config)
  */
 void lpmd_process_cpuset_uninit(void)
 {
+	clear_class_tune_owner(&g_min_perf_owner, 1);
+
 	if (!g_pc_ctx)
 		return;
 
@@ -358,6 +520,8 @@ void lpmd_process_cpuset_uninit(void)
 void lpmd_process_cpuset_unbind_all(void)
 {
 	int n;
+
+	clear_class_tune_owner(&g_min_perf_owner, 1);
 
 	if (!g_pc_ctx) {
 		lpmd_log_msg("process_cpuset: not active; nothing to unbind\n");
@@ -404,8 +568,10 @@ void lpmd_process_cpuset_rescan(void)
 	else if (n < 0)
 		lpmd_log_warn("process_cpuset: rescan failed\n");
 
-	if (n <= 0)
+	if (n <= 0) {
+		sync_min_perf_owner(get_lpmd_config(), NULL);
 		return;
+	}
 
 	config = get_lpmd_config();
 	if (!config)
@@ -422,8 +588,10 @@ void lpmd_process_cpuset_rescan(void)
 						   sizeof(unit), &cls, &use_p,
 						   &use_e, &use_l) < 0)
 			continue;
-		apply_class_min_perf_override(config, cls);
+		sync_min_perf_owner(config, cls);
 	}
+
+	sync_min_perf_owner(config, NULL);
 }
 
 /*
@@ -691,6 +859,12 @@ void lpmd_process_cpuset_proc_connector_handle(void)
 		case PROC_EVENT_EXEC:
 			pid = msg.ev.event_data.exec.process_pid;
 			break;
+		case PROC_EVENT_EXIT: {
+			struct lpmd_config_t *config = get_lpmd_config();
+
+			sync_min_perf_owner(config, NULL);
+			continue;
+		}
 		case PROC_EVENT_COMM:
 			/* A process renamed itself (e.g. via prctl(PR_SET_NAME)).
              * comm now matches a config entry that didn't match at
