@@ -262,6 +262,36 @@ static int process_slider_offset(struct lpmd_config_state_t *state)
 		return update_slider_offset(state->slider_offset_ac);
 }
 
+int process_balance_slider_only(struct lpmd_config_t *config,
+				       struct lpmd_config_state_t *state)
+{
+	int ret;
+
+	if (!config || !state)
+		return LPMD_ERROR;
+
+	ret = process_balance_slider(state);
+	if (ret)
+		process_balance_slider_default_update(config);
+
+	return ret;
+}
+
+int process_slider_offset_only(struct lpmd_config_t *config,
+				      struct lpmd_config_state_t *state)
+{
+	int ret;
+
+	if (!config || !state)
+		return LPMD_ERROR;
+
+	ret = process_slider_offset(state);
+	if (ret)
+		process_slider_offset_default_update(config);
+
+	return ret;
+}
+
 void process_slider(struct lpmd_config_t *config, struct lpmd_config_state_t *state)
 {
 	int ret;

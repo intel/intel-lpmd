@@ -33,19 +33,32 @@
 #define PROCESS_CPUSET_CONFIG_FILE "process_cpuset.xml"
 #define PROCESS_CPUSET_USER_CONFIG_FILE "process_cpuset_user.xml"
 
+#define PATH_INTEL_PSTATE_MAX_PERF_PCT "/sys/devices/system/cpu/intel_pstate/max_perf_pct"
+#define PATH_SOC_BALANCE_SLIDER "/sys/module/processor_thermal_soc_slider/parameters/slider_balance"
+#define PATH_SOC_OFFSET "/sys/module/processor_thermal_soc_slider/parameters/slider_offset"
+
 struct class_tune_owner_t {
 	char owner_class[64];
 	const char *field_name;
+	const char *reset_desc;
 	int (*class_has_override)(const struct lpmd_config_t *config,
 				      const char *cls);
 	void (*apply_override)(const struct lpmd_config_t *config,
 			       const char *cls);
+	void (*capture_restore_state)(void);
 	void (*reset_override)(void);
 };
 
 static process_cpuset_t *g_pc_ctx;
 static int g_pc_connector_fd = -1;
 static struct class_tune_owner_t g_min_perf_owner;
+static struct class_tune_owner_t g_max_perf_owner;
+static struct class_tune_owner_t g_balance_slider_owner;
+static struct class_tune_owner_t g_slider_offset_owner;
+
+static int g_saved_max_perf_pct = SETTING_IGNORE;
+static int g_saved_balance_slider = -1;
+static int g_saved_slider_offset = -1;
 
 static const struct lpmd_class_tuning_override_t *class_tuning_for_name(
 	const struct lpmd_config_t *config, const char *cls)
@@ -101,6 +114,105 @@ static void apply_class_min_perf_override(const struct lpmd_config_t *config,
 
 	if (process_min_perf_pct(&tmp_state))
 		lpmd_log_warn("process_cpuset: class=%s min_perf_pct apply failed\n",
+			      cls ? cls : "?");
+}
+
+static void apply_class_max_perf_override(const struct lpmd_config_t *config,
+					  const char *cls)
+{
+	const struct lpmd_class_tuning_override_t *ovr;
+	struct lpmd_config_state_t tmp_state;
+	int on_battery;
+
+	ovr = class_tuning_for_name(config, cls);
+	if (!ovr || !ovr->present_mask)
+		return;
+
+	on_battery = is_on_battery();
+	if (on_battery) {
+		if (!(ovr->present_mask & LPMD_CLASS_TUNE_MAX_PERF_PCT_DC))
+			return;
+	} else {
+		if (!(ovr->present_mask & LPMD_CLASS_TUNE_MAX_PERF_PCT_AC))
+			return;
+	}
+
+	lpmd_init_config_state(&tmp_state);
+	if (ovr->present_mask & LPMD_CLASS_TUNE_MAX_PERF_PCT_AC)
+		tmp_state.max_perf_pct_ac = ovr->max_perf_pct_ac;
+	if (ovr->present_mask & LPMD_CLASS_TUNE_MAX_PERF_PCT_DC)
+		tmp_state.max_perf_pct_dc = ovr->max_perf_pct_dc;
+
+	if (process_max_perf_pct(&tmp_state))
+		lpmd_log_warn("process_cpuset: class=%s max_perf_pct apply failed\n",
+			      cls ? cls : "?");
+}
+
+static void apply_class_balance_slider_override(const struct lpmd_config_t *config,
+						const char *cls)
+{
+	const struct lpmd_class_tuning_override_t *ovr;
+	struct lpmd_config_state_t tmp_state;
+	int on_battery;
+
+	if (!config)
+		return;
+
+	ovr = class_tuning_for_name(config, cls);
+	if (!ovr || !ovr->present_mask)
+		return;
+
+	on_battery = is_on_battery();
+	if (on_battery) {
+		if (!(ovr->present_mask & LPMD_CLASS_TUNE_BALANCE_SLIDER_DC))
+			return;
+	} else {
+		if (!(ovr->present_mask & LPMD_CLASS_TUNE_BALANCE_SLIDER_AC))
+			return;
+	}
+
+	lpmd_init_config_state(&tmp_state);
+	if (ovr->present_mask & LPMD_CLASS_TUNE_BALANCE_SLIDER_AC)
+		tmp_state.balance_slider_ac = ovr->balance_slider_ac;
+	if (ovr->present_mask & LPMD_CLASS_TUNE_BALANCE_SLIDER_DC)
+		tmp_state.balance_slider_dc = ovr->balance_slider_dc;
+
+	if (process_balance_slider_only((struct lpmd_config_t *)config, &tmp_state))
+		lpmd_log_warn("process_cpuset: class=%s balance_slider apply failed\n",
+			      cls ? cls : "?");
+}
+
+static void apply_class_slider_offset_override(const struct lpmd_config_t *config,
+					      const char *cls)
+{
+	const struct lpmd_class_tuning_override_t *ovr;
+	struct lpmd_config_state_t tmp_state;
+	int on_battery;
+
+	if (!config)
+		return;
+
+	ovr = class_tuning_for_name(config, cls);
+	if (!ovr || !ovr->present_mask)
+		return;
+
+	on_battery = is_on_battery();
+	if (on_battery) {
+		if (!(ovr->present_mask & LPMD_CLASS_TUNE_SLIDER_OFFSET_DC))
+			return;
+	} else {
+		if (!(ovr->present_mask & LPMD_CLASS_TUNE_SLIDER_OFFSET_AC))
+			return;
+	}
+
+	lpmd_init_config_state(&tmp_state);
+	if (ovr->present_mask & LPMD_CLASS_TUNE_SLIDER_OFFSET_AC)
+		tmp_state.slider_offset_ac = ovr->slider_offset_ac;
+	if (ovr->present_mask & LPMD_CLASS_TUNE_SLIDER_OFFSET_DC)
+		tmp_state.slider_offset_dc = ovr->slider_offset_dc;
+
+	if (process_slider_offset_only((struct lpmd_config_t *)config, &tmp_state))
+		lpmd_log_warn("process_cpuset: class=%s slider_offset apply failed\n",
 			      cls ? cls : "?");
 }
 
@@ -167,6 +279,66 @@ static int class_has_min_perf_override(const struct lpmd_config_t *config,
 	return !!(ovr->present_mask & LPMD_CLASS_TUNE_MIN_PERF_PCT_AC);
 }
 
+static int class_has_max_perf_override(const struct lpmd_config_t *config,
+					 const char *cls)
+{
+	const struct lpmd_class_tuning_override_t *ovr;
+	int on_battery;
+
+	if (!config || !cls || !*cls)
+		return 0;
+
+	ovr = class_tuning_for_name(config, cls);
+	if (!ovr || !ovr->present_mask)
+		return 0;
+
+	on_battery = is_on_battery();
+	if (on_battery)
+		return !!(ovr->present_mask & LPMD_CLASS_TUNE_MAX_PERF_PCT_DC);
+
+	return !!(ovr->present_mask & LPMD_CLASS_TUNE_MAX_PERF_PCT_AC);
+}
+
+static int class_has_balance_slider_override(const struct lpmd_config_t *config,
+					      const char *cls)
+{
+	const struct lpmd_class_tuning_override_t *ovr;
+	int on_battery;
+
+	if (!config || !cls || !*cls)
+		return 0;
+
+	ovr = class_tuning_for_name(config, cls);
+	if (!ovr || !ovr->present_mask)
+		return 0;
+
+	on_battery = is_on_battery();
+	if (on_battery)
+		return !!(ovr->present_mask & LPMD_CLASS_TUNE_BALANCE_SLIDER_DC);
+
+	return !!(ovr->present_mask & LPMD_CLASS_TUNE_BALANCE_SLIDER_AC);
+}
+
+static int class_has_slider_offset_override(const struct lpmd_config_t *config,
+					     const char *cls)
+{
+	const struct lpmd_class_tuning_override_t *ovr;
+	int on_battery;
+
+	if (!config || !cls || !*cls)
+		return 0;
+
+	ovr = class_tuning_for_name(config, cls);
+	if (!ovr || !ovr->present_mask)
+		return 0;
+
+	on_battery = is_on_battery();
+	if (on_battery)
+		return !!(ovr->present_mask & LPMD_CLASS_TUNE_SLIDER_OFFSET_DC);
+
+	return !!(ovr->present_mask & LPMD_CLASS_TUNE_SLIDER_OFFSET_AC);
+}
+
 static void reset_owned_min_perf_pct_to_zero(void)
 {
 	struct lpmd_config_state_t tmp_state;
@@ -176,6 +348,82 @@ static void reset_owned_min_perf_pct_to_zero(void)
 	tmp_state.min_perf_pct_dc = 0;
 	if (process_min_perf_pct(&tmp_state))
 		lpmd_log_warn("process_cpuset: failed to reset owned min_perf_pct to 0\n");
+}
+
+static void capture_owned_max_perf_pct_state(void)
+{
+	if (lpmd_read_int(PATH_INTEL_PSTATE_MAX_PERF_PCT, &g_saved_max_perf_pct, -1)) {
+		g_saved_max_perf_pct = SETTING_IGNORE;
+		lpmd_log_warn("process_cpuset: failed to read current max_perf_pct for restore\n");
+	}
+}
+
+static void reset_owned_max_perf_pct_to_zero(void)
+{
+	struct lpmd_config_state_t tmp_state;
+
+	if (g_saved_max_perf_pct == SETTING_IGNORE)
+		return;
+
+	lpmd_init_config_state(&tmp_state);
+	tmp_state.max_perf_pct_ac = g_saved_max_perf_pct;
+	tmp_state.max_perf_pct_dc = g_saved_max_perf_pct;
+	if (process_max_perf_pct(&tmp_state))
+		lpmd_log_warn("process_cpuset: failed to restore owned max_perf_pct\n");
+}
+
+static void capture_owned_balance_slider_state(void)
+{
+	if (lpmd_read_int(PATH_SOC_BALANCE_SLIDER, &g_saved_balance_slider, -1)) {
+		g_saved_balance_slider = -1;
+		lpmd_log_warn("process_cpuset: failed to read current balance_slider for restore\n");
+	}
+}
+
+static void reset_owned_balance_slider_to_default(void)
+{
+	struct lpmd_config_t *config = get_lpmd_config();
+	struct lpmd_config_state_t tmp_state;
+
+	if (!config)
+		return;
+
+	if (g_saved_balance_slider >= 0) {
+		lpmd_init_config_state(&tmp_state);
+		tmp_state.balance_slider_ac = g_saved_balance_slider;
+		tmp_state.balance_slider_dc = g_saved_balance_slider;
+		if (!process_balance_slider_only(config, &tmp_state))
+			return;
+	}
+
+	process_balance_slider_default_update(config);
+}
+
+static void capture_owned_slider_offset_state(void)
+{
+	if (lpmd_read_int(PATH_SOC_OFFSET, &g_saved_slider_offset, -1)) {
+		g_saved_slider_offset = -1;
+		lpmd_log_warn("process_cpuset: failed to read current slider_offset for restore\n");
+	}
+}
+
+static void reset_owned_slider_offset_to_default(void)
+{
+	struct lpmd_config_t *config = get_lpmd_config();
+	struct lpmd_config_state_t tmp_state;
+
+	if (!config)
+		return;
+
+	if (g_saved_slider_offset >= 0) {
+		lpmd_init_config_state(&tmp_state);
+		tmp_state.slider_offset_ac = g_saved_slider_offset;
+		tmp_state.slider_offset_dc = g_saved_slider_offset;
+		if (!process_slider_offset_only(config, &tmp_state))
+			return;
+	}
+
+	process_slider_offset_default_update(config);
 }
 
 static void clear_class_tune_owner(struct class_tune_owner_t *owner,
@@ -201,9 +449,10 @@ static void sync_class_tune_owner(struct class_tune_owner_t *owner,
 	    !class_has_live_attached_pid(owner->owner_class)) {
 		if (owner->reset_override)
 			owner->reset_override();
-		lpmd_log_info("process_cpuset: owner class %s has no live tasks, %s reset to 0\n",
+		lpmd_log_info("process_cpuset: owner class %s has no live tasks, %s %s\n",
 			      owner->owner_class,
-			      owner->field_name ? owner->field_name : "tuning field");
+			      owner->field_name ? owner->field_name : "tuning field",
+			      owner->reset_desc ? owner->reset_desc : "reset");
 		owner->owner_class[0] = '\0';
 	}
 
@@ -219,6 +468,9 @@ static void sync_class_tune_owner(struct class_tune_owner_t *owner,
 		return;
 
 	if (!owner->owner_class[0]) {
+		if (owner->capture_restore_state)
+			owner->capture_restore_state();
+
 		snprintf(owner->owner_class, sizeof(owner->owner_class),
 			 "%s", candidate_cls);
 		lpmd_log_info("process_cpuset: class %s is now %s owner\n",
@@ -234,6 +486,24 @@ static void sync_min_perf_owner(const struct lpmd_config_t *config,
 			      const char *candidate_cls)
 {
 	sync_class_tune_owner(&g_min_perf_owner, config, candidate_cls);
+}
+
+static void sync_max_perf_owner(const struct lpmd_config_t *config,
+			      const char *candidate_cls)
+{
+	sync_class_tune_owner(&g_max_perf_owner, config, candidate_cls);
+}
+
+static void sync_balance_slider_owner(const struct lpmd_config_t *config,
+				  const char *candidate_cls)
+{
+	sync_class_tune_owner(&g_balance_slider_owner, config, candidate_cls);
+}
+
+static void sync_slider_offset_owner(const struct lpmd_config_t *config,
+				 const char *candidate_cls)
+{
+	sync_class_tune_owner(&g_slider_offset_owner, config, candidate_cls);
 }
 
 static void apply_class_tuning_override_for_pid(
@@ -272,11 +542,58 @@ static void apply_class_min_perf_override_for_pid(
 	apply_class_tuning_override_for_pid(config, pid, &g_min_perf_owner);
 }
 
+static void apply_class_max_perf_override_for_pid(
+	const struct lpmd_config_t *config, pid_t pid)
+{
+	apply_class_tuning_override_for_pid(config, pid, &g_max_perf_owner);
+}
+
+static void apply_class_balance_slider_override_for_pid(
+	const struct lpmd_config_t *config, pid_t pid)
+{
+	apply_class_tuning_override_for_pid(config, pid, &g_balance_slider_owner);
+}
+
+static void apply_class_slider_offset_override_for_pid(
+	const struct lpmd_config_t *config, pid_t pid)
+{
+	apply_class_tuning_override_for_pid(config, pid, &g_slider_offset_owner);
+}
+
 static struct class_tune_owner_t g_min_perf_owner = {
 	.field_name = "min_perf_pct",
+	.reset_desc = "reset to 0",
 	.class_has_override = class_has_min_perf_override,
 	.apply_override = apply_class_min_perf_override,
+	.capture_restore_state = NULL,
 	.reset_override = reset_owned_min_perf_pct_to_zero,
+};
+
+static struct class_tune_owner_t g_max_perf_owner = {
+	.field_name = "max_perf_pct",
+	.reset_desc = "restored",
+	.class_has_override = class_has_max_perf_override,
+	.apply_override = apply_class_max_perf_override,
+	.capture_restore_state = capture_owned_max_perf_pct_state,
+	.reset_override = reset_owned_max_perf_pct_to_zero,
+};
+
+static struct class_tune_owner_t g_balance_slider_owner = {
+	.field_name = "balance_slider",
+	.reset_desc = "restored",
+	.class_has_override = class_has_balance_slider_override,
+	.apply_override = apply_class_balance_slider_override,
+	.capture_restore_state = capture_owned_balance_slider_state,
+	.reset_override = reset_owned_balance_slider_to_default,
+};
+
+static struct class_tune_owner_t g_slider_offset_owner = {
+	.field_name = "slider_offset",
+	.reset_desc = "restored",
+	.class_has_override = class_has_slider_offset_override,
+	.apply_override = apply_class_slider_offset_override,
+	.capture_restore_state = capture_owned_slider_offset_state,
+	.reset_override = reset_owned_slider_offset_to_default,
 };
 
 static void user_xml_path(char *out, size_t cap)
@@ -500,6 +817,9 @@ int lpmd_process_cpuset_init(struct lpmd_config_t *config)
 void lpmd_process_cpuset_uninit(void)
 {
 	clear_class_tune_owner(&g_min_perf_owner, 1);
+	clear_class_tune_owner(&g_max_perf_owner, 1);
+	clear_class_tune_owner(&g_balance_slider_owner, 1);
+	clear_class_tune_owner(&g_slider_offset_owner, 1);
 
 	if (!g_pc_ctx)
 		return;
@@ -522,6 +842,9 @@ void lpmd_process_cpuset_unbind_all(void)
 	int n;
 
 	clear_class_tune_owner(&g_min_perf_owner, 1);
+	clear_class_tune_owner(&g_max_perf_owner, 1);
+	clear_class_tune_owner(&g_balance_slider_owner, 1);
+	clear_class_tune_owner(&g_slider_offset_owner, 1);
 
 	if (!g_pc_ctx) {
 		lpmd_log_msg("process_cpuset: not active; nothing to unbind\n");
@@ -570,6 +893,9 @@ void lpmd_process_cpuset_rescan(void)
 
 	if (n <= 0) {
 		sync_min_perf_owner(get_lpmd_config(), NULL);
+		sync_max_perf_owner(get_lpmd_config(), NULL);
+		sync_balance_slider_owner(get_lpmd_config(), NULL);
+		sync_slider_offset_owner(get_lpmd_config(), NULL);
 		return;
 	}
 
@@ -589,9 +915,15 @@ void lpmd_process_cpuset_rescan(void)
 						   &use_e, &use_l) < 0)
 			continue;
 		sync_min_perf_owner(config, cls);
+		sync_max_perf_owner(config, cls);
+		sync_balance_slider_owner(config, cls);
+		sync_slider_offset_owner(config, cls);
 	}
 
 	sync_min_perf_owner(config, NULL);
+	sync_max_perf_owner(config, NULL);
+	sync_balance_slider_owner(config, NULL);
+	sync_slider_offset_owner(config, NULL);
 }
 
 /*
@@ -863,6 +1195,9 @@ void lpmd_process_cpuset_proc_connector_handle(void)
 			struct lpmd_config_t *config = get_lpmd_config();
 
 			sync_min_perf_owner(config, NULL);
+			sync_max_perf_owner(config, NULL);
+			sync_balance_slider_owner(config, NULL);
+			sync_slider_offset_owner(config, NULL);
 			continue;
 		}
 		case PROC_EVENT_COMM:
@@ -877,8 +1212,12 @@ void lpmd_process_cpuset_proc_connector_handle(void)
 
 		if (process_cpuset_apply_pid(g_pc_ctx, pid, 0) == 1) {
 			struct lpmd_config_t *config = get_lpmd_config();
-			if (config)
+			if (config) {
 				apply_class_min_perf_override_for_pid(config, pid);
+				apply_class_max_perf_override_for_pid(config, pid);
+				apply_class_balance_slider_override_for_pid(config, pid);
+				apply_class_slider_offset_override_for_pid(config, pid);
+			}
 		}
 	}
 }

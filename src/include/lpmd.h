@@ -481,6 +481,10 @@ int process_max_perf_pct(struct lpmd_config_state_t *state);
 
 void process_balance_slider_default_update(struct lpmd_config_t *config);
 void process_slider_offset_default_update(struct lpmd_config_t *config);
+int process_balance_slider_only(struct lpmd_config_t *config,
+				       struct lpmd_config_state_t *state);
+int process_slider_offset_only(struct lpmd_config_t *config,
+				      struct lpmd_config_state_t *state);
 void process_slider(struct lpmd_config_t *config, struct lpmd_config_state_t *state);
 
 /* lpmd_irq.c */
