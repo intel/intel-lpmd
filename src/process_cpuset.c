@@ -35,6 +35,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <fnmatch.h>
 #include <sched.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -653,6 +654,75 @@ static int read_comm(pid_t pid, char *out, size_t cap)
 	return 0;
 }
 
+/* Match a config name against a process comm.
+ * Exact names behave as before. If the config name contains '*',
+ * treat it as a glob (e.g. Strange*).
+ */
+static int name_matches_entry(const char *pattern, const char *name)
+{
+	if (!pattern || !name)
+		return 0;
+	if (!strchr(pattern, '*'))
+		return !strcmp(pattern, name);
+	return fnmatch(pattern, name, 0) == 0;
+}
+
+static int pid_matches_name(pid_t pid, const char *pattern, const char *leader_comm)
+{
+	char path[64];
+	DIR *task_dir;
+	struct dirent *entry;
+	char tcomm[MAX_NAME];
+	FILE *tf;
+	size_t n;
+
+	if (!pattern || !*pattern)
+		return 0;
+
+	if (leader_comm && name_matches_entry(pattern, leader_comm))
+		return 1;
+
+	if (!strchr(pattern, '*'))
+		return 0;
+
+	snprintf(path, sizeof(path), "/proc/%d/task", (int)pid);
+	task_dir = opendir(path);
+	if (!task_dir)
+		return 0;
+
+	while ((entry = readdir(task_dir)) != NULL) {
+		pid_t tid;
+		char tpath[64];
+		char *end;
+
+		if (entry->d_type != DT_DIR)
+			continue;
+		if (!strcmp(entry->d_name, ".") || !strcmp(entry->d_name, ".."))
+			continue;
+		tid = (pid_t)strtol(entry->d_name, &end, 10);
+		if (*end != '\0' || tid <= 0)
+			continue;
+		snprintf(tpath, sizeof(tpath), "/proc/%d/task/%d/comm", (int)pid,
+			 (int)tid);
+		tf = fopen(tpath, "r");
+		if (!tf)
+			continue;
+		if (fgets(tcomm, sizeof(tcomm), tf)) {
+			n = strlen(tcomm);
+			if (n && tcomm[n - 1] == '\n')
+				tcomm[n - 1] = '\0';
+			if (name_matches_entry(pattern, tcomm)) {
+				fclose(tf);
+				closedir(task_dir);
+				return 1;
+			}
+		}
+		fclose(tf);
+	}
+	closedir(task_dir);
+	return 0;
+}
+
 /*
  * Resolve a possibly-TID to its thread-group leader (TGID) by parsing
  * /proc/<pid>/status's "Tgid:" field. Returns @pid unchanged on
@@ -861,7 +931,7 @@ static int find_pids_by_name(const char *name, pid_t *out, int max)
 			continue;
 		if (read_comm((pid_t)pid, comm, sizeof(comm)) < 0)
 			continue;
-		if (strcmp(comm, name))
+		if (!pid_matches_name((pid_t)pid, name, comm))
 			continue;
 		out[n++] = (pid_t)pid;
 	}
@@ -2544,7 +2614,8 @@ void process_cpuset_log_class_defaults(const process_cpuset_t *ctx)
 /* Forward decls for catch-all <DefaultProcess> helpers (defined below). */
 static int apply_default_to_pid(process_cpuset_t *ctx, pid_t pid,
 				int from_event, int dry_run);
-static int comm_in_entries(const process_cpuset_t *ctx, const char *comm);
+static int pid_in_entries(const process_cpuset_t *ctx, pid_t pid,
+				  const char *comm);
 
 int process_cpuset_apply_once(process_cpuset_t *ctx, int dry_run)
 {
@@ -2739,7 +2810,7 @@ int process_cpuset_apply_once(process_cpuset_t *ctx, int dry_run)
 				if (read_comm((pid_t)pid, comm, sizeof(comm)) <
 				    0)
 					continue;
-				if (comm_in_entries(ctx, comm))
+				if (pid_in_entries(ctx, (pid_t)pid, comm))
 					continue; /* will be / was handled by name */
 				if (apply_default_to_pid(ctx, (pid_t)pid, 0,
 							 dry_run) == 1) {
@@ -2967,11 +3038,12 @@ static int apply_default_to_pid(process_cpuset_t *ctx, pid_t pid,
 	return -1;
 }
 
-/* Returns 1 if @comm is the <Name> of any explicit <Process> entry. */
-static int comm_in_entries(const process_cpuset_t *ctx, const char *comm)
+/* Returns 1 if @pid/@comm matches the <Name> of any explicit <Process> entry. */
+static int pid_in_entries(const process_cpuset_t *ctx, pid_t pid,
+				  const char *comm)
 {
 	for (int i = 0; i < ctx->n_entries; i++)
-		if (!strcmp(ctx->entries[i].name, comm))
+		if (pid_matches_name(pid, ctx->entries[i].name, comm))
 			return 1;
 	return 0;
 }

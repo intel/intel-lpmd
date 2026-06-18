@@ -37,4 +37,7 @@
     </Process>
     -->
 
+    <!-- <Name> may also use '*' wildcards for matching only,
+         e.g. <Name>Strange*</Name>. -->
+
 </ProcessCpusetConfig>

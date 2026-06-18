@@ -120,6 +120,10 @@
       Optional per-process tags accepted inside <Process>:
 
         <Name>           required: /proc/<pid>/comm (15-char limit)
+                       Supports '*' wildcards for
+                       matching only, e.g. 'Strange*'
+                       matches process names starting
+                       with 'Strange'.
         <Classification> required: realtime | user_interactive |
                                    user_initiated | utility |
                                    background | GameProfileCPU |
