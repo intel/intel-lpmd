@@ -77,11 +77,14 @@ static const struct lpmd_class_tuning_override_t *class_tuning_for_name(
 		return &config->pc_class_tuning_utility;
 	if (!strcasecmp(cls, "background"))
 		return &config->pc_class_tuning_background;
-	if (!strcasecmp(cls, "GameProfileCPU"))
+	if (!strcasecmp(cls, "game_profile_cpu") ||
+	    !strcasecmp(cls, "GameProfileCPU"))
 		return &config->pc_class_tuning_gp_cpu;
-	if (!strcasecmp(cls, "GameProfileGPU"))
+	if (!strcasecmp(cls, "game_profile_gpu") ||
+	    !strcasecmp(cls, "GameProfileGPU"))
 		return &config->pc_class_tuning_gp_gpu;
-	if (!strcasecmp(cls, "GameProfileMixed"))
+	if (!strcasecmp(cls, "game_profile_mixed") ||
+	    !strcasecmp(cls, "GameProfileMixed"))
 		return &config->pc_class_tuning_gp_hybrid;
 	return NULL;
 }

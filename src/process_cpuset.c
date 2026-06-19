@@ -490,11 +490,14 @@ static enum classification parse_class(const char *s)
 		return CLASS_USER_INTERACTIVE;
 	if (!strcasecmp(s, "realtime"))
 		return CLASS_REALTIME;
-	if (!strcasecmp(s, "GameProfileCPU"))
+	if (!strcasecmp(s, "game_profile_cpu") ||
+	    !strcasecmp(s, "GameProfileCPU"))
 		return CLASS_GAME_PROFILE_CPU;
-	if (!strcasecmp(s, "GameProfileGPU"))
+	if (!strcasecmp(s, "game_profile_gpu") ||
+	    !strcasecmp(s, "GameProfileGPU"))
 		return CLASS_GAME_PROFILE_GPU;
-	if (!strcasecmp(s, "GameProfileMixed"))
+	if (!strcasecmp(s, "game_profile_mixed") ||
+	    !strcasecmp(s, "GameProfileMixed"))
 		return CLASS_GAME_PROFILE_HYBRID;
 	return CLASS_INVALID;
 }
@@ -515,11 +518,11 @@ static const char *class_str(enum classification c)
 	case CLASS_REALTIME:
 		return "realtime";
 	case CLASS_GAME_PROFILE_CPU:
-		return "GameProfileCPU";
+		return "game_profile_cpu";
 	case CLASS_GAME_PROFILE_GPU:
-		return "GameProfileGPU";
+		return "game_profile_gpu";
 	case CLASS_GAME_PROFILE_HYBRID:
-		return "GameProfileMixed";
+		return "game_profile_mixed";
 	default:
 		return "invalid";
 	}
@@ -601,12 +604,20 @@ static void parse_class_defaults(xmlDoc *doc, xmlNode *node,
 			parse_core_spec(val, &defaults[CLASS_UNCLASSIFIED]);
 		else if (!strcasecmp((const char *)c->name, "Background"))
 			parse_core_spec(val, &defaults[CLASS_BACKGROUND]);
-		else if (!strcasecmp((const char *)c->name, "GameProfileCPU"))
+		else if (!strcasecmp((const char *)c->name,
+				    "game_profile_cpu") ||
+			 !strcasecmp((const char *)c->name,
+				    "GameProfileCPU"))
 			parse_core_spec(val, &defaults[CLASS_GAME_PROFILE_CPU]);
-		else if (!strcasecmp((const char *)c->name, "GameProfileGPU"))
+		else if (!strcasecmp((const char *)c->name,
+				    "game_profile_gpu") ||
+			 !strcasecmp((const char *)c->name,
+				    "GameProfileGPU"))
 			parse_core_spec(val, &defaults[CLASS_GAME_PROFILE_GPU]);
 		else if (!strcasecmp((const char *)c->name,
-				     "GameProfileMixed"))
+				    "game_profile_mixed") ||
+			 !strcasecmp((const char *)c->name,
+				    "GameProfileMixed"))
 			parse_core_spec(val,
 					&defaults[CLASS_GAME_PROFILE_HYBRID]);
 		else
@@ -1894,8 +1905,8 @@ int process_cpuset_load_config_overlay(process_cpuset_t *ctx, const char *path)
  *
  * @name           : matched against /proc/<pid>/comm (15-char limit).
  * @classification : "background" / "foreground" / "realtime" /
- *                   "GameProfileCPU" / "GameProfileGPU" /
- *                   "GameProfileMixed" (case-insensitive).
+ *                   "game_profile_cpu" / "game_profile_gpu" /
+ *                   "game_profile_mixed" (case-insensitive).
  *
  * Resolves the CPU mask from the current <ClassDefaults>; literal
  * <ActiveCores> / <AllowSession> / <AffinityAllThreads> are not

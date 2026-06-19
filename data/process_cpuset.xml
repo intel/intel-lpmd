@@ -30,9 +30,9 @@
                          the seed config because it always drives
                          the visible UI regardless of focus.
     realtime           - latency-sensitive media / audio engines
-    GameProfileCPU     - CPU-bound game workloads
-    GameProfileGPU     - GPU-bound game workloads
-    GameProfileMixed  - mixed CPU/GPU game workloads
+    game_profile_cpu     - CPU-bound game workloads
+    game_profile_gpu     - GPU-bound game workloads
+    game_profile_mixed  - mixed CPU/GPU game workloads
 
 
   Distro-specific notables retained in this single file:
@@ -63,9 +63,9 @@
       user_initiated     -> Pcores + Ecores
       utility            -> Ecores + Lcores
       background         -> Lcores
-      GameProfileCPU     -> Pcores
-      GameProfileGPU     -> Pcores + Ecores
-      GameProfileMixed  -> Pcores + Ecores
+      game_profile_cpu     -> Pcores
+      game_profile_gpu     -> Pcores + Ecores
+      game_profile_mixed  -> Pcores + Ecores
 
   NOTE: /proc/<pid>/comm is truncated to 15 chars; names below already
         respect that limit.
@@ -92,9 +92,9 @@
           user_initiated     -> ActivePcores, ActiveEcores
           utility            -> ActiveEcores, ActiveLcores
           background         -> ActiveLcores
-          GameProfileCPU     -> ActivePcores
-          GameProfileGPU     -> ActivePcores, ActiveEcores
-          GameProfileMixed  -> ActivePcores, ActiveEcores
+          game_profile_cpu     -> ActivePcores
+          game_profile_gpu     -> ActivePcores, ActiveEcores
+          game_profile_mixed  -> ActivePcores, ActiveEcores
       Override any of them by editing this block; remove the whole block
       to keep all defaults built-in.
 
@@ -142,8 +142,8 @@
                        with 'Strange'.
         <Classification> required: realtime | user_interactive |
                                    user_initiated | utility |
-                                   background | GameProfileCPU |
-                                   GameProfileGPU | GameProfileMixed
+                                   background | game_profile_cpu |
+                                   game_profile_gpu | game_profile_mixed
                                    Most GUI apps should use
                                    user_initiated; intel_lpmd will
                                    promote them to user_interactive
@@ -1561,7 +1561,7 @@
     <!-- Steam Games -->
     <Process>
         <Name>StrangeBrigade.</Name>
-        <Classification>GameProfileMixed</Classification>
+        <Classification>game_profile_mixed</Classification>
         <AffinityAllThreads>1</AffinityAllThreads>
     </Process>
 
