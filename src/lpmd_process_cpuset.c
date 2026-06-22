@@ -851,6 +851,54 @@ int lpmd_process_cpuset_init(struct lpmd_config_t *config)
 		}
 	}
 
+	if (config->pc_class_uclamp_min_realtime != LPMD_UCLAMP_INHERIT ||
+	    config->pc_class_uclamp_max_realtime != LPMD_UCLAMP_INHERIT ||
+	    config->pc_class_uclamp_min_user_interactive !=
+		    LPMD_UCLAMP_INHERIT ||
+	    config->pc_class_uclamp_max_user_interactive !=
+		    LPMD_UCLAMP_INHERIT ||
+	    config->pc_class_uclamp_min_user_initiated != LPMD_UCLAMP_INHERIT ||
+	    config->pc_class_uclamp_max_user_initiated != LPMD_UCLAMP_INHERIT ||
+	    config->pc_class_uclamp_min_unclassified != LPMD_UCLAMP_INHERIT ||
+	    config->pc_class_uclamp_max_unclassified != LPMD_UCLAMP_INHERIT ||
+	    config->pc_class_uclamp_min_utility != LPMD_UCLAMP_INHERIT ||
+	    config->pc_class_uclamp_max_utility != LPMD_UCLAMP_INHERIT ||
+	    config->pc_class_uclamp_min_background != LPMD_UCLAMP_INHERIT ||
+	    config->pc_class_uclamp_max_background != LPMD_UCLAMP_INHERIT ||
+	    config->pc_class_uclamp_min_gp_cpu != LPMD_UCLAMP_INHERIT ||
+	    config->pc_class_uclamp_max_gp_cpu != LPMD_UCLAMP_INHERIT ||
+	    config->pc_class_uclamp_min_gp_gpu != LPMD_UCLAMP_INHERIT ||
+	    config->pc_class_uclamp_max_gp_gpu != LPMD_UCLAMP_INHERIT ||
+	    config->pc_class_uclamp_min_gp_hybrid != LPMD_UCLAMP_INHERIT ||
+	    config->pc_class_uclamp_max_gp_hybrid != LPMD_UCLAMP_INHERIT) {
+		if (process_cpuset_override_class_uclamp_defaults(
+			    g_pc_ctx,
+			    config->pc_class_uclamp_min_realtime,
+			    config->pc_class_uclamp_max_realtime,
+			    config->pc_class_uclamp_min_user_interactive,
+			    config->pc_class_uclamp_max_user_interactive,
+			    config->pc_class_uclamp_min_user_initiated,
+			    config->pc_class_uclamp_max_user_initiated,
+			    config->pc_class_uclamp_min_unclassified,
+			    config->pc_class_uclamp_max_unclassified,
+			    config->pc_class_uclamp_min_utility,
+			    config->pc_class_uclamp_max_utility,
+			    config->pc_class_uclamp_min_background,
+			    config->pc_class_uclamp_max_background,
+			    config->pc_class_uclamp_min_gp_cpu,
+			    config->pc_class_uclamp_max_gp_cpu,
+			    config->pc_class_uclamp_min_gp_gpu,
+			    config->pc_class_uclamp_max_gp_gpu,
+			    config->pc_class_uclamp_min_gp_hybrid,
+			    config->pc_class_uclamp_max_gp_hybrid) < 0) {
+			lpmd_log_warn(
+				"process_cpuset: ClassDefaults uclamp override failed\n");
+		} else {
+			lpmd_log_info(
+				"process_cpuset: applied per-CPU ClassDefaults uclamp override\n");
+		}
+	}
+
 	/* core_type_masks[] uses the same little-endian bit layout as
      * cpu_set_t, so it's safe to cast and pass straight through. */
 	setsize = (size_t)(get_max_cpus() / 8);

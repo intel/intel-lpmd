@@ -101,6 +101,11 @@
       Each entry accepts a comma- / whitespace-separated mix of:
         * Named groups   : ActivePcores | ActiveEcores | ActiveLcores
         * Literal CPUs   : cpuset-style list, e.g. "0-3,5,8"
+            Optional per-class uclamp tags inside each class node:
+                * <UClampMin> / <uclamp_min> : -1(disable) or 0..1024
+                * <UClampMax> / <uclamp_max> : -1(disable) or 0..1024
+            When set, matching PIDs in that classification are updated via
+            sched_setattr() (sched_util_min / sched_util_max).
       The effective AllowedCPUs mask is the union of every group plus
       every literal CPU that appears in the entry. The same syntax is
       accepted in per-process <ActiveCores> overrides.

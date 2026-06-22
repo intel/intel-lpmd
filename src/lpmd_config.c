@@ -134,6 +134,43 @@ static int read_max_perf_pct_and_validate(int *dest_ptr, const char *src_value,
 	return LPMD_ERROR;
 }
 
+static int read_uclamp_and_validate(int *dest_ptr, const char *src_value,
+				    const char *param_name,
+				    int state_id)
+{
+	char *endptr;
+	int value;
+
+	errno = 0;
+	value = strtol(src_value, &endptr, 10);
+
+	if (errno == ERANGE || endptr == src_value) {
+		if (state_id >= 0)
+			lpmd_log_error("Failed to parse %s value: '%s' is not a valid integer in state ID %d\n",
+				       param_name, src_value, state_id);
+		else
+			lpmd_log_error("Failed to parse %s value: '%s' is not a valid integer\n",
+				       param_name, src_value);
+		return LPMD_ERROR;
+	}
+
+	/* -1 disable, or explicit clamp in [0, 1024] */
+	if (value == LPMD_UCLAMP_DISABLE ||
+	    (value >= LPMD_UCLAMP_MIN && value <= LPMD_UCLAMP_MAX)) {
+		*dest_ptr = value;
+		return LPMD_SUCCESS;
+	}
+
+	if (state_id >= 0)
+		lpmd_log_error("Invalid %s value: %d in state ID %d. Valid values: 0-1024, -1(disable)\n",
+			       param_name, value, state_id);
+	else
+		lpmd_log_error("Invalid %s value: %d. Valid values: 0-1024, -1(disable)\n",
+			       param_name, value);
+
+	return LPMD_ERROR;
+}
+
 static void save_string_or_zero(char *tmp_value, char *dst_string, int dest_size)
 {
 	if (!strncmp(tmp_value, "-1", strlen("-1")))
@@ -335,34 +372,54 @@ static void lpmd_parse_class_defaults(xmlDoc *doc, xmlNode *a_node, struct lpmd_
 		const char *tag;
 		char       *dst;
 		size_t      cap;
+		int        *uclamp_min;
+		int        *uclamp_max;
 		struct lpmd_class_tuning_override_t *tuning;
 	} map[] = {
 		{ "Realtime",          lpmd_config->pc_class_default_realtime,
 		  sizeof(lpmd_config->pc_class_default_realtime),
+		  &lpmd_config->pc_class_uclamp_min_realtime,
+		  &lpmd_config->pc_class_uclamp_max_realtime,
 		  &lpmd_config->pc_class_tuning_realtime },
 		{ "UserInteractive",   lpmd_config->pc_class_default_user_interactive,
 		  sizeof(lpmd_config->pc_class_default_user_interactive),
+		  &lpmd_config->pc_class_uclamp_min_user_interactive,
+		  &lpmd_config->pc_class_uclamp_max_user_interactive,
 		  &lpmd_config->pc_class_tuning_user_interactive },
 		{ "UserInitiated",     lpmd_config->pc_class_default_user_initiated,
 		  sizeof(lpmd_config->pc_class_default_user_initiated),
+		  &lpmd_config->pc_class_uclamp_min_user_initiated,
+		  &lpmd_config->pc_class_uclamp_max_user_initiated,
 		  &lpmd_config->pc_class_tuning_user_initiated },
 		{ "Unclassified",     lpmd_config->pc_class_default_unclassified,
 		  sizeof(lpmd_config->pc_class_default_unclassified),
+		  &lpmd_config->pc_class_uclamp_min_unclassified,
+		  &lpmd_config->pc_class_uclamp_max_unclassified,
 		  &lpmd_config->pc_class_tuning_unclassified },
 		{ "Utility",           lpmd_config->pc_class_default_utility,
 		  sizeof(lpmd_config->pc_class_default_utility),
+		  &lpmd_config->pc_class_uclamp_min_utility,
+		  &lpmd_config->pc_class_uclamp_max_utility,
 		  &lpmd_config->pc_class_tuning_utility },
 		{ "Background",        lpmd_config->pc_class_default_background,
 		  sizeof(lpmd_config->pc_class_default_background),
+		  &lpmd_config->pc_class_uclamp_min_background,
+		  &lpmd_config->pc_class_uclamp_max_background,
 		  &lpmd_config->pc_class_tuning_background },
 		{ "GameProfileCPU",    lpmd_config->pc_class_default_gp_cpu,
 		  sizeof(lpmd_config->pc_class_default_gp_cpu),
+		  &lpmd_config->pc_class_uclamp_min_gp_cpu,
+		  &lpmd_config->pc_class_uclamp_max_gp_cpu,
 		  &lpmd_config->pc_class_tuning_gp_cpu },
 		{ "GameProfileGPU",    lpmd_config->pc_class_default_gp_gpu,
 		  sizeof(lpmd_config->pc_class_default_gp_gpu),
+		  &lpmd_config->pc_class_uclamp_min_gp_gpu,
+		  &lpmd_config->pc_class_uclamp_max_gp_gpu,
 		  &lpmd_config->pc_class_tuning_gp_gpu },
 		{ "GameProfileMixed", lpmd_config->pc_class_default_gp_hybrid,
 		  sizeof(lpmd_config->pc_class_default_gp_hybrid),
+		  &lpmd_config->pc_class_uclamp_min_gp_hybrid,
+		  &lpmd_config->pc_class_uclamp_max_gp_hybrid,
 		  &lpmd_config->pc_class_tuning_gp_hybrid },
 	};
 
@@ -385,6 +442,8 @@ static void lpmd_parse_class_defaults(xmlDoc *doc, xmlNode *a_node, struct lpmd_
 		/* Look for <Cores> child element */
 		val = NULL;
 		for (child_node = cur_node->children; child_node; child_node = child_node->next) {
+			int ret;
+
 			if (child_node->type != XML_ELEMENT_NODE || !child_node->name)
 				continue;
 
@@ -396,6 +455,42 @@ static void lpmd_parse_class_defaults(xmlDoc *doc, xmlNode *a_node, struct lpmd_
 					continue;
 				snprintf(map[class_idx].dst, map[class_idx].cap, "%s", val);
 				map[class_idx].dst[map[class_idx].cap - 1] = '\0';
+				xmlFree(val);
+				continue;
+			}
+
+			if (!strcmp((const char *)child_node->name, "UClampMin") ||
+			    !strcmp((const char *)child_node->name, "uclamp_min")) {
+				val = (char *)xmlNodeListGetString(doc,
+						   child_node->xmlChildrenNode,
+						   1);
+				if (!val)
+					continue;
+				ret = read_uclamp_and_validate(
+					map[class_idx].uclamp_min, val,
+					"UClampMin", -1);
+				if (ret)
+					lpmd_log_warn("Invalid %s for class %s\n",
+						      "UClampMin",
+						      map[class_idx].tag);
+				xmlFree(val);
+				continue;
+			}
+
+			if (!strcmp((const char *)child_node->name, "UClampMax") ||
+			    !strcmp((const char *)child_node->name, "uclamp_max")) {
+				val = (char *)xmlNodeListGetString(doc,
+						   child_node->xmlChildrenNode,
+						   1);
+				if (!val)
+					continue;
+				ret = read_uclamp_and_validate(
+					map[class_idx].uclamp_max, val,
+					"UClampMax", -1);
+				if (ret)
+					lpmd_log_warn("Invalid %s for class %s\n",
+						      "UClampMax",
+						      map[class_idx].tag);
 				xmlFree(val);
 				continue;
 			}
@@ -527,6 +622,24 @@ static void lpmd_init_config(struct lpmd_config_t *config)
 	       sizeof(config->pc_class_tuning_gp_gpu));
 	memset(&config->pc_class_tuning_gp_hybrid, 0,
 	       sizeof(config->pc_class_tuning_gp_hybrid));
+	config->pc_class_uclamp_min_realtime = LPMD_UCLAMP_INHERIT;
+	config->pc_class_uclamp_max_realtime = LPMD_UCLAMP_INHERIT;
+	config->pc_class_uclamp_min_user_interactive = LPMD_UCLAMP_INHERIT;
+	config->pc_class_uclamp_max_user_interactive = LPMD_UCLAMP_INHERIT;
+	config->pc_class_uclamp_min_user_initiated = LPMD_UCLAMP_INHERIT;
+	config->pc_class_uclamp_max_user_initiated = LPMD_UCLAMP_INHERIT;
+	config->pc_class_uclamp_min_unclassified = LPMD_UCLAMP_INHERIT;
+	config->pc_class_uclamp_max_unclassified = LPMD_UCLAMP_INHERIT;
+	config->pc_class_uclamp_min_utility = LPMD_UCLAMP_INHERIT;
+	config->pc_class_uclamp_max_utility = LPMD_UCLAMP_INHERIT;
+	config->pc_class_uclamp_min_background = LPMD_UCLAMP_INHERIT;
+	config->pc_class_uclamp_max_background = LPMD_UCLAMP_INHERIT;
+	config->pc_class_uclamp_min_gp_cpu = LPMD_UCLAMP_INHERIT;
+	config->pc_class_uclamp_max_gp_cpu = LPMD_UCLAMP_INHERIT;
+	config->pc_class_uclamp_min_gp_gpu = LPMD_UCLAMP_INHERIT;
+	config->pc_class_uclamp_max_gp_gpu = LPMD_UCLAMP_INHERIT;
+	config->pc_class_uclamp_min_gp_hybrid = LPMD_UCLAMP_INHERIT;
+	config->pc_class_uclamp_max_gp_hybrid = LPMD_UCLAMP_INHERIT;
 	config->balance_slider_def_ac = -1;
 	config->balance_slider_def_dc = -1;
 	config->slider_offset_def_ac = -1;

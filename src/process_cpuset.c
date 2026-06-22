@@ -37,11 +37,13 @@
 #include <fcntl.h>
 #include <fnmatch.h>
 #include <sched.h>
+#include <linux/sched.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/syscall.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 
@@ -54,6 +56,45 @@
 #define MAX_PROCS 512
 #define MAX_CPUS 1024 /* cap for the POC */
 #define CPUMASK_BYTES (MAX_CPUS / 8)
+
+#define UCLAMP_UNSET (-1)
+#define UCLAMP_CLAMP_MIN 0
+#define UCLAMP_CLAMP_MAX 1024
+
+#ifndef SCHED_FLAG_KEEP_POLICY
+#define SCHED_FLAG_KEEP_POLICY 0x08
+#endif
+
+#ifndef SCHED_FLAG_KEEP_PARAMS
+#define SCHED_FLAG_KEEP_PARAMS 0x10
+#endif
+
+#ifndef SCHED_FLAG_UTIL_CLAMP_MIN
+#define SCHED_FLAG_UTIL_CLAMP_MIN 0x20
+#endif
+
+#ifndef SCHED_FLAG_UTIL_CLAMP_MAX
+#define SCHED_FLAG_UTIL_CLAMP_MAX 0x40
+#endif
+
+#if !defined(SYS_sched_setattr) && defined(__NR_sched_setattr)
+#define SYS_sched_setattr __NR_sched_setattr
+#endif
+
+#ifndef SCHED_ATTR_SIZE_VER0
+struct sched_attr {
+	uint32_t size;
+	uint32_t sched_policy;
+	uint64_t sched_flags;
+	int32_t sched_nice;
+	uint32_t sched_priority;
+	uint64_t sched_runtime;
+	uint64_t sched_deadline;
+	uint64_t sched_period;
+	uint32_t sched_util_min;
+	uint32_t sched_util_max;
+};
+#endif
 
 enum classification {
 	CLASS_BACKGROUND = 0,
@@ -84,6 +125,9 @@ enum classification {
 	CLASS_GAME_PROFILE_HYBRID,
 	CLASS_INVALID,
 };
+
+static int reapply_attached_class(process_cpuset_t *ctx,
+				  enum classification target_cls);
 
 /* Bitmask of CPU groups a process is allowed to use. */
 #define GROUP_PCORES (1u << 0)
@@ -186,6 +230,9 @@ struct process_cpuset_ctx {
      * Sized to CLASS_INVALID + 1 so every enumerator (including the
      * GameProfile* placeholders) has a slot. */
 	struct core_spec class_defaults[CLASS_INVALID + 1];
+	/* Per-classification uclamp defaults. UCLAMP_UNSET means disabled. */
+	int class_uclamp_min[CLASS_INVALID + 1];
+	int class_uclamp_max[CLASS_INVALID + 1];
 
 	/* Optional <DefaultProcess> entry: catch-all for any user-session
      * PID whose comm is not matched by ctx->entries[]. .cls is set
@@ -338,6 +385,59 @@ static void parse_core_spec(const char *s, struct core_spec *out)
 				"warning: unknown ActiveCores token '%.*s'\n",
 				(int)len, tok);
 	}
+}
+
+static int parse_uclamp_value(const char *s, int *out)
+{
+	char *end;
+	long v;
+
+	if (!s || !out)
+		return -1;
+
+	errno = 0;
+	v = strtol(s, &end, 10);
+	if (errno || end == s || *end != '\0')
+		return -1;
+
+	if (v == UCLAMP_UNSET ||
+	    (v >= UCLAMP_CLAMP_MIN && v <= UCLAMP_CLAMP_MAX)) {
+		*out = (int)v;
+		return 0;
+	}
+
+	return -1;
+}
+
+static enum classification classdefaults_tag_to_class(const char *tag)
+{
+	if (!tag)
+		return CLASS_INVALID;
+	if (!strcasecmp(tag, "Realtime"))
+		return CLASS_REALTIME;
+	if (!strcasecmp(tag, "Foreground"))
+		return CLASS_USER_INTERACTIVE;
+	if (!strcasecmp(tag, "UserInteractive"))
+		return CLASS_USER_INTERACTIVE;
+	if (!strcasecmp(tag, "UserInitiated"))
+		return CLASS_USER_INITIATED;
+	if (!strcasecmp(tag, "Utility"))
+		return CLASS_UTILITY;
+	if (!strcasecmp(tag, "Unclassified"))
+		return CLASS_UNCLASSIFIED;
+	if (!strcasecmp(tag, "Background"))
+		return CLASS_BACKGROUND;
+	if (!strcasecmp(tag, "game_profile_cpu") ||
+	    !strcasecmp(tag, "GameProfileCPU"))
+		return CLASS_GAME_PROFILE_CPU;
+	if (!strcasecmp(tag, "game_profile_gpu") ||
+	    !strcasecmp(tag, "GameProfileGPU"))
+		return CLASS_GAME_PROFILE_GPU;
+	if (!strcasecmp(tag, "game_profile_mixed") ||
+	    !strcasecmp(tag, "GameProfileMixed"))
+		return CLASS_GAME_PROFILE_HYBRID;
+
+	return CLASS_INVALID;
 }
 
 /* Parse a token list (used by <ActiveCores> and every <ClassDefaults>
@@ -564,67 +664,105 @@ static void parse_cpu_groups(xmlDoc *doc, xmlNode *node, struct cpu_groups *g)
  * <ActiveCores> (named groups and/or literal cpuset list).
  * Any class not mentioned keeps its built-in default. */
 static void parse_class_defaults(xmlDoc *doc, xmlNode *node,
-				 struct core_spec defaults[])
+				 struct core_spec defaults[],
+				 int uclamp_min[], int uclamp_max[])
 {
 	xmlNode *c, *child_node;
 	char *val;
 
 	for (c = node; c; c = c->next) {
+		enum classification cls;
+
 		if (c->type != XML_ELEMENT_NODE)
 			continue;
 
-		/* Look for <Cores> child element */
-		val = NULL;
-		for (child_node = c->children; child_node; child_node = child_node->next) {
-			if (child_node->type == XML_ELEMENT_NODE &&
-			    child_node->name &&
-			    !strcasecmp((const char *)child_node->name, "Cores")) {
-				val = (char *)xmlNodeListGetString(doc, child_node->xmlChildrenNode, 1);
-				break;
-			}
-		}
-
-		if (!val)
-			continue;
-		if (!strcasecmp((const char *)c->name, "Realtime"))
-			parse_core_spec(val, &defaults[CLASS_REALTIME]);
-		/* Legacy single interactive tier. Mirror to both modern
-		 * user tiers so old configs keep similar behavior. */
-		else if (!strcasecmp((const char *)c->name, "Foreground")) {
-			parse_core_spec(val, &defaults[CLASS_USER_INTERACTIVE]);
-			parse_core_spec(val, &defaults[CLASS_USER_INITIATED]);
-		}
-		else if (!strcasecmp((const char *)c->name, "UserInteractive"))
-			parse_core_spec(val, &defaults[CLASS_USER_INTERACTIVE]);
-		else if (!strcasecmp((const char *)c->name, "UserInitiated"))
-			parse_core_spec(val, &defaults[CLASS_USER_INITIATED]);
-		else if (!strcasecmp((const char *)c->name, "Utility"))
-			parse_core_spec(val, &defaults[CLASS_UTILITY]);
-		else if (!strcasecmp((const char *)c->name, "Unclassified"))
-			parse_core_spec(val, &defaults[CLASS_UNCLASSIFIED]);
-		else if (!strcasecmp((const char *)c->name, "Background"))
-			parse_core_spec(val, &defaults[CLASS_BACKGROUND]);
-		else if (!strcasecmp((const char *)c->name,
-				    "game_profile_cpu") ||
-			 !strcasecmp((const char *)c->name,
-				    "GameProfileCPU"))
-			parse_core_spec(val, &defaults[CLASS_GAME_PROFILE_CPU]);
-		else if (!strcasecmp((const char *)c->name,
-				    "game_profile_gpu") ||
-			 !strcasecmp((const char *)c->name,
-				    "GameProfileGPU"))
-			parse_core_spec(val, &defaults[CLASS_GAME_PROFILE_GPU]);
-		else if (!strcasecmp((const char *)c->name,
-				    "game_profile_mixed") ||
-			 !strcasecmp((const char *)c->name,
-				    "GameProfileMixed"))
-			parse_core_spec(val,
-					&defaults[CLASS_GAME_PROFILE_HYBRID]);
-		else
+		cls = classdefaults_tag_to_class((const char *)c->name);
+		if (cls == CLASS_INVALID) {
 			lpmd_log_debug(
 				"warning: unknown <ClassDefaults> child '%s'\n",
 				c->name);
-		xmlFree(val);
+			continue;
+		}
+
+		/* Legacy alias: map Foreground to both modern user tiers. */
+		if (!strcasecmp((const char *)c->name, "Foreground")) {
+			for (child_node = c->children; child_node;
+			     child_node = child_node->next) {
+				int parsed;
+
+				if (child_node->type != XML_ELEMENT_NODE ||
+				    !child_node->name)
+					continue;
+				val = (char *)xmlNodeListGetString(
+					doc, child_node->xmlChildrenNode, 1);
+				if (!val)
+					continue;
+
+				if (!strcasecmp((const char *)child_node->name,
+					       "Cores")) {
+					parse_core_spec(
+						val,
+						&defaults[CLASS_USER_INTERACTIVE]);
+					parse_core_spec(
+						val,
+						&defaults[CLASS_USER_INITIATED]);
+				} else if (!strcasecmp((const char *)child_node->name,
+						      "UClampMin") ||
+					   !strcasecmp((const char *)child_node->name,
+						      "uclamp_min")) {
+					if (parse_uclamp_value(val, &parsed) == 0) {
+						uclamp_min[CLASS_USER_INTERACTIVE] =
+							parsed;
+						uclamp_min[CLASS_USER_INITIATED] =
+							parsed;
+					}
+				} else if (!strcasecmp((const char *)child_node->name,
+						      "UClampMax") ||
+					   !strcasecmp((const char *)child_node->name,
+						      "uclamp_max")) {
+					if (parse_uclamp_value(val, &parsed) == 0) {
+						uclamp_max[CLASS_USER_INTERACTIVE] =
+							parsed;
+						uclamp_max[CLASS_USER_INITIATED] =
+							parsed;
+					}
+				}
+
+				xmlFree(val);
+			}
+			continue;
+		}
+
+		for (child_node = c->children; child_node; child_node = child_node->next) {
+			int parsed;
+
+			if (child_node->type == XML_ELEMENT_NODE &&
+			    !child_node->name)
+				continue;
+
+			val = (char *)xmlNodeListGetString(
+				doc, child_node->xmlChildrenNode, 1);
+			if (!val)
+				continue;
+
+			if (!strcasecmp((const char *)child_node->name, "Cores")) {
+				parse_core_spec(val, &defaults[cls]);
+			} else if (!strcasecmp((const char *)child_node->name,
+					      "UClampMin") ||
+				   !strcasecmp((const char *)child_node->name,
+					      "uclamp_min")) {
+				if (parse_uclamp_value(val, &parsed) == 0)
+					uclamp_min[cls] = parsed;
+			} else if (!strcasecmp((const char *)child_node->name,
+					      "UClampMax") ||
+				   !strcasecmp((const char *)child_node->name,
+					      "uclamp_max")) {
+				if (parse_uclamp_value(val, &parsed) == 0)
+					uclamp_max[cls] = parsed;
+			}
+
+			xmlFree(val);
+		}
 	}
 }
 
@@ -1111,6 +1249,92 @@ static int set_pid_affinity_all_threads(pid_t pid, const uint8_t *mask,
 	return n_ok;
 }
 
+static int class_uclamp_get(const process_cpuset_t *ctx,
+			   enum classification cls,
+			   int *uclamp_min, int *uclamp_max)
+{
+	int min_v, max_v;
+
+	if (!ctx || !uclamp_min || !uclamp_max)
+		return -1;
+	if ((int)cls < 0 || cls > CLASS_INVALID)
+		return -1;
+
+	min_v = ctx->class_uclamp_min[cls];
+	max_v = ctx->class_uclamp_max[cls];
+
+	/* Disabled for this class. */
+	if (min_v == UCLAMP_UNSET && max_v == UCLAMP_UNSET)
+		return 1;
+
+	if (min_v == UCLAMP_UNSET)
+		min_v = UCLAMP_CLAMP_MIN;
+	if (max_v == UCLAMP_UNSET)
+		max_v = UCLAMP_CLAMP_MAX;
+
+	if (min_v > max_v)
+		return -1;
+
+	*uclamp_min = min_v;
+	*uclamp_max = max_v;
+	return 0;
+}
+
+static int sched_setattr_pid(pid_t pid, const struct sched_attr *attr,
+			    unsigned int flags)
+{
+#ifdef SYS_sched_setattr
+	return syscall(SYS_sched_setattr, pid, attr, flags);
+#else
+	(void)pid;
+	(void)attr;
+	(void)flags;
+	errno = ENOSYS;
+	return -1;
+#endif
+}
+
+static int apply_pid_uclamp(process_cpuset_t *ctx, pid_t pid,
+			   enum classification cls,
+			   const char *cls_label)
+{
+	struct sched_attr attr;
+	int min_v, max_v;
+	int rc;
+
+	rc = class_uclamp_get(ctx, cls, &min_v, &max_v);
+	if (rc == 1)
+		return 0; /* not configured */
+	if (rc < 0) {
+		lpmd_log_debug(
+			"uclamp: invalid config for class=%s, skip pid=%d\n",
+			cls_label ? cls_label : class_str(cls), (int)pid);
+		return -1;
+	}
+
+	memset(&attr, 0, sizeof(attr));
+	attr.size = sizeof(attr);
+	attr.sched_flags = SCHED_FLAG_KEEP_POLICY | SCHED_FLAG_KEEP_PARAMS |
+			   SCHED_FLAG_UTIL_CLAMP_MIN |
+			   SCHED_FLAG_UTIL_CLAMP_MAX;
+	attr.sched_util_min = (uint32_t)min_v;
+	attr.sched_util_max = (uint32_t)max_v;
+
+	if (sched_setattr_pid(pid, &attr, 0) < 0) {
+		if (errno != ESRCH)
+			lpmd_log_debug(
+				"uclamp: sched_setattr pid=%d class=%s min=%d max=%d failed: %s\n",
+				(int)pid,
+				cls_label ? cls_label : class_str(cls), min_v,
+				max_v, strerror(errno));
+		return -1;
+	}
+
+	lpmd_log_debug("uclamp: pid=%d class=%s min=%d max=%d\n", (int)pid,
+		       cls_label ? cls_label : class_str(cls), min_v, max_v);
+	return 0;
+}
+
 /* ---------- systemd: StartTransientUnit with AllowedCPUs + PIDs ----------
  *
  * Equivalent to:
@@ -1505,6 +1729,13 @@ process_cpuset_t *process_cpuset_new(void)
 		GROUP_PCORES | GROUP_ECORES;
 	ctx->class_defaults[CLASS_GAME_PROFILE_HYBRID].groups =
 		GROUP_PCORES | GROUP_ECORES;
+
+	for (size_t i = 0;
+	     i < sizeof(ctx->class_uclamp_min) / sizeof(ctx->class_uclamp_min[0]);
+	     i++) {
+		ctx->class_uclamp_min[i] = UCLAMP_UNSET;
+		ctx->class_uclamp_max[i] = UCLAMP_UNSET;
+	}
 	return ctx;
 }
 
@@ -1720,6 +1951,77 @@ int process_cpuset_override_class_defaults(
 	return 0;
 }
 
+int process_cpuset_override_class_uclamp_defaults(
+	process_cpuset_t *ctx,
+	int realtime_min, int realtime_max,
+	int user_interactive_min, int user_interactive_max,
+	int user_initiated_min, int user_initiated_max,
+	int unclassified_min, int unclassified_max,
+	int utility_min, int utility_max,
+	int background_min, int background_max,
+	int game_profile_cpu_min, int game_profile_cpu_max,
+	int game_profile_gpu_min, int game_profile_gpu_max,
+	int game_profile_hybrid_min, int game_profile_hybrid_max)
+{
+	const struct {
+		enum classification cls;
+		int min_v;
+		int max_v;
+	} overrides[] = {
+		{ CLASS_REALTIME, realtime_min, realtime_max },
+		{ CLASS_USER_INTERACTIVE, user_interactive_min,
+		  user_interactive_max },
+		{ CLASS_USER_INITIATED, user_initiated_min, user_initiated_max },
+		{ CLASS_UNCLASSIFIED, unclassified_min, unclassified_max },
+		{ CLASS_UTILITY, utility_min, utility_max },
+		{ CLASS_BACKGROUND, background_min, background_max },
+		{ CLASS_GAME_PROFILE_CPU, game_profile_cpu_min,
+		  game_profile_cpu_max },
+		{ CLASS_GAME_PROFILE_GPU, game_profile_gpu_min,
+		  game_profile_gpu_max },
+		{ CLASS_GAME_PROFILE_HYBRID, game_profile_hybrid_min,
+		  game_profile_hybrid_max },
+	};
+	int touched = 0;
+
+	if (!ctx)
+		return -1;
+
+	for (size_t i = 0; i < sizeof(overrides) / sizeof(overrides[0]); i++) {
+		int min_v = overrides[i].min_v;
+		int max_v = overrides[i].max_v;
+
+		if (min_v != LPMD_UCLAMP_INHERIT) {
+			if (min_v < UCLAMP_UNSET || min_v > UCLAMP_CLAMP_MAX)
+				return -1;
+			ctx->class_uclamp_min[overrides[i].cls] = min_v;
+			touched = 1;
+		}
+
+		if (max_v != LPMD_UCLAMP_INHERIT) {
+			if (max_v < UCLAMP_UNSET || max_v > UCLAMP_CLAMP_MAX)
+				return -1;
+			ctx->class_uclamp_max[overrides[i].cls] = max_v;
+			touched = 1;
+		}
+
+		if (min_v != LPMD_UCLAMP_INHERIT &&
+		    max_v != LPMD_UCLAMP_INHERIT &&
+		    min_v != UCLAMP_UNSET && max_v != UCLAMP_UNSET &&
+		    min_v > max_v)
+			return -1;
+	}
+
+	if (!touched)
+		return 0;
+
+	/* Re-apply on all classes to pick up changed clamps for attached PIDs. */
+	for (size_t i = 0; i < sizeof(overrides) / sizeof(overrides[0]); i++)
+		(void)reapply_attached_class(ctx, overrides[i].cls);
+
+	return 0;
+}
+
 int process_cpuset_load_config(process_cpuset_t *ctx, const char *path)
 {
 	xmlDoc *doc;
@@ -1758,7 +2060,9 @@ int process_cpuset_load_config(process_cpuset_t *ctx, const char *path)
 			parse_cpu_groups(doc, cur->children, &ctx->groups);
 		else if (!strcmp((const char *)cur->name, "ClassDefaults"))
 			parse_class_defaults(doc, cur->children,
-					     ctx->class_defaults);
+					     ctx->class_defaults,
+					     ctx->class_uclamp_min,
+					     ctx->class_uclamp_max);
 		else if (!strcmp((const char *)cur->name, "DefaultProcess")) {
 			parse_one_process(ctx, doc, cur->children,
 					  &ctx->default_entry);
@@ -1851,7 +2155,9 @@ int process_cpuset_load_config_overlay(process_cpuset_t *ctx, const char *path)
 			parse_cpu_groups(doc, cur->children, &ctx->groups);
 		else if (!strcmp((const char *)cur->name, "ClassDefaults"))
 			parse_class_defaults(doc, cur->children,
-					     ctx->class_defaults);
+					     ctx->class_defaults,
+					     ctx->class_uclamp_min,
+					     ctx->class_uclamp_max);
 		else if (!strcmp((const char *)cur->name, "DefaultProcess")) {
 			struct proc_entry tmp;
 			parse_one_process(ctx, doc, cur->children, &tmp);
@@ -2250,10 +2556,19 @@ static int focus_promote_descendant(process_cpuset_t *ctx, pid_t pid,
 			ui_list[0] ? ui_list : "?");
 	}
 
-	if (desc->used_scope)
-		return set_scope_allowed_cpus(desc->unit, ui_mask, ui_mlen);
-	return affinity_apply(pid, /*all_threads=*/1, ui_mask, ui_mlen,
-			      class_str(CLASS_USER_INTERACTIVE));
+	if (desc->used_scope) {
+		if (set_scope_allowed_cpus(desc->unit, ui_mask, ui_mlen) < 0)
+			return -1;
+		(void)apply_pid_uclamp(ctx, pid, CLASS_USER_INTERACTIVE,
+			       class_str(CLASS_USER_INTERACTIVE));
+		return 0;
+	}
+	if (affinity_apply(pid, /*all_threads=*/1, ui_mask, ui_mlen,
+			  class_str(CLASS_USER_INTERACTIVE)) < 0)
+		return -1;
+	(void)apply_pid_uclamp(ctx, pid, CLASS_USER_INTERACTIVE,
+		       class_str(CLASS_USER_INTERACTIVE));
+	return 0;
 }
 
 /* Revert one descendant. Best-effort: PID may already be gone. */
@@ -2275,10 +2590,16 @@ static void focus_demote_descendant(process_cpuset_t *ctx,
 	if (desc->used_scope && desc->unit[0]) {
 		(void)set_scope_allowed_cpus(desc->unit, desc->orig_mask,
 					     desc->orig_mlen);
+		if (desc->orig_cls != CLASS_INVALID)
+			(void)apply_pid_uclamp(ctx, desc->pid, desc->orig_cls,
+				       class_str(desc->orig_cls));
 	} else {
 		(void)affinity_apply(desc->pid, /*all_threads=*/1,
 				     desc->orig_mask, desc->orig_mlen,
 				     class_str(desc->orig_cls));
+		if (desc->orig_cls != CLASS_INVALID)
+			(void)apply_pid_uclamp(ctx, desc->pid, desc->orig_cls,
+				       class_str(desc->orig_cls));
 	}
 }
 
@@ -2370,12 +2691,20 @@ int process_cpuset_set_focus_pid(process_cpuset_t *ctx, pid_t pid)
 			set_scope_allowed_cpus(ctx->focus_unit,
 					       ctx->focus_orig_mask,
 					       ctx->focus_orig_mlen);
+			if (ctx->focus_orig_cls != CLASS_INVALID)
+				(void)apply_pid_uclamp(ctx, prev,
+					       ctx->focus_orig_cls,
+					       class_str(ctx->focus_orig_cls));
 		} else {
 			/* Affinity-only path: best effort, the PID may be gone. */
 			(void)affinity_apply(prev, ctx->focus_all_threads,
 					     ctx->focus_orig_mask,
 					     ctx->focus_orig_mlen,
 					     class_str(ctx->focus_orig_cls));
+			if (ctx->focus_orig_cls != CLASS_INVALID)
+				(void)apply_pid_uclamp(ctx, prev,
+					       ctx->focus_orig_cls,
+					       class_str(ctx->focus_orig_cls));
 		}
 		ctx->focus_pid = 0;
 		ctx->focus_unit[0] = '\0';
@@ -2457,6 +2786,8 @@ int process_cpuset_set_focus_pid(process_cpuset_t *ctx, pid_t pid)
 	if (ctx->focus_used_scope) {
 		if (set_scope_allowed_cpus(ent->unit, mask, mlen) < 0)
 			return -1;
+		(void)apply_pid_uclamp(ctx, pid, CLASS_USER_INTERACTIVE,
+			       class_str(CLASS_USER_INTERACTIVE));
 	} else {
 		/* Affinity-only. Focus promotion is a whole-process semantic:
          * always cover every TID in the leader's task list, regardless
@@ -2467,6 +2798,8 @@ int process_cpuset_set_focus_pid(process_cpuset_t *ctx, pid_t pid)
 		if (affinity_apply(pid, /*all_threads=*/1, mask, mlen,
 				   class_str(CLASS_USER_INTERACTIVE)) < 0)
 			return -1;
+		(void)apply_pid_uclamp(ctx, pid, CLASS_USER_INTERACTIVE,
+			       class_str(CLASS_USER_INTERACTIVE));
 	}
 
 	/* Step 4: promote descendant TGIDs (browser content / GPU / RDD
@@ -2536,9 +2869,13 @@ static int reapply_attached_class(process_cpuset_t *ctx,
 			continue;
 		if (ent->unit[0]) {
 			(void)set_scope_allowed_cpus(ent->unit, mask, mlen);
+			(void)apply_pid_uclamp(ctx, ent->pid, target_cls,
+				       class_str(target_cls));
 		} else {
 			(void)affinity_apply(ent->pid, /*all_threads=*/1, mask,
 					     mlen, class_str(target_cls));
+			(void)apply_pid_uclamp(ctx, ent->pid, target_cls,
+				       class_str(target_cls));
 		}
 		/* Keep the stored groups in sync so LIST-BOUND displays the
 		 * correct CPU group names after a class-default change
@@ -2645,6 +2982,8 @@ void process_cpuset_log_class_defaults(const process_cpuset_t *ctx)
 	for (size_t i = 0; i < sizeof(order) / sizeof(order[0]); i++) {
 		struct proc_entry e;
 		uint8_t mask[CPUMASK_BYTES];
+		int uclamp_min = UCLAMP_UNSET;
+		int uclamp_max = UCLAMP_UNSET;
 
 		memset(&e, 0, sizeof(e));
 		e.cls = order[i];
@@ -2656,8 +2995,12 @@ void process_cpuset_log_class_defaults(const process_cpuset_t *ctx)
 			continue;
 		}
 		mask_to_cpulist(mask, sizeof(mask), list, sizeof(list));
-		lpmd_log_debug( "process_cpuset: defaults: %-18s = [%s]\n",
-			class_str(order[i]), list[0] ? list : "<empty>");
+		(void)class_uclamp_get(ctx, order[i],
+				      &uclamp_min, &uclamp_max);
+		lpmd_log_debug(
+			"process_cpuset: defaults: %-18s = [%s] uclamp_min=%d uclamp_max=%d\n",
+			class_str(order[i]), list[0] ? list : "<empty>",
+			uclamp_min, uclamp_max);
 	}
 }
 
@@ -2754,6 +3097,9 @@ int process_cpuset_apply_once(process_cpuset_t *ctx, int dry_run)
 							   pids[j], "", e->cls,
 							   e->resolved.groups,
 							   owner_uid);
+						(void)apply_pid_uclamp(ctx, pids[j],
+							       e->cls,
+							       class_str(e->cls));
 					}
 				} else if (set_pid_affinity_from_mask(
 						   pids[j], mask, mlen) == 0) {
@@ -2765,6 +3111,8 @@ int process_cpuset_apply_once(process_cpuset_t *ctx, int dry_run)
 					pidset_add(&ctx->attached, pids[j], "",
 						   e->cls, e->resolved.groups,
 						   owner_uid);
+					(void)apply_pid_uclamp(ctx, pids[j], e->cls,
+						       class_str(e->cls));
 				}
 				continue;
 			}
@@ -2802,6 +3150,8 @@ int process_cpuset_apply_once(process_cpuset_t *ctx, int dry_run)
 					pidset_add(&ctx->attached, pids[j],
 						   existing, e->cls,
 						   e->resolved.groups, 0);
+					(void)apply_pid_uclamp(ctx, pids[j], e->cls,
+						       class_str(e->cls));
 					continue;
 				}
 			}
@@ -2826,6 +3176,8 @@ int process_cpuset_apply_once(process_cpuset_t *ctx, int dry_run)
 					       (int)pids[j], unit);
 				pidset_add(&ctx->attached, pids[j], unit,
 					   e->cls, e->resolved.groups, 0);
+				(void)apply_pid_uclamp(ctx, pids[j], e->cls,
+					       class_str(e->cls));
 			}
 		}
 
@@ -2950,6 +3302,8 @@ int process_cpuset_apply_pid(process_cpuset_t *ctx, pid_t pid, int dry_run)
 					pidset_add(&ctx->attached, pid, "",
 						   e->cls, e->resolved.groups,
 						   owner_uid);
+					(void)apply_pid_uclamp(ctx, pid, e->cls,
+						       class_str(e->cls));
 					return 1;
 				}
 			} else if (set_pid_affinity_from_mask(pid, mask,
@@ -2959,6 +3313,8 @@ int process_cpuset_apply_pid(process_cpuset_t *ctx, pid_t pid, int dry_run)
 					       (unsigned)owner_uid);
 				pidset_add(&ctx->attached, pid, "", e->cls,
 					   e->resolved.groups, owner_uid);
+				(void)apply_pid_uclamp(ctx, pid, e->cls,
+					       class_str(e->cls));
 				return 1;
 			}
 			return -1;
@@ -2995,6 +3351,8 @@ int process_cpuset_apply_pid(process_cpuset_t *ctx, pid_t pid, int dry_run)
 						       existing);
 				pidset_add(&ctx->attached, pid, existing,
 					   e->cls, e->resolved.groups, 0);
+				(void)apply_pid_uclamp(ctx, pid, e->cls,
+					       class_str(e->cls));
 				return 1;
 			}
 		}
@@ -3010,6 +3368,8 @@ int process_cpuset_apply_pid(process_cpuset_t *ctx, pid_t pid, int dry_run)
 				       e->name, (int)pid, unit);
 			pidset_add(&ctx->attached, pid, unit, e->cls,
 				   e->resolved.groups, 0);
+			(void)apply_pid_uclamp(ctx, pid, e->cls,
+				       class_str(e->cls));
 			return 1;
 		}
 		return -1;
@@ -3075,6 +3435,8 @@ static int apply_default_to_pid(process_cpuset_t *ctx, pid_t pid,
 				       from_event ? " event" : "");
 			pidset_add(&ctx->attached, pid, "", e->cls,
 				   e->resolved.groups, owner_uid);
+			(void)apply_pid_uclamp(ctx, pid, e->cls,
+				       class_str(e->cls));
 			return 1;
 		}
 	} else if (set_pid_affinity_from_mask(pid, mask, mlen) == 0) {
@@ -3083,6 +3445,7 @@ static int apply_default_to_pid(process_cpuset_t *ctx, pid_t pid,
 			       from_event ? " event" : "");
 		pidset_add(&ctx->attached, pid, "", e->cls, e->resolved.groups,
 			   owner_uid);
+		(void)apply_pid_uclamp(ctx, pid, e->cls, class_str(e->cls));
 		return 1;
 	}
 	return -1;

@@ -123,6 +123,27 @@ int process_cpuset_override_class_defaults(
 	const char *game_profile_hybrid);
 
 /*
+ * Override one or more per-class uclamp defaults at runtime.
+ * Each value accepts:
+ *   -2: keep current value unchanged
+ *   -1: disable clamp for that bound
+ * 0..1024: explicit sched_util_{min,max} value
+ *
+ * Returns 0 on success, -1 on error.
+ */
+int process_cpuset_override_class_uclamp_defaults(
+	process_cpuset_t *ctx,
+	int realtime_min, int realtime_max,
+	int user_interactive_min, int user_interactive_max,
+	int user_initiated_min, int user_initiated_max,
+	int unclassified_min, int unclassified_max,
+	int utility_min, int utility_max,
+	int background_min, int background_max,
+	int game_profile_cpu_min, int game_profile_cpu_max,
+	int game_profile_gpu_min, int game_profile_gpu_max,
+	int game_profile_hybrid_min, int game_profile_hybrid_max);
+
+/*
  * Scan /proc once and attach any newly-seen matching PIDs to a transient
  * cpuset scope. PIDs already attached in a previous call are skipped.
  * If dry_run is non-zero, prints what would happen but does not call

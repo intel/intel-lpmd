@@ -274,6 +274,29 @@ struct lpmd_config_t {
 	char pc_class_default_gp_gpu[MAX_CONFIG_LEN];
 	char pc_class_default_gp_hybrid[MAX_CONFIG_LEN];
 
+	/* Optional per-class uclamp overrides from <ClassDefaults> in
+	 * intel_lpmd_config_*.xml. LPMD_UCLAMP_INHERIT means "leave value
+	 * from process_cpuset.xml untouched"; LPMD_UCLAMP_DISABLE (-1) or
+	 * 0..1024 are explicit overrides. */
+	int pc_class_uclamp_min_realtime;
+	int pc_class_uclamp_max_realtime;
+	int pc_class_uclamp_min_user_interactive;
+	int pc_class_uclamp_max_user_interactive;
+	int pc_class_uclamp_min_user_initiated;
+	int pc_class_uclamp_max_user_initiated;
+	int pc_class_uclamp_min_unclassified;
+	int pc_class_uclamp_max_unclassified;
+	int pc_class_uclamp_min_utility;
+	int pc_class_uclamp_max_utility;
+	int pc_class_uclamp_min_background;
+	int pc_class_uclamp_max_background;
+	int pc_class_uclamp_min_gp_cpu;
+	int pc_class_uclamp_max_gp_cpu;
+	int pc_class_uclamp_min_gp_gpu;
+	int pc_class_uclamp_max_gp_gpu;
+	int pc_class_uclamp_min_gp_hybrid;
+	int pc_class_uclamp_max_gp_hybrid;
+
 	/* Optional per-class tuning overrides from <ClassDefaults>. These
 	 * are independent from <State> definitions. Each field is applied
 	 * only when the corresponding present bit is set, so omitted tags
@@ -380,6 +403,11 @@ enum cpumask_idx {
 
 #define SETTING_RESTORE	-2
 #define SETTING_IGNORE	-1
+
+#define LPMD_UCLAMP_INHERIT	-2
+#define LPMD_UCLAMP_DISABLE	-1
+#define LPMD_UCLAMP_MIN	0
+#define LPMD_UCLAMP_MAX	1024
 
 /* WLT hints parsing */
 enum wlt_type_t {
