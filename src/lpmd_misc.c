@@ -295,14 +295,27 @@ int process_slider_offset_only(struct lpmd_config_t *config,
 void process_slider(struct lpmd_config_t *config, struct lpmd_config_state_t *state)
 {
 	int ret;
+	const char *owner;
 
-	ret = process_balance_slider(state);
-	if (ret)
-		process_balance_slider_default_update(config);
+	if (lpmd_process_cpuset_balance_slider_locked()) {
+		owner = lpmd_process_cpuset_balance_slider_owner();
+		lpmd_log_info("Skip state balance slider due to process_cpuset class lock (owner=%s)\n",
+			      owner && owner[0] ? owner : "unknown");
+	} else {
+		ret = process_balance_slider(state);
+		if (ret)
+			process_balance_slider_default_update(config);
+	}
 
-	ret = process_slider_offset(state);
-	if (ret)
-		process_slider_offset_default_update(config);
+	if (lpmd_process_cpuset_slider_offset_locked()) {
+		owner = lpmd_process_cpuset_slider_offset_owner();
+		lpmd_log_info("Skip state slider offset due to process_cpuset class lock (owner=%s)\n",
+			      owner && owner[0] ? owner : "unknown");
+	} else {
+		ret = process_slider_offset(state);
+		if (ret)
+			process_slider_offset_default_update(config);
+	}
 }
 
 /* EPP/EPB Management */
@@ -521,6 +534,8 @@ int epp_epb_init(void)
 
 static int saved_min_perf_pct = SETTING_IGNORE;
 static int saved_max_perf_pct = SETTING_IGNORE;
+static int process_min_perf_pct_impl(struct lpmd_config_state_t *state,
+				     int honor_class_lock);
 
 int min_perf_pct_init(void)
 {
@@ -536,11 +551,30 @@ int min_perf_pct_init(void)
 
 int process_min_perf_pct(struct lpmd_config_state_t *state)
 {
+	return process_min_perf_pct_impl(state, 1);
+}
+
+int process_min_perf_pct_override(struct lpmd_config_state_t *state)
+{
+	return process_min_perf_pct_impl(state, 0);
+}
+
+static int process_min_perf_pct_impl(struct lpmd_config_state_t *state,
+				     int honor_class_lock)
+{
 	int val;
 	int configured_val;
+	const char *owner;
 
 	if (!state)
 		return 0;
+
+	if (honor_class_lock && lpmd_process_cpuset_min_perf_pct_locked()) {
+		owner = lpmd_process_cpuset_min_perf_pct_owner();
+		lpmd_log_info("Skip state min_perf_pct due to process_cpuset class lock (owner=%s)\n",
+			      owner && owner[0] ? owner : "unknown");
+		return 0;
+	}
 
 	if (is_on_battery())
 		configured_val = state->min_perf_pct_dc;

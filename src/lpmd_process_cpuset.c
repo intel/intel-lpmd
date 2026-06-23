@@ -112,7 +112,7 @@ static void apply_class_min_perf_override(const struct lpmd_config_t *config,
 	if (ovr->present_mask & LPMD_CLASS_TUNE_MIN_PERF_PCT_DC)
 		tmp_state.min_perf_pct_dc = ovr->min_perf_pct_dc;
 
-	if (process_min_perf_pct(&tmp_state))
+	if (process_min_perf_pct_override(&tmp_state))
 		lpmd_log_warn("process_cpuset: class=%s min_perf_pct apply failed\n",
 			      cls ? cls : "?");
 }
@@ -595,6 +595,75 @@ static struct class_tune_owner_t g_slider_offset_owner = {
 	.capture_restore_state = capture_owned_slider_offset_state,
 	.reset_override = reset_owned_slider_offset_to_default,
 };
+
+static int class_tune_owner_is_locked(const struct class_tune_owner_t *owner,
+				      const struct lpmd_config_t *config)
+{
+	if (!owner || !config || !owner->owner_class[0])
+		return 0;
+
+	if (!class_has_live_attached_pid(owner->owner_class))
+		return 0;
+
+	if (!owner->class_has_override)
+		return 0;
+
+	return owner->class_has_override(config, owner->owner_class);
+}
+
+int lpmd_process_cpuset_min_perf_pct_locked(void)
+{
+	struct lpmd_config_t *config = get_lpmd_config();
+
+	if (!g_pc_ctx)
+		return 0;
+
+	return class_tune_owner_is_locked(&g_min_perf_owner, config);
+}
+
+int lpmd_process_cpuset_balance_slider_locked(void)
+{
+	struct lpmd_config_t *config = get_lpmd_config();
+
+	if (!g_pc_ctx)
+		return 0;
+
+	return class_tune_owner_is_locked(&g_balance_slider_owner, config);
+}
+
+int lpmd_process_cpuset_slider_offset_locked(void)
+{
+	struct lpmd_config_t *config = get_lpmd_config();
+
+	if (!g_pc_ctx)
+		return 0;
+
+	return class_tune_owner_is_locked(&g_slider_offset_owner, config);
+}
+
+const char *lpmd_process_cpuset_min_perf_pct_owner(void)
+{
+	if (!g_pc_ctx)
+		return NULL;
+
+	return g_min_perf_owner.owner_class[0] ? g_min_perf_owner.owner_class : NULL;
+}
+
+const char *lpmd_process_cpuset_balance_slider_owner(void)
+{
+	if (!g_pc_ctx)
+		return NULL;
+
+	return g_balance_slider_owner.owner_class[0] ? g_balance_slider_owner.owner_class : NULL;
+}
+
+const char *lpmd_process_cpuset_slider_offset_owner(void)
+{
+	if (!g_pc_ctx)
+		return NULL;
+
+	return g_slider_offset_owner.owner_class[0] ? g_slider_offset_owner.owner_class : NULL;
+}
 
 static void user_xml_path(char *out, size_t cap)
 {

@@ -476,6 +476,7 @@ int get_epp_epb(int *epp, char *epp_str, int size, int *epb);
 int process_epp_epb(struct lpmd_config_state_t *state);
 int min_perf_pct_init(void);
 int process_min_perf_pct(struct lpmd_config_state_t *state);
+int process_min_perf_pct_override(struct lpmd_config_state_t *state);
 int max_perf_pct_init(void);
 int process_max_perf_pct(struct lpmd_config_state_t *state);
 
@@ -537,6 +538,12 @@ int  lpmd_process_cpuset_add_process(const char *name, const char *classificatio
 int  lpmd_process_cpuset_set_focus_pid(pid_t pid);
 int  lpmd_process_cpuset_set_focus_helper_present(int present);
 int  lpmd_process_cpuset_classify(const char *name, char *result, size_t result_cap);
+int  lpmd_process_cpuset_min_perf_pct_locked(void);
+int  lpmd_process_cpuset_balance_slider_locked(void);
+int  lpmd_process_cpuset_slider_offset_locked(void);
+const char *lpmd_process_cpuset_min_perf_pct_owner(void);
+const char *lpmd_process_cpuset_balance_slider_owner(void);
+const char *lpmd_process_cpuset_slider_offset_owner(void);
 
 /* Kernel proc-connector (event-driven classification). Returns the
  * NETLINK_CONNECTOR fd to add to the main poll loop on success, or -1
