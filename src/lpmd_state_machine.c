@@ -231,69 +231,71 @@ end:
 
 static void dump_state(struct lpmd_config_state_t *state, char *str, int debug)
 {
-	char buf[MAX_STR_LENGTH];
+#define DUMP_STATE_BUF_SIZE	512
+	char buf[DUMP_STATE_BUF_SIZE];
 	int offset = 0;
 
 	if (debug && !in_debug_mode())
 		return;
 
-	offset += snprintf(buf + offset, MAX_STR_LENGTH - offset,
+	offset += snprintf(buf + offset, DUMP_STATE_BUF_SIZE - offset,
 			   "[%6s] [%s] [%s]: ", str,
 			   lpmd_state_name[lpmd_state], state->name);
 
 	if (state->wlt_type)
-		offset += snprintf(buf + offset, MAX_STR_LENGTH - offset,
+		offset += snprintf(buf + offset, DUMP_STATE_BUF_SIZE - offset,
 				   "WLT [%2d] ", state->wlt_type);
 
 	if (state->wlt_type_mask)
-		offset += snprintf(buf + offset, MAX_STR_LENGTH - offset, "WLTMASK [%2d] ", state->wlt_type_mask);
+		offset += snprintf(buf + offset, DUMP_STATE_BUF_SIZE - offset, "WLTMASK [%2d] ", state->wlt_type_mask);
 
 	if (state->entry_system_load_thres)
-		offset += snprintf(buf + offset, MAX_STR_LENGTH - offset,
+		offset += snprintf(buf + offset, DUMP_STATE_BUF_SIZE - offset,
 				   "SYS [%6d] ",
 				   state->entry_system_load_thres / 100);
 
 	if (state->enter_cpu_load_thres)
-		offset += snprintf(buf + offset, MAX_STR_LENGTH - offset,
+		offset += snprintf(buf + offset, DUMP_STATE_BUF_SIZE - offset,
 				   "CPU [%6d] ",
 				   state->enter_cpu_load_thres / 100);
 
 	if (state->enter_gfx_load_thres)
-		offset += snprintf(buf + offset, MAX_STR_LENGTH - offset,
+		offset += snprintf(buf + offset, DUMP_STATE_BUF_SIZE - offset,
 				   "GFX [%6d] ",
 				   state->enter_gfx_load_thres / 100);
 
-	offset += snprintf(buf + offset, MAX_STR_LENGTH - offset,
+	offset += snprintf(buf + offset, DUMP_STATE_BUF_SIZE - offset,
 			   "CPUMASK [%d] ", state->cpumask_idx);
-	offset += snprintf(buf + offset, MAX_STR_LENGTH - offset,
+	offset += snprintf(buf + offset, DUMP_STATE_BUF_SIZE - offset,
 			   "IRQ [%d] ", state->irq_migrate);
-	offset += snprintf(buf + offset, MAX_STR_LENGTH - offset,
+	offset += snprintf(buf + offset, DUMP_STATE_BUF_SIZE - offset,
 			   "ITMT [%d] ", state->itmt_state);
-	offset += snprintf(buf + offset, MAX_STR_LENGTH - offset,
+	offset += snprintf(buf + offset, DUMP_STATE_BUF_SIZE - offset,
 			   "EPB [%d] ", state->epb);
-	offset += snprintf(buf + offset, MAX_STR_LENGTH - offset,
+	offset += snprintf(buf + offset, DUMP_STATE_BUF_SIZE - offset,
 			   "EPP [%d] ", state->epp);
-	offset += snprintf(buf + offset, MAX_STR_LENGTH - offset,
+	offset += snprintf(buf + offset, DUMP_STATE_BUF_SIZE - offset,
 			   "MIN_PERF_PCT_AC [%d] ", state->min_perf_pct_ac);
-	offset += snprintf(buf + offset, MAX_STR_LENGTH - offset,
+	offset += snprintf(buf + offset, DUMP_STATE_BUF_SIZE - offset,
 			   "MIN_PERF_PCT_DC [%d] ", state->min_perf_pct_dc);
-	offset += snprintf(buf + offset, MAX_STR_LENGTH - offset,
+	offset += snprintf(buf + offset, DUMP_STATE_BUF_SIZE - offset,
 			   "MAX_PERF_PCT_AC [%d] ", state->max_perf_pct_ac);
-	offset += snprintf(buf + offset, MAX_STR_LENGTH - offset,
+	offset += snprintf(buf + offset, DUMP_STATE_BUF_SIZE - offset,
 			   "MAX_PERF_PCT_DC [%d] ", state->max_perf_pct_dc);
-	offset += snprintf(buf + offset, MAX_STR_LENGTH - offset,
+	offset += snprintf(buf + offset, DUMP_STATE_BUF_SIZE - offset,
 			   "SliderAC [%d] ", state->balance_slider_ac);
-	offset += snprintf(buf + offset, MAX_STR_LENGTH - offset,
+	offset += snprintf(buf + offset, DUMP_STATE_BUF_SIZE - offset,
 			   "SliderDC [%d] ", state->balance_slider_dc);
-	offset += snprintf(buf + offset, MAX_STR_LENGTH - offset,
+	offset += snprintf(buf + offset, DUMP_STATE_BUF_SIZE - offset,
 			   "OffsetAC [%d] ", state->slider_offset_ac);
-	offset += snprintf(buf + offset, MAX_STR_LENGTH - offset,
+	offset += snprintf(buf + offset, DUMP_STATE_BUF_SIZE - offset,
 			   "OffsetDC [%d] ", state->slider_offset_dc);
 
 	if (debug)
 		lpmd_log_debug("%s\n", buf);
 	else
 		lpmd_log_info("%s\n", buf);
+#undef DUMP_STATE_BUF_SIZE
 }
 
 static int choose_next_state(struct lpmd_config_t *config)

@@ -154,7 +154,7 @@ for Intel Energy Optimizer (LPMD) daemon
 		<CPUConfig> 4P0E4L-25W </CPUConfig>
 		<!--
 		  Optional per-CPU-model override of process_cpuset.xml's
-		  <ClassDefaults>. Inside each class, <Cores> accepts the same
+		  <ClassDefaults>. Inside each class, "Cores" accepts the same
 		  token list as ActiveCores ("ActivePcores" / "ActiveEcores" /
 		  "ActiveLcores", comma- or whitespace-separated).
 
