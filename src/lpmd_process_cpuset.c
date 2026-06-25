@@ -56,9 +56,42 @@ static struct class_tune_owner_t g_max_perf_owner;
 static struct class_tune_owner_t g_balance_slider_owner;
 static struct class_tune_owner_t g_slider_offset_owner;
 
+struct perf_tune_cache_t {
+	int dirty;
+	int on_battery;
+	int has_effective;
+	int effective_val;
+	char owner_class[64];
+};
+
+static struct perf_tune_cache_t g_min_perf_cache = {
+	.dirty = 1,
+	.on_battery = -1,
+};
+static struct perf_tune_cache_t g_max_perf_cache = {
+	.dirty = 1,
+	.on_battery = -1,
+};
+
 static int g_saved_max_perf_pct = SETTING_IGNORE;
 static int g_saved_balance_slider = -1;
 static int g_saved_slider_offset = -1;
+
+static void mark_perf_tuning_dirty(void)
+{
+	g_min_perf_cache.dirty = 1;
+	g_max_perf_cache.dirty = 1;
+}
+
+static void reset_perf_tuning_cache(void)
+{
+	memset(&g_min_perf_cache, 0, sizeof(g_min_perf_cache));
+	memset(&g_max_perf_cache, 0, sizeof(g_max_perf_cache));
+	g_min_perf_cache.dirty = 1;
+	g_max_perf_cache.dirty = 1;
+	g_min_perf_cache.on_battery = -1;
+	g_max_perf_cache.on_battery = -1;
+}
 
 static const struct lpmd_class_tuning_override_t *class_tuning_for_name(
 	const struct lpmd_config_t *config, const char *cls)
@@ -302,6 +335,86 @@ static int class_has_max_perf_override(const struct lpmd_config_t *config,
 	return !!(ovr->present_mask & LPMD_CLASS_TUNE_MAX_PERF_PCT_AC);
 }
 
+static int class_get_min_perf_override_value(const struct lpmd_config_t *config,
+					     const char *cls,
+					     int *value_out)
+{
+	const struct lpmd_class_tuning_override_t *ovr;
+	int on_battery;
+
+	if (!config || !cls || !*cls || !value_out)
+		return 0;
+
+	ovr = class_tuning_for_name(config, cls);
+	if (!ovr || !ovr->present_mask)
+		return 0;
+
+	on_battery = is_on_battery();
+	if (on_battery) {
+		if (!(ovr->present_mask & LPMD_CLASS_TUNE_MIN_PERF_PCT_DC))
+			return 0;
+		*value_out = ovr->min_perf_pct_dc;
+		return 1;
+	}
+
+	if (!(ovr->present_mask & LPMD_CLASS_TUNE_MIN_PERF_PCT_AC))
+		return 0;
+	*value_out = ovr->min_perf_pct_ac;
+	return 1;
+}
+
+static int class_get_max_perf_override_value(const struct lpmd_config_t *config,
+					     const char *cls,
+					     int *value_out)
+{
+	const struct lpmd_class_tuning_override_t *ovr;
+	int on_battery;
+
+	if (!config || !cls || !*cls || !value_out)
+		return 0;
+
+	ovr = class_tuning_for_name(config, cls);
+	if (!ovr || !ovr->present_mask)
+		return 0;
+
+	on_battery = is_on_battery();
+	if (on_battery) {
+		if (!(ovr->present_mask & LPMD_CLASS_TUNE_MAX_PERF_PCT_DC))
+			return 0;
+		*value_out = ovr->max_perf_pct_dc;
+		return 1;
+	}
+
+	if (!(ovr->present_mask & LPMD_CLASS_TUNE_MAX_PERF_PCT_AC))
+		return 0;
+	*value_out = ovr->max_perf_pct_ac;
+	return 1;
+}
+
+static void apply_min_perf_value(int val)
+{
+	struct lpmd_config_state_t tmp_state;
+
+	lpmd_init_config_state(&tmp_state);
+	tmp_state.min_perf_pct_ac = val;
+	tmp_state.min_perf_pct_dc = val;
+	if (process_min_perf_pct_override(&tmp_state))
+		lpmd_log_warn("process_cpuset: failed to apply effective min_perf_pct=%d\n",
+			      val);
+}
+
+static void apply_max_perf_value(int val)
+{
+	struct lpmd_config_state_t tmp_state;
+
+	lpmd_init_config_state(&tmp_state);
+	tmp_state.max_perf_pct_ac = val;
+	tmp_state.max_perf_pct_dc = val;
+	if (process_max_perf_pct(&tmp_state))
+		lpmd_log_warn("process_cpuset: failed to apply effective max_perf_pct=%d\n",
+			      val);
+}
+
 static int class_has_balance_slider_override(const struct lpmd_config_t *config,
 					      const char *cls)
 {
@@ -488,13 +601,171 @@ static void sync_class_tune_owner(struct class_tune_owner_t *owner,
 static void sync_min_perf_owner(const struct lpmd_config_t *config,
 			      const char *candidate_cls)
 {
-	sync_class_tune_owner(&g_min_perf_owner, config, candidate_cls);
+	size_t n, i;
+	int best_val = -1;
+	char best_cls[sizeof(g_min_perf_owner.owner_class)] = { 0 };
+	int found = 0;
+	int on_battery;
+
+	(void)candidate_cls;
+
+	if (!g_pc_ctx || !config)
+		return;
+
+	on_battery = is_on_battery();
+	if (!g_min_perf_cache.dirty && g_min_perf_cache.on_battery == on_battery)
+		return;
+
+	n = process_cpuset_attached_count(g_pc_ctx);
+	for (i = 0; i < n; i++) {
+		pid_t pid = 0;
+		char unit[128] = { 0 };
+		const char *cls = NULL;
+		int use_p = 0, use_e = 0, use_l = 0;
+		int val;
+
+		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, unit,
+					   sizeof(unit), &cls,
+					   &use_p, &use_e, &use_l) < 0)
+			continue;
+		if (!pid_is_live(pid))
+			continue;
+		if (!class_get_min_perf_override_value(config, cls, &val))
+			continue;
+
+		if (!found || val > best_val) {
+			best_val = val;
+			snprintf(best_cls, sizeof(best_cls), "%s", cls ? cls : "");
+			found = 1;
+		}
+	}
+
+	if (!found) {
+		if (g_min_perf_owner.owner_class[0]) {
+			if (g_min_perf_owner.reset_override)
+				g_min_perf_owner.reset_override();
+			lpmd_log_info(
+				"process_cpuset: no active class min_perf_pct override, reset to default\n");
+			g_min_perf_owner.owner_class[0] = '\0';
+		}
+		g_min_perf_cache.dirty = 0;
+		g_min_perf_cache.on_battery = on_battery;
+		g_min_perf_cache.has_effective = 0;
+		g_min_perf_cache.effective_val = 0;
+		g_min_perf_cache.owner_class[0] = '\0';
+		return;
+	}
+
+	if (g_min_perf_cache.has_effective &&
+	    g_min_perf_cache.effective_val == best_val &&
+	    !strcasecmp(g_min_perf_cache.owner_class, best_cls)) {
+		g_min_perf_cache.dirty = 0;
+		g_min_perf_cache.on_battery = on_battery;
+		return;
+	}
+
+	if (strcasecmp(g_min_perf_owner.owner_class, best_cls)) {
+		snprintf(g_min_perf_owner.owner_class,
+			 sizeof(g_min_perf_owner.owner_class), "%s", best_cls);
+		lpmd_log_info(
+			"process_cpuset: class %s is now min_perf_pct owner (effective=%d)\n",
+			g_min_perf_owner.owner_class, best_val);
+	}
+
+	apply_min_perf_value(best_val);
+	g_min_perf_cache.dirty = 0;
+	g_min_perf_cache.on_battery = on_battery;
+	g_min_perf_cache.has_effective = 1;
+	g_min_perf_cache.effective_val = best_val;
+	snprintf(g_min_perf_cache.owner_class, sizeof(g_min_perf_cache.owner_class),
+		 "%s", best_cls);
 }
 
 static void sync_max_perf_owner(const struct lpmd_config_t *config,
 			      const char *candidate_cls)
 {
-	sync_class_tune_owner(&g_max_perf_owner, config, candidate_cls);
+	size_t n, i;
+	int best_val = 101;
+	char best_cls[sizeof(g_max_perf_owner.owner_class)] = { 0 };
+	int found = 0;
+	int on_battery;
+
+	(void)candidate_cls;
+
+	if (!g_pc_ctx || !config)
+		return;
+
+	on_battery = is_on_battery();
+	if (!g_max_perf_cache.dirty && g_max_perf_cache.on_battery == on_battery)
+		return;
+
+	n = process_cpuset_attached_count(g_pc_ctx);
+	for (i = 0; i < n; i++) {
+		pid_t pid = 0;
+		char unit[128] = { 0 };
+		const char *cls = NULL;
+		int use_p = 0, use_e = 0, use_l = 0;
+		int val;
+
+		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, unit,
+					   sizeof(unit), &cls,
+					   &use_p, &use_e, &use_l) < 0)
+			continue;
+		if (!pid_is_live(pid))
+			continue;
+		if (!class_get_max_perf_override_value(config, cls, &val))
+			continue;
+
+		if (!found || val < best_val) {
+			best_val = val;
+			snprintf(best_cls, sizeof(best_cls), "%s", cls ? cls : "");
+			found = 1;
+		}
+	}
+
+	if (!found) {
+		if (g_max_perf_owner.owner_class[0]) {
+			if (g_max_perf_owner.reset_override)
+				g_max_perf_owner.reset_override();
+			lpmd_log_info(
+				"process_cpuset: no active class max_perf_pct override, restored default\n");
+			g_max_perf_owner.owner_class[0] = '\0';
+		}
+		g_max_perf_cache.dirty = 0;
+		g_max_perf_cache.on_battery = on_battery;
+		g_max_perf_cache.has_effective = 0;
+		g_max_perf_cache.effective_val = 0;
+		g_max_perf_cache.owner_class[0] = '\0';
+		return;
+	}
+
+	if (g_max_perf_cache.has_effective &&
+	    g_max_perf_cache.effective_val == best_val &&
+	    !strcasecmp(g_max_perf_cache.owner_class, best_cls)) {
+		g_max_perf_cache.dirty = 0;
+		g_max_perf_cache.on_battery = on_battery;
+		return;
+	}
+
+	if (!g_max_perf_owner.owner_class[0] &&
+	    g_max_perf_owner.capture_restore_state)
+		g_max_perf_owner.capture_restore_state();
+
+	if (strcasecmp(g_max_perf_owner.owner_class, best_cls)) {
+		snprintf(g_max_perf_owner.owner_class,
+			 sizeof(g_max_perf_owner.owner_class), "%s", best_cls);
+		lpmd_log_info(
+			"process_cpuset: class %s is now max_perf_pct owner (effective=%d)\n",
+			g_max_perf_owner.owner_class, best_val);
+	}
+
+	apply_max_perf_value(best_val);
+	g_max_perf_cache.dirty = 0;
+	g_max_perf_cache.on_battery = on_battery;
+	g_max_perf_cache.has_effective = 1;
+	g_max_perf_cache.effective_val = best_val;
+	snprintf(g_max_perf_cache.owner_class, sizeof(g_max_perf_cache.owner_class),
+		 "%s", best_cls);
 }
 
 static void sync_balance_slider_owner(const struct lpmd_config_t *config,
@@ -542,13 +813,15 @@ static void apply_class_tuning_override_for_pid(
 static void apply_class_min_perf_override_for_pid(
 	const struct lpmd_config_t *config, pid_t pid)
 {
-	apply_class_tuning_override_for_pid(config, pid, &g_min_perf_owner);
+	(void)pid;
+	sync_min_perf_owner(config, NULL);
 }
 
 static void apply_class_max_perf_override_for_pid(
 	const struct lpmd_config_t *config, pid_t pid)
 {
-	apply_class_tuning_override_for_pid(config, pid, &g_max_perf_owner);
+	(void)pid;
+	sync_max_perf_owner(config, NULL);
 }
 
 static void apply_class_balance_slider_override_for_pid(
@@ -940,6 +1213,7 @@ void lpmd_process_cpuset_uninit(void)
 	clear_class_tune_owner(&g_max_perf_owner, 1);
 	clear_class_tune_owner(&g_balance_slider_owner, 1);
 	clear_class_tune_owner(&g_slider_offset_owner, 1);
+	reset_perf_tuning_cache();
 
 	if (!g_pc_ctx)
 		return;
@@ -965,6 +1239,7 @@ void lpmd_process_cpuset_unbind_all(void)
 	clear_class_tune_owner(&g_max_perf_owner, 1);
 	clear_class_tune_owner(&g_balance_slider_owner, 1);
 	clear_class_tune_owner(&g_slider_offset_owner, 1);
+	reset_perf_tuning_cache();
 
 	if (!g_pc_ctx) {
 		lpmd_log_msg("process_cpuset: not active; nothing to unbind\n");
@@ -1018,6 +1293,8 @@ void lpmd_process_cpuset_rescan(void)
 		sync_slider_offset_owner(get_lpmd_config(), NULL);
 		return;
 	}
+
+	mark_perf_tuning_dirty();
 
 	config = get_lpmd_config();
 	if (!config)
@@ -1314,6 +1591,8 @@ void lpmd_process_cpuset_proc_connector_handle(void)
 		case PROC_EVENT_EXIT: {
 			struct lpmd_config_t *config = get_lpmd_config();
 
+			mark_perf_tuning_dirty();
+
 			sync_min_perf_owner(config, NULL);
 			sync_max_perf_owner(config, NULL);
 			sync_balance_slider_owner(config, NULL);
@@ -1332,6 +1611,8 @@ void lpmd_process_cpuset_proc_connector_handle(void)
 
 		if (process_cpuset_apply_pid(g_pc_ctx, pid, 0) == 1) {
 			struct lpmd_config_t *config = get_lpmd_config();
+
+			mark_perf_tuning_dirty();
 			if (config) {
 				apply_class_min_perf_override_for_pid(config, pid);
 				apply_class_max_perf_override_for_pid(config, pid);
