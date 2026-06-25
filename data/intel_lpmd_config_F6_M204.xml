@@ -33,7 +33,7 @@ for Intel Energy Optimizer (LPMD) daemon
 		 0: auto. (opportunistic Low Power Mode enter/exit)
 		 2: Process-CPU affinity based Low Power Mode enter/exit
 	-->
-	<PerformanceDef>-1</PerformanceDef>
+	<PerformanceDef>2</PerformanceDef>
 
 	<!--
 		Default behavior when Balanced power setting is used
@@ -42,7 +42,7 @@ for Intel Energy Optimizer (LPMD) daemon
 		 0: auto. (opportunistic Low Power Mode enter/exit)
 		 2: Process-CPU affinity based Low Power Mode enter/exit
 	-->
-	<BalancedDef>2</BalancedDef>
+	<BalancedDef>0</BalancedDef>
 
 	<!--
 		Default behavior when Power saver setting is used
@@ -72,7 +72,7 @@ for Intel Energy Optimizer (LPMD) daemon
 		0 : No
 		1 : Yes
 	-->
-	<WLTHintPollEnable>0</WLTHintPollEnable>
+	<WLTHintPollEnable>1</WLTHintPollEnable>
 
 	<!--
 		Use WLT hint Mask
@@ -151,7 +151,8 @@ for Intel Energy Optimizer (LPMD) daemon
 	<States>
 		<CPUFamily> 6 </CPUFamily>
 		<CPUModel> 204 </CPUModel>
-		<CPUConfig> 4P0E4L-25W </CPUConfig>
+		<CPUConfig> * </CPUConfig>
+
 		<!--
 		  Optional per-CPU-model override of process_cpuset.xml's
 		  <ClassDefaults>. Inside each class, "Cores" accepts the same
@@ -184,87 +185,96 @@ for Intel Energy Optimizer (LPMD) daemon
 			<Unclassified>
 				<Cores>ActivePcores, ActiveEcores, ActiveLcores</Cores>
 			</Unclassified>
-		</ClassDefaults>
-		<State>
-			<ID> 1 </ID>
-			<Name> UTIL_IDLE </Name>
-			<WLTType> 1 </WLTType>
-			<ActiveCPUs>4-7</ActiveCPUs>
-		</State>
-		<State>
-			<ID> 2 </ID>
-			<Name> UTIL_IDLE_SUSTAIN </Name>
-			<WLTType> 2 </WLTType>
-			<ActiveCPUs>0-7</ActiveCPUs>
-		</State>
-		<State>
-			<ID> 3 </ID>
-			<Name> UTIL_IDLE_BURSTY </Name>
-			<WLTType> 3 </WLTType>
-			<ActiveCPUs>0-7</ActiveCPUs>
-		</State>
-	</States>
-
-	<States>
-		<CPUFamily> 6 </CPUFamily>
-		<CPUModel> 204 </CPUModel>
-		<CPUConfig> * </CPUConfig>
-		-->
-		  Optional per-CPU-model override of process_cpuset.xml's
-		  ClassDefaults. Inside each class, <Cores> accepts the same
-		  token list as ActiveCores ("ActivePcores" / "ActiveEcores" /
-		  "ActiveLcores", comma- or whitespace-separated).
-
-		  Optional per-class tuning tags are also supported:
-		    MinPerfPctAC / MinPerfPctDC
-		    MaxPerfPctAC / MaxPerfPctDC (aliases: MaxPerfAC / MaxPerfDC)
-		    BalanceSliderAC / BalanceSliderDC
-		    SliderOffsetAC / SliderOffsetDC
-
-		  Tags omitted in a class are left unchanged (no fallback forced).
-		  Classes not listed here keep values from process_cpuset.xml
-		  (or its built-in fallback).
-		-->
-		<ClassDefaults>
-			<Realtime>
-				<Cores>ActivePcores, ActiveEcores, ActiveLcores</Cores>
-			</Realtime>
-			<UserInteractive>
+			<GameProfileGPU>
 				<Cores>ActiveEcores, ActiveLcores</Cores>
-			</UserInteractive>
-			<UserInitiated>
-				<Cores>ActiveEcores, ActiveLcores</Cores>
-			</UserInitiated>
-			<Background>
-				<Cores>ActiveLcores</Cores>
-			</Background>
-
+				<MinPerfPctAC>50</MinPerfPctAC>
+				<BalanceSliderAC>2</BalanceSliderAC>
+				<SliderOffsetAC>0</SliderOffsetAC>
+			</GameProfileGPU>
 			<GameProfileMixed>
 				<Cores>ActiveEcores, ActiveLcores</Cores>
+				<BalanceSliderAC>4</BalanceSliderAC>
+				<SliderOffsetAC>0</SliderOffsetAC>
 			</GameProfileMixed>
-
-			<Unclassified>
-				<Cores>ActivePcores, ActiveEcores, ActiveLcores</Cores>
-			</Unclassified>
 		</ClassDefaults>
+
 		<State>
 			<ID> 1 </ID>
 			<Name> UTIL_IDLE </Name>
 			<WLTType> 1 </WLTType>
-			<ActiveLcores>ALL</ActiveLcores>
+			<EnterGFXLoadThres>50</EnterGFXLoadThres>
+			<ActiveLcores>*</ActiveLcores>
+
+			<IRQMigrate> -1 </IRQMigrate>
+			<BalanceSliderAC>3</BalanceSliderAC>
+			<BalanceSliderDC>3</BalanceSliderDC>
+			<SliderOffsetAC>3</SliderOffsetAC>
+			<SliderOffsetDC>3</SliderOffsetDC>
+
+			<MinPollInterval> 2000 </MinPollInterval>
+			<PollIntervalIncrement> 500 </PollIntervalIncrement>
+			<MaxPollInterval> 4000 </MaxPollInterval>
 		</State>
 		<State>
 			<ID> 2 </ID>
-			<Name> UTIL_IDLE_SUSTAIN </Name>
-			<WLTType> 2 </WLTType>
-			<ActiveCPUs> * </ActiveCPUs>
+			<Name> UTIL_NON_IDLE </Name>
+			<WLTTypeMask> 12 </WLTTypeMask>
+			<EnterGFXLoadThres>50</EnterGFXLoadThres>
+			<ActivePcores>*</ActivePcores>
+			<ActiveLcores>*</ActiveLcores>
+			<ActiveEcores>*</ActiveEcores>
+
+			<IRQMigrate> -1 </IRQMigrate>
+			<BalanceSliderAC>1</BalanceSliderAC>
+			<BalanceSliderDC>3</BalanceSliderDC>
+			<SliderOffsetAC>0</SliderOffsetAC>
+			<SliderOffsetDC>3</SliderOffsetDC>
+
+			<MinPollInterval> 1000 </MinPollInterval>
+			<PollIntervalIncrement> 500 </PollIntervalIncrement>
+			<MaxPollInterval> 2000 </MaxPollInterval>
 		</State>
+
 		<State>
-			<ID> 3 </ID>
-			<Name> UTIL_IDLE_BURSTY </Name>
-			<WLTType> 3 </WLTType>
-			<ActiveCPUs> * </ActiveCPUs>
+			<ID> 4 </ID>
+			<Name> UTIL_IDLE_GFX_BUSY </Name>
+			<WLTType> 1 </WLTType>
+			<EnterGFXLoadThres>100</EnterGFXLoadThres>
+			<IRQMigrate> -1 </IRQMigrate>
+
+			<ActiveEcores>*</ActiveEcores>
+			<ActiveLcores>*</ActiveLcores>
+
+			<BalanceSliderAC>3</BalanceSliderAC>
+			<BalanceSliderDC>3</BalanceSliderDC>
+			<SliderOffsetAC>0</SliderOffsetAC>
+			<SliderOffsetDC>3</SliderOffsetDC>
+
+			<MinPollInterval> 1000 </MinPollInterval>
+			<PollIntervalIncrement> 500 </PollIntervalIncrement>
+			<MaxPollInterval> 2000 </MaxPollInterval>
 		</State>
+
+		<State>
+			<ID> 5 </ID>
+			<Name> UTIL_BUSY_GFX_BUSY </Name>
+			<WLTTypeMask> 12 </WLTTypeMask>
+			<EnterGFXLoadThres>100</EnterGFXLoadThres>
+			<IRQMigrate> -1 </IRQMigrate>
+
+			<ActiveEcores>*</ActiveEcores>
+			<ActiveLcores>*</ActiveLcores>
+
+			<BalanceSliderAC>4</BalanceSliderAC>
+			<BalanceSliderDC>4</BalanceSliderDC>
+			<SliderOffsetAC>0</SliderOffsetAC>
+			<SliderOffsetDC>2</SliderOffsetDC>
+
+			<MinPollInterval> 1000 </MinPollInterval>
+			<PollIntervalIncrement> 500 </PollIntervalIncrement>
+			<MaxPollInterval> 2000 </MaxPollInterval>
+		</State>
+
 	</States>
 
 </Configuration>

@@ -1586,8 +1586,20 @@
 
     <!-- Steam Games -->
     <Process>
-        <Name>StrangeBrigade.</Name>
-        <Classification>game_profile_mixed</Classification>
+        <Name>Strange*</Name>
+	<Classification>game_profile_gpu</Classification>
+        <AffinityAllThreads>1</AffinityAllThreads>
+    </Process>
+
+    <Process>
+        <Name>ShadowOfTheTomb*</Name>
+	<Classification>game_profile_mixed</Classification>
+        <AffinityAllThreads>1</AffinityAllThreads>
+    </Process>
+
+    <Process>
+        <Name>hitman*</Name>
+	<Classification>game_profile_mixed</Classification>
         <AffinityAllThreads>1</AffinityAllThreads>
     </Process>
 
