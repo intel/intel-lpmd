@@ -123,6 +123,9 @@ enum classification {
 	CLASS_GAME_PROFILE_CPU,
 	CLASS_GAME_PROFILE_GPU,
 	CLASS_GAME_PROFILE_HYBRID,
+	CLASS_CUSTOM_PROFILE_0,
+	CLASS_CUSTOM_PROFILE_1,
+	CLASS_CUSTOM_PROFILE_2,
 	CLASS_INVALID,
 };
 
@@ -436,6 +439,15 @@ static enum classification classdefaults_tag_to_class(const char *tag)
 	if (!strcasecmp(tag, "game_profile_mixed") ||
 	    !strcasecmp(tag, "GameProfileMixed"))
 		return CLASS_GAME_PROFILE_HYBRID;
+	if (!strcasecmp(tag, "custom_profile_0") ||
+	    !strcasecmp(tag, "CustomProfile0"))
+		return CLASS_CUSTOM_PROFILE_0;
+	if (!strcasecmp(tag, "custom_profile_1") ||
+	    !strcasecmp(tag, "CustomProfile1"))
+		return CLASS_CUSTOM_PROFILE_1;
+	if (!strcasecmp(tag, "custom_profile_2") ||
+	    !strcasecmp(tag, "CustomProfile2"))
+		return CLASS_CUSTOM_PROFILE_2;
 
 	return CLASS_INVALID;
 }
@@ -599,6 +611,15 @@ static enum classification parse_class(const char *s)
 	if (!strcasecmp(s, "game_profile_mixed") ||
 	    !strcasecmp(s, "GameProfileMixed"))
 		return CLASS_GAME_PROFILE_HYBRID;
+	if (!strcasecmp(s, "custom_profile_0") ||
+	    !strcasecmp(s, "CustomProfile0"))
+		return CLASS_CUSTOM_PROFILE_0;
+	if (!strcasecmp(s, "custom_profile_1") ||
+	    !strcasecmp(s, "CustomProfile1"))
+		return CLASS_CUSTOM_PROFILE_1;
+	if (!strcasecmp(s, "custom_profile_2") ||
+	    !strcasecmp(s, "CustomProfile2"))
+		return CLASS_CUSTOM_PROFILE_2;
 	return CLASS_INVALID;
 }
 
@@ -623,6 +644,12 @@ static const char *class_str(enum classification c)
 		return "game_profile_gpu";
 	case CLASS_GAME_PROFILE_HYBRID:
 		return "game_profile_mixed";
+	case CLASS_CUSTOM_PROFILE_0:
+		return "custom_profile_0";
+	case CLASS_CUSTOM_PROFILE_1:
+		return "custom_profile_1";
+	case CLASS_CUSTOM_PROFILE_2:
+		return "custom_profile_2";
 	default:
 		return "invalid";
 	}
@@ -1729,6 +1756,12 @@ process_cpuset_t *process_cpuset_new(void)
 		GROUP_PCORES | GROUP_ECORES;
 	ctx->class_defaults[CLASS_GAME_PROFILE_HYBRID].groups =
 		GROUP_PCORES | GROUP_ECORES;
+	ctx->class_defaults[CLASS_CUSTOM_PROFILE_0].groups =
+		GROUP_PCORES | GROUP_ECORES | GROUP_LCORES;
+	ctx->class_defaults[CLASS_CUSTOM_PROFILE_1].groups =
+		GROUP_PCORES | GROUP_ECORES | GROUP_LCORES;
+	ctx->class_defaults[CLASS_CUSTOM_PROFILE_2].groups =
+		GROUP_PCORES | GROUP_ECORES | GROUP_LCORES;
 
 	for (size_t i = 0;
 	     i < sizeof(ctx->class_uclamp_min) / sizeof(ctx->class_uclamp_min[0]);
@@ -2965,6 +2998,8 @@ void process_cpuset_log_class_defaults(const process_cpuset_t *ctx)
 		CLASS_UTILITY,
 		CLASS_BACKGROUND,	CLASS_GAME_PROFILE_CPU,
 		CLASS_GAME_PROFILE_GPU, CLASS_GAME_PROFILE_HYBRID,
+		CLASS_CUSTOM_PROFILE_0, CLASS_CUSTOM_PROFILE_1,
+		CLASS_CUSTOM_PROFILE_2,
 	};
 	char list[MAX_CPULIST];
 	char gp[MAX_CPULIST], ge[MAX_CPULIST], gl[MAX_CPULIST];

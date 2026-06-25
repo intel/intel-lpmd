@@ -33,6 +33,9 @@
     game_profile_cpu     - CPU-bound game workloads
     game_profile_gpu     - GPU-bound game workloads
     game_profile_mixed  - mixed CPU/GPU game workloads
+    custom_profile_0    - custom workload profile 0
+    custom_profile_1    - custom workload profile 1
+    custom_profile_2    - custom workload profile 2
 
 
   Distro-specific notables retained in this single file:
@@ -66,6 +69,9 @@
       game_profile_cpu     -> Pcores
       game_profile_gpu     -> Pcores + Ecores
       game_profile_mixed  -> Pcores + Ecores
+    custom_profile_0    -> Pcores + Ecores + Lcores
+    custom_profile_1    -> Pcores + Ecores + Lcores
+    custom_profile_2    -> Pcores + Ecores + Lcores
 
   NOTE: /proc/<pid>/comm is truncated to 15 chars; names below already
         respect that limit.
@@ -95,6 +101,9 @@
           game_profile_cpu     -> ActivePcores
           game_profile_gpu     -> ActivePcores, ActiveEcores
           game_profile_mixed  -> ActivePcores, ActiveEcores
+          custom_profile_0    -> ActivePcores, ActiveEcores, ActiveLcores
+          custom_profile_1    -> ActivePcores, ActiveEcores, ActiveLcores
+          custom_profile_2    -> ActivePcores, ActiveEcores, ActiveLcores
       Override any of them by editing this block; remove the whole block
       to keep all defaults built-in.
 
@@ -135,6 +144,15 @@
         <GameProfileMixed>
             <Cores>ActiveEcores,ActiveLcores</Cores>
         </GameProfileMixed>
+        <CustomProfile0>
+            <Cores>ActivePcores, ActiveEcores, ActiveLcores</Cores>
+        </CustomProfile0>
+        <CustomProfile1>
+            <Cores>ActivePcores, ActiveEcores, ActiveLcores</Cores>
+        </CustomProfile1>
+        <CustomProfile2>
+            <Cores>ActivePcores, ActiveEcores, ActiveLcores</Cores>
+        </CustomProfile2>
     </ClassDefaults>
 
     <!--
@@ -148,7 +166,10 @@
         <Classification> required: realtime | user_interactive |
                                    user_initiated | utility |
                                    background | game_profile_cpu |
-                                   game_profile_gpu | game_profile_mixed
+                                   game_profile_gpu | game_profile_mixed |
+                                   custom_profile_0 |
+                                   custom_profile_1 |
+                                   custom_profile_2
                                    Most GUI apps should use
                                    user_initiated; intel_lpmd will
                                    promote them to user_interactive
