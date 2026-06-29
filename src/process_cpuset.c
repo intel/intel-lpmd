@@ -1940,7 +1940,9 @@ int process_cpuset_override_class_defaults(
 	const char *unclassified,
 	const char *utility, const char *background,
 	const char *game_profile_cpu, const char *game_profile_gpu,
-	const char *game_profile_hybrid)
+	const char *game_profile_hybrid,
+	const char *custom_profile_0, const char *custom_profile_1,
+	const char *custom_profile_2)
 {
 	const struct {
 		enum classification cls;
@@ -1955,6 +1957,9 @@ int process_cpuset_override_class_defaults(
 		{ CLASS_GAME_PROFILE_CPU, game_profile_cpu },
 		{ CLASS_GAME_PROFILE_GPU, game_profile_gpu },
 		{ CLASS_GAME_PROFILE_HYBRID, game_profile_hybrid },
+		{ CLASS_CUSTOM_PROFILE_0, custom_profile_0 },
+		{ CLASS_CUSTOM_PROFILE_1, custom_profile_1 },
+		{ CLASS_CUSTOM_PROFILE_2, custom_profile_2 },
 	};
 	int updated = 0;
 
@@ -1994,7 +1999,10 @@ int process_cpuset_override_class_uclamp_defaults(
 	int background_min, int background_max,
 	int game_profile_cpu_min, int game_profile_cpu_max,
 	int game_profile_gpu_min, int game_profile_gpu_max,
-	int game_profile_hybrid_min, int game_profile_hybrid_max)
+	int game_profile_hybrid_min, int game_profile_hybrid_max,
+	int custom_profile_0_min, int custom_profile_0_max,
+	int custom_profile_1_min, int custom_profile_1_max,
+	int custom_profile_2_min, int custom_profile_2_max)
 {
 	const struct {
 		enum classification cls;
@@ -2014,6 +2022,12 @@ int process_cpuset_override_class_uclamp_defaults(
 		  game_profile_gpu_max },
 		{ CLASS_GAME_PROFILE_HYBRID, game_profile_hybrid_min,
 		  game_profile_hybrid_max },
+		{ CLASS_CUSTOM_PROFILE_0, custom_profile_0_min,
+		  custom_profile_0_max },
+		{ CLASS_CUSTOM_PROFILE_1, custom_profile_1_min,
+		  custom_profile_1_max },
+		{ CLASS_CUSTOM_PROFILE_2, custom_profile_2_min,
+		  custom_profile_2_max },
 	};
 	int touched = 0;
 

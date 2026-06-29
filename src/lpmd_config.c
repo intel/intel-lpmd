@@ -421,6 +421,21 @@ static void lpmd_parse_class_defaults(xmlDoc *doc, xmlNode *a_node, struct lpmd_
 		  &lpmd_config->pc_class_uclamp_min_gp_hybrid,
 		  &lpmd_config->pc_class_uclamp_max_gp_hybrid,
 		  &lpmd_config->pc_class_tuning_gp_hybrid },
+		{ "CustomProfile0",   lpmd_config->pc_class_default_custom_profile_0,
+		  sizeof(lpmd_config->pc_class_default_custom_profile_0),
+		  &lpmd_config->pc_class_uclamp_min_custom_profile_0,
+		  &lpmd_config->pc_class_uclamp_max_custom_profile_0,
+		  &lpmd_config->pc_class_tuning_custom_profile_0 },
+		{ "CustomProfile1",   lpmd_config->pc_class_default_custom_profile_1,
+		  sizeof(lpmd_config->pc_class_default_custom_profile_1),
+		  &lpmd_config->pc_class_uclamp_min_custom_profile_1,
+		  &lpmd_config->pc_class_uclamp_max_custom_profile_1,
+		  &lpmd_config->pc_class_tuning_custom_profile_1 },
+		{ "CustomProfile2",   lpmd_config->pc_class_default_custom_profile_2,
+		  sizeof(lpmd_config->pc_class_default_custom_profile_2),
+		  &lpmd_config->pc_class_uclamp_min_custom_profile_2,
+		  &lpmd_config->pc_class_uclamp_max_custom_profile_2,
+		  &lpmd_config->pc_class_tuning_custom_profile_2 },
 	};
 
 	if (!doc || !a_node || !lpmd_config)
@@ -622,6 +637,12 @@ static void lpmd_init_config(struct lpmd_config_t *config)
 	       sizeof(config->pc_class_tuning_gp_gpu));
 	memset(&config->pc_class_tuning_gp_hybrid, 0,
 	       sizeof(config->pc_class_tuning_gp_hybrid));
+	memset(&config->pc_class_tuning_custom_profile_0, 0,
+	       sizeof(config->pc_class_tuning_custom_profile_0));
+	memset(&config->pc_class_tuning_custom_profile_1, 0,
+	       sizeof(config->pc_class_tuning_custom_profile_1));
+	memset(&config->pc_class_tuning_custom_profile_2, 0,
+	       sizeof(config->pc_class_tuning_custom_profile_2));
 	config->pc_class_uclamp_min_realtime = LPMD_UCLAMP_INHERIT;
 	config->pc_class_uclamp_max_realtime = LPMD_UCLAMP_INHERIT;
 	config->pc_class_uclamp_min_user_interactive = LPMD_UCLAMP_INHERIT;
@@ -640,6 +661,12 @@ static void lpmd_init_config(struct lpmd_config_t *config)
 	config->pc_class_uclamp_max_gp_gpu = LPMD_UCLAMP_INHERIT;
 	config->pc_class_uclamp_min_gp_hybrid = LPMD_UCLAMP_INHERIT;
 	config->pc_class_uclamp_max_gp_hybrid = LPMD_UCLAMP_INHERIT;
+	config->pc_class_uclamp_min_custom_profile_0 = LPMD_UCLAMP_INHERIT;
+	config->pc_class_uclamp_max_custom_profile_0 = LPMD_UCLAMP_INHERIT;
+	config->pc_class_uclamp_min_custom_profile_1 = LPMD_UCLAMP_INHERIT;
+	config->pc_class_uclamp_max_custom_profile_1 = LPMD_UCLAMP_INHERIT;
+	config->pc_class_uclamp_min_custom_profile_2 = LPMD_UCLAMP_INHERIT;
+	config->pc_class_uclamp_max_custom_profile_2 = LPMD_UCLAMP_INHERIT;
 	config->balance_slider_def_ac = -1;
 	config->balance_slider_def_dc = -1;
 	config->slider_offset_def_ac = -1;

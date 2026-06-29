@@ -119,6 +119,15 @@ static const struct lpmd_class_tuning_override_t *class_tuning_for_name(
 	if (!strcasecmp(cls, "game_profile_mixed") ||
 	    !strcasecmp(cls, "GameProfileMixed"))
 		return &config->pc_class_tuning_gp_hybrid;
+	if (!strcasecmp(cls, "custom_profile_0") ||
+	    !strcasecmp(cls, "CustomProfile0"))
+		return &config->pc_class_tuning_custom_profile_0;
+	if (!strcasecmp(cls, "custom_profile_1") ||
+	    !strcasecmp(cls, "CustomProfile1"))
+		return &config->pc_class_tuning_custom_profile_1;
+	if (!strcasecmp(cls, "custom_profile_2") ||
+	    !strcasecmp(cls, "CustomProfile2"))
+		return &config->pc_class_tuning_custom_profile_2;
 	return NULL;
 }
 
@@ -1105,7 +1114,10 @@ int lpmd_process_cpuset_init(struct lpmd_config_t *config)
 	    config->pc_class_default_background[0] ||
 	    config->pc_class_default_gp_cpu[0] ||
 	    config->pc_class_default_gp_gpu[0] ||
-	    config->pc_class_default_gp_hybrid[0]) {
+	    config->pc_class_default_gp_hybrid[0] ||
+	    config->pc_class_default_custom_profile_0[0] ||
+	    config->pc_class_default_custom_profile_1[0] ||
+	    config->pc_class_default_custom_profile_2[0]) {
 		if (process_cpuset_override_class_defaults(
 			    g_pc_ctx, config->pc_class_default_realtime,
 			    config->pc_class_default_user_interactive,
@@ -1115,7 +1127,10 @@ int lpmd_process_cpuset_init(struct lpmd_config_t *config)
 			    config->pc_class_default_background,
 			    config->pc_class_default_gp_cpu,
 			    config->pc_class_default_gp_gpu,
-			    config->pc_class_default_gp_hybrid) < 0) {
+			    config->pc_class_default_gp_hybrid,
+			    config->pc_class_default_custom_profile_0,
+			    config->pc_class_default_custom_profile_1,
+			    config->pc_class_default_custom_profile_2) < 0) {
 			lpmd_log_warn(
 				"process_cpuset: ClassDefaults override failed\n");
 		} else {
@@ -1143,7 +1158,13 @@ int lpmd_process_cpuset_init(struct lpmd_config_t *config)
 	    config->pc_class_uclamp_min_gp_gpu != LPMD_UCLAMP_INHERIT ||
 	    config->pc_class_uclamp_max_gp_gpu != LPMD_UCLAMP_INHERIT ||
 	    config->pc_class_uclamp_min_gp_hybrid != LPMD_UCLAMP_INHERIT ||
-	    config->pc_class_uclamp_max_gp_hybrid != LPMD_UCLAMP_INHERIT) {
+	    config->pc_class_uclamp_max_gp_hybrid != LPMD_UCLAMP_INHERIT ||
+	    config->pc_class_uclamp_min_custom_profile_0 != LPMD_UCLAMP_INHERIT ||
+	    config->pc_class_uclamp_max_custom_profile_0 != LPMD_UCLAMP_INHERIT ||
+	    config->pc_class_uclamp_min_custom_profile_1 != LPMD_UCLAMP_INHERIT ||
+	    config->pc_class_uclamp_max_custom_profile_1 != LPMD_UCLAMP_INHERIT ||
+	    config->pc_class_uclamp_min_custom_profile_2 != LPMD_UCLAMP_INHERIT ||
+	    config->pc_class_uclamp_max_custom_profile_2 != LPMD_UCLAMP_INHERIT) {
 		if (process_cpuset_override_class_uclamp_defaults(
 			    g_pc_ctx,
 			    config->pc_class_uclamp_min_realtime,
@@ -1163,7 +1184,13 @@ int lpmd_process_cpuset_init(struct lpmd_config_t *config)
 			    config->pc_class_uclamp_min_gp_gpu,
 			    config->pc_class_uclamp_max_gp_gpu,
 			    config->pc_class_uclamp_min_gp_hybrid,
-			    config->pc_class_uclamp_max_gp_hybrid) < 0) {
+			    config->pc_class_uclamp_max_gp_hybrid,
+			    config->pc_class_uclamp_min_custom_profile_0,
+			    config->pc_class_uclamp_max_custom_profile_0,
+			    config->pc_class_uclamp_min_custom_profile_1,
+			    config->pc_class_uclamp_max_custom_profile_1,
+			    config->pc_class_uclamp_min_custom_profile_2,
+			    config->pc_class_uclamp_max_custom_profile_2) < 0) {
 			lpmd_log_warn(
 				"process_cpuset: ClassDefaults uclamp override failed\n");
 		} else {
@@ -2087,7 +2114,10 @@ int lpmd_process_cpuset_classify(const char *name, char *result,
 	    config->pc_class_default_background[0] ||
 	    config->pc_class_default_gp_cpu[0] ||
 	    config->pc_class_default_gp_gpu[0] ||
-	    config->pc_class_default_gp_hybrid[0])) {
+	    config->pc_class_default_gp_hybrid[0] ||
+	    config->pc_class_default_custom_profile_0[0] ||
+	    config->pc_class_default_custom_profile_1[0] ||
+	    config->pc_class_default_custom_profile_2[0])) {
 		(void)process_cpuset_override_class_defaults(
 			lookup_ctx, config->pc_class_default_realtime,
 			config->pc_class_default_user_interactive,
@@ -2097,7 +2127,10 @@ int lpmd_process_cpuset_classify(const char *name, char *result,
 			config->pc_class_default_background,
 			config->pc_class_default_gp_cpu,
 			config->pc_class_default_gp_gpu,
-			config->pc_class_default_gp_hybrid);
+			config->pc_class_default_gp_hybrid,
+			config->pc_class_default_custom_profile_0,
+			config->pc_class_default_custom_profile_1,
+			config->pc_class_default_custom_profile_2);
 	}
 
 	/* Reuse active runtime P/E/LP-E groups if available. */

@@ -273,6 +273,9 @@ struct lpmd_config_t {
 	char pc_class_default_gp_cpu[MAX_CONFIG_LEN];
 	char pc_class_default_gp_gpu[MAX_CONFIG_LEN];
 	char pc_class_default_gp_hybrid[MAX_CONFIG_LEN];
+	char pc_class_default_custom_profile_0[MAX_CONFIG_LEN];
+	char pc_class_default_custom_profile_1[MAX_CONFIG_LEN];
+	char pc_class_default_custom_profile_2[MAX_CONFIG_LEN];
 
 	/* Optional per-class uclamp overrides from <ClassDefaults> in
 	 * intel_lpmd_config_*.xml. LPMD_UCLAMP_INHERIT means "leave value
@@ -296,6 +299,12 @@ struct lpmd_config_t {
 	int pc_class_uclamp_max_gp_gpu;
 	int pc_class_uclamp_min_gp_hybrid;
 	int pc_class_uclamp_max_gp_hybrid;
+	int pc_class_uclamp_min_custom_profile_0;
+	int pc_class_uclamp_max_custom_profile_0;
+	int pc_class_uclamp_min_custom_profile_1;
+	int pc_class_uclamp_max_custom_profile_1;
+	int pc_class_uclamp_min_custom_profile_2;
+	int pc_class_uclamp_max_custom_profile_2;
 
 	/* Optional per-class tuning overrides from <ClassDefaults>. These
 	 * are independent from <State> definitions. Each field is applied
@@ -310,6 +319,9 @@ struct lpmd_config_t {
 	struct lpmd_class_tuning_override_t pc_class_tuning_gp_cpu;
 	struct lpmd_class_tuning_override_t pc_class_tuning_gp_gpu;
 	struct lpmd_class_tuning_override_t pc_class_tuning_gp_hybrid;
+	struct lpmd_class_tuning_override_t pc_class_tuning_custom_profile_0;
+	struct lpmd_class_tuning_override_t pc_class_tuning_custom_profile_1;
+	struct lpmd_class_tuning_override_t pc_class_tuning_custom_profile_2;
 
 	union {
 		struct {

@@ -120,7 +120,9 @@ int process_cpuset_override_class_defaults(
 	const char *unclassified,
 	const char *utility, const char *background,
 	const char *game_profile_cpu, const char *game_profile_gpu,
-	const char *game_profile_hybrid);
+	const char *game_profile_hybrid,
+	const char *custom_profile_0, const char *custom_profile_1,
+	const char *custom_profile_2);
 
 /*
  * Override one or more per-class uclamp defaults at runtime.
@@ -141,7 +143,10 @@ int process_cpuset_override_class_uclamp_defaults(
 	int background_min, int background_max,
 	int game_profile_cpu_min, int game_profile_cpu_max,
 	int game_profile_gpu_min, int game_profile_gpu_max,
-	int game_profile_hybrid_min, int game_profile_hybrid_max);
+	int game_profile_hybrid_min, int game_profile_hybrid_max,
+	int custom_profile_0_min, int custom_profile_0_max,
+	int custom_profile_1_min, int custom_profile_1_max,
+	int custom_profile_2_min, int custom_profile_2_max);
 
 /*
  * Scan /proc once and attach any newly-seen matching PIDs to a transient

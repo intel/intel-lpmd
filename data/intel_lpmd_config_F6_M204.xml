@@ -159,10 +159,23 @@ for Intel Energy Optimizer (LPMD) daemon
 		  token list as ActiveCores ("ActivePcores" / "ActiveEcores" /
 		  "ActiveLcores", comma- or whitespace-separated).
 
+		  Supported class nodes in this overlay:
+		    Realtime, UserInteractive, UserInitiated, Unclassified,
+		    Utility, Background, GameProfileCPU, GameProfileGPU,
+		    GameProfileMixed, CustomProfile0, CustomProfile1,
+		    CustomProfile2
+
+		  Optional per-class keys are also supported:
+		    UClampMin / UClampMax (aliases: uclamp_min / uclamp_max)
+
 		  Optional per-class tuning tags are also supported:
 		    MinPerfPctAC / MinPerfPctDC
+		      (aliases: min_perf_pct_ac / min_perf_pct_dc)
 		    MaxPerfPctAC / MaxPerfPctDC (aliases: MaxPerfAC / MaxPerfDC)
+		      (aliases: max_perf_pct_ac / max_perf_pct_dc)
 		    BalanceSliderAC / BalanceSliderDC
+		      (aliases: SliderBalanceAC / SliderBalanceDC,
+		       SliderBalnceAC / SliderBalnceDC)
 		    SliderOffsetAC / SliderOffsetDC
 
 		  Tags omitted in a class are left unchanged (no fallback forced).
