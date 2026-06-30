@@ -265,6 +265,21 @@ lpmd_dbus_handle_method_call(GDBusConnection       *connection,
 		return;
 	}
 
+	if (g_strcmp0(method_name, "LPM_ADD_NEW_PROCESS_EX") == 0) {
+		const gchar *pname = NULL;
+		const gchar *pclass = NULL;
+		gint allow_session = 0;
+		gint result;
+
+		g_variant_get(parameters, "(&s&si)", &pname, &pclass,
+			      &allow_session);
+		result = lpmd_process_cpuset_add_process_ex(
+			pname, pclass, allow_session ? 1 : 0);
+		g_dbus_method_invocation_return_value(invocation,
+					      g_variant_new("(i)", result));
+		return;
+	}
+
 	if (g_strcmp0(method_name, "LPM_GET_PROC_CLASSIFICATION") == 0) {
 		const gchar *pname = NULL;
 		char result[512] = { 0 };

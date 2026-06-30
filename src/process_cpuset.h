@@ -69,6 +69,9 @@ int process_cpuset_load_config_overlay(process_cpuset_t *ctx, const char *path);
  * entry with the same @name, -1 on error (NULL args, unknown
  * classification, table full).
  */
+int process_cpuset_add_entry_ex(process_cpuset_t *ctx, const char *name,
+				const char *classification,
+				int allow_session);
 int process_cpuset_add_entry(process_cpuset_t *ctx, const char *name,
 			     const char *classification);
 

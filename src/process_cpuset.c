@@ -2269,8 +2269,9 @@ int process_cpuset_load_config_overlay(process_cpuset_t *ctx, const char *path)
  * Returns 1 if the entry was newly added, 0 if it replaced an
  * existing one with the same name, -1 on error.
  */
-int process_cpuset_add_entry(process_cpuset_t *ctx, const char *name,
-			     const char *classification)
+int process_cpuset_add_entry_ex(process_cpuset_t *ctx, const char *name,
+				const char *classification,
+				int allow_session)
 {
 	struct proc_entry e;
 	enum classification cls;
@@ -2286,6 +2287,7 @@ int process_cpuset_add_entry(process_cpuset_t *ctx, const char *name,
 	memset(&e, 0, sizeof(e));
 	snprintf(e.name, sizeof(e.name), "%s", name);
 	e.cls = cls;
+	e.allow_session = allow_session ? 1 : 0;
 	e.resolved = *default_spec_for(ctx, cls);
 
 	idx = find_entry_index(ctx, e.name);
@@ -2297,6 +2299,12 @@ int process_cpuset_add_entry(process_cpuset_t *ctx, const char *name,
 		return -1;
 	ctx->entries[ctx->n_entries++] = e;
 	return 1;
+}
+
+int process_cpuset_add_entry(process_cpuset_t *ctx, const char *name,
+			     const char *classification)
+{
+	return process_cpuset_add_entry_ex(ctx, name, classification, 0);
 }
 
 /* ---------- focus-driven user_interactive promotion ---------- */

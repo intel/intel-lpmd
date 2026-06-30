@@ -574,6 +574,9 @@ void lpmd_process_cpuset_unbind_all(void);
 void lpmd_process_cpuset_rescan(void);
 void lpmd_process_cpuset_print_unbound(int user_only);
 void lpmd_process_cpuset_print_bound(void);
+int  lpmd_process_cpuset_add_process_ex(const char *name,
+					const char *classification,
+					int allow_session);
 int  lpmd_process_cpuset_add_process(const char *name, const char *classification);
 int  lpmd_process_cpuset_set_focus_pid(pid_t pid);
 int  lpmd_process_cpuset_set_focus_helper_present(int present);

@@ -34,7 +34,7 @@ int main(int argc, char **argv)
 		fprintf (stderr, "intel_lpmd_control: missing control command\n");
 		fprintf (stderr, "syntax:\n");
 		fprintf (stderr, "intel_lpmd_control ON|OFF|AUTO|PROCESS-PRECONFIG|STATUS|LIST-UNBOUND|LIST-UNBOUND-USER|LIST-BOUND|UNBIND-ALL\n");
-		fprintf (stderr, "intel_lpmd_control ADD-PROCESS <name> <user_interactive|user_initiated|Unclassified|utility|background|realtime|GameProfileCPU|GameProfileGPU|GameProfileMixed>\n");
+		fprintf (stderr, "intel_lpmd_control ADD-PROCESS <name> <user_interactive|user_initiated|Unclassified|utility|background|realtime|GameProfileCPU|GameProfileGPU|GameProfileMixed|CustomProfile0|CustomProfile1|CustomProfile2> [allow_session:0|1]\n");
 		fprintf (stderr, "intel_lpmd_control GET-PROC-CLASSIFICATION <name>\n");
 		fprintf (stderr, "intel_lpmd_control SET-FOCUS <pid>   (use 0 to clear)\n");
 		exit (0);
@@ -71,24 +71,67 @@ int main(int argc, char **argv)
 	if (!strcmp (argv[1], "ADD-PROCESS")) {
 		g_autoptr(GVariant) result = NULL;
 		gint rc = -1;
+		gint allow_session = 0;
 
 		if (argc < 4) {
 			fprintf (stderr,
-				 "ADD-PROCESS requires <name> <classification>\n");
+				 "ADD-PROCESS requires <name> <classification> [allow_session:0|1]\n");
 			exit (1);
+		}
+
+		if (argc >= 5) {
+			if (!g_ascii_strcasecmp(argv[4], "1") ||
+			    !g_ascii_strcasecmp(argv[4], "true") ||
+			    !g_ascii_strcasecmp(argv[4], "yes") ||
+			    !g_ascii_strcasecmp(argv[4], "on"))
+				allow_session = 1;
+			else if (!g_ascii_strcasecmp(argv[4], "0") ||
+				 !g_ascii_strcasecmp(argv[4], "false") ||
+				 !g_ascii_strcasecmp(argv[4], "no") ||
+				 !g_ascii_strcasecmp(argv[4], "off"))
+				allow_session = 0;
+			else {
+				fprintf (stderr,
+					 "ADD-PROCESS: invalid allow_session '%s' (use 0 or 1)\n",
+					 argv[4]);
+				exit (1);
+			}
 		}
 
 		result = g_dbus_connection_call_sync (connection,
 						      INTEL_LPMD_SERVICE_NAME,
 						      INTEL_LPMD_SERVICE_OBJECT_PATH,
 						      INTEL_LPMD_SERVICE_INTERFACE,
-						      "LPM_ADD_NEW_PROCESS",
-						      g_variant_new ("(ss)", argv[2], argv[3]),
+					      "LPM_ADD_NEW_PROCESS_EX",
+					      g_variant_new ("(ssi)", argv[2], argv[3], allow_session),
 						      G_VARIANT_TYPE ("(i)"),
 						      G_DBUS_CALL_FLAGS_NONE,
 						      -1,
 						      NULL,
 						      &error);
+		if (error != NULL &&
+		    g_error_matches (error, G_DBUS_ERROR,
+				     G_DBUS_ERROR_UNKNOWN_METHOD)) {
+			g_clear_error (&error);
+			if (allow_session) {
+				fprintf (stderr,
+					 "ADD-PROCESS with allow_session requires newer intel_lpmd daemon\n");
+				exit (1);
+			}
+
+			result = g_dbus_connection_call_sync (
+				connection,
+				INTEL_LPMD_SERVICE_NAME,
+				INTEL_LPMD_SERVICE_OBJECT_PATH,
+				INTEL_LPMD_SERVICE_INTERFACE,
+				"LPM_ADD_NEW_PROCESS",
+				g_variant_new ("(ss)", argv[2], argv[3]),
+				G_VARIANT_TYPE ("(i)"),
+				G_DBUS_CALL_FLAGS_NONE,
+				-1,
+				NULL,
+				&error);
+		}
 		if (error != NULL) {
 			g_warning ("Fail on connecting lpmd: %s", error->message);
 			exit (1);

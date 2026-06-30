@@ -93,6 +93,91 @@ static void reset_perf_tuning_cache(void)
 	g_max_perf_cache.on_battery = -1;
 }
 
+static void append_tuning_field(char *buf, size_t cap, const char *name,
+				int value, int present)
+{
+	size_t used;
+
+	if (!buf || !cap || !name || !present)
+		return;
+
+	used = strlen(buf);
+	if (used >= cap)
+		return;
+
+	snprintf(buf + used, cap - used, "%s%s=%d",
+		 used ? " " : "", name, value);
+}
+
+static void log_class_tuning_override(const char *class_name,
+				      const struct lpmd_class_tuning_override_t *ovr)
+{
+	char details[256] = { 0 };
+
+	if (!class_name || !ovr)
+		return;
+
+	append_tuning_field(details, sizeof(details), "min_perf_ac",
+			   ovr->min_perf_pct_ac,
+			   ovr->present_mask & LPMD_CLASS_TUNE_MIN_PERF_PCT_AC);
+	append_tuning_field(details, sizeof(details), "min_perf_dc",
+			   ovr->min_perf_pct_dc,
+			   ovr->present_mask & LPMD_CLASS_TUNE_MIN_PERF_PCT_DC);
+	append_tuning_field(details, sizeof(details), "max_perf_ac",
+			   ovr->max_perf_pct_ac,
+			   ovr->present_mask & LPMD_CLASS_TUNE_MAX_PERF_PCT_AC);
+	append_tuning_field(details, sizeof(details), "max_perf_dc",
+			   ovr->max_perf_pct_dc,
+			   ovr->present_mask & LPMD_CLASS_TUNE_MAX_PERF_PCT_DC);
+	append_tuning_field(details, sizeof(details), "balance_ac",
+			   ovr->balance_slider_ac,
+			   ovr->present_mask & LPMD_CLASS_TUNE_BALANCE_SLIDER_AC);
+	append_tuning_field(details, sizeof(details), "balance_dc",
+			   ovr->balance_slider_dc,
+			   ovr->present_mask & LPMD_CLASS_TUNE_BALANCE_SLIDER_DC);
+	append_tuning_field(details, sizeof(details), "offset_ac",
+			   ovr->slider_offset_ac,
+			   ovr->present_mask & LPMD_CLASS_TUNE_SLIDER_OFFSET_AC);
+	append_tuning_field(details, sizeof(details), "offset_dc",
+			   ovr->slider_offset_dc,
+			   ovr->present_mask & LPMD_CLASS_TUNE_SLIDER_OFFSET_DC);
+
+	lpmd_log_debug("process_cpuset: tuning: %-18s mask=0x%02x %s\n",
+		       class_name, ovr->present_mask,
+		       details[0] ? details : "<none>");
+}
+
+static void log_class_tuning_overrides(const struct lpmd_config_t *config)
+{
+	if (!config)
+		return;
+
+	log_class_tuning_override("realtime",
+				  &config->pc_class_tuning_realtime);
+	log_class_tuning_override("user_interactive",
+				  &config->pc_class_tuning_user_interactive);
+	log_class_tuning_override("user_initiated",
+				  &config->pc_class_tuning_user_initiated);
+	log_class_tuning_override("Unclassified",
+				  &config->pc_class_tuning_unclassified);
+	log_class_tuning_override("utility",
+				  &config->pc_class_tuning_utility);
+	log_class_tuning_override("background",
+				  &config->pc_class_tuning_background);
+	log_class_tuning_override("game_profile_cpu",
+				  &config->pc_class_tuning_gp_cpu);
+	log_class_tuning_override("game_profile_gpu",
+				  &config->pc_class_tuning_gp_gpu);
+	log_class_tuning_override("game_profile_mixed",
+				  &config->pc_class_tuning_gp_hybrid);
+	log_class_tuning_override("custom_profile_0",
+				  &config->pc_class_tuning_custom_profile_0);
+	log_class_tuning_override("custom_profile_1",
+				  &config->pc_class_tuning_custom_profile_1);
+	log_class_tuning_override("custom_profile_2",
+				  &config->pc_class_tuning_custom_profile_2);
+}
+
 static const struct lpmd_class_tuning_override_t *class_tuning_for_name(
 	const struct lpmd_config_t *config, const char *cls)
 {
@@ -962,7 +1047,8 @@ static void user_xml_path(char *out, size_t cap)
  * exists, replace it. Returns 0 on success, -1 on error.
  */
 static int user_xml_upsert_process(const char *path, const char *name,
-				   const char *classification)
+				   const char *classification,
+				   int allow_session)
 {
 	xmlDoc *doc = NULL;
 	xmlNode *root = NULL;
@@ -1034,6 +1120,11 @@ static int user_xml_upsert_process(const char *path, const char *name,
 	if (!xmlNewChild(new_proc, NULL, BAD_CAST "Classification",
 			 BAD_CAST classification))
 		goto out;
+	if (allow_session) {
+		if (!xmlNewChild(new_proc, NULL, BAD_CAST "AllowSession",
+				 BAD_CAST "true"))
+			goto out;
+	}
 
 	if (xmlSaveFormatFileEnc(path, doc, "UTF-8", 1) < 0) {
 		lpmd_log_warn("process_cpuset: failed to write %s\n", path);
@@ -1217,6 +1308,7 @@ int lpmd_process_cpuset_init(struct lpmd_config_t *config)
 	/* Debug: log per-classification cpusets so the operator can
      * see what each tier maps to under the active P/E/LP-E sets. */
 	process_cpuset_log_class_defaults(g_pc_ctx);
+	log_class_tuning_overrides(config);
 
 	/*
      * Do NOT perform the initial bind here: the daemon's state at
@@ -1359,8 +1451,9 @@ void lpmd_process_cpuset_rescan(void)
  * I/O failure. Safe to call when process_cpuset is disabled (returns
  * -1 with a warning).
  */
-int lpmd_process_cpuset_add_process(const char *name,
-				    const char *classification)
+int lpmd_process_cpuset_add_process_ex(const char *name,
+				       const char *classification,
+				       int allow_session)
 {
 	char user_path[MAX_FILE_NAME_PATH];
 	int rc;
@@ -1376,7 +1469,8 @@ int lpmd_process_cpuset_add_process(const char *name,
 		return -1;
 	}
 
-	rc = process_cpuset_add_entry(g_pc_ctx, name, classification);
+	rc = process_cpuset_add_entry_ex(g_pc_ctx, name, classification,
+					 allow_session);
 	if (rc < 0) {
 		lpmd_log_warn(
 			"process_cpuset: add: rejected name='%s' class='%s' "
@@ -1386,7 +1480,8 @@ int lpmd_process_cpuset_add_process(const char *name,
 	}
 
 	user_xml_path(user_path, sizeof(user_path));
-	if (user_xml_upsert_process(user_path, name, classification) < 0) {
+	if (user_xml_upsert_process(user_path, name, classification,
+				   allow_session) < 0) {
 		lpmd_log_warn(
 			"process_cpuset: add: in-memory updated but persist to %s failed\n",
 			user_path);
@@ -1401,6 +1496,12 @@ int lpmd_process_cpuset_add_process(const char *name,
      * inside lpmd_process_cpuset_rescan(). */
 	lpmd_process_cpuset_rescan();
 	return 0;
+}
+
+int lpmd_process_cpuset_add_process(const char *name,
+				    const char *classification)
+{
+	return lpmd_process_cpuset_add_process_ex(name, classification, 0);
 }
 
 /*
