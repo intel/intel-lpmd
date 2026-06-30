@@ -1594,6 +1594,12 @@
 
     <!-- Steam Games -->
     <Process>
+        <Name>Spaceship*</Name>
+	<Classification>game_profile_mixed</Classification>
+        <AffinityAllThreads>1</AffinityAllThreads>
+    </Process>
+
+    <Process>
         <Name>Strange*</Name>
 	<Classification>game_profile_gpu</Classification>
         <AffinityAllThreads>1</AffinityAllThreads>
