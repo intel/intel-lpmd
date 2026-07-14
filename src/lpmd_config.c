@@ -324,7 +324,11 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, struct lpmd_config_t *
 				    strlen("WLTHintMask"))) {
 			errno = 0;
 			lpmd_config->wlt_hint_mask = strtol(tmp_value, &pos, 10);
-		} else if (!strncmp((const char *)cur_node->name,
+		} else if (!strncmp((const char *)cur_node->name, "WLTHintNotificationDelay",
+			   strlen("WLTHintNotificationDelay"))) {
+			errno = 0;
+			lpmd_config->wlt_notification_delay = strtol(tmp_value, &pos, 10);
+                } else if (!strncmp((const char *)cur_node->name,
 				    "WLTHintPollEnable",
 				    strlen("WLtHintPollEnable"))) {
 			errno = 0;
