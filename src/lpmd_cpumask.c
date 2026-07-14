@@ -27,6 +27,8 @@ static struct lpm_cpus cpumasks[CPUMASK_MAX] = {
 		[CPUMASK_HFI_BANNED] = { .name = "HFI BANNED", },
 		[CPUMASK_HFI_LAST] = { .name = "HFI LAST", },
 		[CPUMASK_HFI_CACHED] = { .name = "HFI CACHED", },
+		[CPUMASK_HFI_LP_HELD] = { .name = "HFI LP HELD", },
+		[CPUMASK_HFI_LP_SHRINK] = { .name = "HFI LP SHRINK", },
 		[CPUMASK_BLACKLIST] = { .name = "Blacklist", },
 };
 
@@ -339,6 +341,19 @@ void cpumask_copy(enum cpumask_idx source, enum cpumask_idx dest)
 	int i;
 
 	cpumask_reset(dest);
+	for (i = 0; i < topo_max_cpus; i++) {
+		if (!CPU_ISSET_S(i, size_cpumask, cpumasks[source].mask))
+			continue;
+
+		cpumask_add_cpu(i, dest);
+	}
+}
+
+/* Merge (union) the CPUs of source into dest without clearing dest first */
+void cpumask_or_copy(enum cpumask_idx source, enum cpumask_idx dest)
+{
+	int i;
+
 	for (i = 0; i < topo_max_cpus; i++) {
 		if (!CPU_ISSET_S(i, size_cpumask, cpumasks[source].mask))
 			continue;

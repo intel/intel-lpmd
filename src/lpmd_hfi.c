@@ -42,6 +42,9 @@ struct hfi_event_data drv;
 int hfi_timeout = HFI_TIMEOUT_LP;
 bool going_back_to_perf;
 
+/* Consecutive identical smaller LP hints seen against the held LP set */
+static int hfi_lp_shrink_count;
+
 static int ack_handler(struct nl_msg *msg, void *arg)
 {
 	int *err = arg;
@@ -228,6 +231,8 @@ int hfi_timeout_over(int timeout_ms)
 
 static void process_one_event(int first, int last, int nr)
 {
+	int held_nr;
+
 	/* Need to update more CPUs */
 	if (nr == 16 && last != get_max_online_cpu())
 		return;
@@ -245,7 +250,80 @@ static void process_one_event(int first, int last, int nr)
 			hfi_timeout_state_action(hfi_timeout);
 			return;
 		}
-		cpumask_copy(CPUMASK_HFI, CPUMASK_HFI_LAST);
+
+		/*
+		 * Prefer keeping more CPUs in LP mode. Rather than compare LP set
+		 * sizes (which cannot tell "the set shrank" from "the set moved to
+		 * different cores", e.g. when a previously banned CPU becomes
+		 * efficient), accumulate every CPU the HW has marked efficient into
+		 * the held LP set and never drop CPUs until the set is released.
+		 * The held set is tracked in CPUMASK_HFI_LP_HELD, which is grown
+		 * only here (LPM events) - never by BANNED events, whose mask is not
+		 * an LP set - and is released on a recover-to-perf event and on HFI
+		 * timeout expiry (see hfi_timeout_state_action()).
+		 */
+		if (hfi_timeout == HFI_TIMEOUT_TIMER) {
+			/*
+			 * During the timeout the LP mask to apply is staged in
+			 * CPUMASK_HFI_CACHED. Accumulate any newly-efficient CPUs so
+			 * the grown LP set is applied once the timeout expires.
+			 */
+			lpmd_log_debug("\thfi_timeout: merging LP hint into cached LP mask\n");
+			cpumask_or_copy(CPUMASK_HFI, CPUMASK_HFI_CACHED);
+			return;
+		}
+
+		/*
+		 * Accumulate any newly-efficient CPUs; never drop CPUs immediately.
+		 * cpumask_or_copy() only writes CPUMASK_HFI_LP_HELD, so CPUMASK_HFI
+		 * still holds this hint's LP set afterwards.
+		 */
+		held_nr = cpumask_nr_cpus(CPUMASK_HFI_LP_HELD);
+		cpumask_or_copy(CPUMASK_HFI, CPUMASK_HFI_LP_HELD);
+
+		/*
+		 * If the held set grew, this hint added new efficient CPUs. Reset
+		 * the shrink tracking and apply the accumulated (grown) LP set.
+		 */
+		if (cpumask_nr_cpus(CPUMASK_HFI_LP_HELD) != held_nr) {
+			hfi_lp_shrink_count = 0;
+			cpumask_copy(CPUMASK_HFI_LP_HELD, CPUMASK_HFI);
+			cpumask_copy(CPUMASK_HFI, CPUMASK_HFI_LAST);
+		} else if (cpumask_nr_cpus(CPUMASK_HFI) < held_nr) {
+			/*
+			 * The hint added no new efficient CPUs and is strictly smaller
+			 * than the held set. Track it as a shrink candidate and only
+			 * shrink once the same smaller set has been seen
+			 * DEF_HFI_LP_SHRINK_COUNT times in a row, to avoid ping-ponging
+			 * on a transient smaller hint.
+			 */
+			if (cpumask_equal(CPUMASK_HFI, CPUMASK_HFI_LP_SHRINK)) {
+				hfi_lp_shrink_count++;
+			} else {
+				/* New candidate; start counting over */
+				cpumask_copy(CPUMASK_HFI, CPUMASK_HFI_LP_SHRINK);
+				hfi_lp_shrink_count = 1;
+			}
+
+			if (hfi_lp_shrink_count >= DEF_HFI_LP_SHRINK_COUNT) {
+				lpmd_log_debug("\tLPM hint smaller for %d events, shrinking held LP set\n",
+					       hfi_lp_shrink_count);
+				hfi_lp_shrink_count = 0;
+				cpumask_copy(CPUMASK_HFI, CPUMASK_HFI_LP_HELD);
+				cpumask_copy(CPUMASK_HFI, CPUMASK_HFI_LAST);
+			} else {
+				lpmd_log_debug("\tSmaller LP hint (%d/%d), holding larger LP set\n",
+					       hfi_lp_shrink_count, DEF_HFI_LP_SHRINK_COUNT);
+				/* Hold: restore CPUMASK_HFI to the held (larger) set */
+				cpumask_copy(CPUMASK_HFI_LP_HELD, CPUMASK_HFI);
+				return;
+			}
+		} else {
+			/* Same size, different cores: not a shrink, just hold */
+			hfi_lp_shrink_count = 0;
+			cpumask_copy(CPUMASK_HFI_LP_HELD, CPUMASK_HFI);
+			return;
+		}
 	} else if (cpumask_has_cpu(CPUMASK_HFI_BANNED)) {
 		cpumask_exclude_copy(CPUMASK_ONLINE, CPUMASK_HFI, CPUMASK_HFI_BANNED);
 		/* Ignore duplicate event */
@@ -269,6 +347,9 @@ static void process_one_event(int first, int last, int nr)
 //		 Don't override the DETECT_LPM_CPU_DEFAULT so it is auto recovered
 		cpumask_copy(CPUMASK_ONLINE, CPUMASK_HFI);
 		cpumask_reset(CPUMASK_HFI_LAST);
+		/* Back to performance: release the held LP set for a fresh episode */
+		cpumask_reset(CPUMASK_HFI_LP_HELD);
+		hfi_lp_shrink_count = 0;
 
 		/* Set timeout state to HFI PERF */
 		if (hfi_timeout == HFI_TIMEOUT_LP)
@@ -313,6 +394,12 @@ void hfi_timeout_state_action(int state)
 		hfi_time_stop();
 		reset_polling();
 		update_reason(UPDATE_HFI);
+		/*
+		 * Timeout expired and the LP set is now applied: re-baseline the
+		 * held LP set to what was just committed so subsequent smaller LP
+		 * hints are held against it.
+		 */
+		cpumask_copy(CPUMASK_HFI, CPUMASK_HFI_LP_HELD);
 		cpumask_copy(CPUMASK_HFI, CPUMASK_HFI_LAST);
 		break;
 	case HFI_TIMEOUT_FINAL:
@@ -321,6 +408,9 @@ void hfi_timeout_state_action(int state)
 		going_back_to_perf = false;
 		cpumask_copy(CPUMASK_ONLINE, CPUMASK_HFI);
 		cpumask_reset(CPUMASK_HFI_LAST);
+		/* Canceled back to performance: release the held LP set */
+		cpumask_reset(CPUMASK_HFI_LP_HELD);
+		hfi_lp_shrink_count = 0;
 		break;
 	case HFI_TIMEOUT_LP:
 	case HFI_TIMEOUT_PERF:

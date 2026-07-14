@@ -273,6 +273,18 @@ enum cpumask_idx {
 	CPUMASK_HFI_BANNED,
 	CPUMASK_HFI_LAST,
 	CPUMASK_HFI_CACHED,
+	/*
+	 * Largest LP set currently being "held" to avoid ping-ponging between
+	 * LP cpumasks of different sizes. Only written by LPM events (never by
+	 * BANNED events, whose mask is ONLINE minus banned and not an LP set).
+	 */
+	CPUMASK_HFI_LP_HELD,
+	/*
+	 * Candidate smaller LP set seen while an LP set is held. Used to
+	 * count consecutive identical smaller hints before shrinking the held
+	 * set to it (see DEF_HFI_LP_SHRINK_COUNT).
+	 */
+	CPUMASK_HFI_LP_SHRINK,
 	CPUMASK_UTIL,
 	CPUMASK_BLACKLIST,
 	CPUMASK_USER,
@@ -318,6 +330,12 @@ enum power_profile_daemon_mode {
 
 #define DEF_POLLING_INTERVAL	100
 #define DEF_HFI_TIMEOUT		1000
+/*
+ * Number of consecutive LP hints that must agree on a smaller LP set before
+ * the held LP set is allowed to shrink to it. Guards against ping-ponging on
+ * a single transient smaller hint while still tracking a sustained change.
+ */
+#define DEF_HFI_LP_SHRINK_COUNT	5
 
 /* lpmd_main.c */
 int in_debug_mode(void);
@@ -438,6 +456,7 @@ int cpumask_has_cpu(enum cpumask_idx idx);
 
 int cpumask_equal(enum cpumask_idx idx1, enum cpumask_idx idx2);
 void cpumask_copy(enum cpumask_idx source, enum cpumask_idx dest);
+void cpumask_or_copy(enum cpumask_idx source, enum cpumask_idx dest);
 void cpumask_exclude_copy(enum cpumask_idx source, enum cpumask_idx dest, enum cpumask_idx exclude);
 
 char *get_cpus_str(enum cpumask_idx idx, bool refresh);
