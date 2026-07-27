@@ -207,6 +207,173 @@ Polling interval increment in milli seconds. If this value
 is -1, then polling increment is adaptive based on the utilization.
 
 
+.SH Per-Process CPU Affinity and Scheduling Control
+.PP
+The file
+.B data/process_cpuset.xml
+defines per-process CPU affinity constraints and per-classification
+(realtime, user_interactive, user_initiated, etc.) scheduling parameters
+such as CPU utilization clamping (uclamp). It allows fine-grained
+control over which CPUs each class of workload can use, with optional
+per-process overrides.
+.PP
+.B Key Concepts
+.IP \(bu 2
+.B Classification:
+Each process is assigned a class (e.g., background, utility, user_initiated,
+user_interactive, realtime, game_profile_cpu). The class determines its
+default CPU affinity mask and uclamp limits.
+.IP \(bu 2
+.B ActiveCores / ClassDefaults:
+Named CPU groups (ActivePcores, ActiveEcores, ActiveLcores) or literal
+CPU lists define which CPUs a class can use. Per-process <ActiveCores>
+entries override the class default.
+.IP \(bu 2
+.B Affinity Modes:
+PIDs from system-slice services (daemons) are managed via systemd
+transient cgroup scopes (applies to all threads automatically).
+User-session PIDs use sched_setaffinity(2), which by default only
+affects the leader thread. The <AffinityAllThreads> tag extends
+this to all threads in the process.
+.IP \(bu 2
+.B UClamp (Utilization Clamping):
+Per-class min/max CPU utilization clamps (sched_util_min / sched_util_max)
+passed to sched_setattr(2). Range: -1 (disabled), 0..1024.
+.PP
+.B Process Tags (process_cpuset.xml)
+.IP \(bu 2
+.B <Name>
+Process name from /proc/PID/comm (15-char limit). Supports '*' wildcard
+for prefix matching (e.g., "firefox*").
+.IP \(bu 2
+.B <Classification>
+One of: realtime, user_interactive, user_initiated, utility, background,
+game_profile_cpu, game_profile_gpu, game_profile_mixed, custom_profile_0,
+custom_profile_1, custom_profile_2.
+.IP \(bu 2
+.B <Cores>
+(inside <ClassDefaults>) Comma/whitespace-separated mix of group names
+(ActivePcores, ActiveEcores, ActiveLcores) or literal CPU ranges
+(e.g., "0-3,5,8"). Defines which CPUs this class can use by default.
+.IP \(bu 2
+.B <ActiveCores>
+(inside <Process>) Overrides ClassDefaults for this specific process.
+Same syntax as <Cores>.
+.IP \(bu 2
+.B <AllowSession>
+(optional; 1/true/yes/on) By default, login-session PIDs (gdm, sshd-session,
+sudo, terminal login shell) are skipped to preserve logind/polkit session
+tracking. Set this to opt a specific process into affinity management
+(sched_setaffinity path only, no cgroup). Intended for games and apps
+knowingly launched from a terminal.
+.IP \(bu 2
+.B <AffinityAllThreads>
+(optional; 1/true/yes/on) When applying the affinity path (user-session
+PIDs), walk /proc/PID/task/ and apply the mask to every thread (TID)
+instead of just the leader. Without this, only the main thread is
+constrained; existing worker threads keep their previous mask. Recommended
+for multithreaded apps (games, browsers, media engines). No effect on
+PIDs in cgroup scopes (cgroups already cover all threads).
+.IP \(bu 2
+.B <UClampMin> / <uclamp_min>
+(optional; -1=disable, 0..1024) Minimum CPU utilization clamp for this
+class. Affects sched_util_min sent to sched_setattr(2). When applied with
+<AffinityAllThreads>, all threads in matching PIDs are updated.
+.IP \(bu 2
+.B <UClampMax> / <uclamp_max>
+(optional; -1=disable, 0..1024) Maximum CPU utilization clamp for this
+class. Affects sched_util_max sent to sched_setattr(2). When applied with
+<AffinityAllThreads>, all threads in matching PIDs are updated.
+.IP \(bu 2
+.B <DefaultProcess>
+(optional catch-all) Applied to any user-session PID not matched by a
+specific <Process> entry. Typical use: reset inherited restrictive affinity
+masks for child processes. Accepts same tags as <Process> (no <Name>).
+System-slice PIDs are never touched by <DefaultProcess>.
+.PP
+.B Per-Model Overrides (intel_lpmd_config_*.xml)
+.PP
+To override per-class uclamp values or CPU group assignments on specific
+CPU models, add a <ClassDefaults> block inside the appropriate <State>
+definition in intel_lpmd_config_F18_M1.xml, intel_lpmd_config_F6_M189.xml,
+or other model-specific files. These overrides take precedence over
+process_cpuset.xml defaults at runtime.
+.PP
+.EX
+<!-- Example: intel_lpmd_config_F18_M1.xml -->
+<State>
+    <ID>1</ID>
+    <Name>MyState</Name>
+    <CPUFamily>0x6</CPUFamily>
+    <CPUModel>0xA1</CPUModel>  <!-- Lunar Lake example -->
+    <!-- ... entry conditions ... -->
+    <ClassDefaults>
+        <UserInitiated>
+            <Cores>ActivePcores, ActiveEcores</Cores>
+            <UClampMin>256</UClampMin>
+            <UClampMax>768</UClampMax>
+        </UserInitiated>
+        <Background>
+            <Cores>ActiveLcores</Cores>
+            <UClampMin>0</UClampMin>
+            <UClampMax>256</UClampMax>
+        </Background>
+    </ClassDefaults>
+</State>
+.EE
+.PP
+.B Examples
+.IP \(bu 2
+.B Example 1: Game with multithreading
+Classify as game_profile_cpu, apply affinity to all threads, limit to
+P-cores, and clamp utilization to mid-range:
+.EX
+<Process>
+    <Name>game</Name>
+    <Classification>game_profile_cpu</Classification>
+    <ActiveCores>ActivePcores</ActiveCores>
+    <AffinityAllThreads>1</AffinityAllThreads>
+    <UClampMin>512</UClampMin>
+    <UClampMax>900</UClampMax>
+</Process>
+.EE
+.IP \(bu 2
+.B Example 2: Utility workload on LP cores
+.EX
+<Process>
+    <Name>indexer</Name>
+    <Classification>utility</Classification>
+    <ActiveCores>ActiveLcores</ActiveCores>
+    <UClampMin>128</UClampMin>
+    <UClampMax>512</UClampMax>
+</Process>
+.EE
+.IP \(bu 2
+.B Example 3: Custom profile with login-session opt-in
+Allow a terminal IDE to use custom profile, apply to all threads,
+even if launched from a login shell:
+.EX
+<Process>
+    <Name>my_ide</Name>
+    <Classification>custom_profile_0</Classification>
+    <AllowSession>1</AllowSession>
+    <AffinityAllThreads>1</AffinityAllThreads>
+</Process>
+.EE
+.IP \(bu 2
+.B Example 4: Class default override in model-specific config
+In intel_lpmd_config_F18_M1.xml, tighten background class uclamp:
+.EX
+<ClassDefaults>
+    <Background>
+        <Cores>ActiveLcores</Cores>
+        <UClampMin>0</UClampMin>
+        <UClampMax>128</UClampMax>
+    </Background>
+</ClassDefaults>
+.EE
+
+
 .SH FILE FORMAT
 The configuration file format conforms to XML specifications.
 .sp 1
