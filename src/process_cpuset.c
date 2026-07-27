@@ -1321,11 +1321,41 @@ static int sched_setattr_pid(pid_t pid, const struct sched_attr *attr,
 #endif
 }
 
-static int apply_pid_uclamp(process_cpuset_t *ctx, pid_t pid,
-			   enum classification cls,
-			   const char *cls_label)
+static int apply_pid_uclamp_single(pid_t pid, enum classification cls,
+				  const char *cls_label,
+				  int min_v, int max_v)
 {
 	struct sched_attr attr;
+
+	memset(&attr, 0, sizeof(attr));
+	attr.size = sizeof(attr);
+	attr.sched_flags = SCHED_FLAG_KEEP_POLICY | SCHED_FLAG_KEEP_PARAMS |
+			   SCHED_FLAG_UTIL_CLAMP_MIN |
+			   SCHED_FLAG_UTIL_CLAMP_MAX;
+	attr.sched_util_min = (uint32_t)min_v;
+	attr.sched_util_max = (uint32_t)max_v;
+
+	if (sched_setattr_pid(pid, &attr, 0) < 0) {
+		if (errno != ESRCH)
+			lpmd_log_debug(
+				"uclamp: sched_setattr tid=%d class=%s min=%d max=%d failed: %s\n",
+				(int)pid,
+				cls_label ? cls_label : class_str(cls), min_v,
+				max_v, strerror(errno));
+		return -1;
+	}
+	return 0;
+}
+
+static int apply_pid_uclamp(process_cpuset_t *ctx, pid_t pid,
+			   enum classification cls,
+			   const char *cls_label,
+			   int all_threads)
+{
+	char path[64];
+	char comm[MAX_NAME] = "?";
+	DIR *d;
+	struct dirent *de;
 	int min_v, max_v;
 	int rc;
 
@@ -1339,27 +1369,76 @@ static int apply_pid_uclamp(process_cpuset_t *ctx, pid_t pid,
 		return -1;
 	}
 
-	memset(&attr, 0, sizeof(attr));
-	attr.size = sizeof(attr);
-	attr.sched_flags = SCHED_FLAG_KEEP_POLICY | SCHED_FLAG_KEEP_PARAMS |
-			   SCHED_FLAG_UTIL_CLAMP_MIN |
-			   SCHED_FLAG_UTIL_CLAMP_MAX;
-	attr.sched_util_min = (uint32_t)min_v;
-	attr.sched_util_max = (uint32_t)max_v;
-
-	if (sched_setattr_pid(pid, &attr, 0) < 0) {
-		if (errno != ESRCH)
+	if (!all_threads) {
+		rc = apply_pid_uclamp_single(pid, cls, cls_label, min_v,
+					     max_v);
+		if (rc == 0)
 			lpmd_log_debug(
-				"uclamp: sched_setattr pid=%d class=%s min=%d max=%d failed: %s\n",
+				"uclamp: pid=%d class=%s min=%d max=%d\n",
 				(int)pid,
 				cls_label ? cls_label : class_str(cls), min_v,
-				max_v, strerror(errno));
-		return -1;
+				max_v);
+		return rc;
 	}
 
-	lpmd_log_debug("uclamp: pid=%d class=%s min=%d max=%d\n", (int)pid,
-		       cls_label ? cls_label : class_str(cls), min_v, max_v);
-	return 0;
+	(void)read_comm(pid, comm, sizeof(comm));
+	snprintf(path, sizeof(path), "/proc/%d/task", (int)pid);
+	d = opendir(path);
+	if (!d) {
+		if (errno != ESRCH)
+			lpmd_log_debug(
+				"uclamp: all-threads pid=%d comm=%s class=%s: opendir(%s) failed: %s; falling back to leader-only\n",
+				(int)pid, comm,
+				cls_label ? cls_label : class_str(cls), path,
+				strerror(errno));
+		rc = apply_pid_uclamp_single(pid, cls, cls_label, min_v,
+					     max_v);
+		if (rc == 0)
+			lpmd_log_debug(
+				"uclamp: pid=%d class=%s min=%d max=%d (leader-only fallback)\n",
+				(int)pid,
+				cls_label ? cls_label : class_str(cls), min_v,
+				max_v);
+		return rc;
+	}
+
+	lpmd_log_debug(
+		"uclamp: all-threads pid=%d comm=%s class=%s min=%d max=%d scanning %s\n",
+		(int)pid, comm, cls_label ? cls_label : class_str(cls), min_v,
+		max_v, path);
+
+	{
+		int n_ok = 0, n_fail = 0;
+		while ((de = readdir(d))) {
+			char *end;
+			long tid = strtol(de->d_name, &end, 10);
+
+			if (*end != '\0' || tid <= 0)
+				continue;
+
+			if (apply_pid_uclamp_single((pid_t)tid, cls,
+						    cls_label, min_v,
+						    max_v) == 0) {
+				n_ok++;
+				lpmd_log_debug("  tid %ld class=%s OK\n", tid,
+					       cls_label ? cls_label :
+							   class_str(cls));
+			} else {
+				n_fail++;
+				lpmd_log_debug("  tid %ld class=%s FAIL (%s)\n",
+					       tid,
+					       cls_label ? cls_label :
+							   class_str(cls),
+					       strerror(errno));
+			}
+		}
+		closedir(d);
+		lpmd_log_debug(
+			"uclamp: all-threads pid=%d comm=%s class=%s min=%d max=%d: %d ok, %d failed\n",
+			(int)pid, comm, cls_label ? cls_label : class_str(cls),
+			min_v, max_v, n_ok, n_fail);
+		return n_ok > 0 ? 0 : -1;
+	}
 }
 
 /* ---------- systemd: StartTransientUnit with AllowedCPUs + PIDs ----------
@@ -2506,11 +2585,14 @@ static size_t collect_descendant_tgids(pid_t root, pid_t *out, size_t max)
 			FILE *cf;
 			size_t got;
 			char *p, *save;
+			char *end;
+			long tid;
 
-			if (de->d_name[0] < '0' || de->d_name[0] > '9')
+			tid = strtol(de->d_name, &end, 10);
+			if (*end != '\0' || tid <= 0)
 				continue;
-			snprintf(cpath, sizeof(cpath), "%s/%s/children",
-				 taskdir, de->d_name);
+			snprintf(cpath, sizeof(cpath), "/proc/%d/task/%ld/children",
+				 (int)cur, tid);
 			cf = fopen(cpath, "r");
 			if (!cf)
 				continue;
@@ -2615,14 +2697,14 @@ static int focus_promote_descendant(process_cpuset_t *ctx, pid_t pid,
 		if (set_scope_allowed_cpus(desc->unit, ui_mask, ui_mlen) < 0)
 			return -1;
 		(void)apply_pid_uclamp(ctx, pid, CLASS_USER_INTERACTIVE,
-			       class_str(CLASS_USER_INTERACTIVE));
+			       class_str(CLASS_USER_INTERACTIVE), 0);
 		return 0;
 	}
 	if (affinity_apply(pid, /*all_threads=*/1, ui_mask, ui_mlen,
 			  class_str(CLASS_USER_INTERACTIVE)) < 0)
 		return -1;
 	(void)apply_pid_uclamp(ctx, pid, CLASS_USER_INTERACTIVE,
-		       class_str(CLASS_USER_INTERACTIVE));
+		       class_str(CLASS_USER_INTERACTIVE), 1);
 	return 0;
 }
 
@@ -2647,14 +2729,14 @@ static void focus_demote_descendant(process_cpuset_t *ctx,
 					     desc->orig_mlen);
 		if (desc->orig_cls != CLASS_INVALID)
 			(void)apply_pid_uclamp(ctx, desc->pid, desc->orig_cls,
-				       class_str(desc->orig_cls));
+				       class_str(desc->orig_cls), 0);
 	} else {
 		(void)affinity_apply(desc->pid, /*all_threads=*/1,
 				     desc->orig_mask, desc->orig_mlen,
 				     class_str(desc->orig_cls));
 		if (desc->orig_cls != CLASS_INVALID)
 			(void)apply_pid_uclamp(ctx, desc->pid, desc->orig_cls,
-				       class_str(desc->orig_cls));
+				       class_str(desc->orig_cls), 1);
 	}
 }
 
@@ -2749,7 +2831,7 @@ int process_cpuset_set_focus_pid(process_cpuset_t *ctx, pid_t pid)
 			if (ctx->focus_orig_cls != CLASS_INVALID)
 				(void)apply_pid_uclamp(ctx, prev,
 					       ctx->focus_orig_cls,
-					       class_str(ctx->focus_orig_cls));
+					       class_str(ctx->focus_orig_cls), 0);
 		} else {
 			/* Affinity-only path: best effort, the PID may be gone. */
 			(void)affinity_apply(prev, ctx->focus_all_threads,
@@ -2759,7 +2841,8 @@ int process_cpuset_set_focus_pid(process_cpuset_t *ctx, pid_t pid)
 			if (ctx->focus_orig_cls != CLASS_INVALID)
 				(void)apply_pid_uclamp(ctx, prev,
 					       ctx->focus_orig_cls,
-					       class_str(ctx->focus_orig_cls));
+					       class_str(ctx->focus_orig_cls),
+					       ctx->focus_all_threads);
 		}
 		ctx->focus_pid = 0;
 		ctx->focus_unit[0] = '\0';
@@ -2842,7 +2925,7 @@ int process_cpuset_set_focus_pid(process_cpuset_t *ctx, pid_t pid)
 		if (set_scope_allowed_cpus(ent->unit, mask, mlen) < 0)
 			return -1;
 		(void)apply_pid_uclamp(ctx, pid, CLASS_USER_INTERACTIVE,
-			       class_str(CLASS_USER_INTERACTIVE));
+			       class_str(CLASS_USER_INTERACTIVE), 0);
 	} else {
 		/* Affinity-only. Focus promotion is a whole-process semantic:
          * always cover every TID in the leader's task list, regardless
@@ -2854,7 +2937,7 @@ int process_cpuset_set_focus_pid(process_cpuset_t *ctx, pid_t pid)
 				   class_str(CLASS_USER_INTERACTIVE)) < 0)
 			return -1;
 		(void)apply_pid_uclamp(ctx, pid, CLASS_USER_INTERACTIVE,
-			       class_str(CLASS_USER_INTERACTIVE));
+			       class_str(CLASS_USER_INTERACTIVE), 1);
 	}
 
 	/* Step 4: promote descendant TGIDs (browser content / GPU / RDD
@@ -2925,12 +3008,12 @@ static int reapply_attached_class(process_cpuset_t *ctx,
 		if (ent->unit[0]) {
 			(void)set_scope_allowed_cpus(ent->unit, mask, mlen);
 			(void)apply_pid_uclamp(ctx, ent->pid, target_cls,
-				       class_str(target_cls));
+				       class_str(target_cls), 0);
 		} else {
 			(void)affinity_apply(ent->pid, /*all_threads=*/1, mask,
 					     mlen, class_str(target_cls));
 			(void)apply_pid_uclamp(ctx, ent->pid, target_cls,
-				       class_str(target_cls));
+				       class_str(target_cls), 1);
 		}
 		/* Keep the stored groups in sync so LIST-BOUND displays the
 		 * correct CPU group names after a class-default change
@@ -3156,7 +3239,7 @@ int process_cpuset_apply_once(process_cpuset_t *ctx, int dry_run)
 							   owner_uid);
 						(void)apply_pid_uclamp(ctx, pids[j],
 							       e->cls,
-							       class_str(e->cls));
+						       class_str(e->cls), 1);
 					}
 				} else if (set_pid_affinity_from_mask(
 						   pids[j], mask, mlen) == 0) {
@@ -3169,7 +3252,7 @@ int process_cpuset_apply_once(process_cpuset_t *ctx, int dry_run)
 						   e->cls, e->resolved.groups,
 						   owner_uid);
 					(void)apply_pid_uclamp(ctx, pids[j], e->cls,
-						       class_str(e->cls));
+						       class_str(e->cls), 0);
 				}
 				continue;
 			}
@@ -3208,7 +3291,7 @@ int process_cpuset_apply_once(process_cpuset_t *ctx, int dry_run)
 						   existing, e->cls,
 						   e->resolved.groups, 0);
 					(void)apply_pid_uclamp(ctx, pids[j], e->cls,
-						       class_str(e->cls));
+						       class_str(e->cls), 0);
 					continue;
 				}
 			}
@@ -3234,7 +3317,7 @@ int process_cpuset_apply_once(process_cpuset_t *ctx, int dry_run)
 				pidset_add(&ctx->attached, pids[j], unit,
 					   e->cls, e->resolved.groups, 0);
 				(void)apply_pid_uclamp(ctx, pids[j], e->cls,
-					       class_str(e->cls));
+					       class_str(e->cls), 0);
 			}
 		}
 
@@ -3360,7 +3443,7 @@ int process_cpuset_apply_pid(process_cpuset_t *ctx, pid_t pid, int dry_run)
 						   e->cls, e->resolved.groups,
 						   owner_uid);
 					(void)apply_pid_uclamp(ctx, pid, e->cls,
-						       class_str(e->cls));
+						       class_str(e->cls), 1);
 					return 1;
 				}
 			} else if (set_pid_affinity_from_mask(pid, mask,
@@ -3371,7 +3454,7 @@ int process_cpuset_apply_pid(process_cpuset_t *ctx, pid_t pid, int dry_run)
 				pidset_add(&ctx->attached, pid, "", e->cls,
 					   e->resolved.groups, owner_uid);
 				(void)apply_pid_uclamp(ctx, pid, e->cls,
-					       class_str(e->cls));
+					       class_str(e->cls), 0);
 				return 1;
 			}
 			return -1;
@@ -3409,7 +3492,7 @@ int process_cpuset_apply_pid(process_cpuset_t *ctx, pid_t pid, int dry_run)
 				pidset_add(&ctx->attached, pid, existing,
 					   e->cls, e->resolved.groups, 0);
 				(void)apply_pid_uclamp(ctx, pid, e->cls,
-					       class_str(e->cls));
+					       class_str(e->cls), 0);
 				return 1;
 			}
 		}
@@ -3426,7 +3509,7 @@ int process_cpuset_apply_pid(process_cpuset_t *ctx, pid_t pid, int dry_run)
 			pidset_add(&ctx->attached, pid, unit, e->cls,
 				   e->resolved.groups, 0);
 			(void)apply_pid_uclamp(ctx, pid, e->cls,
-				       class_str(e->cls));
+			       class_str(e->cls), 0);
 			return 1;
 		}
 		return -1;
@@ -3493,7 +3576,7 @@ static int apply_default_to_pid(process_cpuset_t *ctx, pid_t pid,
 			pidset_add(&ctx->attached, pid, "", e->cls,
 				   e->resolved.groups, owner_uid);
 			(void)apply_pid_uclamp(ctx, pid, e->cls,
-				       class_str(e->cls));
+			       class_str(e->cls), 1);
 			return 1;
 		}
 	} else if (set_pid_affinity_from_mask(pid, mask, mlen) == 0) {
@@ -3502,7 +3585,7 @@ static int apply_default_to_pid(process_cpuset_t *ctx, pid_t pid,
 			       from_event ? " event" : "");
 		pidset_add(&ctx->attached, pid, "", e->cls, e->resolved.groups,
 			   owner_uid);
-		(void)apply_pid_uclamp(ctx, pid, e->cls, class_str(e->cls));
+		(void)apply_pid_uclamp(ctx, pid, e->cls, class_str(e->cls), 0);
 		return 1;
 	}
 	return -1;
