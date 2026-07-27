@@ -405,44 +405,15 @@ static int class_has_live_attached_pid(const char *cls)
 	return 0;
 }
 
-static int class_has_min_perf_override(const struct lpmd_config_t *config,
-					 const char *cls)
+/*
+ * Public API for checking if a class has attached processes.
+ */
+int lpmd_process_cpuset_class_has_attached(const char *class_name)
 {
-	const struct lpmd_class_tuning_override_t *ovr;
-	int on_battery;
-
-	if (!config || !cls || !*cls)
+	if (!class_name || !*class_name)
 		return 0;
 
-	ovr = class_tuning_for_name(config, cls);
-	if (!ovr || !ovr->present_mask)
-		return 0;
-
-	on_battery = is_on_battery();
-	if (on_battery)
-		return !!(ovr->present_mask & LPMD_CLASS_TUNE_MIN_PERF_PCT_DC);
-
-	return !!(ovr->present_mask & LPMD_CLASS_TUNE_MIN_PERF_PCT_AC);
-}
-
-static int class_has_max_perf_override(const struct lpmd_config_t *config,
-					 const char *cls)
-{
-	const struct lpmd_class_tuning_override_t *ovr;
-	int on_battery;
-
-	if (!config || !cls || !*cls)
-		return 0;
-
-	ovr = class_tuning_for_name(config, cls);
-	if (!ovr || !ovr->present_mask)
-		return 0;
-
-	on_battery = is_on_battery();
-	if (on_battery)
-		return !!(ovr->present_mask & LPMD_CLASS_TUNE_MAX_PERF_PCT_DC);
-
-	return !!(ovr->present_mask & LPMD_CLASS_TUNE_MAX_PERF_PCT_AC);
+	return class_has_live_attached_pid(class_name);
 }
 
 static int class_get_min_perf_override_value(const struct lpmd_config_t *config,
@@ -555,6 +526,21 @@ static int class_get_slider_offset_override_value(const struct lpmd_config_t *co
 		return 0;
 	*value_out = ovr->slider_offset_ac;
 	return 1;
+}
+
+/* Wrapper functions for class_has_override field (no value_out param) */
+static int class_has_min_perf_override(const struct lpmd_config_t *config,
+				       const char *cls)
+{
+	int dummy = 0;
+	return class_get_min_perf_override_value(config, cls, &dummy);
+}
+
+static int class_has_max_perf_override(const struct lpmd_config_t *config,
+				       const char *cls)
+{
+	int dummy = 0;
+	return class_get_max_perf_override_value(config, cls, &dummy);
 }
 
 static void apply_min_perf_value(int val)

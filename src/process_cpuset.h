@@ -303,6 +303,20 @@ int process_cpuset_classify_name(const process_cpuset_t *ctx,
 				 const char **class_out,
 				 char *cpus_out, size_t cpus_cap);
 
+/*
+ * Resolve a classification's effective default AllowedCPUs list under
+ * the current CPU groups and class-default table.
+ *
+ * @classification accepts the same aliases as XML (for example
+ * "GameProfileGPU" / "game_profile_gpu").
+ *
+ * Returns 0 on success, -1 on invalid input / unknown class / mask
+ * build error.
+ */
+int process_cpuset_get_class_cpulist(const process_cpuset_t *ctx,
+				     const char *classification,
+				     char *cpus_out, size_t cpus_cap);
+
 #ifdef __cplusplus
 }
 #endif

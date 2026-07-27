@@ -173,6 +173,33 @@ enum core_type {
 	L_CORE
 };
 
+#define NUM_USER_CPUMASKS	10
+enum cpumask_idx {
+	CPUMASK_LPM_DEFAULT,
+	CPUMASK_ONLINE,
+	CPUMASK_HFI,
+	CPUMASK_HFI_BANNED,
+	CPUMASK_HFI_LAST,
+	CPUMASK_HFI_CACHED,
+	/*
+	 * Largest LP set currently being "held" to avoid ping-ponging between
+	 * LP cpumasks of different sizes. Only written by LPM events (never by
+	 * BANNED events, whose mask is ONLINE minus banned and not an LP set).
+	 */
+	CPUMASK_HFI_LP_HELD,
+	/*
+	 * Candidate smaller LP set seen while an LP set is held. Used to
+	 * count consecutive identical smaller hints before shrinking the held
+	 * set to it (see DEF_HFI_LP_SHRINK_COUNT).
+	 */
+	CPUMASK_HFI_LP_SHRINK,
+	CPUMASK_UTIL,
+	CPUMASK_BLACKLIST,
+	CPUMASK_USER,
+	CPUMASK_MAX = CPUMASK_USER + NUM_USER_CPUMASKS,
+	CPUMASK_NONE = CPUMASK_MAX,
+};
+
 struct lpmd_config_state_t {
 	int id;
 	int valid;
@@ -277,6 +304,41 @@ struct lpmd_config_t {
 	char pc_class_default_custom_profile_1[MAX_CONFIG_LEN];
 	char pc_class_default_custom_profile_2[MAX_CONFIG_LEN];
 
+	/* Optional per-class switch from <ClassDefaults> that requests the
+	 * selected class core map to become the global process-cpuset CPU
+	 * groups (P/E/LP-E), overriding the default groups from per-state
+	 * Active*Cores settings. */
+	int pc_class_override_global_cpu_realtime;
+	int pc_class_override_global_cpu_user_interactive;
+	int pc_class_override_global_cpu_user_initiated;
+	int pc_class_override_global_cpu_unclassified;
+	int pc_class_override_global_cpu_utility;
+	int pc_class_override_global_cpu_background;
+	int pc_class_override_global_cpu_gp_cpu;
+	int pc_class_override_global_cpu_gp_gpu;
+	int pc_class_override_global_cpu_gp_hybrid;
+	int pc_class_override_global_cpu_custom_profile_0;
+	int pc_class_override_global_cpu_custom_profile_1;
+	int pc_class_override_global_cpu_custom_profile_2;
+
+	/* Per-class override tracking: store which classes have
+	 * OverrideGlobalCPUSettings enabled, and their resolved cpumasks.
+	 * At runtime, the class with attached processes + most CPUs wins. */
+	struct {
+		const char *class_name;  /* e.g. "game_profile_gpu" */
+		enum cpumask_idx cpumask_idx;
+		int cpu_count;
+	} override_classes[13];  /* One per ClassDefaults type */
+	int override_classes_count;
+
+	/* Runtime tracking of currently active override.
+	 * Used to detect when override should change due to attached processes
+	 * detaching. */
+	enum cpumask_idx current_override_idx;
+	const char *current_override_class;
+	int current_override_cpu_count;
+	enum cpumask_idx saved_state_cpumask_idx;  /* Original cpumask before override applied */
+
 	/* Optional per-class uclamp overrides from <ClassDefaults> in
 	 * intel_lpmd_config_*.xml. LPMD_UCLAMP_INHERIT means "leave value
 	 * from process_cpuset.xml untouched"; LPMD_UCLAMP_DISABLE (-1) or
@@ -367,33 +429,6 @@ enum lpm_cpu_process_mode {
 	LPM_CPU_POWERCLAMP,
 	LPM_CPU_OFFLINE,
 	LPM_CPU_MODE_MAX = LPM_CPU_POWERCLAMP,
-};
-
-#define NUM_USER_CPUMASKS	10
-enum cpumask_idx {
-	CPUMASK_LPM_DEFAULT,
-	CPUMASK_ONLINE,
-	CPUMASK_HFI,
-	CPUMASK_HFI_BANNED,
-	CPUMASK_HFI_LAST,
-	CPUMASK_HFI_CACHED,
-	/*
-	 * Largest LP set currently being "held" to avoid ping-ponging between
-	 * LP cpumasks of different sizes. Only written by LPM events (never by
-	 * BANNED events, whose mask is ONLINE minus banned and not an LP set).
-	 */
-	CPUMASK_HFI_LP_HELD,
-	/*
-	 * Candidate smaller LP set seen while an LP set is held. Used to
-	 * count consecutive identical smaller hints before shrinking the held
-	 * set to it (see DEF_HFI_LP_SHRINK_COUNT).
-	 */
-	CPUMASK_HFI_LP_SHRINK,
-	CPUMASK_UTIL,
-	CPUMASK_BLACKLIST,
-	CPUMASK_USER,
-	CPUMASK_MAX = CPUMASK_USER + NUM_USER_CPUMASKS,
-	CPUMASK_NONE = CPUMASK_MAX,
 };
 
 #define UTIL_DELAY_MAX		5000
@@ -581,6 +616,7 @@ int  lpmd_process_cpuset_add_process(const char *name, const char *classificatio
 int  lpmd_process_cpuset_set_focus_pid(pid_t pid);
 int  lpmd_process_cpuset_set_focus_helper_present(int present);
 int  lpmd_process_cpuset_classify(const char *name, char *result, size_t result_cap);
+int  lpmd_process_cpuset_class_has_attached(const char *class_name);
 int  lpmd_process_cpuset_min_perf_pct_locked(void);
 int  lpmd_process_cpuset_balance_slider_locked(void);
 int  lpmd_process_cpuset_slider_offset_locked(void);

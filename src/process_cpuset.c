@@ -3747,3 +3747,29 @@ int process_cpuset_classify_name(const process_cpuset_t *ctx,
 
 	return is_default ? 0 : 1;
 }
+
+int process_cpuset_get_class_cpulist(const process_cpuset_t *ctx,
+				     const char *classification,
+				     char *cpus_out, size_t cpus_cap)
+{
+	struct proc_entry e;
+	uint8_t mask[CPUMASK_BYTES];
+	enum classification cls;
+
+	if (!ctx || !classification || !cpus_out || cpus_cap == 0)
+		return -1;
+
+	cls = parse_class(classification);
+	if (cls == CLASS_INVALID)
+		return -1;
+
+	memset(&e, 0, sizeof(e));
+	e.cls = cls;
+	e.resolved = *default_spec_for(ctx, cls);
+
+	if (build_mask_for(ctx, &e, mask, sizeof(mask)) < 0)
+		return -1;
+
+	mask_to_cpulist(mask, sizeof(mask), cpus_out, cpus_cap);
+	return 0;
+}

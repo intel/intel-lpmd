@@ -7,7 +7,9 @@
 #include <err.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <ctype.h>
 #include <string.h>
+#include <strings.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/file.h>
@@ -233,6 +235,7 @@ static void dump_state(struct lpmd_config_state_t *state, char *str, int debug)
 {
 #define DUMP_STATE_BUF_SIZE	512
 	char buf[DUMP_STATE_BUF_SIZE];
+	char *cpus;
 	int offset = 0;
 
 	if (debug && !in_debug_mode())
@@ -264,8 +267,10 @@ static void dump_state(struct lpmd_config_state_t *state, char *str, int debug)
 				   "GFX [%6d] ",
 				   state->enter_gfx_load_thres / 100);
 
+	cpus = get_cpus_str(state->cpumask_idx, false);
 	offset += snprintf(buf + offset, DUMP_STATE_BUF_SIZE - offset,
-			   "CPUMASK [%d] ", state->cpumask_idx);
+			   "CPUMASK [%d:%s] ", state->cpumask_idx,
+			   cpus ? cpus : "?");
 	offset += snprintf(buf + offset, DUMP_STATE_BUF_SIZE - offset,
 			   "IRQ [%d] ", state->irq_migrate);
 	offset += snprintf(buf + offset, DUMP_STATE_BUF_SIZE - offset,
@@ -356,9 +361,108 @@ static int need_enter(struct lpmd_config_t *config, int idx)
 	return 0;
 }
 
+/*
+ * Evaluate the best override class based on current attached processes.
+ * Returns the cpumask_idx and class name of the best override, or CPUMASK_NONE
+ * if no override class has attached processes.
+ */
+static enum cpumask_idx evaluate_best_override_state(
+	const struct lpmd_config_t *config,
+	const char **best_class_out,
+	int *best_cpu_count_out)
+{
+	int best_cpu_count = 0;
+	enum cpumask_idx best_override_idx = CPUMASK_NONE;
+	const char *best_override_class = NULL;
+	int i;
+
+	for (i = 0; i < config->override_classes_count; i++) {
+		if (config->override_classes[i].cpumask_idx == CPUMASK_NONE)
+			continue;
+		if (!lpmd_process_cpuset_class_has_attached(
+		    config->override_classes[i].class_name))
+			continue;
+
+		if (config->override_classes[i].cpu_count > best_cpu_count) {
+			best_cpu_count = config->override_classes[i].cpu_count;
+			best_override_idx = config->override_classes[i].cpumask_idx;
+			best_override_class = config->override_classes[i].class_name;
+		}
+	}
+
+	if (best_class_out)
+		*best_class_out = best_override_class;
+	if (best_cpu_count_out)
+		*best_cpu_count_out = best_cpu_count;
+
+	return best_override_idx;
+}
+
+/*
+ * Check if the current override is still valid, and update to a new one if needed.
+ * This is called periodically while in a state to detect when processes attach/detach.
+ * Returns 1 if override changed, 0 if no change.
+ */
+static int update_override_state_if_needed(struct lpmd_config_t *config, int current_state_idx)
+{
+	enum cpumask_idx new_override_idx = CPUMASK_NONE;
+	const char *new_override_class = NULL;
+	int new_cpu_count = 0;
+	struct lpmd_config_state_t *state;
+	char cpumask_str[MAX_STR_LENGTH] = {0};
+
+	if (current_state_idx < 0 || current_state_idx >= MAX_STATES)
+		return 0;
+
+	state = &config->config_states[current_state_idx];
+	if (!state->valid)
+		return 0;
+
+	/* Evaluate best override based on current attached processes */
+	new_override_idx = evaluate_best_override_state(config, &new_override_class,
+							&new_cpu_count);
+
+	/* Check if override changed */
+	if (new_override_idx != config->current_override_idx) {
+		config->current_override_idx = new_override_idx;
+		config->current_override_class = new_override_class;
+		config->current_override_cpu_count = new_cpu_count;
+
+		if (new_override_idx != CPUMASK_NONE) {
+			/* Override changed to a different class */
+			state->cpumask_idx = new_override_idx;
+			snprintf(cpumask_str, sizeof(cpumask_str), "%s",
+				 get_cpus_hexstr(state->cpumask_idx, false));
+			lpmd_log_info(
+				"state %s: override switched to class=%s (cpus=%d) CPUMASK [%s]",
+				state->name, new_override_class, new_cpu_count, cpumask_str);
+			/* Re-apply cpumask to system with new override */
+			process_cgroup(config, state);
+		} else {
+			/* Override deactivated - restore to original state cpumask */
+			state->cpumask_idx = config->saved_state_cpumask_idx;
+			snprintf(cpumask_str, sizeof(cpumask_str), "%s",
+				 get_cpus_hexstr(state->cpumask_idx, false));
+			lpmd_log_info(
+				"state %s: override deactivated, cpumask restored to [%s] (no classes with attached processes)",
+				state->name, cpumask_str);
+			/* Re-apply restored cpumask to system */
+			process_cgroup(config, state);
+		}
+		return 1;
+	}
+
+	return 0;
+}
+
 static int enter_state(struct lpmd_config_t *config, int idx)
 {
 	struct lpmd_config_state_t *state = &config->config_states[idx];
+	enum cpumask_idx save_cpumask_idx = CPUMASK_NONE;
+	int override_active = 0;
+	enum cpumask_idx best_override_idx = CPUMASK_NONE;
+	const char *best_override_class = NULL;
+	int best_cpu_count = 0;
 
 	state->entry_load_sys = config->data.util_sys;
 	state->entry_load_cpu = config->data.util_cpu;
@@ -377,7 +481,37 @@ static int enter_state(struct lpmd_config_t *config, int idx)
 		process_irq(state);
 	}
 
-	process_itmt(state);
+	/* Save original cpumask for potential override deactivation later */
+	config->saved_state_cpumask_idx = state->cpumask_idx;
+
+	/* Check all override classes: pick one with attached processes + most CPUs. */
+	best_override_idx = evaluate_best_override_state(config, &best_override_class,
+							 &best_cpu_count);
+
+	if (best_override_idx != CPUMASK_NONE) {
+		save_cpumask_idx = state->cpumask_idx;
+		state->cpumask_idx = best_override_idx;
+		override_active = 1;
+
+		/* Update runtime tracking */
+		config->current_override_idx = best_override_idx;
+		config->current_override_class = best_override_class;
+		config->current_override_cpu_count = best_cpu_count;
+
+		lpmd_log_info(
+			"state %s: override active from class=%s (cpus=%d)",
+			state->name, best_override_class, best_cpu_count);
+	} else {
+		/* No override active now */
+		if (config->current_override_idx != CPUMASK_NONE) {
+			lpmd_log_info(
+				"state %s: override deactivated (no classes with attached processes)",
+				state->name);
+		}
+		config->current_override_idx = CPUMASK_NONE;
+		config->current_override_class = NULL;
+		config->current_override_cpu_count = 0;
+	}
 
 	process_epp_epb(state);
 	process_min_perf_pct(state);
@@ -386,6 +520,10 @@ static int enter_state(struct lpmd_config_t *config, int idx)
 	process_irq(state);
 
 	process_cgroup(config, state);
+
+	/* Restore original cpumask after state processing. */
+	if (override_active)
+		state->cpumask_idx = save_cpumask_idx;
 
 	return 0;
 }
@@ -519,8 +657,13 @@ int lpmd_enter_next_state(void)
 		get_config_state_interval(config, idx);
 
 	/* No action needed, keep previous idx and interval */
-	if (idx == STATE_NONE)
+	if (idx == STATE_NONE) {
+		/* Even if no state transition, check if override needs updating
+		 * (e.g., processes attached/detached while in same state) */
+		if (current_idx >= 0 && current_idx < MAX_STATES)
+			update_override_state_if_needed(config, current_idx);
 		goto end;
+	}
 
 	get_state_interval(config, idx);
 
@@ -528,6 +671,9 @@ int lpmd_enter_next_state(void)
 		enter_state(config, idx);
 		current_idx = idx;
 		dump_state(&config->config_states[idx], "Enter", 0);
+	} else {
+		/* Staying in same state, but check if override needs updating */
+		update_override_state_if_needed(config, current_idx);
 	}
 
 end:
@@ -813,6 +959,166 @@ static int build_state_cpumask_cputypes(struct lpmd_config_state_t *state, unsig
 	return 0;
 }
 
+static const char *get_global_cpu_override_class_cores(const struct lpmd_config_t *config,
+						 const char **class_name_out)
+{
+	const struct {
+		const char *cfg_name;
+		const char *cores;
+		int enabled;
+	} flags[] = {
+		{ "Realtime", config->pc_class_default_realtime,
+		  config->pc_class_override_global_cpu_realtime },
+		{ "UserInteractive", config->pc_class_default_user_interactive,
+		  config->pc_class_override_global_cpu_user_interactive },
+		{ "UserInitiated", config->pc_class_default_user_initiated,
+		  config->pc_class_override_global_cpu_user_initiated },
+		{ "Unclassified", config->pc_class_default_unclassified,
+		  config->pc_class_override_global_cpu_unclassified },
+		{ "Utility", config->pc_class_default_utility,
+		  config->pc_class_override_global_cpu_utility },
+		{ "Background", config->pc_class_default_background,
+		  config->pc_class_override_global_cpu_background },
+		{ "GameProfileCPU", config->pc_class_default_gp_cpu,
+		  config->pc_class_override_global_cpu_gp_cpu },
+		{ "GameProfileGPU", config->pc_class_default_gp_gpu,
+		  config->pc_class_override_global_cpu_gp_gpu },
+		{ "GameProfileMixed", config->pc_class_default_gp_hybrid,
+		  config->pc_class_override_global_cpu_gp_hybrid },
+		{ "CustomProfile0", config->pc_class_default_custom_profile_0,
+		  config->pc_class_override_global_cpu_custom_profile_0 },
+		{ "CustomProfile1", config->pc_class_default_custom_profile_1,
+		  config->pc_class_override_global_cpu_custom_profile_1 },
+		{ "CustomProfile2", config->pc_class_default_custom_profile_2,
+		  config->pc_class_override_global_cpu_custom_profile_2 },
+	};
+	const char *selected_cores = NULL;
+	const char *selected_name = NULL;
+	size_t i;
+
+	if (!config)
+		return NULL;
+
+	for (i = 0; i < sizeof(flags) / sizeof(flags[0]); i++) {
+		if (!flags[i].enabled)
+			continue;
+
+		if (!selected_cores) {
+			selected_cores = flags[i].cores;
+			selected_name = flags[i].cfg_name;
+			continue;
+		}
+
+		lpmd_log_warn(
+			"global cpu override: multiple OverrideGlobalCPUSettings tags enabled (%s, %s); using %s\n",
+			selected_name, flags[i].cfg_name, selected_name);
+	}
+
+	if (class_name_out)
+		*class_name_out = selected_name;
+
+	return selected_cores;
+}
+
+static int build_global_override_cpumask_idx(struct lpmd_config_t *config,
+					     const char *cores_spec,
+					     enum cpumask_idx *idx_out)
+{
+	char literal_cpus[MAX_STR_LENGTH];
+	char token[MAX_STR_LENGTH];
+	const char *p;
+	int use_p = 0, use_e = 0, use_l = 0;
+	enum cpumask_idx idx;
+	int ret;
+
+	if (!config || !cores_spec || !cores_spec[0] || !idx_out)
+		return -1;
+
+	idx = cpumask_alloc();
+	if (idx == CPUMASK_NONE)
+		return -1;
+
+	literal_cpus[0] = '\0';
+	p = cores_spec;
+	while (*p) {
+		size_t tlen;
+
+		while (*p && (isspace((unsigned char)*p) || *p == ',' || *p == '|'))
+			p++;
+		if (!*p)
+			break;
+
+		tlen = 0;
+		while (p[tlen] && !isspace((unsigned char)p[tlen]) && p[tlen] != ',' &&
+		       p[tlen] != '|') {
+			if (tlen + 1 < sizeof(token))
+				token[tlen] = p[tlen];
+			tlen++;
+		}
+
+		if (tlen >= sizeof(token))
+			tlen = sizeof(token) - 1;
+		token[tlen] = '\0';
+
+		if (!strcasecmp(token, "ActivePcores")) {
+			use_p = 1;
+		} else if (!strcasecmp(token, "ActiveEcores")) {
+			use_e = 1;
+		} else if (!strcasecmp(token, "ActiveLcores")) {
+			use_l = 1;
+		} else {
+			size_t cur = strlen(literal_cpus);
+			if (cur && cur + 1 < sizeof(literal_cpus))
+				literal_cpus[cur++] = ',';
+			if (cur + tlen < sizeof(literal_cpus)) {
+				memcpy(literal_cpus + cur, token, tlen);
+				literal_cpus[cur + tlen] = '\0';
+			}
+		}
+
+		p += tlen;
+	}
+
+	if (use_p) {
+		ret = cpumask_init_cpus_type("all", idx,
+					    config->core_type_masks, P_CORE);
+		if (ret < 0)
+			goto err;
+	}
+
+	if (use_e) {
+		ret = cpumask_init_cpus_type("all", idx,
+					    config->core_type_masks, E_CORE);
+		if (ret < 0)
+			goto err;
+	}
+
+	if (use_l) {
+		ret = cpumask_init_cpus_type("all", idx,
+					    config->core_type_masks, L_CORE);
+		if (ret < 0)
+			goto err;
+	}
+
+	if (literal_cpus[0]) {
+		ret = cpumask_init_cpus(literal_cpus, idx);
+		if (ret < 0)
+			goto err;
+	}
+
+	if (!cpumask_has_cpu(idx))
+		goto err;
+
+	*idx_out = idx;
+	return 0;
+
+err:
+	cpumask_free(idx);
+	return -1;
+}
+
+
+
 #define DEFAULT_POLL_RATE_MS	1000
 
 int lpmd_build_config_states(struct lpmd_config_t *lpmd_config)
@@ -865,6 +1171,60 @@ int lpmd_build_config_states(struct lpmd_config_t *lpmd_config)
 			state->enter_gfx_load_thres *= 100;
 
 		state->valid = 1;
+	}
+
+/* Scan all classes for OverrideGlobalCPUSettings and store info for runtime. */
+	{
+		const struct {
+			const char *cfg_name;
+			const char *class_name;
+			int enabled;
+			const char *cores;
+		} classes[] = {
+			{ "Realtime", "realtime", lpmd_config->pc_class_override_global_cpu_realtime, lpmd_config->pc_class_default_realtime },
+			{ "UserInteractive", "user_interactive", lpmd_config->pc_class_override_global_cpu_user_interactive, lpmd_config->pc_class_default_user_interactive },
+			{ "UserInitiated", "user_initiated", lpmd_config->pc_class_override_global_cpu_user_initiated, lpmd_config->pc_class_default_user_initiated },
+			{ "Unclassified", "unclassified", lpmd_config->pc_class_override_global_cpu_unclassified, lpmd_config->pc_class_default_unclassified },
+			{ "Utility", "utility", lpmd_config->pc_class_override_global_cpu_utility, lpmd_config->pc_class_default_utility },
+			{ "Background", "background", lpmd_config->pc_class_override_global_cpu_background, lpmd_config->pc_class_default_background },
+			{ "GameProfileCPU", "game_profile_cpu", lpmd_config->pc_class_override_global_cpu_gp_cpu, lpmd_config->pc_class_default_gp_cpu },
+			{ "GameProfileGPU", "game_profile_gpu", lpmd_config->pc_class_override_global_cpu_gp_gpu, lpmd_config->pc_class_default_gp_gpu },
+			{ "GameProfileMixed", "game_profile_mixed", lpmd_config->pc_class_override_global_cpu_gp_hybrid, lpmd_config->pc_class_default_gp_hybrid },
+			{ "CustomProfile0", "custom_profile_0", lpmd_config->pc_class_override_global_cpu_custom_profile_0, lpmd_config->pc_class_default_custom_profile_0 },
+			{ "CustomProfile1", "custom_profile_1", lpmd_config->pc_class_override_global_cpu_custom_profile_1, lpmd_config->pc_class_default_custom_profile_1 },
+			{ "CustomProfile2", "custom_profile_2", lpmd_config->pc_class_override_global_cpu_custom_profile_2, lpmd_config->pc_class_default_custom_profile_2 },
+		};
+		int i;
+		lpmd_config->override_classes_count = 0;
+
+		for (i = 0; i < sizeof(classes) / sizeof(classes[0]); i++) {
+			if (!classes[i].enabled || !classes[i].cores || !classes[i].cores[0])
+				continue;
+
+			enum cpumask_idx idx = cpumask_alloc();
+			if (idx == CPUMASK_NONE)
+				continue;
+
+			if (build_global_override_cpumask_idx(lpmd_config, classes[i].cores, &idx) < 0) {
+				cpumask_free(idx);
+				continue;
+			}
+
+			int cpu_count = cpumask_nr_cpus(idx);
+			if (cpu_count <= 0) {
+				cpumask_free(idx);
+				continue;
+			}
+
+			lpmd_config->override_classes[lpmd_config->override_classes_count].class_name = classes[i].class_name;
+			lpmd_config->override_classes[lpmd_config->override_classes_count].cpumask_idx = idx;
+			lpmd_config->override_classes[lpmd_config->override_classes_count].cpu_count = cpu_count;
+			lpmd_config->override_classes_count++;
+
+			lpmd_log_info(
+				"global cpu override: stored class=%s cpus=%d, will apply if processes attached",
+				classes[i].class_name, cpu_count);
+		}
 	}
 
 	config_states_update_config(lpmd_config);

@@ -179,6 +179,15 @@ static void save_string_or_zero(char *tmp_value, char *dst_string, int dest_size
 		copy_user_string(tmp_value, dst_string, dest_size);
 }
 
+static int is_xml_true_value(const char *value)
+{
+	if (!value)
+		return 0;
+
+	return !strcasecmp(value, "1") || !strcasecmp(value, "true") ||
+	       !strcasecmp(value, "yes") || !strcasecmp(value, "on");
+}
+
 static void lpmd_parse_state(xmlDoc *doc, xmlNode *a_node, struct lpmd_config_t *config, int idx)
 {
 	struct lpmd_config_state_t *state = &config->config_states[idx];
@@ -372,67 +381,80 @@ static void lpmd_parse_class_defaults(xmlDoc *doc, xmlNode *a_node, struct lpmd_
 		const char *tag;
 		char       *dst;
 		size_t      cap;
+		int        *override_global_cpu;
 		int        *uclamp_min;
 		int        *uclamp_max;
 		struct lpmd_class_tuning_override_t *tuning;
 	} map[] = {
 		{ "Realtime",          lpmd_config->pc_class_default_realtime,
 		  sizeof(lpmd_config->pc_class_default_realtime),
+		  &lpmd_config->pc_class_override_global_cpu_realtime,
 		  &lpmd_config->pc_class_uclamp_min_realtime,
 		  &lpmd_config->pc_class_uclamp_max_realtime,
 		  &lpmd_config->pc_class_tuning_realtime },
 		{ "UserInteractive",   lpmd_config->pc_class_default_user_interactive,
 		  sizeof(lpmd_config->pc_class_default_user_interactive),
+		  &lpmd_config->pc_class_override_global_cpu_user_interactive,
 		  &lpmd_config->pc_class_uclamp_min_user_interactive,
 		  &lpmd_config->pc_class_uclamp_max_user_interactive,
 		  &lpmd_config->pc_class_tuning_user_interactive },
 		{ "UserInitiated",     lpmd_config->pc_class_default_user_initiated,
 		  sizeof(lpmd_config->pc_class_default_user_initiated),
+		  &lpmd_config->pc_class_override_global_cpu_user_initiated,
 		  &lpmd_config->pc_class_uclamp_min_user_initiated,
 		  &lpmd_config->pc_class_uclamp_max_user_initiated,
 		  &lpmd_config->pc_class_tuning_user_initiated },
 		{ "Unclassified",     lpmd_config->pc_class_default_unclassified,
 		  sizeof(lpmd_config->pc_class_default_unclassified),
+		  &lpmd_config->pc_class_override_global_cpu_unclassified,
 		  &lpmd_config->pc_class_uclamp_min_unclassified,
 		  &lpmd_config->pc_class_uclamp_max_unclassified,
 		  &lpmd_config->pc_class_tuning_unclassified },
 		{ "Utility",           lpmd_config->pc_class_default_utility,
 		  sizeof(lpmd_config->pc_class_default_utility),
+		  &lpmd_config->pc_class_override_global_cpu_utility,
 		  &lpmd_config->pc_class_uclamp_min_utility,
 		  &lpmd_config->pc_class_uclamp_max_utility,
 		  &lpmd_config->pc_class_tuning_utility },
 		{ "Background",        lpmd_config->pc_class_default_background,
 		  sizeof(lpmd_config->pc_class_default_background),
+		  &lpmd_config->pc_class_override_global_cpu_background,
 		  &lpmd_config->pc_class_uclamp_min_background,
 		  &lpmd_config->pc_class_uclamp_max_background,
 		  &lpmd_config->pc_class_tuning_background },
 		{ "GameProfileCPU",    lpmd_config->pc_class_default_gp_cpu,
 		  sizeof(lpmd_config->pc_class_default_gp_cpu),
+		  &lpmd_config->pc_class_override_global_cpu_gp_cpu,
 		  &lpmd_config->pc_class_uclamp_min_gp_cpu,
 		  &lpmd_config->pc_class_uclamp_max_gp_cpu,
 		  &lpmd_config->pc_class_tuning_gp_cpu },
 		{ "GameProfileGPU",    lpmd_config->pc_class_default_gp_gpu,
 		  sizeof(lpmd_config->pc_class_default_gp_gpu),
+		  &lpmd_config->pc_class_override_global_cpu_gp_gpu,
 		  &lpmd_config->pc_class_uclamp_min_gp_gpu,
 		  &lpmd_config->pc_class_uclamp_max_gp_gpu,
 		  &lpmd_config->pc_class_tuning_gp_gpu },
 		{ "GameProfileMixed", lpmd_config->pc_class_default_gp_hybrid,
 		  sizeof(lpmd_config->pc_class_default_gp_hybrid),
+		  &lpmd_config->pc_class_override_global_cpu_gp_hybrid,
 		  &lpmd_config->pc_class_uclamp_min_gp_hybrid,
 		  &lpmd_config->pc_class_uclamp_max_gp_hybrid,
 		  &lpmd_config->pc_class_tuning_gp_hybrid },
 		{ "CustomProfile0",   lpmd_config->pc_class_default_custom_profile_0,
 		  sizeof(lpmd_config->pc_class_default_custom_profile_0),
+		  &lpmd_config->pc_class_override_global_cpu_custom_profile_0,
 		  &lpmd_config->pc_class_uclamp_min_custom_profile_0,
 		  &lpmd_config->pc_class_uclamp_max_custom_profile_0,
 		  &lpmd_config->pc_class_tuning_custom_profile_0 },
 		{ "CustomProfile1",   lpmd_config->pc_class_default_custom_profile_1,
 		  sizeof(lpmd_config->pc_class_default_custom_profile_1),
+		  &lpmd_config->pc_class_override_global_cpu_custom_profile_1,
 		  &lpmd_config->pc_class_uclamp_min_custom_profile_1,
 		  &lpmd_config->pc_class_uclamp_max_custom_profile_1,
 		  &lpmd_config->pc_class_tuning_custom_profile_1 },
 		{ "CustomProfile2",   lpmd_config->pc_class_default_custom_profile_2,
 		  sizeof(lpmd_config->pc_class_default_custom_profile_2),
+		  &lpmd_config->pc_class_override_global_cpu_custom_profile_2,
 		  &lpmd_config->pc_class_uclamp_min_custom_profile_2,
 		  &lpmd_config->pc_class_uclamp_max_custom_profile_2,
 		  &lpmd_config->pc_class_tuning_custom_profile_2 },
@@ -506,6 +528,25 @@ static void lpmd_parse_class_defaults(xmlDoc *doc, xmlNode *a_node, struct lpmd_
 					lpmd_log_warn("Invalid %s for class %s\n",
 						      "UClampMax",
 						      map[class_idx].tag);
+				xmlFree(val);
+				continue;
+			}
+
+			if (!strcmp((const char *)child_node->name,
+				    "OverrideGlobalCPUSettings")) {
+				val = (char *)xmlNodeListGetString(doc,
+						   child_node->xmlChildrenNode,
+						   1);
+				if (!val)
+					continue;
+
+				*map[class_idx].override_global_cpu =
+					is_xml_true_value(val) ? 1 : 0;
+				lpmd_log_info(
+					"ClassDefaults: %s OverrideGlobalCPUSettings=%d (raw='%s')\n",
+					map[class_idx].tag,
+					*map[class_idx].override_global_cpu,
+					val);
 				xmlFree(val);
 				continue;
 			}
@@ -667,6 +708,23 @@ static void lpmd_init_config(struct lpmd_config_t *config)
 	config->pc_class_uclamp_max_custom_profile_1 = LPMD_UCLAMP_INHERIT;
 	config->pc_class_uclamp_min_custom_profile_2 = LPMD_UCLAMP_INHERIT;
 	config->pc_class_uclamp_max_custom_profile_2 = LPMD_UCLAMP_INHERIT;
+	config->pc_class_override_global_cpu_realtime = 0;
+	config->pc_class_override_global_cpu_user_interactive = 0;
+	config->pc_class_override_global_cpu_user_initiated = 0;
+	config->pc_class_override_global_cpu_unclassified = 0;
+	config->pc_class_override_global_cpu_utility = 0;
+	config->pc_class_override_global_cpu_background = 0;
+	config->pc_class_override_global_cpu_gp_cpu = 0;
+	config->pc_class_override_global_cpu_gp_gpu = 0;
+	config->pc_class_override_global_cpu_gp_hybrid = 0;
+	config->pc_class_override_global_cpu_custom_profile_0 = 0;
+	config->pc_class_override_global_cpu_custom_profile_1 = 0;
+	config->pc_class_override_global_cpu_custom_profile_2 = 0;
+	config->override_classes_count = 0;
+	config->current_override_idx = CPUMASK_NONE;
+	config->current_override_class = NULL;
+	config->current_override_cpu_count = 0;
+	config->saved_state_cpumask_idx = CPUMASK_NONE;
 	config->balance_slider_def_ac = -1;
 	config->balance_slider_def_dc = -1;
 	config->slider_offset_def_ac = -1;
