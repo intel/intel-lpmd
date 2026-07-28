@@ -946,18 +946,20 @@ static pid_t pid_to_tgid(pid_t pid)
 	char buf[4096];
 	FILE *f;
 	char *line, *save;
+	size_t nread;
 	pid_t tgid = pid;
 
 	snprintf(path, sizeof(path), "/proc/%d/status", (int)pid);
 	f = fopen(path, "r");
 	if (!f)
 		return pid;
-	if (fread(buf, 1, sizeof(buf) - 1, f) <= 0) {
+	nread = fread(buf, 1, sizeof(buf) - 1, f);
+	if (nread == 0) {
 		fclose(f);
 		return pid;
 	}
 	fclose(f);
-	buf[sizeof(buf) - 1] = '\0';
+	buf[nread] = '\0';
 
 	for (line = strtok_r(buf, "\n", &save); line;
 	     line = strtok_r(NULL, "\n", &save)) {
@@ -3720,6 +3722,9 @@ int process_cpuset_release_all(process_cpuset_t *ctx)
 			size_t setsize;
 			if (ncpus <= 0)
 				ncpus = 1;
+			/* Guard CPU_ALLOC/CPU_ALLOC_SIZE math against bogus sysconf values. */
+			if (ncpus > MAX_CPUS)
+				ncpus = MAX_CPUS;
 			all = CPU_ALLOC(ncpus);
 			if (all) {
 				setsize = CPU_ALLOC_SIZE(ncpus);

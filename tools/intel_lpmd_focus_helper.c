@@ -30,6 +30,7 @@
 #define _GNU_SOURCE
 #include <errno.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
@@ -51,9 +52,10 @@ static pid_t g_last_pid = -1;
 
 static void log_msg(const char *fmt, ...)
 {
-	va_list ap;
-	if (!opt_verbose)
+	if (!opt_verbose || !fmt)
 		return;
+	va_list ap;
+	memset(&ap, 0, sizeof(ap));
 	va_start(ap, fmt);
 	vfprintf(stderr, fmt, ap);
 	va_end(ap);

@@ -962,6 +962,9 @@ static int build_state_cpumask_cputypes(struct lpmd_config_state_t *state, unsig
 static const char *get_global_cpu_override_class_cores(const struct lpmd_config_t *config,
 						 const char **class_name_out)
 {
+	if (!config)
+		return NULL;
+
 	const struct {
 		const char *cfg_name;
 		const char *cores;
@@ -995,9 +998,6 @@ static const char *get_global_cpu_override_class_cores(const struct lpmd_config_
 	const char *selected_cores = NULL;
 	const char *selected_name = NULL;
 	size_t i;
-
-	if (!config)
-		return NULL;
 
 	for (i = 0; i < sizeof(flags) / sizeof(flags[0]); i++) {
 		if (!flags[i].enabled)
