@@ -100,6 +100,12 @@ int lpmd_init_config_state(struct lpmd_config_state_t *state)
 	state->min_perf_pct_dc = SETTING_IGNORE;
 	state->max_perf_pct_ac = SETTING_IGNORE;
 	state->max_perf_pct_dc = SETTING_IGNORE;
+	state->min_perf_pct_scope_ac = LPMD_PERF_SCOPE_GLOBAL;
+	state->min_perf_pct_scope_dc = LPMD_PERF_SCOPE_GLOBAL;
+	state->max_perf_pct_scope_ac = LPMD_PERF_SCOPE_GLOBAL;
+	state->max_perf_pct_scope_dc = LPMD_PERF_SCOPE_GLOBAL;
+	state->max_perf_pct_is_scoped_ac = 0;
+	state->max_perf_pct_is_scoped_dc = 0;
 	state->active_cpus[0] = '\0';
 	state->cpumask_idx = CPUMASK_NONE;
 

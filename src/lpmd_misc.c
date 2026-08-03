@@ -531,14 +531,153 @@ int epp_epb_init(void)
 /* intel_pstate min perf management */
 #define PATH_INTEL_PSTATE_MIN_PERF_PCT "/sys/devices/system/cpu/intel_pstate/min_perf_pct"
 #define PATH_INTEL_PSTATE_MAX_PERF_PCT "/sys/devices/system/cpu/intel_pstate/max_perf_pct"
+#define PATH_CPUFREQ_SCALING_MIN_FREQ_FMT "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_min_freq"
+#define PATH_CPUFREQ_SCALING_MAX_FREQ_FMT "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_max_freq"
+#define PATH_CPUFREQ_CPUINFO_MAX_FREQ_FMT "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_max_freq"
 
 static int saved_min_perf_pct = SETTING_IGNORE;
 static int saved_max_perf_pct = SETTING_IGNORE;
+
+struct perf_cpufreq_info {
+	int valid;
+	int saved_scaling_min;
+	int saved_scaling_max;
+	int cpuinfo_max;
+};
+
+static struct perf_cpufreq_info *saved_perf_cpufreq;
+static int perf_cpufreq_ready;
+
 static int process_min_perf_pct_impl(struct lpmd_config_state_t *state,
 				     int honor_class_lock);
+static int process_max_perf_pct_impl(struct lpmd_config_state_t *state,
+				     unsigned int core_scope_mask);
+
+static int perf_scope_cpu_match(const struct lpmd_config_t *config,
+				int cpu, unsigned int scope_mask)
+{
+	if (!(scope_mask & LPMD_PERF_SCOPE_ALL))
+		return 0;
+
+	if (!config || !config->core_type_masks[P_CORE] ||
+	    !config->core_type_masks[E_CORE] ||
+	    !config->core_type_masks[L_CORE])
+		return 1;
+
+	if ((scope_mask & LPMD_PERF_SCOPE_P) &&
+	    (config->core_type_masks[P_CORE][cpu / 8] & (1U << (cpu % 8))))
+		return 1;
+	if ((scope_mask & LPMD_PERF_SCOPE_E) &&
+	    (config->core_type_masks[E_CORE][cpu / 8] & (1U << (cpu % 8))))
+		return 1;
+	if ((scope_mask & LPMD_PERF_SCOPE_L) &&
+	    (config->core_type_masks[L_CORE][cpu / 8] & (1U << (cpu % 8))))
+		return 1;
+
+	return 0;
+}
+
+static void init_perf_cpufreq_cache(void)
+{
+	int max_cpus;
+	char path[MAX_STR_LENGTH];
+	int c;
+
+	if (saved_perf_cpufreq)
+		return;
+
+	max_cpus = get_max_cpus();
+	if (max_cpus <= 0)
+		return;
+
+	saved_perf_cpufreq = calloc(max_cpus, sizeof(*saved_perf_cpufreq));
+	if (!saved_perf_cpufreq)
+		return;
+
+	for (c = 0; c < max_cpus; c++) {
+		int minf, maxf, maxinfo;
+
+		if (!is_cpu_online(c))
+			continue;
+
+		snprintf(path, sizeof(path), PATH_CPUFREQ_SCALING_MIN_FREQ_FMT, c);
+		if (lpmd_read_int(path, &minf, -1))
+			continue;
+
+		snprintf(path, sizeof(path), PATH_CPUFREQ_SCALING_MAX_FREQ_FMT, c);
+		if (lpmd_read_int(path, &maxf, -1))
+			continue;
+
+		snprintf(path, sizeof(path), PATH_CPUFREQ_CPUINFO_MAX_FREQ_FMT, c);
+		if (lpmd_read_int(path, &maxinfo, -1))
+			continue;
+
+		saved_perf_cpufreq[c].saved_scaling_min = minf;
+		saved_perf_cpufreq[c].saved_scaling_max = maxf;
+		saved_perf_cpufreq[c].cpuinfo_max = maxinfo;
+		saved_perf_cpufreq[c].valid = 1;
+		perf_cpufreq_ready = 1;
+	}
+}
+
+static int apply_perf_pct_scoped_cpufreq(int is_min, int val, int restore,
+					 unsigned int scope_mask)
+{
+	struct lpmd_config_t *config = get_lpmd_config();
+	char path[MAX_STR_LENGTH];
+	int max_cpus = get_max_cpus();
+	int attempted = 0;
+	int applied = 0;
+	int c;
+
+	if (!(scope_mask & LPMD_PERF_SCOPE_ALL))
+		return -1;
+
+	init_perf_cpufreq_cache();
+	if (!perf_cpufreq_ready || !saved_perf_cpufreq)
+		return -1;
+
+	for (c = 0; c < max_cpus; c++) {
+		long long target;
+		int write_val;
+
+		if (!is_cpu_online(c) || !saved_perf_cpufreq[c].valid)
+			continue;
+		if (!perf_scope_cpu_match(config, c, scope_mask))
+			continue;
+
+		if (restore)
+			write_val = is_min ? saved_perf_cpufreq[c].saved_scaling_min
+					   : saved_perf_cpufreq[c].saved_scaling_max;
+		else {
+			target = ((long long)saved_perf_cpufreq[c].cpuinfo_max * val) / 100;
+			if (target <= 0)
+				target = 1;
+			write_val = (int)target;
+		}
+
+		if (write_val <= 0)
+			continue;
+
+		attempted++;
+		snprintf(path, sizeof(path),
+			 is_min ? PATH_CPUFREQ_SCALING_MIN_FREQ_FMT :
+				  PATH_CPUFREQ_SCALING_MAX_FREQ_FMT,
+			 c);
+		if (!lpmd_write_int(path, write_val, LPMD_LOG_DEBUG))
+			applied++;
+	}
+
+	if (!attempted)
+		return 0;
+
+	return applied > 0 ? 0 : -1;
+}
 
 int min_perf_pct_init(void)
 {
+	init_perf_cpufreq_cache();
+
 	if (lpmd_read_int(PATH_INTEL_PSTATE_MIN_PERF_PCT, &saved_min_perf_pct, -1)) {
 		saved_min_perf_pct = SETTING_IGNORE;
 		lpmd_log_debug("intel_pstate min_perf_pct not available\n");
@@ -554,6 +693,20 @@ int process_min_perf_pct(struct lpmd_config_state_t *state)
 	return process_min_perf_pct_impl(state, 1);
 }
 
+int process_min_perf_pct_scoped(struct lpmd_config_state_t *state,
+				 unsigned int core_scope_mask)
+{
+	if (!state)
+		return 0;
+
+	if (is_on_battery())
+		state->min_perf_pct_scope_dc = core_scope_mask;
+	else
+		state->min_perf_pct_scope_ac = core_scope_mask;
+
+	return process_min_perf_pct_impl(state, 1);
+}
+
 int process_min_perf_pct_override(struct lpmd_config_state_t *state)
 {
 	return process_min_perf_pct_impl(state, 0);
@@ -564,6 +717,8 @@ static int process_min_perf_pct_impl(struct lpmd_config_state_t *state,
 {
 	int val;
 	int configured_val;
+	unsigned int configured_scope;
+	int restore;
 	const char *owner;
 
 	if (!state)
@@ -577,20 +732,37 @@ static int process_min_perf_pct_impl(struct lpmd_config_state_t *state,
 	}
 
 	if (is_on_battery())
-		configured_val = state->min_perf_pct_dc;
+		configured_val = state->min_perf_pct_dc,
+		configured_scope = state->min_perf_pct_scope_dc;
 	else
-		configured_val = state->min_perf_pct_ac;
+		configured_val = state->min_perf_pct_ac,
+		configured_scope = state->min_perf_pct_scope_ac;
 
 	if (configured_val == SETTING_IGNORE)
 		return 0;
 
 	if (configured_val == SETTING_RESTORE) {
+		restore = 1;
 		if (saved_min_perf_pct == SETTING_IGNORE)
-			return 0;
-		val = saved_min_perf_pct;
+			val = SETTING_IGNORE;
+		else
+			val = saved_min_perf_pct;
 	} else {
+		restore = 0;
 		val = configured_val;
 	}
+
+	if (configured_scope != LPMD_PERF_SCOPE_GLOBAL) {
+		if (apply_perf_pct_scoped_cpufreq(1, val, restore,
+						 configured_scope) == 0)
+			return 0;
+
+		if (restore && saved_min_perf_pct == SETTING_IGNORE)
+			return 0;
+	}
+
+	if (restore && saved_min_perf_pct == SETTING_IGNORE)
+		return 0;
 
 	if (val < 0 || val > 100) {
 		lpmd_log_error("Invalid min_perf_pct value %d\n", val);
@@ -602,6 +774,8 @@ static int process_min_perf_pct_impl(struct lpmd_config_state_t *state,
 
 int max_perf_pct_init(void)
 {
+	init_perf_cpufreq_cache();
+
 	if (lpmd_read_int(PATH_INTEL_PSTATE_MAX_PERF_PCT, &saved_max_perf_pct, -1)) {
 		saved_max_perf_pct = SETTING_IGNORE;
 		lpmd_log_debug("intel_pstate max_perf_pct not available\n");
@@ -614,27 +788,66 @@ int max_perf_pct_init(void)
 
 int process_max_perf_pct(struct lpmd_config_state_t *state)
 {
+	return process_max_perf_pct_impl(state, LPMD_PERF_SCOPE_GLOBAL);
+}
+
+int process_max_perf_pct_scoped(struct lpmd_config_state_t *state,
+				 unsigned int core_scope_mask)
+{
+	return process_max_perf_pct_impl(state, core_scope_mask);
+}
+
+static int process_max_perf_pct_impl(struct lpmd_config_state_t *state,
+				     unsigned int core_scope_mask)
+{
 	int val;
 	int configured_val;
+	unsigned int configured_scope;
+	int configured_is_scoped;
+	int restore;
 
 	if (!state)
 		return 0;
 
-	if (is_on_battery())
+	if (is_on_battery()) {
 		configured_val = state->max_perf_pct_dc;
-	else
+		configured_scope = state->max_perf_pct_scope_dc;
+		configured_is_scoped = state->max_perf_pct_is_scoped_dc;
+	} else {
 		configured_val = state->max_perf_pct_ac;
+		configured_scope = state->max_perf_pct_scope_ac;
+		configured_is_scoped = state->max_perf_pct_is_scoped_ac;
+	}
 
 	if (configured_val == SETTING_IGNORE)
 		return 0;
 
+	if (core_scope_mask != LPMD_PERF_SCOPE_GLOBAL)
+		configured_scope = core_scope_mask,
+		configured_is_scoped = 1;
+
 	if (configured_val == SETTING_RESTORE) {
+		restore = 1;
 		if (saved_max_perf_pct == SETTING_IGNORE)
-			return 0;
-		val = saved_max_perf_pct;
+			val = SETTING_IGNORE;
+		else
+			val = saved_max_perf_pct;
 	} else {
+		restore = 0;
 		val = configured_val;
 	}
+
+	if (configured_is_scoped && configured_scope != LPMD_PERF_SCOPE_GLOBAL) {
+		if (apply_perf_pct_scoped_cpufreq(0, val, restore,
+						 configured_scope) == 0)
+			return 0;
+
+		if (restore && saved_max_perf_pct == SETTING_IGNORE)
+			return 0;
+	}
+
+	if (restore && saved_max_perf_pct == SETTING_IGNORE)
+		return 0;
 
 	if (val < 0 || val > 100) {
 		lpmd_log_error("Invalid max_perf_pct value %d\n", val);

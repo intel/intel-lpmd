@@ -200,6 +200,12 @@ enum cpumask_idx {
 	CPUMASK_NONE = CPUMASK_MAX,
 };
 
+#define LPMD_PERF_SCOPE_GLOBAL	0U
+#define LPMD_PERF_SCOPE_P	(1U << P_CORE)
+#define LPMD_PERF_SCOPE_E	(1U << E_CORE)
+#define LPMD_PERF_SCOPE_L	(1U << L_CORE)
+#define LPMD_PERF_SCOPE_ALL	(LPMD_PERF_SCOPE_P | LPMD_PERF_SCOPE_E | LPMD_PERF_SCOPE_L)
+
 struct lpmd_config_state_t {
 	int id;
 	int valid;
@@ -223,6 +229,12 @@ struct lpmd_config_state_t {
 	int min_perf_pct_dc;
 	int max_perf_pct_ac;
 	int max_perf_pct_dc;
+	unsigned int min_perf_pct_scope_ac;
+	unsigned int min_perf_pct_scope_dc;
+	unsigned int max_perf_pct_scope_ac;
+	unsigned int max_perf_pct_scope_dc;
+	int max_perf_pct_is_scoped_ac;
+	int max_perf_pct_is_scoped_dc;
 	char active_cpus[MAX_STR_LENGTH];
 	// If active CPUs are specified then
 	// the below counts don't matter
@@ -263,6 +275,12 @@ struct lpmd_class_tuning_override_t {
 	int min_perf_pct_dc;
 	int max_perf_pct_ac;
 	int max_perf_pct_dc;
+	unsigned int min_perf_pct_scope_ac;
+	unsigned int min_perf_pct_scope_dc;
+	unsigned int max_perf_pct_scope_ac;
+	unsigned int max_perf_pct_scope_dc;
+	int max_perf_pct_is_scoped_ac;
+	int max_perf_pct_is_scoped_dc;
 	int balance_slider_ac;
 	int balance_slider_dc;
 	int slider_offset_ac;
@@ -552,8 +570,12 @@ int process_epp_epb(struct lpmd_config_state_t *state);
 int min_perf_pct_init(void);
 int process_min_perf_pct(struct lpmd_config_state_t *state);
 int process_min_perf_pct_override(struct lpmd_config_state_t *state);
+int process_min_perf_pct_scoped(struct lpmd_config_state_t *state,
+				 unsigned int core_scope_mask);
 int max_perf_pct_init(void);
 int process_max_perf_pct(struct lpmd_config_state_t *state);
+int process_max_perf_pct_scoped(struct lpmd_config_state_t *state,
+				 unsigned int core_scope_mask);
 
 void process_balance_slider_default_update(struct lpmd_config_t *config);
 void process_slider_offset_default_update(struct lpmd_config_t *config);

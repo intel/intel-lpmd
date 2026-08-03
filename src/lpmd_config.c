@@ -2,6 +2,7 @@
 /* Copyright (C) 2026 Intel Corporation */
 
 #include "lpmd.h"
+#include <ctype.h>
 #include <libxml/parser.h>
 #include <libxml/tree.h>
 
@@ -82,18 +83,127 @@ static int read_slider_and_validate(int *dest_ptr, const char *src_value,
 	return LPMD_SUCCESS;
 }
 
-static int read_min_perf_pct_and_validate(int *dest_ptr, const char *src_value,
-					  int state_id)
+static int parse_perf_scope_mask(const char *scope_str, unsigned int *scope_mask,
+				 int state_id, const char *param_name)
 {
+	char token[64];
+	const char *p;
+	unsigned int mask = 0;
+
+	if (!scope_str || !scope_mask)
+		return LPMD_ERROR;
+
+	p = scope_str;
+	while (*p) {
+		size_t len = 0;
+
+		while (*p && (isspace((unsigned char)*p) || *p == ',' || *p == '|'))
+			p++;
+		if (!*p)
+			break;
+
+		while (p[len] && p[len] != ',' && p[len] != '|' &&
+		       !isspace((unsigned char)p[len])) {
+			if (len + 1 < sizeof(token))
+				token[len] = p[len];
+			len++;
+		}
+
+		if (len >= sizeof(token))
+			len = sizeof(token) - 1;
+		token[len] = '\0';
+
+		if (!strcasecmp(token, "P-cores") || !strcasecmp(token, "P-core") ||
+		    !strcasecmp(token, "Pcores") || !strcasecmp(token, "Pcore") ||
+		    !strcasecmp(token, "P") || !strcasecmp(token, "ActivePcores"))
+			mask |= LPMD_PERF_SCOPE_P;
+		else if (!strcasecmp(token, "E-cores") || !strcasecmp(token, "E-core") ||
+			 !strcasecmp(token, "Ecores") || !strcasecmp(token, "Ecore") ||
+			 !strcasecmp(token, "E") || !strcasecmp(token, "ActiveEcores"))
+			mask |= LPMD_PERF_SCOPE_E;
+		else if (!strcasecmp(token, "L-cores") || !strcasecmp(token, "L-core") ||
+			 !strcasecmp(token, "LP-E-cores") || !strcasecmp(token, "LP-E-core") ||
+			 !strcasecmp(token, "Lcores") || !strcasecmp(token, "Lcore") ||
+			 !strcasecmp(token, "L") || !strcasecmp(token, "ActiveLcores"))
+			mask |= LPMD_PERF_SCOPE_L;
+		else {
+			lpmd_log_error("Invalid %s core scope token '%s' in state ID %d\n",
+				       param_name ? param_name : "PerfPct", token, state_id);
+			return LPMD_ERROR;
+		}
+
+		p += len;
+	}
+
+	if (!(mask & LPMD_PERF_SCOPE_ALL)) {
+		lpmd_log_error("Invalid %s core scope '%s' in state ID %d\n",
+		       param_name ? param_name : "PerfPct", scope_str, state_id);
+		return LPMD_ERROR;
+	}
+
+	*scope_mask = mask;
+	return LPMD_SUCCESS;
+}
+
+static int read_perf_pct_and_validate(int *dest_ptr, unsigned int *scope_ptr,
+				      const char *src_value, int state_id,
+				      const char *param_name,
+				      int *is_scoped_out)
+{
+	char value_part[64];
+	char scope_part[64];
 	char *endptr;
+	const char *colon;
 	int value;
 
-	errno = 0;
-	value = strtol(src_value, &endptr, 10);
+	if (!dest_ptr || !scope_ptr || !src_value)
+		return LPMD_ERROR;
 
-	if (errno == ERANGE || endptr == src_value) {
-		lpmd_log_error("Failed to parse MinPerfPct value: '%s' is not a valid integer in state ID %d\n",
-			       src_value, state_id);
+	*scope_ptr = LPMD_PERF_SCOPE_GLOBAL;
+	if (is_scoped_out)
+		*is_scoped_out = 0;
+	colon = strchr(src_value, ':');
+	if (colon) {
+		size_t scope_len = (size_t)(colon - src_value);
+		const char *vstart = colon + 1;
+
+		while (*vstart && isspace((unsigned char)*vstart))
+			vstart++;
+
+		if (!scope_len || !*vstart) {
+			lpmd_log_error("Failed to parse %s value: '%s' in state ID %d\n",
+			       param_name, src_value, state_id);
+			return LPMD_ERROR;
+		}
+
+		if (scope_len >= sizeof(scope_part))
+			scope_len = sizeof(scope_part) - 1;
+		memcpy(scope_part, src_value, scope_len);
+		scope_part[scope_len] = '\0';
+
+		snprintf(value_part, sizeof(value_part), "%s", vstart);
+		if (parse_perf_scope_mask(scope_part, scope_ptr, state_id,
+					  param_name) != LPMD_SUCCESS)
+			return LPMD_ERROR;
+		if (is_scoped_out)
+			*is_scoped_out = 1;
+	} else {
+		snprintf(value_part, sizeof(value_part), "%s", src_value);
+	}
+
+	errno = 0;
+	value = strtol(value_part, &endptr, 10);
+
+	if (errno == ERANGE || endptr == value_part) {
+		lpmd_log_error("Failed to parse %s value: '%s' is not a valid integer in state ID %d\n",
+		       param_name, src_value, state_id);
+		return LPMD_ERROR;
+	}
+	while (*endptr && isspace((unsigned char)*endptr))
+		endptr++;
+	if (*endptr != '\0') {
+		lpmd_log_error("Failed to parse %s value: '%s' has trailing characters in state ID %d\n",
+		       param_name, src_value, state_id);
 		return LPMD_ERROR;
 	}
 
@@ -103,35 +213,24 @@ static int read_min_perf_pct_and_validate(int *dest_ptr, const char *src_value,
 		return LPMD_SUCCESS;
 	}
 
-	lpmd_log_error("Invalid MinPerfPct value: %d in state ID %d. Valid values: 0-100, -1(ignore), -2(restore)\n",
-		       value, state_id);
+	lpmd_log_error("Invalid %s value: %d in state ID %d. Valid values: 0-100, -1(ignore), -2(restore)\n",
+	       param_name, value, state_id);
 	return LPMD_ERROR;
 }
 
-static int read_max_perf_pct_and_validate(int *dest_ptr, const char *src_value,
-				  int state_id)
+static int read_min_perf_pct_and_validate(int *dest_ptr, unsigned int *scope_ptr,
+				  const char *src_value, int state_id)
 {
-	char *endptr;
-	int value;
+	return read_perf_pct_and_validate(dest_ptr, scope_ptr, src_value, state_id,
+				      "MinPerfPct", NULL);
+}
 
-	errno = 0;
-	value = strtol(src_value, &endptr, 10);
-
-	if (errno == ERANGE || endptr == src_value) {
-		lpmd_log_error("Failed to parse MaxPerfPct value: '%s' is not a valid integer in state ID %d\n",
-			       src_value, state_id);
-		return LPMD_ERROR;
-	}
-
-	/* -1 ignore, -2 restore, or explicit percentage in [0, 100] */
-	if (value == SETTING_IGNORE || value == SETTING_RESTORE || (value >= 0 && value <= 100)) {
-		*dest_ptr = value;
-		return LPMD_SUCCESS;
-	}
-
-	lpmd_log_error("Invalid MaxPerfPct value: %d in state ID %d. Valid values: 0-100, -1(ignore), -2(restore)\n",
-		       value, state_id);
-	return LPMD_ERROR;
+static int read_max_perf_pct_and_validate(int *dest_ptr, unsigned int *scope_ptr,
+				  const char *src_value, int state_id,
+				  int *is_scoped_out)
+{
+	return read_perf_pct_and_validate(dest_ptr, scope_ptr, src_value, state_id,
+				      "MaxPerfPct", is_scoped_out);
 }
 
 static int read_uclamp_and_validate(int *dest_ptr, const char *src_value,
@@ -248,16 +347,26 @@ static void lpmd_parse_state(xmlDoc *doc, xmlNode *a_node, struct lpmd_config_t 
 			state->epb = strtol(tmp_value, &pos, 10);
 		if (!strncmp((const char *)cur_node->name, "MinPerfPctAC", strlen("MinPerfPctAC")) ||
 		    !strncmp((const char *)cur_node->name, "min_perf_pct_ac", strlen("min_perf_pct_ac")))
-			ret = read_min_perf_pct_and_validate(&state->min_perf_pct_ac, tmp_value, state->id);
+			ret = read_min_perf_pct_and_validate(&state->min_perf_pct_ac,
+						     &state->min_perf_pct_scope_ac,
+						     tmp_value, state->id);
 		if (!strncmp((const char *)cur_node->name, "MinPerfPctDC", strlen("MinPerfPctDC")) ||
 		    !strncmp((const char *)cur_node->name, "min_perf_pct_dc", strlen("min_perf_pct_dc")))
-			ret = read_min_perf_pct_and_validate(&state->min_perf_pct_dc, tmp_value, state->id);
+			ret = read_min_perf_pct_and_validate(&state->min_perf_pct_dc,
+						     &state->min_perf_pct_scope_dc,
+						     tmp_value, state->id);
 		if (!strncmp((const char *)cur_node->name, "MaxPerfPctAC", strlen("MaxPerfPctAC")) ||
 		    !strncmp((const char *)cur_node->name, "max_perf_pct_ac", strlen("max_perf_pct_ac")))
-			ret = read_max_perf_pct_and_validate(&state->max_perf_pct_ac, tmp_value, state->id);
+			ret = read_max_perf_pct_and_validate(&state->max_perf_pct_ac,
+						     &state->max_perf_pct_scope_ac,
+						     tmp_value, state->id,
+						     &state->max_perf_pct_is_scoped_ac);
 		if (!strncmp((const char *)cur_node->name, "MaxPerfPctDC", strlen("MaxPerfPctDC")) ||
 		    !strncmp((const char *)cur_node->name, "max_perf_pct_dc", strlen("max_perf_pct_dc")))
-			ret = read_max_perf_pct_and_validate(&state->max_perf_pct_dc, tmp_value, state->id);
+			ret = read_max_perf_pct_and_validate(&state->max_perf_pct_dc,
+						     &state->max_perf_pct_scope_dc,
+						     tmp_value, state->id,
+						     &state->max_perf_pct_is_scoped_dc);
 		if (!strncmp((const char *)cur_node->name, "ITMTState", strlen("ITMTState")))
 			state->itmt_state = strtol(tmp_value, &pos, 10);
 		if (!strcmp((const char *)cur_node->name, "IRQMigrate"))
@@ -320,24 +429,34 @@ static void parse_class_tuning_node(xmlDoc *doc, xmlNode *node,
 	ret = 0;
 	if (!strcmp((const char *)node->name, "MinPerfPctAC") ||
 	    !strcmp((const char *)node->name, "min_perf_pct_ac")) {
-		ret = read_min_perf_pct_and_validate(&ovr->min_perf_pct_ac, val, -1);
+		ret = read_min_perf_pct_and_validate(&ovr->min_perf_pct_ac,
+						     &ovr->min_perf_pct_scope_ac,
+						     val, -1);
 		if (!ret)
 			set_class_tuning_bit(ovr, LPMD_CLASS_TUNE_MIN_PERF_PCT_AC);
 	} else if (!strcmp((const char *)node->name, "MinPerfPctDC") ||
 		   !strcmp((const char *)node->name, "min_perf_pct_dc")) {
-		ret = read_min_perf_pct_and_validate(&ovr->min_perf_pct_dc, val, -1);
+		ret = read_min_perf_pct_and_validate(&ovr->min_perf_pct_dc,
+						     &ovr->min_perf_pct_scope_dc,
+						     val, -1);
 		if (!ret)
 			set_class_tuning_bit(ovr, LPMD_CLASS_TUNE_MIN_PERF_PCT_DC);
 	} else if (!strcmp((const char *)node->name, "MaxPerfPctAC") ||
 		   !strcmp((const char *)node->name, "max_perf_pct_ac") ||
 		   !strcmp((const char *)node->name, "MaxPerfAC")) {
-		ret = read_max_perf_pct_and_validate(&ovr->max_perf_pct_ac, val, -1);
+		ret = read_max_perf_pct_and_validate(&ovr->max_perf_pct_ac,
+						     &ovr->max_perf_pct_scope_ac,
+						     val, -1,
+						     &ovr->max_perf_pct_is_scoped_ac);
 		if (!ret)
 			set_class_tuning_bit(ovr, LPMD_CLASS_TUNE_MAX_PERF_PCT_AC);
 	} else if (!strcmp((const char *)node->name, "MaxPerfPctDC") ||
 		   !strcmp((const char *)node->name, "max_perf_pct_dc") ||
 		   !strcmp((const char *)node->name, "MaxPerfDC")) {
-		ret = read_max_perf_pct_and_validate(&ovr->max_perf_pct_dc, val, -1);
+		ret = read_max_perf_pct_and_validate(&ovr->max_perf_pct_dc,
+						     &ovr->max_perf_pct_scope_dc,
+						     val, -1,
+						     &ovr->max_perf_pct_is_scoped_dc);
 		if (!ret)
 			set_class_tuning_bit(ovr, LPMD_CLASS_TUNE_MAX_PERF_PCT_DC);
 	} else if (!strcmp((const char *)node->name, "BalanceSliderAC") ||

@@ -61,6 +61,7 @@ struct perf_tune_cache_t {
 	int on_battery;
 	int has_effective;
 	int effective_val;
+	unsigned int effective_scope;
 	char owner_class[64];
 };
 
@@ -257,6 +258,10 @@ static void apply_class_min_perf_override(const struct lpmd_config_t *config,
 		tmp_state.min_perf_pct_ac = ovr->min_perf_pct_ac;
 	if (ovr->present_mask & LPMD_CLASS_TUNE_MIN_PERF_PCT_DC)
 		tmp_state.min_perf_pct_dc = ovr->min_perf_pct_dc;
+	if (ovr->present_mask & LPMD_CLASS_TUNE_MIN_PERF_PCT_AC)
+		tmp_state.min_perf_pct_scope_ac = ovr->min_perf_pct_scope_ac;
+	if (ovr->present_mask & LPMD_CLASS_TUNE_MIN_PERF_PCT_DC)
+		tmp_state.min_perf_pct_scope_dc = ovr->min_perf_pct_scope_dc;
 
 	if (process_min_perf_pct_override(&tmp_state))
 		lpmd_log_warn("process_cpuset: class=%s min_perf_pct apply failed\n",
@@ -288,6 +293,14 @@ static void apply_class_max_perf_override(const struct lpmd_config_t *config,
 		tmp_state.max_perf_pct_ac = ovr->max_perf_pct_ac;
 	if (ovr->present_mask & LPMD_CLASS_TUNE_MAX_PERF_PCT_DC)
 		tmp_state.max_perf_pct_dc = ovr->max_perf_pct_dc;
+	if (ovr->present_mask & LPMD_CLASS_TUNE_MAX_PERF_PCT_AC)
+		tmp_state.max_perf_pct_scope_ac = ovr->max_perf_pct_scope_ac;
+	if (ovr->present_mask & LPMD_CLASS_TUNE_MAX_PERF_PCT_DC)
+		tmp_state.max_perf_pct_scope_dc = ovr->max_perf_pct_scope_dc;
+	if (ovr->present_mask & LPMD_CLASS_TUNE_MAX_PERF_PCT_AC)
+		tmp_state.max_perf_pct_is_scoped_ac = ovr->max_perf_pct_is_scoped_ac;
+	if (ovr->present_mask & LPMD_CLASS_TUNE_MAX_PERF_PCT_DC)
+		tmp_state.max_perf_pct_is_scoped_dc = ovr->max_perf_pct_is_scoped_dc;
 
 	if (process_max_perf_pct(&tmp_state))
 		lpmd_log_warn("process_cpuset: class=%s max_perf_pct apply failed\n",
@@ -418,7 +431,8 @@ int lpmd_process_cpuset_class_has_attached(const char *class_name)
 
 static int class_get_min_perf_override_value(const struct lpmd_config_t *config,
 					     const char *cls,
-					     int *value_out)
+					     int *value_out,
+					     unsigned int *scope_out)
 {
 	const struct lpmd_class_tuning_override_t *ovr;
 	int on_battery;
@@ -435,18 +449,23 @@ static int class_get_min_perf_override_value(const struct lpmd_config_t *config,
 		if (!(ovr->present_mask & LPMD_CLASS_TUNE_MIN_PERF_PCT_DC))
 			return 0;
 		*value_out = ovr->min_perf_pct_dc;
+		if (scope_out)
+			*scope_out = ovr->min_perf_pct_scope_dc;
 		return 1;
 	}
 
 	if (!(ovr->present_mask & LPMD_CLASS_TUNE_MIN_PERF_PCT_AC))
 		return 0;
 	*value_out = ovr->min_perf_pct_ac;
+	if (scope_out)
+		*scope_out = ovr->min_perf_pct_scope_ac;
 	return 1;
 }
 
 static int class_get_max_perf_override_value(const struct lpmd_config_t *config,
 					     const char *cls,
-					     int *value_out)
+					     int *value_out,
+					     unsigned int *scope_out)
 {
 	const struct lpmd_class_tuning_override_t *ovr;
 	int on_battery;
@@ -463,12 +482,16 @@ static int class_get_max_perf_override_value(const struct lpmd_config_t *config,
 		if (!(ovr->present_mask & LPMD_CLASS_TUNE_MAX_PERF_PCT_DC))
 			return 0;
 		*value_out = ovr->max_perf_pct_dc;
+		if (scope_out)
+			*scope_out = ovr->max_perf_pct_scope_dc;
 		return 1;
 	}
 
 	if (!(ovr->present_mask & LPMD_CLASS_TUNE_MAX_PERF_PCT_AC))
 		return 0;
 	*value_out = ovr->max_perf_pct_ac;
+	if (scope_out)
+		*scope_out = ovr->max_perf_pct_scope_ac;
 	return 1;
 }
 
@@ -533,38 +556,46 @@ static int class_has_min_perf_override(const struct lpmd_config_t *config,
 				       const char *cls)
 {
 	int dummy = 0;
-	return class_get_min_perf_override_value(config, cls, &dummy);
+	return class_get_min_perf_override_value(config, cls, &dummy, NULL);
 }
 
 static int class_has_max_perf_override(const struct lpmd_config_t *config,
 				       const char *cls)
 {
 	int dummy = 0;
-	return class_get_max_perf_override_value(config, cls, &dummy);
+	return class_get_max_perf_override_value(config, cls, &dummy, NULL);
 }
 
-static void apply_min_perf_value(int val)
+static void apply_min_perf_value(int val, unsigned int scope_mask)
 {
 	struct lpmd_config_state_t tmp_state;
 
 	lpmd_init_config_state(&tmp_state);
 	tmp_state.min_perf_pct_ac = val;
 	tmp_state.min_perf_pct_dc = val;
+	tmp_state.min_perf_pct_scope_ac = scope_mask;
+	tmp_state.min_perf_pct_scope_dc = scope_mask;
 	if (process_min_perf_pct_override(&tmp_state))
-		lpmd_log_warn("process_cpuset: failed to apply effective min_perf_pct=%d\n",
-			      val);
+		lpmd_log_warn("process_cpuset: failed to apply effective min_perf_pct=%d scope=0x%x\n",
+			      val, scope_mask);
 }
 
-static void apply_max_perf_value(int val)
+static void apply_max_perf_value(int val, unsigned int scope_mask)
 {
 	struct lpmd_config_state_t tmp_state;
 
 	lpmd_init_config_state(&tmp_state);
 	tmp_state.max_perf_pct_ac = val;
 	tmp_state.max_perf_pct_dc = val;
+	tmp_state.max_perf_pct_scope_ac = scope_mask;
+	tmp_state.max_perf_pct_scope_dc = scope_mask;
+	tmp_state.max_perf_pct_is_scoped_ac =
+		scope_mask != LPMD_PERF_SCOPE_GLOBAL;
+	tmp_state.max_perf_pct_is_scoped_dc =
+		scope_mask != LPMD_PERF_SCOPE_GLOBAL;
 	if (process_max_perf_pct(&tmp_state))
-		lpmd_log_warn("process_cpuset: failed to apply effective max_perf_pct=%d\n",
-			      val);
+		lpmd_log_warn("process_cpuset: failed to apply effective max_perf_pct=%d scope=0x%x\n",
+			      val, scope_mask);
 }
 
 static void apply_balance_slider_value(const struct lpmd_config_t *config, int val)
@@ -660,12 +691,30 @@ static void reset_owned_max_perf_pct_to_zero(void)
 {
 	struct lpmd_config_state_t tmp_state;
 
-	if (g_saved_max_perf_pct == SETTING_IGNORE)
-		return;
-
 	lpmd_init_config_state(&tmp_state);
-	tmp_state.max_perf_pct_ac = g_saved_max_perf_pct;
-	tmp_state.max_perf_pct_dc = g_saved_max_perf_pct;
+	if (g_max_perf_cache.effective_scope == LPMD_PERF_SCOPE_GLOBAL) {
+		if (g_saved_max_perf_pct == SETTING_IGNORE)
+			return;
+
+		/* For global values (no core type prefix), restore to the value
+		 * captured when the class owner became active. */
+		tmp_state.max_perf_pct_ac = g_saved_max_perf_pct;
+		tmp_state.max_perf_pct_dc = g_saved_max_perf_pct;
+		tmp_state.max_perf_pct_scope_ac = LPMD_PERF_SCOPE_GLOBAL;
+		tmp_state.max_perf_pct_scope_dc = LPMD_PERF_SCOPE_GLOBAL;
+		tmp_state.max_perf_pct_is_scoped_ac = 0;
+		tmp_state.max_perf_pct_is_scoped_dc = 0;
+	} else {
+		/* For typed-core scoped values, restore per-cpu cpufreq values.
+		 * process_max_perf_pct() maps SETTING_RESTORE + scope to the
+		 * scoped cpufreq restore path. */
+		tmp_state.max_perf_pct_ac = SETTING_RESTORE;
+		tmp_state.max_perf_pct_dc = SETTING_RESTORE;
+		tmp_state.max_perf_pct_scope_ac = g_max_perf_cache.effective_scope;
+		tmp_state.max_perf_pct_scope_dc = g_max_perf_cache.effective_scope;
+		tmp_state.max_perf_pct_is_scoped_ac = 1;
+		tmp_state.max_perf_pct_is_scoped_dc = 1;
+	}
 	if (process_max_perf_pct(&tmp_state))
 		lpmd_log_warn("process_cpuset: failed to restore owned max_perf_pct\n");
 }
@@ -741,6 +790,7 @@ static void sync_min_perf_owner(const struct lpmd_config_t *config,
 {
 	size_t n, i;
 	int best_val = -1;
+	unsigned int best_scope = LPMD_PERF_SCOPE_GLOBAL;
 	char best_cls[sizeof(g_min_perf_owner.owner_class)] = { 0 };
 	int found = 0;
 	int on_battery;
@@ -761,6 +811,7 @@ static void sync_min_perf_owner(const struct lpmd_config_t *config,
 		const char *cls = NULL;
 		int use_p = 0, use_e = 0, use_l = 0;
 		int val;
+		unsigned int scope;
 
 		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, unit,
 					   sizeof(unit), &cls,
@@ -768,11 +819,12 @@ static void sync_min_perf_owner(const struct lpmd_config_t *config,
 			continue;
 		if (!pid_is_live(pid))
 			continue;
-		if (!class_get_min_perf_override_value(config, cls, &val))
+		if (!class_get_min_perf_override_value(config, cls, &val, &scope))
 			continue;
 
 		if (!found || val > best_val) {
 			best_val = val;
+			best_scope = scope;
 			snprintf(best_cls, sizeof(best_cls), "%s", cls ? cls : "");
 			found = 1;
 		}
@@ -790,12 +842,14 @@ static void sync_min_perf_owner(const struct lpmd_config_t *config,
 		g_min_perf_cache.on_battery = on_battery;
 		g_min_perf_cache.has_effective = 0;
 		g_min_perf_cache.effective_val = 0;
+		g_min_perf_cache.effective_scope = LPMD_PERF_SCOPE_GLOBAL;
 		g_min_perf_cache.owner_class[0] = '\0';
 		return;
 	}
 
 	if (g_min_perf_cache.has_effective &&
 	    g_min_perf_cache.effective_val == best_val &&
+	    g_min_perf_cache.effective_scope == best_scope &&
 	    !strcasecmp(g_min_perf_cache.owner_class, best_cls)) {
 		g_min_perf_cache.dirty = 0;
 		g_min_perf_cache.on_battery = on_battery;
@@ -810,11 +864,12 @@ static void sync_min_perf_owner(const struct lpmd_config_t *config,
 			g_min_perf_owner.owner_class, best_val);
 	}
 
-	apply_min_perf_value(best_val);
+	apply_min_perf_value(best_val, best_scope);
 	g_min_perf_cache.dirty = 0;
 	g_min_perf_cache.on_battery = on_battery;
 	g_min_perf_cache.has_effective = 1;
 	g_min_perf_cache.effective_val = best_val;
+	g_min_perf_cache.effective_scope = best_scope;
 	snprintf(g_min_perf_cache.owner_class, sizeof(g_min_perf_cache.owner_class),
 		 "%s", best_cls);
 }
@@ -824,6 +879,7 @@ static void sync_max_perf_owner(const struct lpmd_config_t *config,
 {
 	size_t n, i;
 	int best_val = 101;
+	unsigned int best_scope = LPMD_PERF_SCOPE_GLOBAL;
 	char best_cls[sizeof(g_max_perf_owner.owner_class)] = { 0 };
 	int found = 0;
 	int on_battery;
@@ -844,6 +900,7 @@ static void sync_max_perf_owner(const struct lpmd_config_t *config,
 		const char *cls = NULL;
 		int use_p = 0, use_e = 0, use_l = 0;
 		int val;
+		unsigned int scope;
 
 		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, unit,
 					   sizeof(unit), &cls,
@@ -851,11 +908,12 @@ static void sync_max_perf_owner(const struct lpmd_config_t *config,
 			continue;
 		if (!pid_is_live(pid))
 			continue;
-		if (!class_get_max_perf_override_value(config, cls, &val))
+		if (!class_get_max_perf_override_value(config, cls, &val, &scope))
 			continue;
 
 		if (!found || val < best_val) {
 			best_val = val;
+			best_scope = scope;
 			snprintf(best_cls, sizeof(best_cls), "%s", cls ? cls : "");
 			found = 1;
 		}
@@ -873,12 +931,14 @@ static void sync_max_perf_owner(const struct lpmd_config_t *config,
 		g_max_perf_cache.on_battery = on_battery;
 		g_max_perf_cache.has_effective = 0;
 		g_max_perf_cache.effective_val = 0;
+		g_max_perf_cache.effective_scope = LPMD_PERF_SCOPE_GLOBAL;
 		g_max_perf_cache.owner_class[0] = '\0';
 		return;
 	}
 
 	if (g_max_perf_cache.has_effective &&
 	    g_max_perf_cache.effective_val == best_val &&
+	    g_max_perf_cache.effective_scope == best_scope &&
 	    !strcasecmp(g_max_perf_cache.owner_class, best_cls)) {
 		g_max_perf_cache.dirty = 0;
 		g_max_perf_cache.on_battery = on_battery;
@@ -897,11 +957,12 @@ static void sync_max_perf_owner(const struct lpmd_config_t *config,
 			g_max_perf_owner.owner_class, best_val);
 	}
 
-	apply_max_perf_value(best_val);
+	apply_max_perf_value(best_val, best_scope);
 	g_max_perf_cache.dirty = 0;
 	g_max_perf_cache.on_battery = on_battery;
 	g_max_perf_cache.has_effective = 1;
 	g_max_perf_cache.effective_val = best_val;
+	g_max_perf_cache.effective_scope = best_scope;
 	snprintf(g_max_perf_cache.owner_class, sizeof(g_max_perf_cache.owner_class),
 		 "%s", best_cls);
 }

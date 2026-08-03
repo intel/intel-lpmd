@@ -188,6 +188,50 @@ EPP to apply for this state. -1 to ignore.
 .B EPB
 EPB to apply for this state. -1 to ignore.
 .PP
+.B MaxPerfPctAC / MaxPerfPctDC / MinPerfPctAC / MinPerfPctDC
+Per-state performance cap/floor controls.
+.IP \(bu 2
+Global form (no core type):
+.br
+Set a single value for all core types in this state.
+.br
+Example: <MaxPerfPctAC>50</MaxPerfPctAC>
+.IP \(bu 2
+Core-typed form:
+.br
+Set value only for selected core type(s), using
+<CoreType>:<value>.
+.br
+Supported core-type tokens include P-cores, E-cores, and
+LP-E-cores (also accepted: ActivePcores, ActiveEcores,
+ActiveLcores).
+.br
+Examples: <MaxPerfPctAC>P-cores:50</MaxPerfPctAC>,
+<MaxPerfPctAC>E-cores:60</MaxPerfPctAC>,
+<MaxPerfPctAC>LP-E-cores:70</MaxPerfPctAC>
+.IP \(bu 2
+Values:
+.br
+0..100 valid percentage, -1 ignore, -2 restore.
+.PP
+.B Core-Type Examples
+.EX
+<!-- Global value (all core types) -->
+<MaxPerfPctAC>50</MaxPerfPctAC>
+
+<!-- P-core only -->
+<MaxPerfPctAC>P-cores:50</MaxPerfPctAC>
+
+<!-- E-core only -->
+<MaxPerfPctDC>E-cores:45</MaxPerfPctDC>
+
+<!-- LP-E-core only -->
+<MinPerfPctAC>LP-E-cores:20</MinPerfPctAC>
+
+<!-- Multiple core types in one value -->
+<MaxPerfPctAC>P-cores,E-cores:55</MaxPerfPctAC>
+.EE
+.PP
 .B ITMTState
 Set the state of ITMT flag. -1 to ignore. ITMT is only relevant for platforms
 before MTL and the debugfs file is not present on later platforms.

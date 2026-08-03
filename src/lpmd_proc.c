@@ -515,9 +515,6 @@ int lpmd_main(void)
 	 * the active P/E/LP-E core sets (still alive in core_type_masks[])
 	 * and attach matching processes to transient cpuset scopes. */
 	lpmd_process_cpuset_init(&lpmd_config);
-
-	/* Cleanup dynamically allocated core-type cpumasks */
-	free_cpu_type_masks(&lpmd_config);
 	ret = irq_init();
 	if (ret)
 		return ret;
