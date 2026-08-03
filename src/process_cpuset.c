@@ -860,6 +860,16 @@ static int read_comm(pid_t pid, char *out, size_t cap)
 	return 0;
 }
 
+/* Best-effort process name lookup for logs. */
+static const char *pid_comm_for_log(pid_t pid, char *buf, size_t cap)
+{
+	if (!buf || cap == 0)
+		return "?";
+	if (read_comm(pid, buf, cap) < 0 || buf[0] == '\0')
+		snprintf(buf, cap, "?");
+	return buf;
+}
+
 /* Match a config name against a process comm.
  * Exact names behave as before. If the config name contains '*',
  * treat it as a glob (e.g. Strange*).
@@ -3184,8 +3194,11 @@ int process_cpuset_apply_once(process_cpuset_t *ctx, int dry_run)
 
 		for (int j = 0; j < npids; j++) {
 			char unit[128];
+			char comm[MAX_NAME];
 			uid_t owner_uid = 0;
 			enum pid_location loc;
+
+			(void)pid_comm_for_log(pids[j], comm, sizeof(comm));
 
 			if (pidset_contains(&ctx->attached, pids[j]))
 				continue; /* already handled in a previous cycle */
@@ -3219,8 +3232,9 @@ int process_cpuset_apply_once(process_cpuset_t *ctx, int dry_run)
              * can't use a transient scope there. */
 			if (loc == PID_LOC_USER_MGR) {
 				if (dry_run) {
-					lpmd_log_debug("[%s] (dry) would set affinity pid %d (uid=%u%s)\n",
+					lpmd_log_debug("[%s] (dry) would set affinity pid %d comm=%s (uid=%u%s)\n",
 						       e->name, (int)pids[j],
+						       comm,
 						       (unsigned)owner_uid,
 						       e->affinity_all_threads ?
 							       " all-threads" :
@@ -3232,8 +3246,9 @@ int process_cpuset_apply_once(process_cpuset_t *ctx, int dry_run)
 						pids[j], mask, mlen,
 						class_str(e->cls));
 					if (n > 0) {
-						lpmd_log_debug("[%s] affinity pid %d (uid=%u tids=%d)\n",
+						lpmd_log_debug("[%s] affinity pid %d comm=%s (uid=%u tids=%d)\n",
 							       e->name, (int)pids[j],
+							       comm,
 							       (unsigned)owner_uid, n);
 						pidset_add(&ctx->attached,
 							   pids[j], "", e->cls,
@@ -3245,8 +3260,9 @@ int process_cpuset_apply_once(process_cpuset_t *ctx, int dry_run)
 					}
 				} else if (set_pid_affinity_from_mask(
 						   pids[j], mask, mlen) == 0) {
-					lpmd_log_debug("[%s] affinity pid %d (uid=%u)\n",
+					lpmd_log_debug("[%s] affinity pid %d comm=%s (uid=%u)\n",
 						       e->name, (int)pids[j],
+						       comm,
 						       (unsigned)owner_uid);
 					/* unit="" marks this as affinity-only (no scope
                      * to stop on shutdown). */
@@ -3282,12 +3298,14 @@ int process_cpuset_apply_once(process_cpuset_t *ctx, int dry_run)
 					    pids[j], existing,
 					    sizeof(existing)) == 1) {
 					if (dry_run)
-						lpmd_log_debug("[%s] (dry) reattach pid %d -> %s\n",
+						lpmd_log_debug("[%s] (dry) reattach pid %d comm=%s -> %s\n",
 							       e->name, (int)pids[j],
+							       comm,
 							       existing);
 					else
-						lpmd_log_debug("[%s] reattached pid %d -> %s\n",
+						lpmd_log_debug("[%s] reattached pid %d comm=%s -> %s\n",
 							       e->name, (int)pids[j],
+							       comm,
 							       existing);
 					pidset_add(&ctx->attached, pids[j],
 						   existing, e->cls,
@@ -3307,15 +3325,15 @@ int process_cpuset_apply_once(process_cpuset_t *ctx, int dry_run)
 						 sizeof(mask_hex) - (k * 2),
 						 "%02x", mask[k]);
 				mask_hex[mlen * 2] = '\0';
-				lpmd_log_debug("[%s] (dry) would attach pid %d -> %s (mask=%s)\n",
-					       e->name, (int)pids[j], unit, mask_hex);
+				lpmd_log_debug("[%s] (dry) would attach pid %d comm=%s -> %s (mask=%s)\n",
+					       e->name, (int)pids[j], comm, unit, mask_hex);
 				continue;
 			}
 
 			if (start_scope_for_pid(unit, pids[j], mask, mlen) ==
 			    0) {
-				lpmd_log_debug("[%s] attached pid %d -> %s\n", e->name,
-					       (int)pids[j], unit);
+				lpmd_log_debug("[%s] attached pid %d comm=%s -> %s\n", e->name,
+					       (int)pids[j], comm, unit);
 				pidset_add(&ctx->attached, pids[j], unit,
 					   e->cls, e->resolved.groups, 0);
 				(void)apply_pid_uclamp(ctx, pids[j], e->cls,
@@ -3426,8 +3444,9 @@ int process_cpuset_apply_pid(process_cpuset_t *ctx, pid_t pid, int dry_run)
 		/* User-session PIDs: sched_setaffinity, no cgroup. */
 		if (loc == PID_LOC_USER_MGR) {
 			if (dry_run) {
-				lpmd_log_debug("[%s] (dry) would set affinity pid %d (event uid=%u%s)\n",
+				lpmd_log_debug("[%s] (dry) would set affinity pid %d comm=%s (event uid=%u%s)\n",
 					       e->name, (int)pid,
+					       comm,
 					       (unsigned)owner_uid,
 					       e->affinity_all_threads ?
 						       " all-threads" :
@@ -3438,8 +3457,9 @@ int process_cpuset_apply_pid(process_cpuset_t *ctx, pid_t pid, int dry_run)
 				int n = set_pid_affinity_all_threads(
 					pid, mask, mlen, class_str(e->cls));
 				if (n > 0) {
-					lpmd_log_debug("[%s] affinity pid %d (event uid=%u tids=%d)\n",
+					lpmd_log_debug("[%s] affinity pid %d comm=%s (event uid=%u tids=%d)\n",
 						       e->name, (int)pid,
+						       comm,
 						       (unsigned)owner_uid, n);
 					pidset_add(&ctx->attached, pid, "",
 						   e->cls, e->resolved.groups,
@@ -3450,8 +3470,9 @@ int process_cpuset_apply_pid(process_cpuset_t *ctx, pid_t pid, int dry_run)
 				}
 			} else if (set_pid_affinity_from_mask(pid, mask,
 							      mlen) == 0) {
-				lpmd_log_debug("[%s] affinity pid %d (event uid=%u)\n",
+				lpmd_log_debug("[%s] affinity pid %d comm=%s (event uid=%u)\n",
 					       e->name, (int)pid,
+					       comm,
 					       (unsigned)owner_uid);
 				pidset_add(&ctx->attached, pid, "", e->cls,
 					   e->resolved.groups, owner_uid);
@@ -3484,12 +3505,14 @@ int process_cpuset_apply_pid(process_cpuset_t *ctx, pid_t pid, int dry_run)
 			if (pid_existing_proc_cpuset_unit(
 				    pid, existing, sizeof(existing)) == 1) {
 				if (dry_run)
-					lpmd_log_debug("[%s] (dry) reattach pid %d -> %s\n",
+					lpmd_log_debug("[%s] (dry) reattach pid %d comm=%s -> %s\n",
 						       e->name, (int)pid,
+						       comm,
 						       existing);
 				else
-					lpmd_log_debug("[%s] reattached pid %d -> %s (event)\n",
+					lpmd_log_debug("[%s] reattached pid %d comm=%s -> %s (event)\n",
 						       e->name, (int)pid,
+						       comm,
 						       existing);
 				pidset_add(&ctx->attached, pid, existing,
 					   e->cls, e->resolved.groups, 0);
@@ -3500,14 +3523,14 @@ int process_cpuset_apply_pid(process_cpuset_t *ctx, pid_t pid, int dry_run)
 		}
 
 		if (dry_run) {
-			lpmd_log_debug("[%s] (dry) would attach pid %d -> %s\n",
-				       e->name, (int)pid, unit);
+			lpmd_log_debug("[%s] (dry) would attach pid %d comm=%s -> %s\n",
+				       e->name, (int)pid, comm, unit);
 			return 1;
 		}
 
 		if (start_scope_for_pid(unit, pid, mask, mlen) == 0) {
-			lpmd_log_debug("[%s] attached pid %d -> %s (event)\n",
-				       e->name, (int)pid, unit);
+			lpmd_log_debug("[%s] attached pid %d comm=%s -> %s (event)\n",
+				       e->name, (int)pid, comm, unit);
 			pidset_add(&ctx->attached, pid, unit, e->cls,
 				   e->resolved.groups, 0);
 			(void)apply_pid_uclamp(ctx, pid, e->cls,
@@ -3537,9 +3560,12 @@ static int apply_default_to_pid(process_cpuset_t *ctx, pid_t pid,
 {
 	uint8_t mask[CPUMASK_BYTES];
 	size_t mlen;
+	char comm[MAX_NAME];
 	uid_t owner_uid = 0;
 	enum pid_location loc;
 	const struct proc_entry *e;
+
+	(void)pid_comm_for_log(pid, comm, sizeof(comm));
 
 	if (!ctx->has_default_entry)
 		return 0;
@@ -3561,8 +3587,9 @@ static int apply_default_to_pid(process_cpuset_t *ctx, pid_t pid,
 	mlen = mask_significant_len(mask, sizeof(mask));
 
 	if (dry_run) {
-		lpmd_log_debug("[*default*] (dry) would set affinity pid %d (uid=%u%s%s)\n",
-			       (int)pid, (unsigned)owner_uid,
+		lpmd_log_debug("[*default*] (dry) would set affinity pid %d comm=%s (uid=%u%s%s)\n",
+			       (int)pid, comm,
+			       (unsigned)owner_uid,
 			       from_event ? " event" : "",
 			       e->affinity_all_threads ? " all-threads" : "");
 		return 1;
@@ -3572,8 +3599,9 @@ static int apply_default_to_pid(process_cpuset_t *ctx, pid_t pid,
 		int n = set_pid_affinity_all_threads(pid, mask, mlen,
 						     class_str(e->cls));
 		if (n > 0) {
-			lpmd_log_debug("[*default*] affinity pid %d (uid=%u tids=%d%s)\n",
-				       (int)pid, (unsigned)owner_uid, n,
+			lpmd_log_debug("[*default*] affinity pid %d comm=%s (uid=%u tids=%d%s)\n",
+				       (int)pid, comm,
+				       (unsigned)owner_uid, n,
 				       from_event ? " event" : "");
 			pidset_add(&ctx->attached, pid, "", e->cls,
 				   e->resolved.groups, owner_uid);
@@ -3582,8 +3610,9 @@ static int apply_default_to_pid(process_cpuset_t *ctx, pid_t pid,
 			return 1;
 		}
 	} else if (set_pid_affinity_from_mask(pid, mask, mlen) == 0) {
-		lpmd_log_debug("[*default*] affinity pid %d (uid=%u%s)\n",
-			       (int)pid, (unsigned)owner_uid,
+		lpmd_log_debug("[*default*] affinity pid %d comm=%s (uid=%u%s)\n",
+			       (int)pid, comm,
+			       (unsigned)owner_uid,
 			       from_event ? " event" : "");
 		pidset_add(&ctx->attached, pid, "", e->cls, e->resolved.groups,
 			   owner_uid);
