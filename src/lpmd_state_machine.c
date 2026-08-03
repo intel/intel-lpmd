@@ -517,6 +517,8 @@ static int enter_state(struct lpmd_config_t *config, int idx)
 	process_min_perf_pct(state);
 	process_max_perf_pct(state);
 
+	process_slider(config, state);
+
 	process_irq(state);
 
 	process_cgroup(config, state);
