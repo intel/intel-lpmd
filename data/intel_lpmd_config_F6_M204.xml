@@ -372,9 +372,7 @@ for Intel Energy Optimizer (LPMD) daemon
 			<Name> UTIL_NON_IDLE </Name>
 			<WLTTypeMask> 12 </WLTTypeMask>
 			<EnterGFXLoadThres>50</EnterGFXLoadThres>
-			<ActivePcores>*</ActivePcores>
-			<ActiveLcores>*</ActiveLcores>
-			<ActiveEcores>*</ActiveEcores>
+			<ActiveCPUs>*</ActiveCPUs>
 
 			<IRQMigrate> -1 </IRQMigrate>
 			<BalanceSliderAC>1</BalanceSliderAC>
