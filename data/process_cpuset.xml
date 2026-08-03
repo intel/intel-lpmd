@@ -1238,46 +1238,55 @@
 
     <Process>
         <Name>steam</Name>
+	<AllowSession>1</AllowSession>
         <Classification>user_initiated</Classification>
     </Process>
     <Process>
         <Name>steamwebhelper</Name>
+	<AllowSession>1</AllowSession>
         <Classification>user_initiated</Classification>
     </Process>
     <Process>
         <!-- steam-runtime-launcher-service / -interface -->
         <Name>steam-runtime-l</Name>
+	<AllowSession>1</AllowSession>
         <Classification>user_initiated</Classification>
     </Process>
     <Process>
         <!-- Steam runtime bubblewrap sandbox launcher -->
         <Name>srt-bwrap</Name>
+	<AllowSession>1</AllowSession>
         <Classification>user_initiated</Classification>
     </Process>
     <Process>
         <!-- Steam runtime logger helper -->
         <Name>srt-logger</Name>
+	<AllowSession>1</AllowSession>
         <Classification>background</Classification>
     </Process>
     <Process>
         <!-- pressure-vessel adverb wrapper -->
         <Name>pv-adverb</Name>
         <Classification>user_initiated</Classification>
+	<AllowSession>1</AllowSession>
     </Process>
     <Process>
         <!-- Valve gamescope launcher (CachyOS Handheld / SteamOS-like) -->
         <Name>start-gamescope</Name>
         <Classification>user_initiated</Classification>
+	<AllowSession>1</AllowSession>
     </Process>
     <Process>
         <!-- gamescope wayland compositor -->
         <Name>gamescope-wl</Name>
         <Classification>user_initiated</Classification>
+	<AllowSession>1</AllowSession>
     </Process>
     <Process>
         <!-- MangoHud overlay app companion -->
         <Name>mangoapp</Name>
         <Classification>user_initiated</Classification>
+	<AllowSession>1</AllowSession>
     </Process>
     <!-- Media -->
     <Process>
@@ -1595,24 +1604,28 @@
     <!-- Steam Games -->
     <Process>
         <Name>Spaceship*</Name>
+	<AllowSession>1</AllowSession>
 	<Classification>game_profile_mixed</Classification>
         <AffinityAllThreads>1</AffinityAllThreads>
     </Process>
 
     <Process>
         <Name>Strange*</Name>
+	<AllowSession>1</AllowSession>
 	<Classification>game_profile_gpu</Classification>
         <AffinityAllThreads>1</AffinityAllThreads>
     </Process>
 
     <Process>
         <Name>ShadowOfTheTomb*</Name>
+	<AllowSession>1</AllowSession>
 	<Classification>game_profile_mixed</Classification>
         <AffinityAllThreads>1</AffinityAllThreads>
     </Process>
 
     <Process>
         <Name>hitman*</Name>
+	<AllowSession>1</AllowSession>
 	<Classification>game_profile_mixed</Classification>
         <AffinityAllThreads>1</AffinityAllThreads>
     </Process>
