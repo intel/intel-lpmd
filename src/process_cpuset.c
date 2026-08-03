@@ -3807,9 +3807,12 @@ int process_cpuset_classify_name(const process_cpuset_t *ctx,
 	/* /proc/<pid>/comm truncates comm to 15 chars; mirror that here. */
 	snprintf(trunc, sizeof(trunc), "%s", name);
 
-	/* Case-insensitive name search across all loaded entries. */
+	/* Case-insensitive name search across all loaded entries.
+	 * Entries with '*' are glob patterns (e.g. "ShadowOfTheTomb*")
+	 * and must be matched with fnmatch, not a plain string compare.
+	 */
 	for (int i = 0; i < ctx->n_entries; i++) {
-		if (!strcasecmp(ctx->entries[i].name, trunc)) {
+		if (name_matches_entry(ctx->entries[i].name, trunc)) {
 			e = &ctx->entries[i];
 			break;
 		}
