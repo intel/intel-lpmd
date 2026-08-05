@@ -487,6 +487,20 @@ static void parse_class_tuning_node(xmlDoc *doc, xmlNode *node,
 					       SLIDER_TYPE_OFFSET);
 		if (!ret)
 			set_class_tuning_bit(ovr, LPMD_CLASS_TUNE_SLIDER_OFFSET_DC);
+	} else if (!strcmp((const char *)node->name, "GTIABias") ||
+		   !strcmp((const char *)node->name, "gt_ia_bias")) {
+		char *endptr = NULL;
+		unsigned long long v;
+
+		errno = 0;
+		v = strtoull(val, &endptr, 10);
+		if (!errno && endptr != val && *endptr == '\0' &&
+		    v <= UINT32_MAX) {
+			ovr->gt_ia_bias = (uint32_t)v;
+			set_class_tuning_bit(ovr, LPMD_CLASS_TUNE_GT_IA_BIAS);
+		} else {
+			lpmd_log_warn("Invalid GTIABias value: '%s'\n", val);
+		}
 	}
 
 	xmlFree(val);
@@ -848,6 +862,7 @@ static void lpmd_init_config(struct lpmd_config_t *config)
 	config->balance_slider_def_dc = -1;
 	config->slider_offset_def_ac = -1;
 	config->slider_offset_def_dc = -1;
+	config->intel_pstate_mode = 0;
 	config->wlt_hint_mask = -1;
 	config->wlt_notification_delay = -1;
 	config->config_states_present = FALSE;
@@ -979,8 +994,18 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, struct lpmd_config_t *
 			    lpmd_config->ignore_itmt < 0 ||
 			    lpmd_config->ignore_itmt > 1)
 				goto err;
-		} else if (!strcmp((const char *)cur_node->name, "lp_mode_cpus")) {
-			if (!strcmp(tmp_value, "-1"))
+		} else if (!strncmp((const char *)cur_node->name,
+				    "IntelPstateMode",
+				    strlen("IntelPstateMode"))) {
+			errno = 0;
+			lpmd_config->intel_pstate_mode = strtol(tmp_value, &pos, 10);
+			if (errno || *pos != '\0' ||
+			    lpmd_config->intel_pstate_mode < 0 ||
+			    lpmd_config->intel_pstate_mode > 1)
+				goto err;
+		} else if (!strncmp((const char *)cur_node->name,
+				    "lp_mode_cpus", strlen("lp_mode_cpus"))) {
+			if (!strncmp(tmp_value, "-1", strlen("-1")))
 				lpmd_config->lp_mode_cpus[0] = '\0';
 			else
 				copy_user_string(tmp_value, lpmd_config->lp_mode_cpus,

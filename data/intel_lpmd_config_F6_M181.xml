@@ -130,6 +130,13 @@ for Intel Energy Optimizer (LPMD) daemon
 	<IgnoreITMT>0</IgnoreITMT>
 
 	<!--
+		Intel Pstate Mode
+		0: active
+		1: passive
+	-->
+	<IntelPstateMode>0</IntelPstateMode>
+
+	<!--
 		Example WorkLoad Type hints based config states applied to
 		4P-8E-2Lcore 15W TDP Arrow Lake platform.
 		Need to set WLTHintEnable to make it work.

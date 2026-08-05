@@ -267,6 +267,7 @@ enum lpmd_class_tuning_present_bits {
 	LPMD_CLASS_TUNE_BALANCE_SLIDER_DC = 1U << 5,
 	LPMD_CLASS_TUNE_SLIDER_OFFSET_AC = 1U << 6,
 	LPMD_CLASS_TUNE_SLIDER_OFFSET_DC = 1U << 7,
+	LPMD_CLASS_TUNE_GT_IA_BIAS = 1U << 8,
 };
 
 struct lpmd_class_tuning_override_t {
@@ -285,6 +286,7 @@ struct lpmd_class_tuning_override_t {
 	int balance_slider_dc;
 	int slider_offset_ac;
 	int slider_offset_dc;
+	uint32_t gt_ia_bias;
 };
 
 // lpmd config data
@@ -419,6 +421,8 @@ struct lpmd_config_t {
 	int util_entry_hyst;
 	int util_exit_hyst;
 	int ignore_itmt;
+	/* 0: active, 1: passive */
+	int intel_pstate_mode;
 	int lp_mode_epp;
 	char lp_mode_cpus[MAX_STR_LENGTH];
 	int cpu_family;
@@ -563,6 +567,8 @@ int wlt_set_notification_delay(int delay);
 void itmt_init(void);
 int get_itmt(void);
 int process_itmt(struct lpmd_config_state_t *state);
+int process_intel_pstate_mode(struct lpmd_config_t *config);
+int restore_intel_pstate_mode(void);
 
 int epp_epb_init(void);
 int get_epp_epb(int *epp, char *epp_str, int size, int *epb);

@@ -62,6 +62,8 @@ static void lpmd_send_message(enum message_name_t msg_id, int size, unsigned cha
 
 void lpmd_terminate(void)
 {
+	restore_intel_pstate_mode();
+
 	/*
 	 * Stop any transient cpuset scopes synchronously here so that every
 	 * termination path (SIGINT/SIGTERM handler, D-Bus Terminate from
@@ -244,18 +246,24 @@ static int proc_message(struct message_capsul_t *msg)
 		update_lpmd_state(LPMD_TERMINATE);
 		break;
 	case LPM_FORCE_ON:
+		(void)process_intel_pstate_mode(&lpmd_config);
 		// Always stay in LPM mode
 		update_lpmd_state(LPMD_ON);
 		break;
 	case LPM_FORCE_OFF:
+		restore_intel_pstate_mode();
+		if (lpmd_config.use_process_cpuset)
+			lpmd_process_cpuset_unbind_all();
 		// Never enter LPM mode
 		update_lpmd_state(LPMD_OFF);
 		break;
 	case LPM_AUTO:
+		(void)process_intel_pstate_mode(&lpmd_config);
 		// Enable oppotunistic LPM
 		update_lpmd_state(LPMD_AUTO);
 		break;
 	case LPM_PROCESS_PRECONFIG:
+		(void)process_intel_pstate_mode(&lpmd_config);
 		// PROCESS-PRECONFIG: only per-process cpuset is active; no LPM
 		// transitions are driven by util/HFI/WLT.
 		update_lpmd_state(LPMD_PROCESS_PRECONFIG);
@@ -482,6 +490,8 @@ int lpmd_main(void)
 	if (ret)
 		goto cleanup;
 
+	(void)process_intel_pstate_mode(&lpmd_config);
+
 	pthread_mutex_init(&lpmd_mutex, NULL);
 
 	ret = detect_lpm_cpus(lpmd_config.lp_mode_cpus);
@@ -630,6 +640,7 @@ int lpmd_main(void)
 
 	return LPMD_SUCCESS;
 cleanup:
+	restore_intel_pstate_mode();
 	free_cpu_type_masks(&lpmd_config);
 	return ret;
 }

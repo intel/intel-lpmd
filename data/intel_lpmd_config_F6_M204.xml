@@ -134,6 +134,13 @@ for Intel Energy Optimizer (LPMD) daemon
 	<IgnoreITMT>0</IgnoreITMT>
 
 	<!--
+		Intel Pstate Mode
+		0: active
+		1: passive
+	-->
+	<IntelPstateMode>0</IntelPstateMode>
+
+	<!--
 		Use pre configured process-CPU affinity settings to determine LP mode enter/exit
 		0: disable UseProcessCPUSet upon LP-mode enter and re-enable UseProcessCPUSet upon LP-mode exit
 		1: do not touch UseProcessCPUSet setting during LP-mode enter/exit

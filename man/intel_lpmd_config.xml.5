@@ -127,6 +127,20 @@ configuration, where this flag can be defined per state. ITMT is only relevant
 for platforms before Lunar Lake and the debugfs file is not present on later
 platforms.
 .PP
+.B IntelPstateMode
+Select the Intel P-state driver mode to request during daemon startup.
+.IP \(bu 2
+0 : active mode (default)
+.IP \(bu 2
+1 : passive mode
+.PP
+If omitted, default is 0 (active).
+.PP
+When intel_lpmd transitions to OFF mode (for example via LPM_FORCE_OFF)
+or terminates, the daemon restores
+.B /sys/devices/system/cpu/intel_pstate/status
+to the value that was present before intel_lpmd first applied IntelPstateMode.
+.PP
 .B States
 Allows one to define per platform low power states. Each state defines
 has an entry condition and set of parameters to use.
@@ -343,6 +357,19 @@ definition in intel_lpmd_config_F18_M1.xml, intel_lpmd_config_F6_M189.xml,
 or other model-specific files. These overrides take precedence over
 process_cpuset.xml defaults at runtime.
 .PP
+In addition to <Cores>, <UClampMin>, and <UClampMax>, each class override
+inside <ClassDefaults> can define:
+.IP \(bu 2
+.B <GTIABias> / <gt_ia_bias>
+Unsigned 32-bit value (0..4294967295) written to the GT/IA bias sysfs node
+when that class becomes the active owner. When ownership changes or class
+overrides are no longer active, intel_lpmd restores the previously saved
+system value.
+.PP
+When intel_lpmd transitions to OFF mode or unbinds all managed process-cpuset
+entries, class ownership is cleared and GT/IA bias is restored to the value
+captured before class overrides were first applied.
+.PP
 .EX
 <!-- Example: intel_lpmd_config_F18_M1.xml -->
 <State>
@@ -361,9 +388,33 @@ process_cpuset.xml defaults at runtime.
             <Cores>ActiveLcores</Cores>
             <UClampMin>0</UClampMin>
             <UClampMax>256</UClampMax>
+			<GTIABias>24</GTIABias>
         </Background>
     </ClassDefaults>
 </State>
+.EE
+.PP
+.B GTIABias Ownership Example
+.PP
+If multiple active classes define <GTIABias>, intel_lpmd applies the value
+from the highest-priority active class. As process activity changes,
+ownership can move between classes, and the effective GT/IA bias updates
+accordingly.
+.PP
+.EX
+<ClassDefaults>
+	<UserInteractive>
+		<GTIABias>40</GTIABias>
+	</UserInteractive>
+	<Background>
+		<GTIABias>8</GTIABias>
+	</Background>
+</ClassDefaults>
+
+<!-- Behavior summary:
+	 - If a UserInteractive process is active, effective GTIABias = 40.
+	 - If only Background processes are active, effective GTIABias = 8.
+	 - When no GTIABias-owning class is active, previous system value is restored. -->
 .EE
 .PP
 .B Examples
@@ -435,6 +486,13 @@ The configuration file format conforms to XML specifications.
 		2: CPU idle injection
 	-->
 	<Mode>0|1|2</Mode>
+
+	<!--
+		Intel P-state mode
+		0: active (default)
+		1: passive
+	-->
+	<IntelPstateMode>0|1</IntelPstateMode>
 
 	<!--
 		Default behavior when Performance power setting is used

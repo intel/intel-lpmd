@@ -131,6 +131,13 @@ for Intel Energy Optimizer (LPMD) daemon
 	<IgnoreITMT>0</IgnoreITMT>
 
 	<!--
+		Intel Pstate Mode
+		0: active
+		1: passive
+	-->
+	<IntelPstateMode>0</IntelPstateMode>
+
+	<!--
 		Slider default configuration for AC and DC
 	-->
 	<BalancedSliderAC>1</BalancedSliderAC>

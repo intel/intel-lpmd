@@ -124,6 +124,13 @@ for Intel Energy Optimizer (LPMD) daemon
 	<IgnoreITMT>0</IgnoreITMT>
 
 	<!--
+		Intel Pstate Mode
+		0: active
+		1: passive
+	-->
+	<IntelPstateMode>0</IntelPstateMode>
+
+	<!--
 		config states for PantherLake 2P + 4E + 4L + 25W TDP platform in Client Power Lab
 	-->
 	<States>

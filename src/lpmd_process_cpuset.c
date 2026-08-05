@@ -18,6 +18,7 @@
 
 #include <dirent.h>
 #include <errno.h>
+#include <inttypes.h>
 #include <linux/cn_proc.h>
 #include <linux/connector.h>
 #include <linux/netlink.h>
@@ -34,6 +35,7 @@
 #define PROCESS_CPUSET_USER_CONFIG_FILE "process_cpuset_user.xml"
 
 #define PATH_INTEL_PSTATE_MAX_PERF_PCT "/sys/devices/system/cpu/intel_pstate/max_perf_pct"
+#define PATH_GT_IA_BIAS "/sys/kernel/debug/dri/0/gt0/gt_ia_bias"
 #define PATH_SOC_BALANCE_SLIDER "/sys/module/processor_thermal_soc_slider/parameters/slider_balance"
 #define PATH_SOC_OFFSET "/sys/module/processor_thermal_soc_slider/parameters/slider_offset"
 
@@ -53,6 +55,7 @@ static process_cpuset_t *g_pc_ctx;
 static int g_pc_connector_fd = -1;
 static struct class_tune_owner_t g_min_perf_owner;
 static struct class_tune_owner_t g_max_perf_owner;
+static struct class_tune_owner_t g_gt_ia_bias_owner;
 static struct class_tune_owner_t g_balance_slider_owner;
 static struct class_tune_owner_t g_slider_offset_owner;
 
@@ -65,6 +68,13 @@ struct perf_tune_cache_t {
 	char owner_class[64];
 };
 
+struct gt_ia_bias_cache_t {
+	int dirty;
+	int has_effective;
+	uint32_t effective_val;
+	char owner_class[64];
+};
+
 static struct perf_tune_cache_t g_min_perf_cache = {
 	.dirty = 1,
 	.on_battery = -1,
@@ -72,6 +82,9 @@ static struct perf_tune_cache_t g_min_perf_cache = {
 static struct perf_tune_cache_t g_max_perf_cache = {
 	.dirty = 1,
 	.on_battery = -1,
+};
+static struct gt_ia_bias_cache_t g_gt_ia_bias_cache = {
+	.dirty = 1,
 };
 static struct perf_tune_cache_t g_balance_slider_cache = {
 	.dirty = 1,
@@ -83,13 +96,23 @@ static struct perf_tune_cache_t g_slider_offset_cache = {
 };
 
 static int g_saved_max_perf_pct = SETTING_IGNORE;
+static uint32_t g_saved_gt_ia_bias;
+static int g_have_saved_gt_ia_bias;
 static int g_saved_balance_slider = -1;
 static int g_saved_slider_offset = -1;
+
+static int class_get_gt_ia_bias_override_value(const struct lpmd_config_t *config,
+					       const char *cls,
+					       uint32_t *value_out);
+static void apply_gt_ia_bias_value(uint32_t val);
+static void sync_gt_ia_bias_owner(const struct lpmd_config_t *config,
+				 const char *candidate_cls);
 
 static void mark_perf_tuning_dirty(void)
 {
 	g_min_perf_cache.dirty = 1;
 	g_max_perf_cache.dirty = 1;
+	g_gt_ia_bias_cache.dirty = 1;
 	g_balance_slider_cache.dirty = 1;
 	g_slider_offset_cache.dirty = 1;
 }
@@ -98,10 +121,12 @@ static void reset_perf_tuning_cache(void)
 {
 	memset(&g_min_perf_cache, 0, sizeof(g_min_perf_cache));
 	memset(&g_max_perf_cache, 0, sizeof(g_max_perf_cache));
+	memset(&g_gt_ia_bias_cache, 0, sizeof(g_gt_ia_bias_cache));
 	memset(&g_balance_slider_cache, 0, sizeof(g_balance_slider_cache));
 	memset(&g_slider_offset_cache, 0, sizeof(g_slider_offset_cache));
 	g_min_perf_cache.dirty = 1;
 	g_max_perf_cache.dirty = 1;
+	g_gt_ia_bias_cache.dirty = 1;
 	g_balance_slider_cache.dirty = 1;
 	g_slider_offset_cache.dirty = 1;
 	g_min_perf_cache.on_battery = -1;
@@ -123,6 +148,22 @@ static void append_tuning_field(char *buf, size_t cap, const char *name,
 		return;
 
 	snprintf(buf + used, cap - used, "%s%s=%d",
+		 used ? " " : "", name, value);
+}
+
+static void append_tuning_field_u32(char *buf, size_t cap, const char *name,
+				    uint32_t value, int present)
+{
+	size_t used;
+
+	if (!buf || !cap || !name || !present)
+		return;
+
+	used = strlen(buf);
+	if (used >= cap)
+		return;
+
+	snprintf(buf + used, cap - used, "%s%s=%" PRIu32,
 		 used ? " " : "", name, value);
 }
 
@@ -158,6 +199,9 @@ static void log_class_tuning_override(const char *class_name,
 	append_tuning_field(details, sizeof(details), "offset_dc",
 			   ovr->slider_offset_dc,
 			   ovr->present_mask & LPMD_CLASS_TUNE_SLIDER_OFFSET_DC);
+	append_tuning_field_u32(details, sizeof(details), "gt_ia_bias",
+			   ovr->gt_ia_bias,
+			   ovr->present_mask & LPMD_CLASS_TUNE_GT_IA_BIAS);
 
 	lpmd_log_debug("process_cpuset: tuning: %-18s mask=0x%02x %s\n",
 		       class_name, ovr->present_mask,
@@ -375,6 +419,17 @@ static void apply_class_slider_offset_override(const struct lpmd_config_t *confi
 			      cls ? cls : "?");
 }
 
+static void apply_class_gt_ia_bias_override(const struct lpmd_config_t *config,
+					     const char *cls)
+{
+	uint32_t val;
+
+	if (!class_get_gt_ia_bias_override_value(config, cls, &val))
+		return;
+
+	apply_gt_ia_bias_value(val);
+}
+
 static int pid_is_live(pid_t pid)
 {
 	if (pid <= 0)
@@ -551,6 +606,26 @@ static int class_get_slider_offset_override_value(const struct lpmd_config_t *co
 	return 1;
 }
 
+static int class_get_gt_ia_bias_override_value(const struct lpmd_config_t *config,
+					       const char *cls,
+					       uint32_t *value_out)
+{
+	const struct lpmd_class_tuning_override_t *ovr;
+
+	if (!config || !cls || !*cls || !value_out)
+		return 0;
+
+	ovr = class_tuning_for_name(config, cls);
+	if (!ovr || !ovr->present_mask)
+		return 0;
+
+	if (!(ovr->present_mask & LPMD_CLASS_TUNE_GT_IA_BIAS))
+		return 0;
+
+	*value_out = ovr->gt_ia_bias;
+	return 1;
+}
+
 /* Wrapper functions for class_has_override field (no value_out param) */
 static int class_has_min_perf_override(const struct lpmd_config_t *config,
 				       const char *cls)
@@ -564,6 +639,13 @@ static int class_has_max_perf_override(const struct lpmd_config_t *config,
 {
 	int dummy = 0;
 	return class_get_max_perf_override_value(config, cls, &dummy, NULL);
+}
+
+static int class_has_gt_ia_bias_override(const struct lpmd_config_t *config,
+					 const char *cls)
+{
+	uint32_t dummy = 0;
+	return class_get_gt_ia_bias_override_value(config, cls, &dummy);
 }
 
 static void apply_min_perf_value(int val, unsigned int scope_mask)
@@ -596,6 +678,16 @@ static void apply_max_perf_value(int val, unsigned int scope_mask)
 	if (process_max_perf_pct(&tmp_state))
 		lpmd_log_warn("process_cpuset: failed to apply effective max_perf_pct=%d scope=0x%x\n",
 			      val, scope_mask);
+}
+
+static void apply_gt_ia_bias_value(uint32_t val)
+{
+	char val_buf[16];
+
+	snprintf(val_buf, sizeof(val_buf), "0x%08" PRIx32, val);
+	if (lpmd_write_str(PATH_GT_IA_BIAS, val_buf, LPMD_LOG_DEBUG))
+		lpmd_log_warn("process_cpuset: failed to apply effective gt_ia_bias=%" PRIu32 "\n",
+			      val);
 }
 
 static void apply_balance_slider_value(const struct lpmd_config_t *config, int val)
@@ -717,6 +809,63 @@ static void reset_owned_max_perf_pct_to_zero(void)
 	}
 	if (process_max_perf_pct(&tmp_state))
 		lpmd_log_warn("process_cpuset: failed to restore owned max_perf_pct\n");
+}
+
+static void capture_owned_gt_ia_bias_state(void)
+{
+	char buf[128];
+	char token[32] = { 0 };
+	size_t i = 0;
+	char *endptr = NULL;
+	unsigned long long v;
+
+	if (lpmd_read_str((char *)PATH_GT_IA_BIAS, buf, sizeof(buf))) {
+		g_have_saved_gt_ia_bias = 0;
+		lpmd_log_warn("process_cpuset: failed to read current gt_ia_bias for restore\n");
+		return;
+	}
+
+	/*
+	 * Kernel/debugfs output may include annotations after the numeric value,
+	 * e.g. "0x80008000 (GT: ..., IA: ... )". Parse only the leading token.
+	 */
+	while (buf[i] && buf[i] != ' ' && buf[i] != '\t' &&
+	       buf[i] != '\n' && buf[i] != '\r' && i < sizeof(token) - 1) {
+		token[i] = buf[i];
+		i++;
+	}
+	token[i] = '\0';
+
+	if (!token[0]) {
+		g_have_saved_gt_ia_bias = 0;
+		lpmd_log_warn("process_cpuset: empty gt_ia_bias content '%s' for restore\n", buf);
+		return;
+	}
+
+	errno = 0;
+	v = strtoull(token, &endptr, 0);
+	if (errno || endptr == token || *endptr ||
+	    v > UINT32_MAX) {
+		g_have_saved_gt_ia_bias = 0;
+		lpmd_log_warn("process_cpuset: invalid gt_ia_bias content '%s' for restore\n", buf);
+		return;
+	}
+
+	g_saved_gt_ia_bias = (uint32_t)v;
+	g_have_saved_gt_ia_bias = 1;
+}
+
+static void reset_owned_gt_ia_bias_to_default(void)
+{
+	char val_buf[16];
+
+	if (!g_have_saved_gt_ia_bias)
+		return;
+
+	snprintf(val_buf, sizeof(val_buf), "0x%08" PRIx32, g_saved_gt_ia_bias);
+	if (lpmd_write_str(PATH_GT_IA_BIAS, val_buf, LPMD_LOG_DEBUG))
+		lpmd_log_warn("process_cpuset: failed to restore gt_ia_bias=%" PRIu32 "\n",
+			      g_saved_gt_ia_bias);
 }
 
 static void capture_owned_balance_slider_state(void)
@@ -967,6 +1116,88 @@ static void sync_max_perf_owner(const struct lpmd_config_t *config,
 		 "%s", best_cls);
 }
 
+static void sync_gt_ia_bias_owner(const struct lpmd_config_t *config,
+				 const char *candidate_cls)
+{
+	size_t n, i;
+	uint32_t best_val = 0;
+	char best_cls[sizeof(g_gt_ia_bias_owner.owner_class)] = { 0 };
+	int found = 0;
+
+	(void)candidate_cls;
+
+	if (!g_pc_ctx || !config)
+		return;
+
+	if (!g_gt_ia_bias_cache.dirty)
+		return;
+
+	n = process_cpuset_attached_count(g_pc_ctx);
+	for (i = 0; i < n; i++) {
+		pid_t pid = 0;
+		char unit[128] = { 0 };
+		const char *cls = NULL;
+		int use_p = 0, use_e = 0, use_l = 0;
+		uint32_t val;
+
+		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, unit,
+					   sizeof(unit), &cls,
+					   &use_p, &use_e, &use_l) < 0)
+			continue;
+		if (!pid_is_live(pid))
+			continue;
+		if (!class_get_gt_ia_bias_override_value(config, cls, &val))
+			continue;
+
+		if (!found || val > best_val) {
+			best_val = val;
+			snprintf(best_cls, sizeof(best_cls), "%s", cls ? cls : "");
+			found = 1;
+		}
+	}
+
+	if (!found) {
+		if (g_gt_ia_bias_owner.owner_class[0]) {
+			if (g_gt_ia_bias_owner.reset_override)
+				g_gt_ia_bias_owner.reset_override();
+			lpmd_log_info(
+				"process_cpuset: no active class gt_ia_bias override, restored default\n");
+			g_gt_ia_bias_owner.owner_class[0] = '\0';
+		}
+		g_gt_ia_bias_cache.dirty = 0;
+		g_gt_ia_bias_cache.has_effective = 0;
+		g_gt_ia_bias_cache.effective_val = 0;
+		g_gt_ia_bias_cache.owner_class[0] = '\0';
+		return;
+	}
+
+	if (g_gt_ia_bias_cache.has_effective &&
+	    g_gt_ia_bias_cache.effective_val == best_val &&
+	    !strcasecmp(g_gt_ia_bias_cache.owner_class, best_cls)) {
+		g_gt_ia_bias_cache.dirty = 0;
+		return;
+	}
+
+	if (!g_gt_ia_bias_owner.owner_class[0] &&
+	    g_gt_ia_bias_owner.capture_restore_state)
+		g_gt_ia_bias_owner.capture_restore_state();
+
+	if (strcasecmp(g_gt_ia_bias_owner.owner_class, best_cls)) {
+		snprintf(g_gt_ia_bias_owner.owner_class,
+			 sizeof(g_gt_ia_bias_owner.owner_class), "%s", best_cls);
+		lpmd_log_info(
+			"process_cpuset: class %s is now gt_ia_bias owner (effective=%" PRIu32 ")\n",
+			g_gt_ia_bias_owner.owner_class, best_val);
+	}
+
+	apply_gt_ia_bias_value(best_val);
+	g_gt_ia_bias_cache.dirty = 0;
+	g_gt_ia_bias_cache.has_effective = 1;
+	g_gt_ia_bias_cache.effective_val = best_val;
+	snprintf(g_gt_ia_bias_cache.owner_class,
+		 sizeof(g_gt_ia_bias_cache.owner_class), "%s", best_cls);
+}
+
 static void sync_balance_slider_owner(const struct lpmd_config_t *config,
 				  const char *candidate_cls)
 {
@@ -1171,6 +1402,13 @@ static void apply_class_slider_offset_override_for_pid(
 	sync_slider_offset_owner(config, NULL);
 }
 
+static void apply_class_gt_ia_bias_override_for_pid(
+	const struct lpmd_config_t *config, pid_t pid)
+{
+	(void)pid;
+	sync_gt_ia_bias_owner(config, NULL);
+}
+
 static struct class_tune_owner_t g_min_perf_owner = {
 	.field_name = "min_perf_pct",
 	.reset_desc = "reset to 0",
@@ -1187,6 +1425,15 @@ static struct class_tune_owner_t g_max_perf_owner = {
 	.apply_override = apply_class_max_perf_override,
 	.capture_restore_state = capture_owned_max_perf_pct_state,
 	.reset_override = reset_owned_max_perf_pct_to_zero,
+};
+
+static struct class_tune_owner_t g_gt_ia_bias_owner = {
+	.field_name = "gt_ia_bias",
+	.reset_desc = "restored",
+	.class_has_override = class_has_gt_ia_bias_override,
+	.apply_override = apply_class_gt_ia_bias_override,
+	.capture_restore_state = capture_owned_gt_ia_bias_state,
+	.reset_override = reset_owned_gt_ia_bias_to_default,
 };
 
 static struct class_tune_owner_t g_balance_slider_owner = {
@@ -1571,6 +1818,7 @@ void lpmd_process_cpuset_uninit(void)
 {
 	clear_class_tune_owner(&g_min_perf_owner, 1);
 	clear_class_tune_owner(&g_max_perf_owner, 1);
+	clear_class_tune_owner(&g_gt_ia_bias_owner, 1);
 	clear_class_tune_owner(&g_balance_slider_owner, 1);
 	clear_class_tune_owner(&g_slider_offset_owner, 1);
 	reset_perf_tuning_cache();
@@ -1597,6 +1845,7 @@ void lpmd_process_cpuset_unbind_all(void)
 
 	clear_class_tune_owner(&g_min_perf_owner, 1);
 	clear_class_tune_owner(&g_max_perf_owner, 1);
+	clear_class_tune_owner(&g_gt_ia_bias_owner, 1);
 	clear_class_tune_owner(&g_balance_slider_owner, 1);
 	clear_class_tune_owner(&g_slider_offset_owner, 1);
 	reset_perf_tuning_cache();
@@ -1649,6 +1898,7 @@ void lpmd_process_cpuset_rescan(void)
 	if (n <= 0) {
 		sync_min_perf_owner(get_lpmd_config(), NULL);
 		sync_max_perf_owner(get_lpmd_config(), NULL);
+		sync_gt_ia_bias_owner(get_lpmd_config(), NULL);
 		sync_balance_slider_owner(get_lpmd_config(), NULL);
 		sync_slider_offset_owner(get_lpmd_config(), NULL);
 		return;
@@ -1673,12 +1923,14 @@ void lpmd_process_cpuset_rescan(void)
 			continue;
 		sync_min_perf_owner(config, cls);
 		sync_max_perf_owner(config, cls);
+		sync_gt_ia_bias_owner(config, cls);
 		sync_balance_slider_owner(config, cls);
 		sync_slider_offset_owner(config, cls);
 	}
 
 	sync_min_perf_owner(config, NULL);
 	sync_max_perf_owner(config, NULL);
+	sync_gt_ia_bias_owner(config, NULL);
 	sync_balance_slider_owner(config, NULL);
 	sync_slider_offset_owner(config, NULL);
 }
@@ -1964,6 +2216,7 @@ void lpmd_process_cpuset_proc_connector_handle(void)
 
 			sync_min_perf_owner(config, NULL);
 			sync_max_perf_owner(config, NULL);
+			sync_gt_ia_bias_owner(config, NULL);
 			sync_balance_slider_owner(config, NULL);
 			sync_slider_offset_owner(config, NULL);
 			continue;
@@ -1985,6 +2238,7 @@ void lpmd_process_cpuset_proc_connector_handle(void)
 			if (config) {
 				apply_class_min_perf_override_for_pid(config, pid);
 				apply_class_max_perf_override_for_pid(config, pid);
+				apply_class_gt_ia_bias_override_for_pid(config, pid);
 				apply_class_balance_slider_override_for_pid(config, pid);
 				apply_class_slider_offset_override_for_pid(config, pid);
 			}

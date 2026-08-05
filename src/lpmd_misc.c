@@ -7,9 +7,27 @@
 /* ITMT Management */
 #define PATH_ITMT_CONTROL "/proc/sys/kernel/sched_itmt_enabled"
 #define PATH_ITMT_CONTROL_DEBUGFS "/sys/kernel/debug/x86/sched_itmt_enabled"
+#define PATH_INTEL_PSTATE_STATUS "/sys/devices/system/cpu/intel_pstate/status"
 
 static int has_itmt;
 static int saved_itmt = SETTING_IGNORE;
+static int intel_pstate_saved;
+static char saved_intel_pstate_mode[32];
+
+static void trim_trailing_ws(char *s)
+{
+	int len;
+
+	if (!s)
+		return;
+
+	len = strlen(s);
+	while (len > 0 && (s[len - 1] == '\n' || s[len - 1] == '\r' ||
+			   s[len - 1] == ' ' || s[len - 1] == '\t')) {
+		s[len - 1] = '\0';
+		len--;
+	}
+}
 
 int get_itmt(void)
 {
@@ -70,6 +88,61 @@ int process_itmt(struct lpmd_config_state_t *state)
 			return lpmd_write_int(PATH_ITMT_CONTROL, state->itmt_state, -1);
 		return ret;
 	}
+}
+
+int process_intel_pstate_mode(struct lpmd_config_t *config)
+{
+	char current_mode[sizeof(saved_intel_pstate_mode)] = { 0 };
+	char mode_active[] = "active";
+	char mode_passive[] = "passive";
+	char *mode;
+
+	if (!config)
+		return -1;
+
+	if (!intel_pstate_saved) {
+		if (lpmd_read_str((char *)PATH_INTEL_PSTATE_STATUS, current_mode,
+				 sizeof(current_mode))) {
+			lpmd_log_warn("Failed to read current intel_pstate mode\n");
+		} else {
+			trim_trailing_ws(current_mode);
+			if (current_mode[0]) {
+				snprintf(saved_intel_pstate_mode,
+					 sizeof(saved_intel_pstate_mode), "%s",
+					 current_mode);
+				intel_pstate_saved = 1;
+				lpmd_log_info("Saved original intel_pstate mode: %s\n",
+					      saved_intel_pstate_mode);
+			}
+		}
+	}
+
+	mode = config->intel_pstate_mode == 1 ? mode_passive : mode_active;
+	if (lpmd_write_str(PATH_INTEL_PSTATE_STATUS, mode, LPMD_LOG_INFO)) {
+		lpmd_log_warn("Failed to set intel_pstate mode to %s\n", mode);
+		return -1;
+	}
+
+	lpmd_log_info("Set intel_pstate mode to %s\n", mode);
+	return 0;
+}
+
+int restore_intel_pstate_mode(void)
+{
+	if (!intel_pstate_saved || !saved_intel_pstate_mode[0])
+		return 0;
+
+	if (lpmd_write_str(PATH_INTEL_PSTATE_STATUS, saved_intel_pstate_mode,
+			  LPMD_LOG_INFO)) {
+		lpmd_log_warn("Failed to restore intel_pstate mode to %s\n",
+			      saved_intel_pstate_mode);
+		return -1;
+	}
+
+	lpmd_log_info("Restored intel_pstate mode to %s\n",
+		      saved_intel_pstate_mode);
+	intel_pstate_saved = 0;
+	return 0;
 }
 
 /* Slider Management */
