@@ -86,12 +86,14 @@ specifies the default behavior for a given power profile.
 0 : opportunistic Low Power Mode enter/exit based on HFI/Utilization request.
 .IP \(bu 2
 1 : Always stay in Low Power Mode.
+.IP \(bu 2
+2 : Process preconfig mode (only process-cpuset policy is active).
 .PP
 .B HfiLpmEnable
 specifies if the HFI monitor can capture the HFI hints for Low Power Mode.
 .PP
 .B HfiSuvEnable
-specifies if the HFI monitor can capture the HFI hints for survivability mode.
+deprecated and ignored.
 .PP
 .B WLTHintEnable
 Enable use of hardware Workload type hints.
@@ -104,8 +106,23 @@ where WLT to coexists with UTIL (if GFX is enabled).
 .B WLTHintNotificationDelay
 Set hardware workload notification delay in milliseconds.
 .PP
+.B WLTHintPollEnable
+Enable polling fallback for workload type hints (0/1).
+.PP
+.B WLTHintMask
+Optional mask applied to workload type hints before matching state masks.
+.PP
 .B WLTProxyEnable
 Enable use of Proxy Workload type hints.
+.PP
+.B UseProcessCPUSet
+Enable per-process cpuset/classification policy integration (0/1).
+.PP
+.B EntryDelayMS / ExitDelayMS
+Utilization monitor entry/exit debounce delay in milliseconds.
+.PP
+.B EntryHystMS / ExitHystMS
+Utilization monitor entry/exit hysteresis in milliseconds.
 .PP
 .B util_entry_threshold
 specifies the system utilization threshold for entering Low Power Mode.
@@ -182,6 +199,15 @@ from /proc/stat. To enter into this state any active CPU utilization must
 be less or equal to this value.
 EnterCPULoadThres is checked before EntrySystemLoadThres to match a state.
 .PP
+.B ExitSystemLoadThres / ExitSystemLoadhysteresis
+System exit load threshold and its hysteresis for leaving a state.
+.PP
+.B ExitCPULoadThres
+CPU exit load threshold for leaving a state.
+.PP
+.B EnterGFXLoadThres / ExitGFXLoadThres / ExitGFXLoadHysteresis
+GFX load entry/exit thresholds and optional exit hysteresis.
+.PP
 .B WLTType
 Workload type value to enter into this state. If this value is defined
 then utilization based entry triggers are not used. To use this
@@ -195,6 +221,10 @@ are not used.
 .B ActiveCPUs
 Active CPUs in this state. The list can be comma separated or use "-" for
 a range. This is optional to have active CPUs in a state.
+.PP
+.B ActivePcores / ActiveEcores / ActiveLcores
+Per-core-type CPU activation controls for a state. These can be used instead
+of (or with) ActiveCPUs and feed the derived cpumask for that state.
 .PP
 .B EPP
 EPP to apply for this state. -1 to ignore.
@@ -365,6 +395,11 @@ Unsigned 32-bit value (0..4294967295) written to the GT/IA bias sysfs node
 when that class becomes the active owner. When ownership changes or class
 overrides are no longer active, intel_lpmd restores the previously saved
 system value.
+.IP \(bu 2
+.B <OverrideGlobalCPUSettings>
+Boolean (1/true/yes/on). When enabled for a class, that class can drive the
+global state cpumask override (system.slice/user.slice/machine.slice) while
+matching processes are attached.
 .PP
 When intel_lpmd transitions to OFF mode or unbinds all managed process-cpuset
 entries, class ownership is cleared and GT/IA bias is restored to the value
@@ -497,26 +532,29 @@ The configuration file format conforms to XML specifications.
 	<!--
 		Default behavior when Performance power setting is used
 		-1: force off. (Never enter Low Power Mode)
+		 2: process preconfig mode (process cpuset only)
 		 1: force on. (Always stay in Low Power Mode)
 		 0: auto. (opportunistic Low Power Mode enter/exit)
 	-->
-	<PerformanceDef>-1|0|1</PerformanceDef>
+	<PerformanceDef>-1|0|1|2</PerformanceDef>
 
 	<!--
 		Default behavior when Balanced power setting is used
 		-1: force off. (Never enter Low Power Mode)
+		 2: process preconfig mode (process cpuset only)
 		 1: force on. (Always stay in Low Power Mode)
 		 0: auto. (opportunistic Low Power Mode enter/exit)
 	-->
-	<BalancedDef>-1|0|1</BalancedDef>
+	<BalancedDef>-1|0|1|2</BalancedDef>
 
 	<!--
 		Default behavior when Power saver setting is used
 		-1: force off. (Never enter Low Power Mode)
+		 2: process preconfig mode (process cpuset only)
 		 1: force on. (Always stay in Low Power Mode)
 		 0: auto. (opportunistic Low Power Mode enter/exit)
 	-->
-	<PowersaverDef>-1|0|1</PowersaverDef>
+	<PowersaverDef>-1|0|1|2</PowersaverDef>
 
 	<!--
 		Use HFI LPM hints
@@ -529,8 +567,36 @@ The configuration file format conforms to XML specifications.
 		Use HFI SUV hints
 		0 : No
 		1 : Yes
+		(deprecated; ignored)
 	-->
 	<HfiSuvEnable>0|1</HfiSuvEnable>
+
+	<!--
+		Enable process cpuset integration
+		0 : No
+		1 : Yes
+	-->
+	<UseProcessCPUSet>0|1</UseProcessCPUSet>
+
+	<!--
+		Workload type hint polling fallback
+		0 : No
+		1 : Yes
+	-->
+	<WLTHintPollEnable>0|1</WLTHintPollEnable>
+
+	<!--
+		Optional workload type hint mask
+	-->
+	<WLTHintMask>Mask value</WLTHintMask>
+
+	<!--
+		Utilization monitor delays/hysteresis (ms)
+	-->
+	<EntryDelayMS>0..UTIL_DELAY_MAX</EntryDelayMS>
+	<ExitDelayMS>0..UTIL_DELAY_MAX</ExitDelayMS>
+	<EntryHystMS>0..UTIL_HYST_MAX</EntryHystMS>
+	<ExitHystMS>0..UTIL_HYST_MAX</ExitHystMS>
 
 	<!--
 		System utilization threshold to enter LP mode
