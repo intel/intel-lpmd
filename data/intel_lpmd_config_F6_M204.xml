@@ -158,145 +158,6 @@ for Intel Energy Optimizer (LPMD) daemon
 	<States>
 		<CPUFamily> 6 </CPUFamily>
 		<CPUModel> 204 </CPUModel>
-		<CPUConfig> 2P8E4L-25W </CPUConfig>
-
-		<!--
-		  Optional per-CPU-model override of process_cpuset.xml's
-		  <ClassDefaults>. Inside each class, "Cores" accepts the same
-		  token list as ActiveCores ("ActivePcores" / "ActiveEcores" /
-		  "ActiveLcores", comma- or whitespace-separated).
-
-		  Supported class nodes in this overlay:
-		    Realtime, UserInteractive, UserInitiated, Unclassified,
-		    Utility, Background, GameProfileCPU, GameProfileGPU,
-		    GameProfileMixed, CustomProfile0, CustomProfile1,
-		    CustomProfile2
-
-		  Optional per-class keys are also supported:
-		    UClampMin / UClampMax (aliases: uclamp_min / uclamp_max)
-
-		  Optional per-class tuning tags are also supported:
-		    MinPerfPctAC / MinPerfPctDC
-		      (aliases: min_perf_pct_ac / min_perf_pct_dc)
-		    MaxPerfPctAC / MaxPerfPctDC (aliases: MaxPerfAC / MaxPerfDC)
-		      (aliases: max_perf_pct_ac / max_perf_pct_dc)
-		    BalanceSliderAC / BalanceSliderDC
-		      (aliases: SliderBalanceAC / SliderBalanceDC,
-		       SliderBalnceAC / SliderBalnceDC)
-		    SliderOffsetAC / SliderOffsetDC
-
-		  Tags omitted in a class are left unchanged (no fallback forced).
-		  Classes not listed here keep values from process_cpuset.xml
-		  (or its built-in fallback).
-		-->
-		<ClassDefaults>
-			<Realtime>
-				<Cores>ActivePcores, ActiveEcores, ActiveLcores</Cores>
-			</Realtime>
-			<UserInteractive>
-				<Cores>ActivePcores, ActiveEcores, ActiveLcores</Cores>
-			</UserInteractive>
-			<UserInitiated>
-				<Cores>ActivePcores, ActiveEcores, ActiveLcores</Cores>
-			</UserInitiated>
-			<Background>
-				<Cores>ActiveLcores</Cores>
-			</Background>
-			<Unclassified>
-				<Cores>ActivePcores, ActiveEcores, ActiveLcores</Cores>
-			</Unclassified>
-			<GameProfileGPU>
-				<Cores>ActivePcores, ActiveEcores, ActiveLcores</Cores>
-				<MinPerfPctAC>50</MinPerfPctAC>
-				<BalanceSliderAC>2</BalanceSliderAC>
-				<SliderOffsetAC>0</SliderOffsetAC>
-			</GameProfileGPU>
-			<GameProfileMixed>
-				<Cores>ActivePcores, ActiveEcores, ActiveLcores</Cores>
-				<BalanceSliderAC>4</BalanceSliderAC>
-				<SliderOffsetAC>0</SliderOffsetAC>
-			</GameProfileMixed>
-		</ClassDefaults>
-
-		<State>
-			<ID> 1 </ID>
-			<Name> UTIL_IDLE </Name>
-			<WLTType> 1 </WLTType>
-			<EnterGFXLoadThres>50</EnterGFXLoadThres>
-			<ActiveLcores>*</ActiveLcores>
-
-			<IRQMigrate> -1 </IRQMigrate>
-			<BalanceSliderAC>3</BalanceSliderAC>
-			<BalanceSliderDC>3</BalanceSliderDC>
-			<SliderOffsetAC>3</SliderOffsetAC>
-			<SliderOffsetDC>3</SliderOffsetDC>
-
-			<MinPollInterval> 2000 </MinPollInterval>
-			<PollIntervalIncrement> 500 </PollIntervalIncrement>
-			<MaxPollInterval> 4000 </MaxPollInterval>
-		</State>
-		<State>
-			<ID> 2 </ID>
-			<Name> UTIL_NON_IDLE </Name>
-			<WLTTypeMask> 12 </WLTTypeMask>
-			<EnterGFXLoadThres>50</EnterGFXLoadThres>
-
-			<ActiveCPUs>*</ActiveCPUs>
-
-			<IRQMigrate> -1 </IRQMigrate>
-			<BalanceSliderAC>1</BalanceSliderAC>
-			<BalanceSliderDC>3</BalanceSliderDC>
-			<SliderOffsetAC>0</SliderOffsetAC>
-			<SliderOffsetDC>3</SliderOffsetDC>
-
-			<MinPollInterval> 1000 </MinPollInterval>
-			<PollIntervalIncrement> 500 </PollIntervalIncrement>
-			<MaxPollInterval> 2000 </MaxPollInterval>
-		</State>
-
-		<State>
-			<ID> 4 </ID>
-			<Name> UTIL_IDLE_GFX_BUSY </Name>
-			<WLTType> 1 </WLTType>
-			<EnterGFXLoadThres>100</EnterGFXLoadThres>
-			<IRQMigrate> -1 </IRQMigrate>
-
-			<ActiveCPUs>*</ActiveCPUs>
-
-			<BalanceSliderAC>3</BalanceSliderAC>
-			<BalanceSliderDC>3</BalanceSliderDC>
-			<SliderOffsetAC>0</SliderOffsetAC>
-			<SliderOffsetDC>3</SliderOffsetDC>
-
-			<MinPollInterval> 1000 </MinPollInterval>
-			<PollIntervalIncrement> 500 </PollIntervalIncrement>
-			<MaxPollInterval> 2000 </MaxPollInterval>
-		</State>
-
-		<State>
-			<ID> 5 </ID>
-			<Name> UTIL_BUSY_GFX_BUSY </Name>
-			<WLTTypeMask> 12 </WLTTypeMask>
-			<EnterGFXLoadThres>100</EnterGFXLoadThres>
-			<IRQMigrate> -1 </IRQMigrate>
-
-			<ActiveCPUs>*</ActiveCPUs>
-
-			<BalanceSliderAC>4</BalanceSliderAC>
-			<BalanceSliderDC>4</BalanceSliderDC>
-			<SliderOffsetAC>0</SliderOffsetAC>
-			<SliderOffsetDC>2</SliderOffsetDC>
-
-			<MinPollInterval> 1000 </MinPollInterval>
-			<PollIntervalIncrement> 500 </PollIntervalIncrement>
-			<MaxPollInterval> 2000 </MaxPollInterval>
-		</State>
-
-	</States>
-
-	<States>
-		<CPUFamily> 6 </CPUFamily>
-		<CPUModel> 204 </CPUModel>
 		<CPUConfig> * </CPUConfig>
 
 		<!--
@@ -345,7 +206,8 @@ for Intel Energy Optimizer (LPMD) daemon
 				<Cores>ActivePcores, ActiveEcores, ActiveLcores</Cores>
 			</Unclassified>
 			<GameProfileGPU>
-				<Cores>ActiveEcores, ActiveLcores</Cores>
+				<OverrideGlobalCPUSettings>1</OverrideGlobalCPUSettings>
+				<Cores>ActivePcores, ActiveEcores, ActiveLcores</Cores>
 				<MinPerfPctAC>50</MinPerfPctAC>
 				<BalanceSliderAC>2</BalanceSliderAC>
 				<SliderOffsetAC>0</SliderOffsetAC>
