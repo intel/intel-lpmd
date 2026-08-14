@@ -242,6 +242,8 @@ static void dump_state(struct lpmd_config_state_t *state, char *str, int debug)
 #define DUMP_STATE_BUF_SIZE	512
 	char buf[DUMP_STATE_BUF_SIZE];
 	char *cpus;
+	struct lpmd_config_t *config = get_lpmd_config();
+	enum cpumask_idx effective_idx = state->cpumask_idx;
 	int offset = 0;
 
 	if (debug && !in_debug_mode())
@@ -250,6 +252,9 @@ static void dump_state(struct lpmd_config_state_t *state, char *str, int debug)
 	offset += snprintf(buf + offset, DUMP_STATE_BUF_SIZE - offset,
 			   "[%6s] [%s] [%s]: ", str,
 			   lpmd_state_name[lpmd_state], state->name);
+
+	if (config && config->current_override_idx != CPUMASK_NONE)
+		effective_idx = config->current_override_idx;
 
 	if (state->wlt_type)
 		offset += snprintf(buf + offset, DUMP_STATE_BUF_SIZE - offset,
@@ -273,9 +278,9 @@ static void dump_state(struct lpmd_config_state_t *state, char *str, int debug)
 				   "GFX [%6d] ",
 				   state->enter_gfx_load_thres / 100);
 
-	cpus = get_cpus_str(state->cpumask_idx, false);
+	cpus = get_cpus_str(effective_idx, false);
 	offset += snprintf(buf + offset, DUMP_STATE_BUF_SIZE - offset,
-			   "CPUMASK [%d:%s] ", state->cpumask_idx,
+			   "CPUMASK [%d:%s] ", effective_idx,
 			   cpus ? cpus : "?");
 	offset += snprintf(buf + offset, DUMP_STATE_BUF_SIZE - offset,
 			   "IRQ [%d] ", state->irq_migrate);
@@ -415,6 +420,7 @@ static int update_override_state_if_needed(struct lpmd_config_t *config, int cur
 	const char *new_override_class = NULL;
 	int new_cpu_count = 0;
 	struct lpmd_config_state_t *state;
+	struct lpmd_config_state_t effective_state;
 	char cpumask_str[MAX_STR_LENGTH] = {0};
 
 	if (current_state_idx < 0 || current_state_idx >= MAX_STATES)
@@ -433,27 +439,28 @@ static int update_override_state_if_needed(struct lpmd_config_t *config, int cur
 		config->current_override_idx = new_override_idx;
 		config->current_override_class = new_override_class;
 		config->current_override_cpu_count = new_cpu_count;
+		effective_state = *state;
 
 		if (new_override_idx != CPUMASK_NONE) {
 			/* Override changed to a different class */
-			state->cpumask_idx = new_override_idx;
+			effective_state.cpumask_idx = new_override_idx;
 			snprintf(cpumask_str, sizeof(cpumask_str), "%s",
-				 get_cpus_hexstr(state->cpumask_idx, false));
+				 get_cpus_hexstr(effective_state.cpumask_idx, false));
 			lpmd_log_info(
 				"state %s: override switched to class=%s (cpus=%d) CPUMASK [%s]",
 				state->name, new_override_class, new_cpu_count, cpumask_str);
 			/* Re-apply cpumask to system with new override */
-			process_cgroup(config, state);
+			process_cgroup(config, &effective_state);
 		} else {
 			/* Override deactivated - restore to original state cpumask */
-			state->cpumask_idx = config->saved_state_cpumask_idx;
+			effective_state.cpumask_idx = config->saved_state_cpumask_idx;
 			snprintf(cpumask_str, sizeof(cpumask_str), "%s",
-				 get_cpus_hexstr(state->cpumask_idx, false));
+				 get_cpus_hexstr(effective_state.cpumask_idx, false));
 			lpmd_log_info(
 				"state %s: override deactivated, cpumask restored to [%s] (no classes with attached processes)",
 				state->name, cpumask_str);
 			/* Re-apply restored cpumask to system */
-			process_cgroup(config, state);
+			process_cgroup(config, &effective_state);
 		}
 		return 1;
 	}
@@ -505,7 +512,7 @@ static int enter_state(struct lpmd_config_t *config, int idx)
 		config->current_override_cpu_count = best_cpu_count;
 
 		lpmd_log_info(
-			"state %s: override active from class=%s (cpus=%d)",
+			"state %s: override active from class=%s (cpus=%d)\n",
 			state->name, best_override_class, best_cpu_count);
 	} else {
 		/* No override active now */
@@ -540,6 +547,7 @@ static void dump_data(struct lpmd_config_t *config, int idx)
 {
 	struct lpmd_config_state_t *state = &config->config_states[idx];
 	char buf[MAX_STR_LENGTH];
+	enum cpumask_idx effective_idx = state->cpumask_idx;
 	int epp, epb, ret;
 	char epp_str[32];
 	int offset = 0;
@@ -594,10 +602,13 @@ static void dump_data(struct lpmd_config_t *config, int idx)
 					   config->data.util_gfx % 100);
 	}
 
-	if (state->cpumask_idx != CPUMASK_NONE)
+	if (config->current_override_idx != CPUMASK_NONE)
+		effective_idx = config->current_override_idx;
+
+	if (effective_idx != CPUMASK_NONE)
 		offset += snprintf(buf + offset, MAX_STR_LENGTH - offset,
 				   "CPUMASK [%s] ",
-				   get_cpus_hexstr(state->cpumask_idx, false));
+				   get_cpus_hexstr(effective_idx, false));
 	else
 		offset += snprintf(buf + offset, MAX_STR_LENGTH - offset,
 				   "CPUMASK [%s] ",
@@ -1074,6 +1085,10 @@ static int build_global_override_cpumask_idx(struct lpmd_config_t *config,
 			use_e = 1;
 		} else if (!strcasecmp(token, "ActiveLcores")) {
 			use_l = 1;
+		} else if (!strcasecmp(token, "all") || !strcmp(token, "*")) {
+			use_p = 1;
+			use_e = 1;
+			use_l = 1;
 		} else {
 			size_t cur = strlen(literal_cpus);
 			if (cur && cur + 1 < sizeof(literal_cpus))
@@ -1230,7 +1245,7 @@ int lpmd_build_config_states(struct lpmd_config_t *lpmd_config)
 			lpmd_config->override_classes_count++;
 
 			lpmd_log_info(
-				"global cpu override: stored class=%s cpus=%d, will apply if processes attached",
+				"global cpu override: stored class=%s cpus=%d, will apply if processes attached\n",
 				classes[i].class_name, cpu_count);
 		}
 	}
