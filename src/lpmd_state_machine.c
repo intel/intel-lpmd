@@ -86,6 +86,7 @@ int lpmd_init_config_state(struct lpmd_config_state_t *state)
 	state->exit_system_load_hyst = 0;
 	state->enter_cpu_load_thres = 0;
 	state->exit_cpu_load_thres = 0;
+	state->exit_cpu_load_hyst = 0;
 	state->enter_gfx_load_thres = 0;
 	state->exit_gfx_load_thres = 0;
 	state->exit_gfx_load_hyst = 0;
@@ -131,7 +132,14 @@ int lpmd_init_config_state(struct lpmd_config_state_t *state)
 
 static int current_idx = DEFAULT_OFF;
 
-static int config_state_match(struct lpmd_config_t *config, int idx)
+/*
+ * Match the load data against the entry criteria of state idx.
+ *
+ * use_hyst applies the exit hysteresis of the state, which widens the load
+ * band it accepts. That only ever happens for the state currently in use,
+ * a state is always entered on its configured band.
+ */
+static int config_state_match_common(struct lpmd_config_t *config, int idx, int use_hyst)
 {
 	struct lpmd_config_state_t *state = &config->config_states[idx];
 	int bcpu = config->data.util_cpu;
@@ -157,27 +165,88 @@ static int config_state_match(struct lpmd_config_t *config, int idx)
 			return 0;
 	}
 
-	if (state->enter_cpu_load_thres && state->enter_cpu_load_thres < bcpu)
-		return 0;
+	/*
+	 * Load thresholds define the load band a state is meant for:
+	 *
+	 * Enter*LoadThres is the upper bound, the state does not apply once the
+	 * load is above it. Exit*LoadThres is the lower bound, the state is left
+	 * when the load falls below it. Exit*LoadHysteresis widens the band, but
+	 * only while the state is the one in use, so that a load hovering around
+	 * a bound does not make the state machine flip on every poll.
+	 */
+	if (state->enter_cpu_load_thres) {
+		int hyst = use_hyst && idx == current_idx ? state->exit_cpu_load_hyst : 0;
 
-	if (state->enter_gfx_load_thres && state->enter_gfx_load_thres < bgfx) {
-		if (!state->exit_gfx_load_hyst)
+		if (bcpu < 0)
 			return 0;
-		if ((state->entry_load_gfx + state->exit_gfx_load_hyst) < bgfx ||
-		    (state->enter_gfx_load_thres + state->exit_gfx_load_hyst) < bgfx)
+
+		if (bcpu > state->enter_cpu_load_thres) {
+			if (!hyst)
+				return 0;
+			if (bcpu > state->entry_load_cpu + hyst ||
+			    bcpu > state->enter_cpu_load_thres + hyst)
+				return 0;
+		}
+
+		if (state->exit_cpu_load_thres &&
+		    bcpu < state->exit_cpu_load_thres - hyst)
 			return 0;
 	}
 
-	if (state->entry_system_load_thres && state->entry_system_load_thres < bsys) {
-		if (!state->exit_system_load_hyst)
+	if (state->enter_gfx_load_thres) {
+		int hyst = use_hyst && idx == current_idx ? state->exit_gfx_load_hyst : 0;
+
+		if (bgfx < 0)
 			return 0;
-		if ((state->entry_load_sys + state->exit_system_load_hyst) < bsys ||
-		    (state->entry_system_load_thres + state->exit_system_load_hyst) < bsys)
+
+		if (bgfx > state->enter_gfx_load_thres) {
+			if (!hyst)
+				return 0;
+			if (bgfx > state->entry_load_gfx + hyst ||
+			    bgfx > state->enter_gfx_load_thres + hyst)
+				return 0;
+		}
+
+		if (state->exit_gfx_load_thres &&
+		    bgfx < state->exit_gfx_load_thres - hyst)
+			return 0;
+	}
+
+	if (state->entry_system_load_thres) {
+		int hyst = use_hyst && idx == current_idx ? state->exit_system_load_hyst : 0;
+
+		if (bsys < 0)
+			return 0;
+
+		if (bsys > state->entry_system_load_thres) {
+			if (!hyst)
+				return 0;
+			if (bsys > state->entry_load_sys + hyst ||
+			    bsys > state->entry_system_load_thres + hyst)
+				return 0;
+		}
+
+		if (state->exit_system_load_thres &&
+		    bsys < state->exit_system_load_thres - hyst)
 			return 0;
 	}
 
 	return 1;
 }
+
+/* Does the load fall inside the band state idx is configured for? */
+static int config_state_match(struct lpmd_config_t *config, int idx)
+{
+	return config_state_match_common(config, idx, 0);
+}
+
+/* Same, but the state in use also gets its exit hysteresis */
+static int config_state_match_hyst(struct lpmd_config_t *config, int idx)
+{
+	return config_state_match_common(config, idx, 1);
+}
+
+static int polling_enabled;
 
 static int get_config_state_interval(struct lpmd_config_t *config, int idx)
 {
@@ -314,6 +383,12 @@ static void dump_state(struct lpmd_config_state_t *state, char *str, int debug)
 #undef DUMP_STATE_BUF_SIZE
 }
 
+static int state_has_load_hyst(struct lpmd_config_state_t *state)
+{
+	return state->exit_cpu_load_hyst || state->exit_gfx_load_hyst ||
+	       state->exit_system_load_hyst;
+}
+
 static int choose_next_state(struct lpmd_config_t *config)
 {
 	int i;
@@ -334,9 +409,28 @@ static int choose_next_state(struct lpmd_config_t *config)
 	if (config->config_states[DEFAULT_HFI].valid)
 		return DEFAULT_HFI;
 
+	/*
+	 * Keep the state in use when it only still matches thanks to its exit
+	 * hysteresis. The load has left the band the state is configured for,
+	 * and without this a state listed before it would claim the hysteresis
+	 * band and the hysteresis would have no effect at all.
+	 *
+	 * This deliberately does not trigger while the load is inside the
+	 * configured band: there the state has no claim over the ones listed
+	 * before it, and pinning it there would keep a more specific state that
+	 * has just become eligible from ever being entered.
+	 */
+	if (current_idx >= CONFIG_STATE_BASE &&
+	    state_has_load_hyst(&config->config_states[current_idx]) &&
+	    config_state_match_hyst(config, current_idx) &&
+	    !config_state_match(config, current_idx)) {
+		dump_state(&config->config_states[current_idx], "  Keep", 1);
+		return current_idx;
+	}
+
 	/* Choose a config state */
 	for (i = CONFIG_STATE_BASE; i < CONFIG_STATE_BASE + config->config_state_count; ++i) {
-		if (config_state_match(config, i)) {
+		if (config_state_match_hyst(config, i)) {
 			dump_state(&config->config_states[i], "Choose", 1);
 			return i;
 		}
@@ -1144,6 +1238,24 @@ err:
 
 #define DEFAULT_POLL_RATE_MS	1000
 
+/*
+ * Convert a load threshold or hysteresis from the percent used in the config
+ * file to the 0.01% unit the utilization data uses.
+ */
+static int scale_load_config(struct lpmd_config_state_t *state, const char *name,
+			     int *val)
+{
+	if (*val < 0 || *val > 100) {
+		lpmd_log_warn("Ignore state %s: invalid %s %d\n", state->name, name,
+			      *val);
+		return 1;
+	}
+
+	*val *= 100;
+
+	return 0;
+}
+
 int lpmd_build_config_states(struct lpmd_config_t *lpmd_config)
 {
 	struct lpmd_config_state_t *state;
@@ -1173,25 +1285,29 @@ int lpmd_build_config_states(struct lpmd_config_t *lpmd_config)
 		if (state->poll_interval_increment <= 0)
 			state->poll_interval_increment = -1;
 
-		if (state->entry_system_load_thres < 0 || state->entry_system_load_thres > 100)
+		/*
+		 * Every load threshold and hysteresis is configured in percent
+		 * and compared against a load in 0.01% units.
+		 */
+		if (scale_load_config(state, "EntrySystemLoadThres",
+				      &state->entry_system_load_thres) ||
+		    scale_load_config(state, "ExitSystemLoadThres",
+				      &state->exit_system_load_thres) ||
+		    scale_load_config(state, "ExitSystemLoadHysteresis",
+				      &state->exit_system_load_hyst) ||
+		    scale_load_config(state, "EnterCPULoadThres",
+				      &state->enter_cpu_load_thres) ||
+		    scale_load_config(state, "ExitCPULoadThres",
+				      &state->exit_cpu_load_thres) ||
+		    scale_load_config(state, "ExitCPULoadHysteresis",
+				      &state->exit_cpu_load_hyst) ||
+		    scale_load_config(state, "EnterGFXLoadThres",
+				      &state->enter_gfx_load_thres) ||
+		    scale_load_config(state, "ExitGFXLoadThres",
+				      &state->exit_gfx_load_thres) ||
+		    scale_load_config(state, "ExitGFXLoadHysteresis",
+				      &state->exit_gfx_load_hyst))
 			continue;
-		else
-			state->entry_system_load_thres *= 100;
-
-		if (state->enter_cpu_load_thres < 0 || state->enter_cpu_load_thres > 100)
-			continue;
-		else
-			state->enter_cpu_load_thres *= 100;
-
-		if (state->exit_cpu_load_thres < 0 || state->exit_cpu_load_thres > 100)
-			continue;
-		else
-			state->exit_cpu_load_thres *= 100;
-
-		if (state->enter_gfx_load_thres < 0 || state->enter_gfx_load_thres > 100)
-			continue;
-		else
-			state->enter_gfx_load_thres *= 100;
 
 		state->valid = 1;
 	}

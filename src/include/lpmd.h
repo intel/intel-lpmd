@@ -217,6 +217,7 @@ struct lpmd_config_state_t {
 	int exit_system_load_hyst;
 	int enter_cpu_load_thres;
 	int exit_cpu_load_thres;
+	int exit_cpu_load_hyst;
 	int enter_gfx_load_thres;
 	int exit_gfx_load_thres;
 	int exit_gfx_load_hyst;

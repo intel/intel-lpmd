@@ -323,13 +323,18 @@ static void lpmd_parse_state(xmlDoc *doc, xmlNode *a_node, struct lpmd_config_t 
 			state->entry_system_load_thres = strtol(tmp_value, &pos, 10);
 		if (!strcmp((const char *)cur_node->name, "ExitSystemLoadThres"))
 			state->exit_system_load_thres = strtol(tmp_value, &pos, 10);
-		if (!strcmp((const char *)cur_node->name, "ExitSystemLoadhysteresis"))
+		/* The lowercase "hysteresis" spelling is what the man page has
+		 * always documented, accept the CPU/GFX spelling as well */
+		if (!strncmp((const char *)cur_node->name, "ExitSystemLoadhysteresis", strlen("ExitSystemLoadhysteresis")) ||
+		    !strncmp((const char *)cur_node->name, "ExitSystemLoadHysteresis", strlen("ExitSystemLoadHysteresis")))
 			state->exit_system_load_hyst = strtol(tmp_value, &pos, 10);
 		if (!strcmp((const char *)cur_node->name, "EnterCPULoadThres"))
 			state->enter_cpu_load_thres = strtol(tmp_value, &pos, 10);
 		if (!strcmp((const char *)cur_node->name, "ExitCPULoadThres"))
 			state->exit_cpu_load_thres = strtol(tmp_value, &pos, 10);
-		if (!strcmp((const char *)cur_node->name, "EnterGFXLoadThres"))
+		if (!strncmp((const char *)cur_node->name, "ExitCPULoadHysteresis", strlen("ExitCPULoadHysteresis")))
+			state->exit_cpu_load_hyst = strtol(tmp_value, &pos, 10);
+		if (!strncmp((const char *)cur_node->name, "EnterGFXLoadThres", strlen("EnterGFXLoadThres")))
 			state->enter_gfx_load_thres = strtol(tmp_value, &pos, 10);
 		if (!strcmp((const char *)cur_node->name, "ExitGFXLoadThres"))
 			state->exit_gfx_load_thres = strtol(tmp_value, &pos, 10);
