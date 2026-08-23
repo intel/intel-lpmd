@@ -344,11 +344,25 @@ void reset_polling(void)
 	hfi_timeout_cached_polling = 0;
 }
 
+/* Monotonic time in msec, used to schedule the utilization sampling */
+static unsigned long long get_time_ms(void)
+{
+	struct timespec ts;
+
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+
+	return (unsigned long long)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+}
+
 // LPMD processing thread. This is callback to pthread lpmd_core_main
 static void *lpmd_core_main_loop(void *arg)
 {
 	struct message_capsul_t msg;
 	int wlt_hint, result, n;
+	/* Deadline of the next utilization sampling */
+	unsigned long long next_util_ms = 0;
+	unsigned long long now;
+	int interval, timeout;
 
 	/* Rescan /proc every 60 seconds to bind any matching PIDs spawned
 	 * after lpmd_process_cpuset_init() ran at startup. */
@@ -361,12 +375,27 @@ static void *lpmd_core_main_loop(void *arg)
 		if (get_lpmd_state() == LPMD_TERMINATE)
 			break;
 
-		if (lpmd_config.data.polling_interval <= 0)
-			lpmd_config.data.polling_interval = process_cpuset_rescan_interval * 1000;
+		/* Nothing needs polling, only wake up for the periodic rescan */
+		interval = lpmd_config.data.polling_interval;
+		if (interval <= 0)
+			interval = process_cpuset_rescan_interval * 1000;
 
-		n = poll (poll_fds, poll_fd_cnt, lpmd_config.data.polling_interval);
+		now = get_time_ms();
+
+		/*
+		 * Arm the sampling deadline, pulling it in when the polling
+		 * interval got shortened by the state machine.
+		 */
+		if (!next_util_ms || next_util_ms > now + (unsigned long long)interval)
+			next_util_ms = now + interval;
+
+		timeout = next_util_ms > now ? (int)(next_util_ms - now) : 0;
+
+		n = poll (poll_fds, poll_fd_cnt, timeout);
 		if (n < 0) {
-			lpmd_log_warn("Write to pipe failed\n");
+			if (errno == EINTR)
+				continue;
+			lpmd_log_warn("poll failed: %s\n", strerror(errno));
 			continue;
 		}
 		dump_poll_results(n);
@@ -397,8 +426,17 @@ static void *lpmd_core_main_loop(void *arg)
 			}
 		}
 
-		/* Polling time out, update polling data */
-		if (n == 0 && lpmd_config.util_monitor && lpmd_config.data.polling_interval > 0) {
+		/*
+		 * Sampling deadline expired, update polling data. This is done on
+		 * the deadline and not only when poll() times out, because a
+		 * steady stream of WLT, uevent or proc connector events would
+		 * otherwise starve the update and leave the state machine matching
+		 * states against a stale CPU and GFX load.
+		 */
+		if (get_time_ms() >= next_util_ms) {
+			/* Re-arm at the top of the loop, with the new interval */
+			next_util_ms = 0;
+
 			update_reason(UPDATE_UTIL);
 			util_update(&lpmd_config);
 
