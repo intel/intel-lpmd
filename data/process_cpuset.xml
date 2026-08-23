@@ -1601,7 +1601,7 @@
         <Classification>background</Classification>
     </Process>
 
-    <!-- Steam Games -->
+    <!-- Example on how Steam Games, can be configured with own class 
     <Process>
         <Name>Spaceship*</Name>
 	<AllowSession>1</AllowSession>
@@ -1624,10 +1624,16 @@
     </Process>
 
     <Process>
-        <Name>hitman*</Name>
+        <Name>_hitman*</Name>
 	<AllowSession>1</AllowSession>
-	<Classification>game_profile_mixed</Classification>
+	<Classification>game_profile_cpu</Classification>
         <AffinityAllThreads>1</AffinityAllThreads>
     </Process>
-
+    <Process>
+        <Name>Strange*</Name>
+	<AllowSession>1</AllowSession>
+	<Classification>game_profile_gpu</Classification>
+        <AffinityAllThreads>1</AffinityAllThreads>
+    </Process>
+    -->
 </ProcessCpusetConfig>
