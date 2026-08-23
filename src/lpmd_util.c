@@ -15,6 +15,7 @@
 #include <sys/stat.h>
 #include <sys/un.h>
 #include <errno.h>
+#include <limits.h>
 #include <pthread.h>
 
 #include "lpmd.h"
@@ -49,123 +50,233 @@ static int busy_sys = -1;
 static int busy_cpu = -1;
 static int busy_gfx = -1;
 
-char *path_gfx_rc6;
-char *path_sam_mc6;
+/*
+ * Graphics utilization is derived from the GT idle residency counters (RC6 for
+ * a render/compute GT, MC6 for a media GT) exposed by the xe and i915 drivers.
+ *
+ * DRM card numbering is not stable and a system can have more than one Intel
+ * GPU, so probe every card instead of assuming card0, and keep every counter
+ * found. Utilization is that of the busiest GT, so it does not matter which
+ * card or GT the workload actually runs on.
+ */
+#define MAX_GFX_COUNTERS	8
+#define MAX_DRM_CARDS		8
+#define MAX_GT_TILES		2
+#define MAX_GTS			4
 
-static int probe_gfx_util_sysfs(void)
+/* Return values of get_gfx_util_sysfs() besides a valid 0-10000 utilization */
+#define GFX_UTIL_NO_SAMPLE	-1	/* Not enough samples collected yet */
+#define GFX_UTIL_ERROR		-2	/* No counter could be read at all */
+
+struct gfx_counter_t {
+	char path[160];
+	/* Previous residency snapshot, ULLONG_MAX when there is none */
+	unsigned long long prev;
+};
+
+static struct gfx_counter_t gfx_counters[MAX_GFX_COUNTERS];
+static int gfx_counter_count;
+
+static int read_residency_ms(const char *path, unsigned long long *val)
 {
 	FILE *fp;
-	char buf[8];
 	int ret;
 
-	if (access("/sys/class/drm/card0/device/tile0/gt0/gtidle/idle_residency_ms", R_OK))
-		return 1;
-
-	fp = fopen("/sys/class/drm/card0/device/tile0/gt0/gtidle/name", "r");
+	fp = fopen(path, "r");
 	if (!fp)
 		return 1;
 
-	ret = fread(buf, sizeof(char), 7, fp);
-	if (!ret) {
-		fclose(fp);
+	ret = fscanf(fp, "%llu", val);
+	fclose(fp);
+
+	return ret == 1 ? 0 : 1;
+}
+
+static int add_gfx_counter(const char *path, const char *kind)
+{
+	struct gfx_counter_t *counter;
+
+	if (gfx_counter_count >= MAX_GFX_COUNTERS) {
+		lpmd_log_debug("Ignore %s, too many gfx counters\n", path);
 		return 1;
 	}
 
-	fclose(fp);
+	if (access(path, R_OK))
+		return 1;
 
-	/* buf is not null terminated - needs strncmp() */
-	if (ret >= strlen("gt0-rc") && !strncmp(buf, "gt0-rc", strlen("gt0-rc"))) {
-		if (!access("/sys/class/drm/card0/device/tile0/gt0/gtidle/idle_residency_ms", R_OK))
-			path_gfx_rc6 = "/sys/class/drm/card0/device/tile0/gt0/gtidle/idle_residency_ms";
-		if (!access("/sys/class/drm/card0/device/tile0/gt1/gtidle/idle_residency_ms", R_OK))
-			path_sam_mc6 = "/sys/class/drm/card0/device/tile0/gt1/gtidle/idle_residency_ms";
-	} else if (ret >= strlen("gt0-mc") && !strncmp(buf, "gt0-mc", strlen("gt0-mc"))) {
-		if (!access("/sys/class/drm/card0/device/tile0/gt1/gtidle/idle_residency_ms", R_OK))
-			path_gfx_rc6 = "/sys/class/drm/card0/device/tile0/gt1/gtidle/idle_residency_ms";
-		if (!access("/sys/class/drm/card0/device/tile0/gt0/gtidle/idle_residency_ms", R_OK))
-			path_sam_mc6 = "/sys/class/drm/card0/device/tile0/gt0/gtidle/idle_residency_ms";
-	}
-	lpmd_log_debug("Use %s for gfx rc6\n", path_gfx_rc6);
-	lpmd_log_debug("Use %s for sam mc6\n", path_sam_mc6);
+	counter = &gfx_counters[gfx_counter_count++];
+	snprintf(counter->path, sizeof(counter->path), "%s", path);
+	counter->prev = ULLONG_MAX;
+
+	lpmd_log_debug("Use %s for gfx %s\n", path, kind);
+
 	return 0;
 }
 
-static int get_gfx_util_sysfs(unsigned long long time_ms)
+/* xe reports the GT type in gtidle/name: "gtN-rc" render, "gtN-mc" media */
+static const char *xe_gt_kind(int card, int tile, int gt)
 {
-	static unsigned long long gfx_rc6_prev = ULLONG_MAX, sam_mc6_prev = ULLONG_MAX;
-	unsigned long long gfx_rc6 = ULLONG_MAX, sam_mc6 = ULLONG_MAX;
+	char path[160];
+	char buf[16];
 	FILE *fp;
-	unsigned long long gfx_util, sam_util;
-	int ret;
+	size_t ret;
 
-	gfx_util = -1;
-	sam_util = -1;
+	snprintf(path, sizeof(path),
+		 "/sys/class/drm/card%d/device/tile%d/gt%d/gtidle/name", card, tile,
+		 gt);
 
-	fp = fopen(path_gfx_rc6, "r");
-	if (fp) {
-		ret = fscanf(fp, "%lld", &gfx_rc6);
-		if (ret != 1)
-			gfx_rc6 = ULLONG_MAX;
-		fclose(fp);
-	}
+	fp = fopen(path, "r");
+	if (!fp)
+		return "rc6";
 
-	fp = fopen(path_sam_mc6, "r");
-	if (fp) {
-		ret = fscanf(fp, "%lld", &sam_mc6);
-		if (ret != 1)
-			sam_mc6 = ULLONG_MAX;
-		fclose(fp);
-	}
+	ret = fread(buf, sizeof(char), sizeof(buf) - 1, fp);
+	fclose(fp);
 
-	if (gfx_rc6 == ULLONG_MAX && sam_mc6 == ULLONG_MAX)
-		return -1;
+	buf[ret] = '\0';
 
-	if (gfx_rc6 != ULLONG_MAX) {
-		if (gfx_rc6_prev != ULLONG_MAX)
-			gfx_util = 10000 - (gfx_rc6 - gfx_rc6_prev) * 10000 / time_ms;
-		gfx_rc6_prev = gfx_rc6;
-	}
-
-	if (sam_mc6 != ULLONG_MAX) {
-		if (sam_mc6_prev != ULLONG_MAX)
-			sam_util = 10000 - (sam_mc6 - sam_mc6_prev) * 10000 / time_ms;
-		sam_mc6_prev = sam_mc6;
-	}
-
-	return gfx_util > sam_util ? gfx_util : sam_util;
+	return strstr(buf, "-mc") ? "mc6" : "rc6";
 }
 
-/* Get GFX_RC6 and SAM_MC6 from sysfs and calculate gfx util based on this */
+static int probe_gfx_util_sysfs(void)
+{
+	char path[160];
+	int card, tile, gt, found;
+
+	gfx_counter_count = 0;
+
+	for (card = 0; card < MAX_DRM_CARDS; card++) {
+		/* xe: one gtidle counter per GT, per tile */
+		for (tile = 0; tile < MAX_GT_TILES; tile++) {
+			for (gt = 0; gt < MAX_GTS; gt++) {
+				snprintf(path, sizeof(path),
+					 "/sys/class/drm/card%d/device/tile%d/gt%d/gtidle/idle_residency_ms",
+					 card, tile, gt);
+				if (access(path, R_OK))
+					continue;
+
+				add_gfx_counter(path, xe_gt_kind(card, tile, gt));
+			}
+		}
+
+		/* i915 with per GT sysfs */
+		found = 0;
+		for (gt = 0; gt < MAX_GTS; gt++) {
+			snprintf(path, sizeof(path),
+				 "/sys/class/drm/card%d/gt/gt%d/rc6_residency_ms",
+				 card, gt);
+			if (!add_gfx_counter(path, "rc6"))
+				found = 1;
+		}
+
+		/* i915 single GT, same counter as gt/gt0 when that one exists */
+		if (found)
+			continue;
+
+		snprintf(path, sizeof(path),
+			 "/sys/class/drm/card%d/power/rc6_residency_ms", card);
+		add_gfx_counter(path, "rc6");
+	}
+
+	if (!gfx_counter_count) {
+		lpmd_log_debug("No gfx idle residency counter found\n");
+		return 1;
+	}
+
+	return 0;
+}
+
+/*
+ * Utilization of the busiest GT over the last time_ms milliseconds.
+ * A zero time_ms only refreshes the snapshots.
+ */
+static int get_gfx_util_sysfs(unsigned long long time_ms)
+{
+	int i, busy = GFX_UTIL_ERROR;
+
+	for (i = 0; i < gfx_counter_count; i++) {
+		struct gfx_counter_t *counter = &gfx_counters[i];
+		unsigned long long cur, delta;
+		int util;
+
+		if (read_residency_ms(counter->path, &cur)) {
+			/* Start over on the next sample */
+			counter->prev = ULLONG_MAX;
+			continue;
+		}
+
+		if (busy == GFX_UTIL_ERROR)
+			busy = GFX_UTIL_NO_SAMPLE;
+
+		/* First sample, or the counter was reset behind our back */
+		if (!time_ms || counter->prev == ULLONG_MAX || cur < counter->prev) {
+			counter->prev = cur;
+			continue;
+		}
+
+		delta = cur - counter->prev;
+		counter->prev = cur;
+
+		/*
+		 * Idle residency can slightly exceed the sampling window because
+		 * the counter and the timestamp are not read atomically. Clamp
+		 * instead of underflowing.
+		 */
+		if (delta >= time_ms)
+			util = 0;
+		else
+			util = 10000 - delta * 10000 / time_ms;
+
+		if (util > busy)
+			busy = util;
+	}
+
+	return busy;
+}
+
+/* Get GT idle residency from sysfs and calculate gfx util based on this */
 static int parse_gfx_util_sysfs(void)
 {
 	static int gfx_sysfs_available = 1;
 	static struct timespec ts_prev;
 	struct timespec ts_cur;
-	unsigned long time_ms;
-	int ret;
+	long long time_ms;
+	int busy;
 
 	busy_gfx = -1;
 
 	if (!gfx_sysfs_available)
 		return 1;
 
+	if (!gfx_counter_count && probe_gfx_util_sysfs()) {
+		gfx_sysfs_available = 0;
+		return 1;
+	}
+
 	clock_gettime(CLOCK_MONOTONIC, &ts_cur);
 
-	if (!ts_prev.tv_sec && !ts_prev.tv_nsec) {
-		ret = probe_gfx_util_sysfs();
-		if (ret) {
+	time_ms = 0;
+	if (ts_prev.tv_sec || ts_prev.tv_nsec)
+		time_ms = ((long long)ts_cur.tv_sec - ts_prev.tv_sec) * 1000 +
+			  ((long long)ts_cur.tv_nsec - ts_prev.tv_nsec) / 1000000;
+	if (time_ms < 0)
+		time_ms = 0;
+
+	ts_prev = ts_cur;
+
+	busy = get_gfx_util_sysfs(time_ms);
+
+	if (busy == GFX_UTIL_ERROR) {
+		/* The counters went away, re-probe and fall back to MSR if needed */
+		lpmd_log_debug("Failed to read gfx idle residency, re-probing\n");
+		if (probe_gfx_util_sysfs()) {
 			gfx_sysfs_available = 0;
 			return 1;
 		}
-		ts_prev = ts_cur;
 		return 0;
 	}
 
-	time_ms = (ts_cur.tv_sec - ts_prev.tv_sec) * 1000 +
-		   (ts_cur.tv_nsec - ts_prev.tv_nsec) / 1000000;
-
-	ts_prev = ts_cur;
-	busy_gfx = get_gfx_util_sysfs(time_ms);
+	if (busy >= 0)
+		busy_gfx = busy;
 
 	return 0;
 }
@@ -175,6 +286,7 @@ static int parse_gfx_util_sysfs(void)
 static int parse_gfx_util_msr(void)
 {
 	static uint64_t val_prev, tsc_prev;
+	static int primed;
 	uint64_t _busy_gfx, val, tsc;
 	int cpu;
 
@@ -189,16 +301,24 @@ static int parse_gfx_util_msr(void)
 	if (val == UINT64_MAX)
 		goto err;
 
-	if (!tsc_prev || !val_prev) {
+	/* A never busy GFX reads 0, so track the first sample explicitly */
+	if (!primed) {
+		primed = 1;
 		tsc_prev = tsc;
 		val_prev = val;
 		return 0;
 	}
 
-	if (val > val_prev && tsc > tsc_prev) {
-		_busy_gfx = abs(val - val_prev) * 10000ULL / abs(tsc - tsc_prev);
-		if (_busy_gfx < INT_MAX)
-			busy_gfx = (int)_busy_gfx;
+	/*
+	 * Do not use abs() on the deltas: it takes an int, and the TSC delta
+	 * alone exceeds INT_MAX after ~0.7 second on a 3GHz part, which turns
+	 * the divisor into an unrelated value.
+	 */
+	if (val >= val_prev && tsc > tsc_prev) {
+		_busy_gfx = (val - val_prev) * 10000ULL / (tsc - tsc_prev);
+		if (_busy_gfx > 10000)
+			_busy_gfx = 10000;
+		busy_gfx = (int)_busy_gfx;
 	}
 
 	tsc_prev = tsc;
