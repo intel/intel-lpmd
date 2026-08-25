@@ -50,6 +50,15 @@ static int busy_sys = -1;
 static int busy_cpu = -1;
 static int busy_gfx = -1;
 
+static inline unsigned long long safe_u64_sub(unsigned long long a,
+					 unsigned long long b)
+{
+	if (a < b)
+		return 0;
+
+	return a - b;
+}
+
 /*
  * Graphics utilization is derived from the GT idle residency counters (RC6 for
  * a render/compute GT, MC6 for a media GT) exposed by the xe and i915 drivers.
@@ -195,7 +204,7 @@ static int get_gfx_util_sysfs(unsigned long long time_ms)
 
 	for (i = 0; i < gfx_counter_count; i++) {
 		struct gfx_counter_t *counter = &gfx_counters[i];
-		unsigned long long cur, delta;
+		unsigned long long cur = 0, delta = 0;
 		int util;
 
 		if (read_residency_ms(counter->path, &cur)) {
@@ -213,7 +222,7 @@ static int get_gfx_util_sysfs(unsigned long long time_ms)
 			continue;
 		}
 
-		delta = cur - counter->prev;
+		delta = safe_u64_sub(cur, counter->prev);
 		counter->prev = cur;
 
 		/*
@@ -223,8 +232,11 @@ static int get_gfx_util_sysfs(unsigned long long time_ms)
 		 */
 		if (delta >= time_ms)
 			util = 0;
-		else
-			util = 10000 - delta * 10000 / time_ms;
+		else {
+			unsigned long long idle_ms = safe_u64_sub((unsigned long long)time_ms, delta);
+			util = (int)((((unsigned __int128)idle_ms * 10000ULL) /
+					 (unsigned long long)time_ms));
+		}
 
 		if (util > busy)
 			busy = util;
@@ -315,10 +327,15 @@ static int parse_gfx_util_msr(void)
 	 * the divisor into an unrelated value.
 	 */
 	if (val >= val_prev && tsc > tsc_prev) {
-		_busy_gfx = (val - val_prev) * 10000ULL / (tsc - tsc_prev);
-		if (_busy_gfx > 10000)
-			_busy_gfx = 10000;
-		busy_gfx = (int)_busy_gfx;
+		unsigned long long delta_val = safe_u64_sub(val, val_prev);
+		unsigned long long delta_tsc = safe_u64_sub(tsc, tsc_prev);
+
+		if (delta_tsc != 0) {
+			_busy_gfx = (delta_val * 10000ULL) / delta_tsc;
+			if (_busy_gfx > 10000)
+				_busy_gfx = 10000;
+			busy_gfx = (int)_busy_gfx;
+		}
 	}
 
 	tsc_prev = tsc;
@@ -348,10 +365,11 @@ static int calculate_busypct(struct proc_stat_info *cur, struct proc_stat_info *
 	unsigned long long busy = 0, total = 0;
 
 	for (idx = STAT_USER; idx < STAT_MAX; idx++) {
-		total += (cur->stat[idx] - prev->stat[idx]);
-//		 Align with the "top" utility logic
+		unsigned long long delta = safe_u64_sub(cur->stat[idx], prev->stat[idx]);
+
+		total += delta;
 		if (idx != STAT_IDLE && idx != STAT_IOWAIT)
-			busy += (cur->stat[idx] - prev->stat[idx]);
+			busy += delta;
 	}
 
 	if (total)
