@@ -46,6 +46,144 @@ static gboolean
  */
 static guint  g_focus_helper_watch_id;
 static gchar *g_focus_helper_owner;
+static guint64 g_last_privileged_dbus_call_us;
+
+static gboolean
+lpmd_dbus_requires_root(const gchar *method_name)
+{
+	static const gchar * const privileged_methods[] = {
+		"Terminate",
+		"LPM_FORCE_ON",
+		"LPM_FORCE_OFF",
+		"LPM_AUTO",
+		"LPM_PROCESS_PRECONFIG",
+		"LPM_UNBIND_ALL",
+		"LPM_SET_FOCUS_PID",
+		"LPM_FOCUS_HELPER_READY",
+		NULL,
+	};
+	int i;
+
+	if (!method_name)
+		return FALSE;
+
+	for (i = 0; privileged_methods[i]; i++) {
+		if (g_strcmp0(method_name, privileged_methods[i]) == 0)
+			return TRUE;
+	}
+
+	return FALSE;
+}
+
+static gboolean
+lpmd_dbus_get_sender_uid(GDBusConnection *connection,
+			 const gchar *sender,
+			 uid_t *uid_out,
+			 GError **error)
+{
+	GCredentials *peer_creds = NULL;
+	uid_t uid;
+	GDBusProxy *bus_proxy = NULL;
+	GVariant *reply = NULL;
+	guint32 bus_uid = 0;
+
+	if (!uid_out)
+		return FALSE;
+	*uid_out = (uid_t)-1;
+
+	if (!connection || !sender || !*sender) {
+		g_set_error(error, G_DBUS_ERROR,
+			    G_DBUS_ERROR_ACCESS_DENIED,
+			    "invalid sender");
+		return FALSE;
+	}
+
+	peer_creds = g_dbus_connection_get_peer_credentials(connection);
+	if (peer_creds) {
+		uid = g_credentials_get_unix_user(peer_creds, error);
+		if (uid != (uid_t)-1 || *error == NULL) {
+			*uid_out = uid;
+			return TRUE;
+		}
+		g_clear_error(error);
+	}
+
+	bus_proxy = g_dbus_proxy_new_for_bus_sync(G_BUS_TYPE_SYSTEM,
+						 G_DBUS_PROXY_FLAGS_DO_NOT_LOAD_PROPERTIES,
+						 NULL,
+						 "org.freedesktop.DBus",
+						 "/org/freedesktop/DBus",
+						 "org.freedesktop.DBus",
+						 NULL,
+						 error);
+	if (!bus_proxy)
+		return FALSE;
+
+	reply = g_dbus_proxy_call_sync(bus_proxy,
+				      "GetConnectionUnixUser",
+				      g_variant_new("(s)", sender),
+				      G_DBUS_CALL_FLAGS_NONE,
+				      -1,
+				      NULL,
+				      error);
+	if (!reply) {
+		g_object_unref(bus_proxy);
+		return FALSE;
+	}
+
+	g_variant_get(reply, "(u)", &bus_uid);
+	*uid_out = (uid_t)bus_uid;
+	g_variant_unref(reply);
+	g_object_unref(bus_proxy);
+	return TRUE;
+}
+
+static gboolean
+lpmd_dbus_enforce_privilege_policy(GDBusConnection       *connection,
+				      const gchar           *sender,
+				      GDBusMethodInvocation *invocation,
+				      const gchar           *method_name)
+{
+	guint64 now_us;
+	uid_t unix_uid = (uid_t)-1;
+	GError *error = NULL;
+
+	if (!lpmd_dbus_requires_root(method_name))
+		return TRUE;
+
+	now_us = g_get_monotonic_time();
+	if (g_last_privileged_dbus_call_us &&
+	    (now_us - g_last_privileged_dbus_call_us) < 2000000ULL) {
+		g_dbus_method_invocation_return_dbus_error(invocation,
+							  "org.freedesktop.DBus.Error.AccessDenied",
+							  "rate limited: too many privileged requests");
+		return FALSE;
+	}
+	g_last_privileged_dbus_call_us = now_us;
+
+	if (!connection || !sender || !*sender) {
+		g_dbus_method_invocation_return_dbus_error(invocation,
+							  "org.freedesktop.DBus.Error.AccessDenied",
+							  "access denied: invalid sender");
+		return FALSE;
+	}
+
+	if (!lpmd_dbus_get_sender_uid(connection, sender, &unix_uid, &error)) {
+		g_dbus_method_invocation_return_dbus_error(invocation,
+							  "org.freedesktop.DBus.Error.AccessDenied",
+							  "access denied: credentials unavailable");
+		return FALSE;
+	}
+
+	if (unix_uid != 0) {
+		g_dbus_method_invocation_return_dbus_error(invocation,
+							  "org.freedesktop.DBus.Error.AccessDenied",
+							  "access denied: privileged operation requires root");
+		return FALSE;
+	}
+
+	return TRUE;
+}
 
 static void
 focus_helper_vanished(GDBusConnection *connection,
@@ -181,6 +319,9 @@ lpmd_dbus_handle_method_call(GDBusConnection       *connection,
 	g_autoptr(GError) error = NULL;
 
 	lpmd_log_debug("Dbus method called %s %s.\n", interface_name, method_name);
+
+	if (!lpmd_dbus_enforce_privilege_policy(connection, sender, invocation, method_name))
+		return;
 
 	if (g_strcmp0(method_name, "Terminate") == 0) {
 		g_dbus_method_invocation_return_value(invocation, NULL);
