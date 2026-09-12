@@ -116,13 +116,10 @@ int detect_supported_platform(struct lpmd_config_t *lpmd_config)
 	}
 
 end:
+	snprintf(lpmd_config->file_name, MAX_FILE_NAME_PATH, "%s", file_name);
 	lpmd_config->cpu_family = family;
 	lpmd_config->cpu_model = model;
 	lpmd_config->tdp = tdp;
-	if (file_name[0] != '\0')
-		strncpy(lpmd_config->file_name, file_name, MAX_FILE_NAME_PATH);
-	else
-		lpmd_config->file_name[0] = '\0';
 
 	return 0;
 }
@@ -226,6 +223,7 @@ int get_tdp(void)
 		if (strlen(entry->d_name) > 100)
 			continue;
 
+		/* Match intel-rapl:1, intel-rapl-mmio etc. */
 		if (strncmp(entry->d_name, "intel-rapl", strlen("intel-rapl")))
 			continue;
 
@@ -240,6 +238,7 @@ int get_tdp(void)
 		if (ret <= 0)
 			continue;
 
+		/* Match package-0, package-1 etc. */
 		if (strncmp(str, "package", strlen("package")))
 			continue;
 
@@ -372,7 +371,7 @@ int detect_cpu_topo(struct lpmd_config_t *lpmd_config)
 
 	lpmd_log_info("Detected %d Pcores, %d Ecores, %d Lcores, TDP %dW\n",
 		      pcores, ecores, lcores, lpmd_config->tdp);
-	ret = snprintf(lpmd_config->cpu_config, MAX_CONFIG_LEN - 1,
+	ret = snprintf(lpmd_config->cpu_config, MAX_CONFIG_LEN,
 		       " %dP%dE%dL-%dW ", pcores, ecores, lcores,
 		       lpmd_config->tdp);
 
@@ -403,7 +402,6 @@ static int detect_lpm_cpus_cluster(void)
 
 		snprintf(path, sizeof(path),
 			 "/sys/devices/system/cpu/cpu%d/topology/cluster_cpus_list", i);
-		path[MAX_STR_LENGTH - 1] = '\0';
 
 		filep = fopen(path, "r");
 		if (!filep)

@@ -10,10 +10,30 @@ all CPUs.
 ## Before You Start
 
 **Please note** that the installed configuration files serve as templates of
-best practices for specific platform models and disable lpmd by default. For
-LPMD to start the user is expected to either edit the main
-"intel_lpmd_config.xml" config file or after starting the program, enable LPMD
-by using the intel_lpmd_control tool.
+best practices for specific platform models and disable lpmd by default.
+
+## Dynamic CPU Selection and Power Settings
+
+By default, some global power settings are enabled even if `intel_lpmd` is not active.
+However, dynamic CPU selection is not enabled by default; the reason being some
+benchmarks only use CPUs which are present when started, which may be restricted to a
+smaller cgroup cpuset.
+
+To drive dynamic CPU selection and power settings, there are two options:
+
+### Option 1: Enable Permanently (Configuration File)
+
+Configure the desired mode in the XML configuration file. For example, to configure behavior in **Balanced** mode, set `<BalancedDef>`:
+
+```xml
+<!--
+    Default behavior when Balanced power setting is used:
+    -1: Force off (never enter Low Power Mode)
+     1: Force on (always stay in Low Power Mode)
+     0: Auto (opportunistic Low Power Mode enter/exit)
+     2: Process-CPU affinity based Low Power Mode enter/exit
+-->
+<BalancedDef>0</BalancedDef>
 
 Refer to the man pages for command line arguments and XML configurations:
 
@@ -105,6 +125,24 @@ Run a workload and monitor `lpmd` to ensure it puts the system in the
 appropriate state based on the load.
 
 ## Releases
+
+### Release 0.1.1 (Test release)
+- Add per-process CPU affinity support: processes are classified
+(user interactive, user initiated, utility, background, realtime,
+game and custom profiles) and confined to a selected set of CPUs
+with a new PROCESS-PRECONFIG mode and shipped process classification
+config files.
+- Add a desktop focus helper for  KDE based distribution for foreground
+application.
+- Add per-class and per-state tuning knobs: uclamp min/max,
+min/max performance percentage per core type, Intel P-State mode and
+graphics IA bias.
+- Allow HFI to specify CPUs and use with other state based configurations
+- Improve graphics utilization detection with load hysteresis and separate
+exit thresholds.
+- Extend the DBus interface and intel_lpmd_control with state query,
+process classification and cpuset management commands, restricted to root.'
+
 
 ### Release 0.1.0
 - Add support for Panther Lake

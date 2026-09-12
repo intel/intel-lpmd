@@ -21,50 +21,50 @@ static int update_allowed_cpus(const char *unit, uint8_t *vals, int size)
 
 	ret = sd_bus_open_system(&bus);
 	if (ret < 0) {
-		fprintf(stderr, "Failed to connect to system bus: %s\n", strerror(-ret));
+		lpmd_log_info("Failed to connect to system bus: %s\n", strerror(-ret));
 		goto finish;
 	}
 
 	ret = sd_bus_message_new_method_call(bus, &m, "org.freedesktop.systemd1", "/org/freedesktop/systemd1",
 					     "org.freedesktop.systemd1.Manager", "SetUnitProperties");
 	if (ret < 0) {
-		fprintf(stderr, "Failed to issue method call: %s\n", error.message);
+		lpmd_log_info("Failed to issue method call: %s\n", error.message);
 		goto finish;
 	}
 
 	ret = sd_bus_message_append(m, "sb", unit, 1);
 	if (ret < 0) {
-		fprintf(stderr, "Failed to append unit: %s\n", error.message);
+		lpmd_log_info("Failed to append unit: %s\n", error.message);
 		goto finish;
 	}
 
 	ret = sd_bus_message_open_container(m, SD_BUS_TYPE_ARRAY, "(sv)");
 	if (ret < 0) {
-		fprintf(stderr, "Failed to append array: %s\n", error.message);
+		lpmd_log_info("Failed to append array: %s\n", error.message);
 		goto finish;
 	}
 
 	ret = sd_bus_message_open_container(m, SD_BUS_TYPE_STRUCT, "sv");
 	if (ret < 0) {
-		fprintf(stderr, "Failed to open container struct: %s\n", error.message);
+		lpmd_log_info("Failed to open container struct: %s\n", error.message);
 		goto finish;
 	}
 
 	ret = sd_bus_message_append_basic(m, SD_BUS_TYPE_STRING, "AllowedCPUs");
 	if (ret < 0) {
-		fprintf(stderr, "Failed to append string: %s\n", error.message);
+		lpmd_log_info("Failed to append string: %s\n", error.message);
 		goto finish_1;
 	}
 
 	ret = sd_bus_message_open_container(m, 'v', "ay");
 	if (ret < 0) {
-		fprintf(stderr, "Failed to open container: %s\n", error.message);
+		lpmd_log_info("Failed to open container: %s\n", error.message);
 		goto finish_2;
 	}
 
 	ret = sd_bus_message_append_array(m, 'y', vals, size);
 	if (ret < 0) {
-		fprintf(stderr, "Failed to append allowed_cpus: %s\n", error.message);
+		lpmd_log_info("Failed to append allowed_cpus: %s\n", error.message);
 		goto finish_2;
 	}
 
@@ -88,7 +88,7 @@ finish:
 	if (ret >= 0) {
 		ret = sd_bus_call(bus, m, 0, &error, NULL);
 		if (ret < 0)
-			fprintf(stderr, "Failed to call: %s\n", error.message);
+			lpmd_log_info("Failed to call: %s\n", error.message);
 	}
 
 	sd_bus_error_free(&error);
@@ -201,19 +201,35 @@ int cgroup_init(struct lpmd_config_t *config)
 	return 0;
 }
 
-int process_cgroup(struct lpmd_config_state_t *state, enum lpm_cpu_process_mode mode)
+int process_cgroup(struct lpmd_config_t *config, struct lpmd_config_state_t *state)
 {
+	enum lpm_cpu_process_mode mode = config->mode;
 	int ret;
 
 	if (state->cpumask_idx == CPUMASK_NONE) {
-		lpmd_log_debug("Ignore cgroup processing\n");
+		lpmd_log_debug("Ignore cgroup processing - CPUMASK empty\n");
 		return 0;
 	}
 
+	/*
+	 * HFI cpumask can't currently be used with last_applied_cpumask because
+	 * CPUMASK_HFI takes on different values at the same index.
+	 *
+	 * TODO: Rewrite HFI with separate cpumasks instead of using the same
+	 * one.
+	 */
 	if (last_applied_cpumask != CPUMASK_NONE &&
 	    cpumask_equal(state->cpumask_idx, last_applied_cpumask)) {
-		lpmd_log_debug("Skip cgroup: cpumask unchanged\n");
-		return 0;
+		if (state->cpumask_idx == CPUMASK_HFI) {
+			/* Don't update cgroups if HFI is enabled and it wasn't a reason for the update */
+			if (!(config->data.need_update & (1 << UPDATE_HFI))) {
+				lpmd_log_debug("Ignore cgroup processing - HFI enabled\n");
+				return 0;
+			}
+		} else {
+			lpmd_log_debug("Skip cgroup: cpumask unchanged\n");
+			return 0;
+		}
 	}
 
 	lpmd_log_info ("Process Cgroup ...\n");

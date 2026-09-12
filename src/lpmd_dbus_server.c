@@ -31,7 +31,211 @@ static gboolean
 dbus_interface_l_pm__au_to(PrefObject *obj, GError **error);
 
 static gboolean
+dbus_interface_l_pm__ba_si_c(PrefObject *obj, GError **error);
+
+static gboolean
 (*intel_lpmd_dbus_exit_callback)(void);
+
+/*
+ * Tracking for the user-session focus helper (intel_lpmd_focus_helper).
+ * When the helper calls LPM_FOCUS_HELPER_READY(1) we record its unique
+ * bus name and start a NameOwner watch. If that name disappears
+ * (helper crashed / exited / lost the session) we automatically flip
+ * the focus-helper-present flag back to 0 so USER_INITIATED reverts
+ * to mirroring USER_INTERACTIVE.
+ */
+static guint  g_focus_helper_watch_id;
+static gchar *g_focus_helper_owner;
+static guint64 g_last_privileged_dbus_call_us;
+
+static gboolean
+lpmd_dbus_requires_root(const gchar *method_name)
+{
+	static const gchar * const privileged_methods[] = {
+		"Terminate",
+		"LPM_FORCE_ON",
+		"LPM_FORCE_OFF",
+		"LPM_AUTO",
+		"LPM_PROCESS_PRECONFIG",
+		"LPM_UNBIND_ALL",
+		"LPM_SET_FOCUS_PID",
+		"LPM_FOCUS_HELPER_READY",
+		NULL,
+	};
+	int i;
+
+	if (!method_name)
+		return FALSE;
+
+	for (i = 0; privileged_methods[i]; i++) {
+		if (g_strcmp0(method_name, privileged_methods[i]) == 0)
+			return TRUE;
+	}
+
+	return FALSE;
+}
+
+static gboolean
+lpmd_dbus_get_sender_uid(GDBusConnection *connection,
+			 const gchar *sender,
+			 uid_t *uid_out,
+			 GError **error)
+{
+	GCredentials *peer_creds = NULL;
+	uid_t uid;
+	GDBusProxy *bus_proxy = NULL;
+	GVariant *reply = NULL;
+	guint32 bus_uid = 0;
+
+	if (!uid_out)
+		return FALSE;
+	*uid_out = (uid_t)-1;
+
+	if (!connection || !sender || !*sender) {
+		g_set_error(error, G_DBUS_ERROR,
+			    G_DBUS_ERROR_ACCESS_DENIED,
+			    "invalid sender");
+		return FALSE;
+	}
+
+	peer_creds = g_dbus_connection_get_peer_credentials(connection);
+	if (peer_creds) {
+		uid = g_credentials_get_unix_user(peer_creds, error);
+		if (uid != (uid_t)-1 || *error == NULL) {
+			*uid_out = uid;
+			return TRUE;
+		}
+		g_clear_error(error);
+	}
+
+	bus_proxy = g_dbus_proxy_new_for_bus_sync(G_BUS_TYPE_SYSTEM,
+						 G_DBUS_PROXY_FLAGS_DO_NOT_LOAD_PROPERTIES,
+						 NULL,
+						 "org.freedesktop.DBus",
+						 "/org/freedesktop/DBus",
+						 "org.freedesktop.DBus",
+						 NULL,
+						 error);
+	if (!bus_proxy)
+		return FALSE;
+
+	reply = g_dbus_proxy_call_sync(bus_proxy,
+				      "GetConnectionUnixUser",
+				      g_variant_new("(s)", sender),
+				      G_DBUS_CALL_FLAGS_NONE,
+				      -1,
+				      NULL,
+				      error);
+	if (!reply) {
+		g_object_unref(bus_proxy);
+		return FALSE;
+	}
+
+	g_variant_get(reply, "(u)", &bus_uid);
+	*uid_out = (uid_t)bus_uid;
+	g_variant_unref(reply);
+	g_object_unref(bus_proxy);
+	return TRUE;
+}
+
+static gboolean
+lpmd_dbus_enforce_privilege_policy(GDBusConnection       *connection,
+				      const gchar           *sender,
+				      GDBusMethodInvocation *invocation,
+				      const gchar           *method_name)
+{
+	guint64 now_us;
+	uid_t unix_uid = (uid_t)-1;
+	GError *error = NULL;
+
+	if (!lpmd_dbus_requires_root(method_name))
+		return TRUE;
+
+	now_us = g_get_monotonic_time();
+	if (g_last_privileged_dbus_call_us &&
+	    (now_us - g_last_privileged_dbus_call_us) < 2000000ULL) {
+		g_dbus_method_invocation_return_dbus_error(invocation,
+							  "org.freedesktop.DBus.Error.AccessDenied",
+							  "rate limited: too many privileged requests");
+		return FALSE;
+	}
+	g_last_privileged_dbus_call_us = now_us;
+
+	if (!connection || !sender || !*sender) {
+		g_dbus_method_invocation_return_dbus_error(invocation,
+							  "org.freedesktop.DBus.Error.AccessDenied",
+							  "access denied: invalid sender");
+		return FALSE;
+	}
+
+	if (!lpmd_dbus_get_sender_uid(connection, sender, &unix_uid, &error)) {
+		g_dbus_method_invocation_return_dbus_error(invocation,
+							  "org.freedesktop.DBus.Error.AccessDenied",
+							  "access denied: credentials unavailable");
+		return FALSE;
+	}
+
+	if (unix_uid != 0) {
+		g_dbus_method_invocation_return_dbus_error(invocation,
+							  "org.freedesktop.DBus.Error.AccessDenied",
+							  "access denied: privileged operation requires root");
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+static void
+focus_helper_vanished(GDBusConnection *connection,
+		      const gchar     *name,
+		      gpointer         user_data)
+{
+	(void)connection;
+	(void)user_data;
+	lpmd_log_info("focus helper %s vanished; reverting\n",
+		      name ? name : "(unknown)");
+	(void)lpmd_process_cpuset_set_focus_helper_present(0);
+	if (g_focus_helper_watch_id) {
+		g_bus_unwatch_name(g_focus_helper_watch_id);
+		g_focus_helper_watch_id = 0;
+	}
+	g_clear_pointer(&g_focus_helper_owner, g_free);
+}
+
+static void
+focus_helper_track(GDBusConnection *connection, const gchar *sender)
+{
+	/* Drop any prior watch -- a fresh READY supersedes the previous
+	 * helper instance. */
+	if (g_focus_helper_watch_id) {
+		g_bus_unwatch_name(g_focus_helper_watch_id);
+		g_focus_helper_watch_id = 0;
+	}
+	g_clear_pointer(&g_focus_helper_owner, g_free);
+
+	if (!connection || !sender || !*sender)
+		return;
+
+	g_focus_helper_owner = g_strdup(sender);
+	g_focus_helper_watch_id = g_bus_watch_name_on_connection(
+		connection, sender,
+		G_BUS_NAME_WATCHER_FLAGS_NONE,
+		NULL,			/* name_appeared (already here) */
+		focus_helper_vanished,
+		NULL, NULL);
+	lpmd_log_debug("focus helper tracked: %s (watch_id=%u)\n",
+		       sender, g_focus_helper_watch_id);
+}
+
+static void
+focus_helper_untrack(void)
+{
+	if (g_focus_helper_watch_id) {
+		g_bus_unwatch_name(g_focus_helper_watch_id);
+		g_focus_helper_watch_id = 0;
+	}
+	g_clear_pointer(&g_focus_helper_owner, g_free);
+}
 
 // Dbus object initialization
 static void pref_object_init(PrefObject *obj)
@@ -77,6 +281,12 @@ static gboolean dbus_interface_l_pm__au_to(PrefObject *obj, GError **error)
 	return TRUE;
 }
 
+static gboolean dbus_interface_l_pm__ba_si_c(PrefObject *obj, GError **error)
+{
+	lpmd_set_process_preconfig ();
+	return TRUE;
+}
+
 #pragma GCC diagnostic push
 
 static GDBusInterfaceVTable interface_vtable;
@@ -110,6 +320,9 @@ lpmd_dbus_handle_method_call(GDBusConnection       *connection,
 
 	lpmd_log_debug("Dbus method called %s %s.\n", interface_name, method_name);
 
+	if (!lpmd_dbus_enforce_privilege_policy(connection, sender, invocation, method_name))
+		return;
+
 	if (g_strcmp0(method_name, "Terminate") == 0) {
 		g_dbus_method_invocation_return_value(invocation, NULL);
 		dbus_interface_terminate(obj, &error);
@@ -133,11 +346,18 @@ lpmd_dbus_handle_method_call(GDBusConnection       *connection,
 		return;
 	}
 
+	if (g_strcmp0(method_name, "LPM_PROCESS_PRECONFIG") == 0) {
+		g_dbus_method_invocation_return_value(invocation, NULL);
+		dbus_interface_l_pm__ba_si_c(obj, &error);
+		return;
+	}
+
 	if (g_strcmp0(method_name, "GetState") == 0) {
 		static const char * const state_names[] = {
 			[LPMD_OFF] = "OFF",
 			[LPMD_ON] = "ON",
 			[LPMD_AUTO] = "AUTO",
+			[LPMD_PROCESS_PRECONFIG] = "PROCESS-PRECONFIG",
 			[LPMD_FREEZE] = "FREEZE",
 			[LPMD_RESTORE] = "RESTORE",
 			[LPMD_TERMINATE] = "TERMINATE",
@@ -147,6 +367,99 @@ lpmd_dbus_handle_method_call(GDBusConnection       *connection,
 
 		g_dbus_method_invocation_return_value(invocation,
 						      g_variant_new("(s)", name));
+		return;
+	}
+
+	if (g_strcmp0(method_name, "LPM_LIST_UNBOUND_PROCS") == 0) {
+		g_dbus_method_invocation_return_value(invocation, NULL);
+		lpmd_process_cpuset_print_unbound(0);
+		return;
+	}
+
+	if (g_strcmp0(method_name, "LPM_LIST_UNBOUND_USER_PROCS") == 0) {
+		g_dbus_method_invocation_return_value(invocation, NULL);
+		lpmd_process_cpuset_print_unbound(1);
+		return;
+	}
+
+	if (g_strcmp0(method_name, "LPM_LIST_BOUND_PROCS") == 0) {
+		g_dbus_method_invocation_return_value(invocation, NULL);
+		lpmd_process_cpuset_print_bound();
+		return;
+	}
+
+	if (g_strcmp0(method_name, "LPM_UNBIND_ALL") == 0) {
+		g_dbus_method_invocation_return_value(invocation, NULL);
+		lpmd_process_cpuset_unbind_all();
+		return;
+	}
+
+	if (g_strcmp0(method_name, "LPM_ADD_NEW_PROCESS") == 0) {
+		const gchar *pname = NULL;
+		const gchar *pclass = NULL;
+		gint result;
+
+		g_variant_get(parameters, "(&s&s)", &pname, &pclass);
+		result = lpmd_process_cpuset_add_process(pname, pclass);
+		g_dbus_method_invocation_return_value(invocation,
+						      g_variant_new("(i)", result));
+		return;
+	}
+
+	if (g_strcmp0(method_name, "LPM_ADD_NEW_PROCESS_EX") == 0) {
+		const gchar *pname = NULL;
+		const gchar *pclass = NULL;
+		gint allow_session = 0;
+		gint result;
+
+		g_variant_get(parameters, "(&s&si)", &pname, &pclass,
+			      &allow_session);
+		result = lpmd_process_cpuset_add_process_ex(
+			pname, pclass, allow_session ? 1 : 0);
+		g_dbus_method_invocation_return_value(invocation,
+					      g_variant_new("(i)", result));
+		return;
+	}
+
+	if (g_strcmp0(method_name, "LPM_GET_PROC_CLASSIFICATION") == 0) {
+		const gchar *pname = NULL;
+		char result[512] = { 0 };
+		gint rc;
+
+		g_variant_get(parameters, "(&s)", &pname);
+		rc = lpmd_process_cpuset_classify(pname, result, sizeof(result));
+		g_dbus_method_invocation_return_value(
+			invocation, g_variant_new("(si)", result, rc));
+		return;
+	}
+
+	if (g_strcmp0(method_name, "LPM_SET_FOCUS_PID") == 0) {
+		gint pid = 0;
+		gint result;
+
+		g_variant_get(parameters, "(i)", &pid);
+		result = lpmd_process_cpuset_set_focus_pid((pid_t)pid);
+		g_dbus_method_invocation_return_value(invocation,
+						      g_variant_new("(i)", result));
+		return;
+	}
+
+	if (g_strcmp0(method_name, "LPM_FOCUS_HELPER_READY") == 0) {
+		gint present = 0;
+		gint result;
+
+		g_variant_get(parameters, "(i)", &present);
+		result = lpmd_process_cpuset_set_focus_helper_present(present);
+		/* On success, start (or stop) tracking the helper's unique
+		 * bus name so we can auto-revert if it dies. */
+		if (result == 0) {
+			if (present)
+				focus_helper_track(connection, sender);
+			else
+				focus_helper_untrack();
+		}
+		g_dbus_method_invocation_return_value(invocation,
+						      g_variant_new("(i)", result));
 		return;
 	}
 

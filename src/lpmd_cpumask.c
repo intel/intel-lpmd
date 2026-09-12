@@ -26,6 +26,9 @@ static struct lpm_cpus cpumasks[CPUMASK_MAX] = {
 		[CPUMASK_HFI] = { .name = "HFI Low Power", },
 		[CPUMASK_HFI_BANNED] = { .name = "HFI BANNED", },
 		[CPUMASK_HFI_LAST] = { .name = "HFI LAST", },
+		[CPUMASK_HFI_CACHED] = { .name = "HFI CACHED", },
+		[CPUMASK_HFI_LP_HELD] = { .name = "HFI LP HELD", },
+		[CPUMASK_HFI_LP_SHRINK] = { .name = "HFI LP SHRINK", },
 		[CPUMASK_BLACKLIST] = { .name = "Blacklist", },
 };
 
@@ -346,6 +349,19 @@ void cpumask_copy(enum cpumask_idx source, enum cpumask_idx dest)
 	}
 }
 
+/* Merge (union) the CPUs of source into dest without clearing dest first */
+void cpumask_or_copy(enum cpumask_idx source, enum cpumask_idx dest)
+{
+	int i;
+
+	for (i = 0; i < topo_max_cpus; i++) {
+		if (!CPU_ISSET_S(i, size_cpumask, cpumasks[source].mask))
+			continue;
+
+		cpumask_add_cpu(i, dest);
+	}
+}
+
 void cpumask_exclude_copy(enum cpumask_idx source, enum cpumask_idx dest, enum cpumask_idx exclude)
 {
 	int i;
@@ -371,14 +387,17 @@ static int cpumask_to_str(cpu_set_t *mask, char *buf, int length)
 	for (i = 0; i < topo_max_cpus; i++) {
 		if (!CPU_ISSET_S(i, size_cpumask, mask))
 			continue;
-		if (length - 1 < offset) {
+		if (length < offset) {
 			lpmd_log_debug("%s: Too many cpus\n", __func__);
 			return 1;
 		}
-		offset += snprintf(buf + offset, length - 1 - offset, "%d,", i);
+		offset += snprintf(buf + offset, length - offset, "%d,", i);
 	}
+
+	/* Clear last comma for clean CPU string */
 	if (offset)
 		buf[offset - 1] = '\0';
+
 	return 0;
 }
 

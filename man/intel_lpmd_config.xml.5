@@ -1,6 +1,6 @@
 .\" SPDX-License-Identifier: GPL-2.0-or-later
 .\" Copyright (C) 2026 Intel Corporation
-.TH intel_lpmd_config.xml "5" "8 Apr 2026"
+.TH intel_lpmd_config.xml "5" "21 May 2026"
 
 .SH NAME
 intel_lpmd_config.xml \- Configuration file for intel_lpmd
@@ -16,6 +16,45 @@ performance and energy saving. The rules of switching refer to what system
 information dictates whether a change of state is needed or not. It can be
 either information from a hardware source or software calculated if the hardware
 features are not supported.
+
+.SH VALID CONFIGURATION COMBINATIONS
+LPMD can run in a couple of general configuration combinations. They generally
+are centered around what the main source driving a change is:
+
+.PP
+.B WLT
+- has the most subchoices in how it can run. Simply setting it to enabled will
+run LPMD in an event based mode, changing states only when WLT changes. A
+polling mode can also be used that periodically checks WLT instead. On older
+systems that don't have WLT support a proxy system can be used. It calculates a
+synthetic WLT value based on various utlization metrics. WLT is not compatible
+with the utilization source and only compatible with HFI if HFI is specified
+inside individual custom states.
+
+.PP
+.B Utilization
+- based on system, CPU or GFX usage can be used to switch to different states
+(custom or default ones). Not compatible with WLT or HFI. Only compatible with
+HFI if it's used in individual custom states.
+
+.PP
+.B HFI
+- without any custom states it manages what CPUs should be used based on HFI
+hardware hints. In this configuration it's not compatible with other sources
+(WLT or utilization). It can be used in individual custom states inside the
+'ActiveCPUs' tag. Then the CPU management will be outsourced to HFI hints, while
+custom state changes along EPP, EPB values will be left to the other source
+chosen.
+
+.PP
+.B Exemptions
+- An exemption to WLT and UTIL compatibility is made if GFX UTIL source is used.
+Look at Lunar Lake config (model 189) as an example.
+
+.SH AVAILABLE CONFIGURATION OPTIONS
+Below are listed all the available configuration tags that can be specified in
+the config file and read by LPMD. Look at the previous paragraph to see what
+sets of features might be mutually exclusive.
 
 .PP
 .B lp_mode_cpus
@@ -47,20 +86,43 @@ specifies the default behavior for a given power profile.
 0 : opportunistic Low Power Mode enter/exit based on HFI/Utilization request.
 .IP \(bu 2
 1 : Always stay in Low Power Mode.
+.IP \(bu 2
+2 : Process preconfig mode (only process-cpuset policy is active).
 .PP
 .B HfiLpmEnable
 specifies if the HFI monitor can capture the HFI hints for Low Power Mode.
 .PP
 .B HfiSuvEnable
-specifies if the HFI monitor can capture the HFI hints for survivability mode.
+deprecated and ignored.
 .PP
 .B WLTHintEnable
 Enable use of hardware Workload type hints.
+.PP
+.B WLTHintPollEnable
+Use WLT in polling mode in case the regular event based mode is not available.
+Used in the Lunar Lake configuration (model 189). Also allows a special case
+where WLT to coexists with UTIL (if GFX is enabled).
+.PP
 .B WLTHintNotificationDelay
 Set hardware workload notification delay in milliseconds.
 .PP
+.B WLTHintPollEnable
+Enable polling fallback for workload type hints (0/1).
+.PP
+.B WLTHintMask
+Optional mask applied to workload type hints before matching state masks.
+.PP
 .B WLTProxyEnable
 Enable use of Proxy Workload type hints.
+.PP
+.B UseProcessCPUSet
+Enable per-process cpuset/classification policy integration (0/1).
+.PP
+.B EntryDelayMS / ExitDelayMS
+Utilization monitor entry/exit debounce delay in milliseconds.
+.PP
+.B EntryHystMS / ExitHystMS
+Utilization monitor entry/exit hysteresis in milliseconds.
 .PP
 .B util_entry_threshold
 specifies the system utilization threshold for entering Low Power Mode.
@@ -81,6 +143,20 @@ switching. This flag is not used when configuration uses "State" based
 configuration, where this flag can be defined per state. ITMT is only relevant
 for platforms before Lunar Lake and the debugfs file is not present on later
 platforms.
+.PP
+.B IntelPstateMode
+Select the Intel P-state driver mode to request during daemon startup.
+.IP \(bu 2
+0 : active mode (default)
+.IP \(bu 2
+1 : passive mode
+.PP
+If omitted, default is 0 (active).
+.PP
+When intel_lpmd transitions to OFF mode (for example via LPM_FORCE_OFF)
+or terminates, the daemon restores
+.B /sys/devices/system/cpu/intel_pstate/status
+to the value that was present before intel_lpmd first applied IntelPstateMode.
 .PP
 .B States
 Allows one to define per platform low power states. Each state defines
@@ -123,6 +199,15 @@ from /proc/stat. To enter into this state any active CPU utilization must
 be less or equal to this value.
 EnterCPULoadThres is checked before EntrySystemLoadThres to match a state.
 .PP
+.B ExitSystemLoadThres / ExitSystemLoadhysteresis
+System exit load threshold and its hysteresis for leaving a state.
+.PP
+.B ExitCPULoadThres
+CPU exit load threshold for leaving a state.
+.PP
+.B EnterGFXLoadThres / ExitGFXLoadThres / ExitGFXLoadHysteresis
+GFX load entry/exit thresholds and optional exit hysteresis.
+.PP
 .B WLTType
 Workload type value to enter into this state. If this value is defined
 then utilization based entry triggers are not used. To use this
@@ -137,11 +222,59 @@ are not used.
 Active CPUs in this state. The list can be comma separated or use "-" for
 a range. This is optional to have active CPUs in a state.
 .PP
+.B ActivePcores / ActiveEcores / ActiveLcores
+Per-core-type CPU activation controls for a state. These can be used instead
+of (or with) ActiveCPUs and feed the derived cpumask for that state.
+.PP
 .B EPP
 EPP to apply for this state. -1 to ignore.
 .PP
 .B EPB
 EPB to apply for this state. -1 to ignore.
+.PP
+.B MaxPerfPctAC / MaxPerfPctDC / MinPerfPctAC / MinPerfPctDC
+Per-state performance cap/floor controls.
+.IP \(bu 2
+Global form (no core type):
+.br
+Set a single value for all core types in this state.
+.br
+Example: <MaxPerfPctAC>50</MaxPerfPctAC>
+.IP \(bu 2
+Core-typed form:
+.br
+Set value only for selected core type(s), using
+<CoreType>:<value>.
+.br
+Supported core-type tokens include P-cores, E-cores, and
+LP-E-cores (also accepted: ActivePcores, ActiveEcores,
+ActiveLcores).
+.br
+Examples: <MaxPerfPctAC>P-cores:50</MaxPerfPctAC>,
+<MaxPerfPctAC>E-cores:60</MaxPerfPctAC>,
+<MaxPerfPctAC>LP-E-cores:70</MaxPerfPctAC>
+.IP \(bu 2
+Values:
+.br
+0..100 valid percentage, -1 ignore, -2 restore.
+.PP
+.B Core-Type Examples
+.EX
+<!-- Global value (all core types) -->
+<MaxPerfPctAC>50</MaxPerfPctAC>
+
+<!-- P-core only -->
+<MaxPerfPctAC>P-cores:50</MaxPerfPctAC>
+
+<!-- E-core only -->
+<MaxPerfPctDC>E-cores:45</MaxPerfPctDC>
+
+<!-- LP-E-core only -->
+<MinPerfPctAC>LP-E-cores:20</MinPerfPctAC>
+
+<!-- Multiple core types in one value -->
+<MaxPerfPctAC>P-cores,E-cores:55</MaxPerfPctAC>
+.EE
 .PP
 .B ITMTState
 Set the state of ITMT flag. -1 to ignore. ITMT is only relevant for platforms
@@ -160,6 +293,215 @@ if there is no maximum is desired.
 .B PollIntervalIncrement
 Polling interval increment in milli seconds. If this value
 is -1, then polling increment is adaptive based on the utilization.
+
+
+.SH Per-Process CPU Affinity and Scheduling Control
+.PP
+The file
+.B data/process_cpuset.xml
+defines per-process CPU affinity constraints and per-classification
+(realtime, user_interactive, user_initiated, etc.) scheduling parameters
+such as CPU utilization clamping (uclamp). It allows fine-grained
+control over which CPUs each class of workload can use, with optional
+per-process overrides.
+.PP
+.B Key Concepts
+.IP \(bu 2
+.B Classification:
+Each process is assigned a class (e.g., background, utility, user_initiated,
+user_interactive, realtime, game_profile_cpu). The class determines its
+default CPU affinity mask and uclamp limits.
+.IP \(bu 2
+.B ActiveCores / ClassDefaults:
+Named CPU groups (ActivePcores, ActiveEcores, ActiveLcores) or literal
+CPU lists define which CPUs a class can use. Per-process <ActiveCores>
+entries override the class default.
+.IP \(bu 2
+.B Affinity Modes:
+PIDs from system-slice services (daemons) are managed via systemd
+transient cgroup scopes (applies to all threads automatically).
+User-session PIDs use sched_setaffinity(2), which by default only
+affects the leader thread. The <AffinityAllThreads> tag extends
+this to all threads in the process.
+.IP \(bu 2
+.B UClamp (Utilization Clamping):
+Per-class min/max CPU utilization clamps (sched_util_min / sched_util_max)
+passed to sched_setattr(2). Range: -1 (disabled), 0..1024.
+.PP
+.B Process Tags (process_cpuset.xml)
+.IP \(bu 2
+.B <Name>
+Process name from /proc/PID/comm (15-char limit). Supports '*' wildcard
+for prefix matching (e.g., "firefox*").
+.IP \(bu 2
+.B <Classification>
+One of: realtime, user_interactive, user_initiated, utility, background,
+game_profile_cpu, game_profile_gpu, game_profile_mixed, custom_profile_0,
+custom_profile_1, custom_profile_2.
+.IP \(bu 2
+.B <Cores>
+(inside <ClassDefaults>) Comma/whitespace-separated mix of group names
+(ActivePcores, ActiveEcores, ActiveLcores) or literal CPU ranges
+(e.g., "0-3,5,8"). Defines which CPUs this class can use by default.
+.IP \(bu 2
+.B <ActiveCores>
+(inside <Process>) Overrides ClassDefaults for this specific process.
+Same syntax as <Cores>.
+.IP \(bu 2
+.B <AllowSession>
+(optional; 1/true/yes/on) By default, login-session PIDs (gdm, sshd-session,
+sudo, terminal login shell) are skipped to preserve logind/polkit session
+tracking. Set this to opt a specific process into affinity management
+(sched_setaffinity path only, no cgroup). Intended for games and apps
+knowingly launched from a terminal.
+.IP \(bu 2
+.B <AffinityAllThreads>
+(optional; 1/true/yes/on) When applying the affinity path (user-session
+PIDs), walk /proc/PID/task/ and apply the mask to every thread (TID)
+instead of just the leader. Without this, only the main thread is
+constrained; existing worker threads keep their previous mask. Recommended
+for multithreaded apps (games, browsers, media engines). No effect on
+PIDs in cgroup scopes (cgroups already cover all threads).
+.IP \(bu 2
+.B <UClampMin> / <uclamp_min>
+(optional; -1=disable, 0..1024) Minimum CPU utilization clamp for this
+class. Affects sched_util_min sent to sched_setattr(2). When applied with
+<AffinityAllThreads>, all threads in matching PIDs are updated.
+.IP \(bu 2
+.B <UClampMax> / <uclamp_max>
+(optional; -1=disable, 0..1024) Maximum CPU utilization clamp for this
+class. Affects sched_util_max sent to sched_setattr(2). When applied with
+<AffinityAllThreads>, all threads in matching PIDs are updated.
+.IP \(bu 2
+.B <DefaultProcess>
+(optional catch-all) Applied to any user-session PID not matched by a
+specific <Process> entry. Typical use: reset inherited restrictive affinity
+masks for child processes. Accepts same tags as <Process> (no <Name>).
+System-slice PIDs are never touched by <DefaultProcess>.
+.PP
+.B Per-Model Overrides (intel_lpmd_config_*.xml)
+.PP
+To override per-class uclamp values or CPU group assignments on specific
+CPU models, add a <ClassDefaults> block inside the appropriate <State>
+definition in intel_lpmd_config_F18_M1.xml, intel_lpmd_config_F6_M189.xml,
+or other model-specific files. These overrides take precedence over
+process_cpuset.xml defaults at runtime.
+.PP
+In addition to <Cores>, <UClampMin>, and <UClampMax>, each class override
+inside <ClassDefaults> can define:
+.IP \(bu 2
+.B <GTIABias> / <gt_ia_bias>
+Unsigned 32-bit value (0..4294967295) written to the GT/IA bias sysfs node
+when that class becomes the active owner. When ownership changes or class
+overrides are no longer active, intel_lpmd restores the previously saved
+system value.
+.IP \(bu 2
+.B <OverrideGlobalCPUSettings>
+Boolean (1/true/yes/on). When enabled for a class, that class can drive the
+global state cpumask override (system.slice/user.slice/machine.slice) while
+matching processes are attached.
+.PP
+When intel_lpmd transitions to OFF mode or unbinds all managed process-cpuset
+entries, class ownership is cleared and GT/IA bias is restored to the value
+captured before class overrides were first applied.
+.PP
+.EX
+<!-- Example: intel_lpmd_config_F18_M1.xml -->
+<State>
+    <ID>1</ID>
+    <Name>MyState</Name>
+    <CPUFamily>0x6</CPUFamily>
+    <CPUModel>0xA1</CPUModel>  <!-- Lunar Lake example -->
+    <!-- ... entry conditions ... -->
+    <ClassDefaults>
+        <UserInitiated>
+            <Cores>ActivePcores, ActiveEcores</Cores>
+            <UClampMin>256</UClampMin>
+            <UClampMax>768</UClampMax>
+        </UserInitiated>
+        <Background>
+            <Cores>ActiveLcores</Cores>
+            <UClampMin>0</UClampMin>
+            <UClampMax>256</UClampMax>
+			<GTIABias>24</GTIABias>
+        </Background>
+    </ClassDefaults>
+</State>
+.EE
+.PP
+.B GTIABias Ownership Example
+.PP
+If multiple active classes define <GTIABias>, intel_lpmd applies the value
+from the highest-priority active class. As process activity changes,
+ownership can move between classes, and the effective GT/IA bias updates
+accordingly.
+.PP
+.EX
+<ClassDefaults>
+	<UserInteractive>
+		<GTIABias>40</GTIABias>
+	</UserInteractive>
+	<Background>
+		<GTIABias>8</GTIABias>
+	</Background>
+</ClassDefaults>
+
+<!-- Behavior summary:
+	 - If a UserInteractive process is active, effective GTIABias = 40.
+	 - If only Background processes are active, effective GTIABias = 8.
+	 - When no GTIABias-owning class is active, previous system value is restored. -->
+.EE
+.PP
+.B Examples
+.IP \(bu 2
+.B Example 1: Game with multithreading
+Classify as game_profile_cpu, apply affinity to all threads, limit to
+P-cores, and clamp utilization to mid-range:
+.EX
+<Process>
+    <Name>game</Name>
+    <Classification>game_profile_cpu</Classification>
+    <ActiveCores>ActivePcores</ActiveCores>
+    <AffinityAllThreads>1</AffinityAllThreads>
+    <UClampMin>512</UClampMin>
+    <UClampMax>900</UClampMax>
+</Process>
+.EE
+.IP \(bu 2
+.B Example 2: Utility workload on LP cores
+.EX
+<Process>
+    <Name>indexer</Name>
+    <Classification>utility</Classification>
+    <ActiveCores>ActiveLcores</ActiveCores>
+    <UClampMin>128</UClampMin>
+    <UClampMax>512</UClampMax>
+</Process>
+.EE
+.IP \(bu 2
+.B Example 3: Custom profile with login-session opt-in
+Allow a terminal IDE to use custom profile, apply to all threads,
+even if launched from a login shell:
+.EX
+<Process>
+    <Name>my_ide</Name>
+    <Classification>custom_profile_0</Classification>
+    <AllowSession>1</AllowSession>
+    <AffinityAllThreads>1</AffinityAllThreads>
+</Process>
+.EE
+.IP \(bu 2
+.B Example 4: Class default override in model-specific config
+In intel_lpmd_config_F18_M1.xml, tighten background class uclamp:
+.EX
+<ClassDefaults>
+    <Background>
+        <Cores>ActiveLcores</Cores>
+        <UClampMin>0</UClampMin>
+        <UClampMax>128</UClampMax>
+    </Background>
+</ClassDefaults>
+.EE
 
 
 .SH FILE FORMAT
@@ -181,28 +523,38 @@ The configuration file format conforms to XML specifications.
 	<Mode>0|1|2</Mode>
 
 	<!--
+		Intel P-state mode
+		0: active (default)
+		1: passive
+	-->
+	<IntelPstateMode>0|1</IntelPstateMode>
+
+	<!--
 		Default behavior when Performance power setting is used
 		-1: force off. (Never enter Low Power Mode)
+		 2: process preconfig mode (process cpuset only)
 		 1: force on. (Always stay in Low Power Mode)
 		 0: auto. (opportunistic Low Power Mode enter/exit)
 	-->
-	<PerformanceDef>-1|0|1</PerformanceDef>
+	<PerformanceDef>-1|0|1|2</PerformanceDef>
 
 	<!--
 		Default behavior when Balanced power setting is used
 		-1: force off. (Never enter Low Power Mode)
+		 2: process preconfig mode (process cpuset only)
 		 1: force on. (Always stay in Low Power Mode)
 		 0: auto. (opportunistic Low Power Mode enter/exit)
 	-->
-	<BalancedDef>-1|0|1</BalancedDef>
+	<BalancedDef>-1|0|1|2</BalancedDef>
 
 	<!--
 		Default behavior when Power saver setting is used
 		-1: force off. (Never enter Low Power Mode)
+		 2: process preconfig mode (process cpuset only)
 		 1: force on. (Always stay in Low Power Mode)
 		 0: auto. (opportunistic Low Power Mode enter/exit)
 	-->
-	<PowersaverDef>-1|0|1</PowersaverDef>
+	<PowersaverDef>-1|0|1|2</PowersaverDef>
 
 	<!--
 		Use HFI LPM hints
@@ -215,8 +567,36 @@ The configuration file format conforms to XML specifications.
 		Use HFI SUV hints
 		0 : No
 		1 : Yes
+		(deprecated; ignored)
 	-->
 	<HfiSuvEnable>0|1</HfiSuvEnable>
+
+	<!--
+		Enable process cpuset integration
+		0 : No
+		1 : Yes
+	-->
+	<UseProcessCPUSet>0|1</UseProcessCPUSet>
+
+	<!--
+		Workload type hint polling fallback
+		0 : No
+		1 : Yes
+	-->
+	<WLTHintPollEnable>0|1</WLTHintPollEnable>
+
+	<!--
+		Optional workload type hint mask
+	-->
+	<WLTHintMask>Mask value</WLTHintMask>
+
+	<!--
+		Utilization monitor delays/hysteresis (ms)
+	-->
+	<EntryDelayMS>0..UTIL_DELAY_MAX</EntryDelayMS>
+	<ExitDelayMS>0..UTIL_DELAY_MAX</ExitDelayMS>
+	<EntryHystMS>0..UTIL_HYST_MAX</EntryHystMS>
+	<ExitHystMS>0..UTIL_HYST_MAX</ExitHystMS>
 
 	<!--
 		System utilization threshold to enter LP mode

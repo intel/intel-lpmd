@@ -117,6 +117,13 @@ Proxy WLT enabled with MTL specific epp values.
     -->
     <IgnoreITMT>0</IgnoreITMT>
 
+    <!--
+        Intel Pstate Mode
+        0: active
+        1: passive
+    -->
+    <IntelPstateMode>0</IntelPstateMode>
+
     <States>
         <CPUFamily> 6 </CPUFamily>
         <CPUModel> 170 </CPUModel>

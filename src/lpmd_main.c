@@ -35,6 +35,8 @@ static gboolean use_syslog;
 static gboolean ignore_platform_check = FALSE;
 static gboolean dbus_enable;
 
+gchar *config_file_path;
+
 int do_platform_check(void)
 {
 	if (ignore_platform_check)
@@ -155,6 +157,7 @@ int main(int argc, char *argv[])
 
 	intel_lpmd_daemonize = TRUE;
 	dbus_enable = FALSE;
+	config_file_path = FALSE;
 	use_syslog = TRUE;
 
 	GOptionEntry options[] = {
@@ -164,6 +167,7 @@ int main(int argc, char *argv[])
 		{ "loglevel=info", 0, 0, G_OPTION_ARG_NONE, &log_info, N_("Log severity: info level and up"), NULL },
 		{ "loglevel=debug", 0, 0, G_OPTION_ARG_NONE, &log_debug, N_("Log severity: debug level and up: Max logging"), NULL },
 		{ "dbus-enable", 0, 0, G_OPTION_ARG_NONE, &dbus_enable, N_("Enable Dbus"), NULL },
+		{ "config", 'c', 0, G_OPTION_ARG_FILENAME, &config_file_path, N_ ( "Specify the config file"), NULL },
 		{ "ignore-platform-check", 0, 0, G_OPTION_ARG_NONE, &ignore_platform_check, N_("Ignore platform check"), NULL },
 		{ NULL, 0, 0, G_OPTION_ARG_NONE, NULL, NULL, NULL }
 	};

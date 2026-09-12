@@ -31,6 +31,7 @@ for Intel Energy Optimizer (LPMD) daemon
 		-1: force off. (Never enter Low Power Mode)
 		 1: force on. (Always stay in Low Power Mode)
 		 0: auto. (opportunistic Low Power Mode enter/exit)
+		 2: Process-CPU affinity based Low Power Mode enter/exit
 	-->
 	<PerformanceDef>-1</PerformanceDef>
 
@@ -39,6 +40,7 @@ for Intel Energy Optimizer (LPMD) daemon
 		-1: force off. (Never enter Low Power Mode)
 		 1: force on. (Always stay in Low Power Mode)
 		 0: auto. (opportunistic Low Power Mode enter/exit)
+		 2: Process-CPU affinity based Low Power Mode enter/exit
 	-->
 	<BalancedDef>-1</BalancedDef>
 
@@ -47,6 +49,7 @@ for Intel Energy Optimizer (LPMD) daemon
 		-1: force off. (Never enter Low Power Mode)
 		 1: force on. (Always stay in Low Power Mode)
 		 0: auto. (opportunistic Low Power Mode enter/exit)
+		 2: Process-CPU affinity based Low Power Mode enter/exit
 	-->
 	<PowersaverDef>-1</PowersaverDef>
 
@@ -69,12 +72,12 @@ for Intel Energy Optimizer (LPMD) daemon
 		0 : No
 		1 : Yes
 	-->
-	<WLTHintPollEnable>0</WLTHintPollEnable>
+	<WLTHintPollEnable>1</WLTHintPollEnable>
 
 	<!--
 		Use WLT hint Mask
 		0 : Non
-		* : Value to AND with the hardware hint
+		* : Value to AND with with the hardware hint
 	-->
 	<WLTHintMask>15</WLTHintMask>
 
@@ -131,6 +134,20 @@ for Intel Energy Optimizer (LPMD) daemon
 	<IgnoreITMT>0</IgnoreITMT>
 
 	<!--
+		Intel Pstate Mode
+		0: active
+		1: passive
+	-->
+	<IntelPstateMode>0</IntelPstateMode>
+
+	<!--
+		Use pre configured process-CPU affinity settings to determine LP mode enter/exit
+		0: disable UseProcessCPUSet upon LP-mode enter and re-enable UseProcessCPUSet upon LP-mode exit
+		1: do not touch UseProcessCPUSet setting during LP-mode enter/exit
+	-->
+	<UseProcessCPUSet>0</UseProcessCPUSet>
+
+	<!--
 		Slider default configuration for AC and DC
 	-->
 	<BalancedSliderAC>1</BalancedSliderAC>
@@ -142,48 +159,244 @@ for Intel Energy Optimizer (LPMD) daemon
 		<CPUFamily> 6 </CPUFamily>
 		<CPUModel> 204 </CPUModel>
 		<CPUConfig> * </CPUConfig>
-		<State>
-			<ID> 1 </ID>
-			<Name> UTIL_IDLE </Name>
-			<WLTType> 1 </WLTType>
-			<ActiveLcores>ALL</ActiveLcores>
-		</State>
-		<State>
-			<ID> 2 </ID>
-			<Name> UTIL_IDLE_SUSTAIN </Name>
-			<WLTType> 2 </WLTType>
-			<ActiveCPUs> * </ActiveCPUs>
-		</State>
-		<State>
-			<ID> 3 </ID>
-			<Name> UTIL_IDLE_BURSTY </Name>
-			<WLTType> 3 </WLTType>
-			<ActiveCPUs> * </ActiveCPUs>
-		</State>
-	</States>
 
-	<States>
-		<CPUFamily> 6 </CPUFamily>
-		<CPUModel> 204 </CPUModel>
-		<CPUConfig> 4P0E4L-25W </CPUConfig>
+		<!--
+		  Optional per-CPU-model override of process_cpuset.xml's
+		  <ClassDefaults>. Inside each class, "Cores" accepts the same
+		  token list as ActiveCores ("ActivePcores" / "ActiveEcores" /
+		  "ActiveLcores", comma- or whitespace-separated).
+
+		  Supported class nodes in this overlay:
+		    Realtime, UserInteractive, UserInitiated, Unclassified,
+		    Utility, Background, GameProfileCPU, GameProfileGPU,
+		    GameProfileMixed, CustomProfile0, CustomProfile1,
+		    CustomProfile2
+
+		  Optional per-class keys are also supported:
+		    UClampMin / UClampMax (aliases: uclamp_min / uclamp_max)
+
+		  Optional per-class tuning tags are also supported:
+		    MinPerfPctAC / MinPerfPctDC
+		      (aliases: min_perf_pct_ac / min_perf_pct_dc)
+		    MaxPerfPctAC / MaxPerfPctDC (aliases: MaxPerfAC / MaxPerfDC)
+		      (aliases: max_perf_pct_ac / max_perf_pct_dc)
+		    BalanceSliderAC / BalanceSliderDC
+		      (aliases: SliderBalanceAC / SliderBalanceDC,
+		       SliderBalnceAC / SliderBalnceDC)
+		    SliderOffsetAC / SliderOffsetDC
+
+		  Tags omitted in a class are left unchanged (no fallback forced).
+		  Classes not listed here keep values from process_cpuset.xml
+		  (or its built-in fallback).
+		-->
+		<ClassDefaults>
+			<Realtime>
+				<Cores>ActivePcores, ActiveEcores, ActiveLcores</Cores>
+			</Realtime>
+			<UserInteractive>
+				<Cores>ActiveEcores, ActiveLcores</Cores>
+			</UserInteractive>
+			<UserInitiated>
+				<Cores>ActiveLcores</Cores>
+			</UserInitiated>
+			<Background>
+				<Cores>ActiveLcores</Cores>
+			</Background>
+			<Unclassified>
+				<Cores>ActivePcores, ActiveEcores, ActiveLcores</Cores>
+			</Unclassified>
+			<GameProfileGPU>
+				<OverrideGlobalCPUSettings>1</OverrideGlobalCPUSettings>
+				<Cores>ActiveEcores, ActiveLcores</Cores>
+				<MinPerfPctAC>50</MinPerfPctAC>
+				<BalanceSliderAC>4</BalanceSliderAC>
+				<SliderOffsetAC>2</SliderOffsetAC>
+			</GameProfileGPU>
+			<GameProfileMixed>
+				<Cores>ActiveEcores, ActiveLcores</Cores>
+				<BalanceSliderAC>4</BalanceSliderAC>
+				<SliderOffsetAC>0</SliderOffsetAC>
+			</GameProfileMixed>
+		</ClassDefaults>
+
+		<!--
+		  choose_next_state() walks the states in the order they appear
+		  here and takes the first one that matches, so document order
+		  is what decides. ID is only ever printed in log messages, so
+		  it is numbered to follow that order: most specific first, the
+		  two catch alls last. Keep the two in step when adding a state,
+		  otherwise a log line reads as if the states were tried in a
+		  different order than they were.
+		-->
 		<State>
 			<ID> 1 </ID>
-			<Name> UTIL_IDLE </Name>
+			<Name> UTIL_IDLE_GFX_BUSY </Name>
 			<WLTType> 1 </WLTType>
-			<ActiveCPUs>4-7</ActiveCPUs>
+			<EnterGFXLoadThres>100</EnterGFXLoadThres>
+			<ExitGFXLoadThres>20</ExitGFXLoadThres>
+			<ExitGFXLoadHysteresis>5</ExitGFXLoadHysteresis>
+			<IRQMigrate> -1 </IRQMigrate>
+
+			<MinPerfPctAC>50</MinPerfPctAC>
+			<MinPerfPctDC>0</MinPerfPctDC>
+
+			<ActiveEcores>*</ActiveEcores>
+			<ActiveLcores>*</ActiveLcores>
+
+			<BalanceSliderAC>3</BalanceSliderAC>
+			<BalanceSliderDC>3</BalanceSliderDC>
+			<SliderOffsetAC>0</SliderOffsetAC>
+			<SliderOffsetDC>3</SliderOffsetDC>
+
+			<MinPollInterval> 1000 </MinPollInterval>
+			<PollIntervalIncrement> 500 </PollIntervalIncrement>
+			<MaxPollInterval> 2000 </MaxPollInterval>
 		</State>
+
+		<!--
+		  GPU pegged while the CPUs stay quiet: WLT types 2 and 3, system
+		  load up to 30% and GFX load of at least 95%. EnterGFXLoadThres
+		  has to be present for ExitGFXLoadThres to be evaluated at all,
+		  hence the 100% ceiling. The GFX hysteresis holds the state down
+		  to 90% once entered, so a GPU load jittering around 95% does
+		  not flip back and forth with ID 4 on every poll.
+
+		  Placed before ID 4, which also matches a 95% GFX load, so this
+		  state gets first refusal while the system load is low.
+		-->
 		<State>
 			<ID> 2 </ID>
-			<Name> UTIL_IDLE_SUSTAIN </Name>
-			<WLTType> 2 </WLTType>
-			<ActiveCPUs>0-7</ActiveCPUs>
+			<Name> UTIL_NON_IDLE_LOW_SYS </Name>
+			<WLTTypeMask> 12 </WLTTypeMask>
+			<EntrySystemLoadThres>30</EntrySystemLoadThres>
+			<ExitSystemLoadHysteresis>5</ExitSystemLoadHysteresis>
+			<EnterGFXLoadThres>100</EnterGFXLoadThres>
+			<ExitGFXLoadThres>95</ExitGFXLoadThres>
+			<ExitGFXLoadHysteresis>5</ExitGFXLoadHysteresis>
+
+			<ActiveEcores>*</ActiveEcores>
+			<ActiveLcores>*</ActiveLcores>
+
+			<MinPerfPctAC>50</MinPerfPctAC>
+			<MinPerfPctDC>0</MinPerfPctDC>
+
+			<IRQMigrate> -1 </IRQMigrate>
+			<BalanceSliderAC>4</BalanceSliderAC>
+			<BalanceSliderDC>4</BalanceSliderDC>
+			<SliderOffsetAC>2</SliderOffsetAC>
+			<SliderOffsetDC>2</SliderOffsetDC>
+
+			<MinPollInterval> 1000 </MinPollInterval>
+			<PollIntervalIncrement> 500 </PollIntervalIncrement>
+			<MaxPollInterval> 2000 </MaxPollInterval>
 		</State>
+
+		<!--
+		  Non idle with the GPU doing some work but not saturated: WLT
+		  types 2 and 3, GFX load between 20% and 50%. Here the CPU is
+		  held back a little to leave the GPU room: BalanceSlider 3
+		  with SliderOffset 2 lets the hardware drift up to 5, and a
+		  higher slider means less CPU performance.
+
+		  The 20% lower bound hands everything below it to ID 6, which
+		  is the CPU bound case: the GPU is idle, so there is nothing
+		  to leave room for. ID 6 pins the slider at 1 with no offset
+		  and gives every core type, which is what a build or a
+		  compile wants. The GFX hysteresis holds this state down to
+		  15% once entered, so a load hovering on 20% does not flip
+		  between the two on every poll.
+		-->
 		<State>
 			<ID> 3 </ID>
-			<Name> UTIL_IDLE_BURSTY </Name>
-			<WLTType> 3 </WLTType>
-			<ActiveCPUs>0-7</ActiveCPUs>
+			<Name> UTIL_NON_IDLE_LT_GFX </Name>
+			<WLTTypeMask> 12 </WLTTypeMask>
+			<EnterGFXLoadThres>50</EnterGFXLoadThres>
+			<ExitGFXLoadThres>20</ExitGFXLoadThres>
+			<ExitGFXLoadHysteresis>5</ExitGFXLoadHysteresis>
+
+			<ActiveEcores>*</ActiveEcores>
+			<ActiveLcores>*</ActiveLcores>
+
+			<MinPerfPctAC>0</MinPerfPctAC>
+			<MinPerfPctDC>0</MinPerfPctDC>
+
+			<IRQMigrate> -1 </IRQMigrate>
+			<BalanceSliderAC>3</BalanceSliderAC>
+			<BalanceSliderDC>3</BalanceSliderDC>
+			<SliderOffsetAC>2</SliderOffsetAC>
+			<SliderOffsetDC>3</SliderOffsetDC>
+
+			<MinPollInterval> 1000 </MinPollInterval>
+			<PollIntervalIncrement> 500 </PollIntervalIncrement>
+			<MaxPollInterval> 2000 </MaxPollInterval>
 		</State>
+
+		<State>
+			<ID> 4 </ID>
+			<Name> UTIL_BUSY_GFX_BUSY </Name>
+			<WLTTypeMask> 12 </WLTTypeMask>
+			<EnterGFXLoadThres>100</EnterGFXLoadThres>
+			<ExitGFXLoadThres>50</ExitGFXLoadThres>
+			<ExitGFXLoadHysteresis>5</ExitGFXLoadHysteresis>
+
+			<IRQMigrate> -1 </IRQMigrate>
+
+			<MinPerfPctAC>0</MinPerfPctAC>
+			<MinPerfPctDC>0</MinPerfPctDC>
+
+			<ActiveEcores>*</ActiveEcores>
+			<ActiveLcores>*</ActiveLcores>
+
+			<BalanceSliderAC>4</BalanceSliderAC>
+			<BalanceSliderDC>4</BalanceSliderDC>
+			<SliderOffsetAC>2</SliderOffsetAC>
+			<SliderOffsetDC>2</SliderOffsetDC>
+
+			<MinPollInterval> 1000 </MinPollInterval>
+			<PollIntervalIncrement> 500 </PollIntervalIncrement>
+			<MaxPollInterval> 2000 </MaxPollInterval>
+		</State>
+
+		<State>
+			<ID> 5 </ID>
+			<Name> UTIL_IDLE </Name>
+			<WLTType> 1 </WLTType>
+			<ActiveLcores>*</ActiveLcores>
+
+			<MinPerfPctAC>0</MinPerfPctAC>
+			<MinPerfPctDC>0</MinPerfPctDC>
+
+			<IRQMigrate> -1 </IRQMigrate>
+			<BalanceSliderAC>3</BalanceSliderAC>
+			<BalanceSliderDC>3</BalanceSliderDC>
+			<SliderOffsetAC>3</SliderOffsetAC>
+			<SliderOffsetDC>3</SliderOffsetDC>
+
+			<MinPollInterval> 2000 </MinPollInterval>
+			<PollIntervalIncrement> 500 </PollIntervalIncrement>
+			<MaxPollInterval> 4000 </MaxPollInterval>
+		</State>
+
+		<State>
+			<ID> 6 </ID>
+			<Name> UTIL_NON_IDLE </Name>
+			<WLTTypeMask> 12 </WLTTypeMask>
+			<ActiveCPUs>*</ActiveCPUs>
+
+			<MinPerfPctAC>0</MinPerfPctAC>
+			<MinPerfPctDC>0</MinPerfPctDC>
+
+			<IRQMigrate> -1 </IRQMigrate>
+			<BalanceSliderAC>1</BalanceSliderAC>
+			<BalanceSliderDC>3</BalanceSliderDC>
+			<SliderOffsetAC>0</SliderOffsetAC>
+			<SliderOffsetDC>3</SliderOffsetDC>
+
+			<MinPollInterval> 1000 </MinPollInterval>
+			<PollIntervalIncrement> 500 </PollIntervalIncrement>
+			<MaxPollInterval> 2000 </MaxPollInterval>
+		</State>
+
 	</States>
 
 </Configuration>

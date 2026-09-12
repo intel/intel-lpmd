@@ -3,6 +3,7 @@
 
 #include "lpmd.h"
 #include <upower.h>
+#include <time.h>
 #include "wlt_proxy.h"
 
 static struct lpmd_config_t lpmd_config;
@@ -61,8 +62,22 @@ static void lpmd_send_message(enum message_name_t msg_id, int size, unsigned cha
 
 void lpmd_terminate(void)
 {
-	lpmd_send_message(TERMINATE, 0, NULL);
-	sleep(1);
+	restore_intel_pstate_mode();
+
+	/*
+	 * Stop any transient cpuset scopes synchronously here so that every
+	 * termination path (SIGINT/SIGTERM handler, D-Bus Terminate from
+	 * `systemctl stop intel_lpmd` or `intel_lpmd_control`) unbinds all
+	 * managed PIDs before the process exits. process_cpuset_stop_all()
+	 * issues a StopUnit D-Bus call per scope, which can exceed the 1s
+	 * grace period below; doing it before signalling the worker
+	 * guarantees cleanup runs to completion. The worker's later call
+	 * is a safe no-op (g_pc_ctx is NULL after this).
+	 */
+	lpmd_process_cpuset_uninit ();
+
+	lpmd_send_message (TERMINATE, 0, NULL);
+	sleep (1);
 	if (upower_client)
 		g_clear_object(&upower_client);
 }
@@ -82,7 +97,12 @@ void lpmd_set_auto(void)
 	lpmd_send_message(LPM_AUTO, 0, NULL);
 }
 
-#define LPMD_NUM_OF_POLL_FDS	5
+void lpmd_set_process_preconfig(void)
+{
+	lpmd_send_message (LPM_PROCESS_PRECONFIG, 0, NULL);
+}
+
+#define LPMD_NUM_OF_POLL_FDS	6
 
 static pthread_t lpmd_core_main;
 static pthread_attr_t lpmd_attr;
@@ -94,6 +114,7 @@ static int idx_pipe_fd = -1;
 static int idx_uevent_fd = -1;
 static int idx_hfi_fd = -1;
 static int idx_wlt_fd = -1;
+static int idx_pc_conn_fd = -1;
 
 #include <gio/gio.h>
 
@@ -216,6 +237,8 @@ static void connect_to_upower_daemon(void)
 // called from LPMD main thread to process user and system messages
 static int proc_message(struct message_capsul_t *msg)
 {
+	int prev_state = get_lpmd_state();
+
 	lpmd_log_debug("Received message %d\n", msg->msg_id);
 	switch (msg->msg_id) {
 	case TERMINATE:
@@ -223,16 +246,29 @@ static int proc_message(struct message_capsul_t *msg)
 		update_lpmd_state(LPMD_TERMINATE);
 		break;
 	case LPM_FORCE_ON:
+		(void)process_intel_pstate_mode(&lpmd_config);
 		// Always stay in LPM mode
 		update_lpmd_state(LPMD_ON);
 		break;
 	case LPM_FORCE_OFF:
+		restore_intel_pstate_mode();
+		if (lpmd_config.use_process_cpuset)
+			lpmd_process_cpuset_unbind_all();
 		// Never enter LPM mode
 		update_lpmd_state(LPMD_OFF);
 		break;
 	case LPM_AUTO:
+		(void)process_intel_pstate_mode(&lpmd_config);
 		// Enable oppotunistic LPM
 		update_lpmd_state(LPMD_AUTO);
+		break;
+	case LPM_PROCESS_PRECONFIG:
+		(void)process_intel_pstate_mode(&lpmd_config);
+		// PROCESS-PRECONFIG: only per-process cpuset is active; no LPM
+		// transitions are driven by util/HFI/WLT.
+		update_lpmd_state(LPMD_PROCESS_PRECONFIG);
+		if (lpmd_config.use_process_cpuset && prev_state == LPMD_OFF)
+			lpmd_process_cpuset_rescan();
 		break;
 	default:
 		break;
@@ -294,11 +330,44 @@ char *user_cpumask_idx_to_state_name(enum cpumask_idx idx)
 	return NULL;
 }
 
+static int hfi_timeout_cached_polling;
+void set_polling(int ms)
+{
+	if (!hfi_timeout_cached_polling)
+		hfi_timeout_cached_polling = lpmd_config.data.polling_interval;
+	lpmd_config.data.polling_interval = ms;
+}
+
+void reset_polling(void)
+{
+	lpmd_config.data.polling_interval = hfi_timeout_cached_polling;
+	hfi_timeout_cached_polling = 0;
+}
+
+/* Monotonic time in msec, used to schedule the utilization sampling */
+static unsigned long long get_time_ms(void)
+{
+	struct timespec ts;
+
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+
+	return (unsigned long long)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+}
+
 // LPMD processing thread. This is callback to pthread lpmd_core_main
 static void *lpmd_core_main_loop(void *arg)
 {
 	struct message_capsul_t msg;
 	int wlt_hint, result, n;
+	/* Deadline of the next utilization sampling */
+	unsigned long long next_util_ms = 0;
+	unsigned long long now;
+	int interval, timeout;
+
+	/* Rescan /proc every 60 seconds to bind any matching PIDs spawned
+	 * after lpmd_process_cpuset_init() ran at startup. */
+	const time_t process_cpuset_rescan_interval = 60;
+	time_t process_cpuset_last_rescan = time(NULL);
 
 	lpmd_config.data.polling_interval = DEF_POLLING_INTERVAL;
 
@@ -306,15 +375,68 @@ static void *lpmd_core_main_loop(void *arg)
 		if (get_lpmd_state() == LPMD_TERMINATE)
 			break;
 
-		n = poll(poll_fds, poll_fd_cnt, lpmd_config.data.polling_interval);
+		/* Nothing needs polling, only wake up for the periodic rescan */
+		interval = lpmd_config.data.polling_interval;
+		if (interval <= 0)
+			interval = process_cpuset_rescan_interval * 1000;
+
+		now = get_time_ms();
+
+		/*
+		 * Arm the sampling deadline, pulling it in when the polling
+		 * interval got shortened by the state machine.
+		 */
+		if (!next_util_ms || next_util_ms > now + (unsigned long long)interval)
+			next_util_ms = now + interval;
+
+		timeout = next_util_ms > now ? (int)(next_util_ms - now) : 0;
+
+		n = poll (poll_fds, poll_fd_cnt, timeout);
 		if (n < 0) {
-			lpmd_log_warn("Write to pipe failed\n");
+			if (errno == EINTR)
+				continue;
+			lpmd_log_warn("poll failed: %s\n", strerror(errno));
 			continue;
 		}
 		dump_poll_results(n);
 
-		/* Polling time out, update polling data */
-		if (n == 0 && lpmd_config.data.polling_interval > 0) {
+		if (hfi_timeout == HFI_TIMEOUT_TIMER) {
+			int delta = hfi_time_delta();
+			lpmd_log_debug("hfi_timeout: Timer : %dms / %dms\n", delta / 1000000, DEF_HFI_TIMEOUT);
+
+			/* If perf flag was set don't finish the timeout */
+			if (going_back_to_perf) {
+				lpmd_log_debug("hfi_timeout: staying in performance cpumask\n");
+				hfi_timeout = HFI_TIMEOUT_FINAL;
+				hfi_timeout_state_action(hfi_timeout);
+			/* Else check if timeout finished before going to LPM */
+			} else if (hfi_timeout_over(DEF_HFI_TIMEOUT) > 0) {
+				lpmd_log_debug("hfi_timeout: timeout over - moving to LP cpumask\n");
+				hfi_timeout = HFI_TIMEOUT_CACHED;
+				hfi_timeout_state_action(hfi_timeout);
+			}
+		}
+
+		/* Periodic process_cpuset rescan (skipped while OFF) */
+		if (lpmd_config.use_process_cpuset && get_lpmd_state() != LPMD_OFF) {
+			time_t now = time(NULL);
+			if (now - process_cpuset_last_rescan >= process_cpuset_rescan_interval) {
+				lpmd_process_cpuset_rescan();
+				process_cpuset_last_rescan = now;
+			}
+		}
+
+		/*
+		 * Sampling deadline expired, update polling data. This is done on
+		 * the deadline and not only when poll() times out, because a
+		 * steady stream of WLT, uevent or proc connector events would
+		 * otherwise starve the update and leave the state machine matching
+		 * states against a stale CPU and GFX load.
+		 */
+		if (get_time_ms() >= next_util_ms) {
+			/* Re-arm at the top of the loop, with the new interval */
+			next_util_ms = 0;
+
 			update_reason(UPDATE_UTIL);
 			util_update(&lpmd_config);
 
@@ -328,8 +450,15 @@ static void *lpmd_core_main_loop(void *arg)
 			check_cpu_hotplug();
 
 		/* Update CPUMASK_HFI */
-		if (idx_hfi_fd >= 0 && (poll_fds[idx_hfi_fd].revents & POLLIN))
-			hfi_update();
+		if (idx_hfi_fd >= 0 && (poll_fds[idx_hfi_fd].revents & POLLIN)) {
+			/* Timeout cached updates hfi manually */
+			if (hfi_timeout < HFI_TIMEOUT_FINAL)
+				hfi_update();
+			else if (hfi_timeout == HFI_TIMEOUT_FINAL)
+				hfi_timeout = HFI_TIMEOUT_PERF;
+			else
+				hfi_timeout = HFI_TIMEOUT_LP;
+		}
 
 		/* Update WLT hint */
 		if (idx_wlt_fd >= 0 && (poll_fds[idx_wlt_fd].revents & POLLPRI)) {
@@ -338,6 +467,11 @@ static void *lpmd_core_main_loop(void *arg)
 				lpmd_config.data.wlt_hint = wlt_hint;
 				update_reason(UPDATE_WLT);
 			}
+		}
+
+		/* Drain proc-connector events: classify newly-exec()ed PIDs. */
+		if (idx_pc_conn_fd >= 0 && (poll_fds[idx_pc_conn_fd].revents & POLLIN)) {
+			lpmd_process_cpuset_proc_connector_handle();
 		}
 
 		/* Respond Dbus commands */
@@ -365,7 +499,10 @@ static void *lpmd_core_main_loop(void *arg)
 
 	if (lpmd_config.wlt_proxy_enable)
 		wlt_proxy_uninit();
-	hfi_kill();
+
+	hfi_kill ();
+	/* Stop any transient cpuset scopes we created before tearing down cgroups. */
+	lpmd_process_cpuset_uninit();
 	cgroup_cleanup();
 
 	return NULL;
@@ -391,6 +528,8 @@ int lpmd_main(void)
 	if (ret)
 		goto cleanup;
 
+	(void)process_intel_pstate_mode(&lpmd_config);
+
 	pthread_mutex_init(&lpmd_mutex, NULL);
 
 	ret = detect_lpm_cpus(lpmd_config.lp_mode_cpus);
@@ -407,15 +546,23 @@ int lpmd_main(void)
 	if (ret)
 		goto cleanup;
 
-	if (!has_hfi_capability())
-		lpmd_config.hfi_lpm_enable = 0;
+	if (lpmd_config.hfi_lpm_enable && !has_hfi_capability()) {
+		lpmd_log_error("System doesn't support HFI but it was used in the config file!\n");
+		ret = LPMD_CONFIGURATION_ERROR;
+		goto cleanup;
+	}
 
 	/* Must done after init_cpu() */
 	lpmd_build_config_states(&lpmd_config);
 
-	/* Cleanup dynamically allocated core-type cpumasks */
-	free_cpu_type_masks(&lpmd_config);
+	ret = exclude_incompatible_configs(&lpmd_config);
+	if (ret)
+		goto cleanup;
 
+	/* If <UseProcessCPUSet> is set, seed the process_cpuset library with
+	 * the active P/E/LP-E core sets (still alive in core_type_masks[])
+	 * and attach matching processes to transient cpuset scopes. */
+	lpmd_process_cpuset_init(&lpmd_config);
 	ret = irq_init();
 	if (ret)
 		return ret;
@@ -472,11 +619,10 @@ int lpmd_main(void)
 	    wlt_proxy_init() != LPMD_SUCCESS) {
 		lpmd_config.wlt_proxy_enable = 0;
 		lpmd_log_error("Error setting up WLT Proxy. wlt_proxy_enable disabled\n");
+		return LPMD_ERROR;
 	}
 
-	if (lpmd_config.wlt_hint_enable && !lpmd_config.hfi_lpm_enable) {
-		if (!lpmd_config.util_gfx_enable && lpmd_config.wlt_hint_poll_enable)
-			lpmd_config.util_enable = 0;
+	if (lpmd_config.wlt_hint_enable) {
 		if (!lpmd_config.wlt_proxy_enable) {
 			poll_fds[poll_fd_cnt].fd = wlt_init();
 			if (poll_fds[poll_fd_cnt].fd > 0) {
@@ -492,8 +638,26 @@ int lpmd_main(void)
 		}
 	}
 
-	pthread_attr_init(&lpmd_attr);
-	pthread_attr_setdetachstate(&lpmd_attr, PTHREAD_CREATE_DETACHED);
+	/*
+	 * Subscribe to the kernel proc-connector multicast group so newly
+	 * exec()ed PIDs can be classified immediately, instead of waiting
+	 * for the periodic /proc rescan. Optional: the helper falls back
+	 * gracefully (returns -1) when CAP_NET_ADMIN or the kernel
+	 * feature is missing.
+	 */
+	if (lpmd_config.use_process_cpuset) {
+		int conn_fd = lpmd_process_cpuset_proc_connector_init();
+		if (conn_fd >= 0 && poll_fd_cnt < LPMD_NUM_OF_POLL_FDS) {
+			poll_fds[poll_fd_cnt].fd = conn_fd;
+			poll_fds[poll_fd_cnt].events = POLLIN;
+			poll_fds[poll_fd_cnt].revents = 0;
+			idx_pc_conn_fd = poll_fd_cnt;
+			poll_fd_cnt++;
+		}
+	}
+
+	pthread_attr_init (&lpmd_attr);
+	pthread_attr_setdetachstate (&lpmd_attr, PTHREAD_CREATE_DETACHED);
 
 	/* Enable lpmd auto run when power profile daemon is not connected */
 	if (connect_to_power_profile_daemon())
@@ -514,6 +678,7 @@ int lpmd_main(void)
 
 	return LPMD_SUCCESS;
 cleanup:
+	restore_intel_pstate_mode();
 	free_cpu_type_masks(&lpmd_config);
 	return ret;
 }

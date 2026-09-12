@@ -54,14 +54,9 @@ struct info_irqs *info = &info_irqs;
 static int irqbalance_ban_cpus(char *irq_str)
 {
 	char socket_cmd[MAX_STR_LENGTH];
-	int offset;
 
 	lpmd_log_debug("\tUpdate IRQ affinity (irqbalance)\n");
-	offset = snprintf(socket_cmd, MAX_STR_LENGTH, "settings cpus %s", irq_str);
-	if (offset >= MAX_STR_LENGTH)
-		offset = MAX_STR_LENGTH - 1;
-
-	socket_cmd[offset] = '\0';
+	snprintf(socket_cmd, MAX_STR_LENGTH, "settings cpus %s", irq_str);
 	socket_send_cmd(irq_socket_name, socket_cmd);
 
 	lpmd_log_debug("\tSend socket command %s\n", socket_cmd);
@@ -233,6 +228,7 @@ int irq_init(void)
 		do {
 			entry = readdir(dir);
 			if (entry) {
+				/* Match patterns like irqbalance%d.sock */
 				if (!strncmp(entry->d_name, "irqbalance", 10)) {
 					ret = sscanf(entry->d_name, "irqbalance%d.sock", &irqbalance_pid);
 					if (!ret)

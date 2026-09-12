@@ -1,0 +1,1639 @@
+<?xml version="1.0"?>
+<!--
+  POC: Per-process CPU affinity via systemd cgroups.
+
+  Unified seed config covering common processes found on default
+  installs of:
+    * Ubuntu       (22.04 / 24.04)
+    * Fedora       (39 / 40 / 41, Workstation + Silverblue/Kinoite)
+    * CachyOS      (Arch-based; KDE Plasma default + GNOME spin)
+    * openSUSE     (Leap / Tumbleweed, GNOME + KDE editions;
+                    MicroOS / Aeon / Kalpa transactional desktops)
+
+  Classification rule (low priority -> high):
+    background         - no user interaction, no display output
+                         (system services, daemons, indexers, ...)
+    utility            - non-interactive helper work above background
+                         (system telemetry, periodic indexers, ...)
+    user_initiated     - user-launched workloads, including all
+                         desktop apps, browsers, terminals, IDEs.
+                         This is the DEFAULT tier for GUI apps.
+    user_interactive   - reserved for the process owning the focused
+                         window; intel_lpmd promotes a PID to this
+                         tier automatically on focus change (via a
+                         compositor-side helper that calls
+                         LPM_SET_FOCUS_PID) and demotes it back to
+                         user_initiated when focus moves away.
+                         The display server / compositor stack
+                         (Xorg / mutter / kwin / plasmashell / ...)
+                         remains classified as user_interactive in
+                         the seed config because it always drives
+                         the visible UI regardless of focus.
+    realtime           - latency-sensitive media / audio engines
+    game_profile_cpu     - CPU-bound game workloads
+    game_profile_gpu     - GPU-bound game workloads
+    game_profile_mixed  - mixed CPU/GPU game workloads
+    custom_profile_0    - custom workload profile 0
+    custom_profile_1    - custom workload profile 1
+    custom_profile_2    - custom workload profile 2
+
+
+  Distro-specific notables retained in this single file:
+    Ubuntu : snapd, apt/dpkg, whoopsie/apport, unattended-upgrades,
+             apparmor, multipathd, dhclient, dbus-daemon, pulseaudio,
+             snap-store, update-notifier/manager.
+    Fedora : dnf / rpm / rpm-ostree / flatpak, packagekitd, abrt*,
+             firewalld, sssd, gssproxy, tuned, chronyd, dbus-broker,
+             gnome-console, loupe, papers.
+    CachyOS: pacman / paru / yay / makepkg / pamac / reflector,
+             ananicy-cpp, iwd / dhcpcd, sddm, KDE Plasma stack
+             (kwin, plasmashell, kded, ksmserver, krunner, baloo*),
+             dolphin, konsole, kate, okular, alacritty, kitty, foot,
+             zsh, fish.
+    openSUSE: zypper / SUSEConnect / yast / y2base / packagekitd,
+             wicked (wickedd / wickedd-dhcp4/6 / -auto4 / -nanny),
+             snapper / snapperd / btrfs maintenance timers,
+             rebootmgrd + transactional-update (MicroOS family),
+             purge-kernels, salt-minion.
+
+  Entries that don't exist on a given distro simply won't match any
+  PID and are silently ignored at runtime.
+
+  Default allowed CPUs per classification (overridable via the
+  <ClassDefaults> block below; built-in fallback shown):
+      realtime           -> Pcores
+      user_interactive   -> Pcores + Ecores + Lcores  (focused PID)
+      user_initiated     -> Pcores + Ecores
+      utility            -> Ecores + Lcores
+      background         -> Lcores
+      game_profile_cpu     -> Pcores
+      game_profile_gpu     -> Pcores + Ecores
+      game_profile_mixed  -> Pcores + Ecores
+    custom_profile_0    -> Pcores + Ecores + Lcores
+    custom_profile_1    -> Pcores + Ecores + Lcores
+    custom_profile_2    -> Pcores + Ecores + Lcores
+
+  NOTE: /proc/<pid>/comm is truncated to 15 chars; names below already
+        respect that limit.
+-->
+
+<ProcessCpusetConfig>
+
+
+    <!--
+      Global CPU groups (ActivePcores / ActiveEcores / ActiveLcores) are
+      NOT defined here. When this config is loaded by intel_lpmd, the
+      daemon supplies the active P-core / E-core / LP-E-core sets at
+      runtime via process_cpuset_set_groups_cpuset() (sourced from
+      lpmd_cpumask). The standalone POC binary may still inject a
+      <CpuGroups> block locally for testing.
+    -->
+
+    <!--
+      Per-classification defaults. OPTIONAL. If a <Process> entry omits
+      <ActiveCores>, the groups listed here for its classification are
+      used. Built-in fallbacks (used if a tag is missing) are:
+          realtime           -> ActivePcores
+          user_interactive   -> ActivePcores, ActiveEcores
+          user_initiated     -> ActivePcores, ActiveEcores
+          utility            -> ActiveEcores, ActiveLcores
+          background         -> ActiveLcores
+          game_profile_cpu     -> ActivePcores
+          game_profile_gpu     -> ActivePcores, ActiveEcores
+          game_profile_mixed  -> ActivePcores, ActiveEcores
+          custom_profile_0    -> ActivePcores, ActiveEcores, ActiveLcores
+          custom_profile_1    -> ActivePcores, ActiveEcores, ActiveLcores
+          custom_profile_2    -> ActivePcores, ActiveEcores, ActiveLcores
+      Override any of them by editing this block; remove the whole block
+      to keep all defaults built-in.
+
+      Each entry accepts a comma- / whitespace-separated mix of:
+        * Named groups   : ActivePcores | ActiveEcores | ActiveLcores
+        * Literal CPUs   : cpuset-style list, e.g. "0-3,5,8"
+
+      Optional per-class uclamp tags inside each class node (per-PID control):
+          * <UClampMin> / <uclamp_min> : -1(disable) or 0..1024
+          * <UClampMax> / <uclamp_max> : -1(disable) or 0..1024
+          When set, matching PIDs in that classification are updated via
+          sched_setattr() (sched_util_min / sched_util_max).
+
+      NOTE: Other per-class tuning tags (MinPerfPctAC/DC, MaxPerfPctAC/DC,
+      BalanceSliderAC/DC, SliderOffsetAC/DC) are NOT per-PID settings;
+      they are global system state overrides that apply when any process
+      from that class is active. Those tags belong in intel_lpmd_config_*.xml
+      under the per-CPU-model <States><ClassDefaults> overlay, not here.
+
+      The effective AllowedCPUs mask is the union of every group plus
+      every literal CPU that appears in the entry. The same syntax is
+      accepted in per-process <ActiveCores> overrides.
+    -->
+    <ClassDefaults>
+        <Realtime>
+            <Cores>ActivePcores,ActiveEcores,ActiveLcores</Cores>
+        </Realtime>
+        <UserInteractive>
+            <Cores>ActivePcores, ActiveEcores, ActiveLcores</Cores>
+        </UserInteractive>
+        <UserInitiated>
+            <Cores>ActivePcores, ActiveEcores</Cores>
+        </UserInitiated>
+        <Utility>
+            <Cores>ActiveEcores, ActiveLcores</Cores>
+        </Utility>
+        <Background>
+            <Cores>ActiveLcores</Cores>
+        </Background>
+        <GameProfileCPU>
+            <Cores>ActivePcores</Cores>
+        </GameProfileCPU>
+        <GameProfileGPU>
+            <Cores>ActiveLcores</Cores>
+        </GameProfileGPU>
+        <GameProfileMixed>
+            <Cores>ActiveEcores,ActiveLcores</Cores>
+        </GameProfileMixed>
+        <CustomProfile0>
+            <Cores>ActivePcores, ActiveEcores, ActiveLcores</Cores>
+        </CustomProfile0>
+        <CustomProfile1>
+            <Cores>ActivePcores, ActiveEcores, ActiveLcores</Cores>
+        </CustomProfile1>
+        <CustomProfile2>
+            <Cores>ActivePcores, ActiveEcores, ActiveLcores</Cores>
+        </CustomProfile2>
+    </ClassDefaults>
+
+    <!--
+      Optional per-process tags accepted inside <Process>:
+
+        <Name>           required: /proc/<pid>/comm (15-char limit)
+                       Supports '*' wildcards for
+                       matching only, e.g. 'Strange*'
+                       matches process names starting
+                       with 'Strange'.
+        <Classification> required: realtime | user_interactive |
+                                   user_initiated | utility |
+                                   background | game_profile_cpu |
+                                   game_profile_gpu | game_profile_mixed |
+                                   custom_profile_0 |
+                                   custom_profile_1 |
+                                   custom_profile_2
+                                   Most GUI apps should use
+                                   user_initiated; intel_lpmd will
+                                   promote them to user_interactive
+                                   while their window has focus.
+        <ActiveCores>    optional: per-process CPU spec (overrides
+                                   ClassDefaults). Same mixed
+                                   group/literal syntax as ClassDefaults.
+        <AllowSession>   optional: 1 / true / yes / on
+                                   By default, PIDs that live inside a
+                                   logind login-session scope (under
+                                   /user.slice/.../session-N.scope:
+                                   gdm-*, sshd-session, sudo, the
+                                   login bash, etc.) are SKIPPED to
+                                   protect logind/polkit session
+                                   tracking. Set this tag to opt a
+                                   specific comm into being pinned via
+                                   sched_setaffinity(2) anyway.
+                                   Intended for games and other apps
+                                   you knowingly launch from a
+                                   terminal or .desktop file under a
+                                   login session and want pinned.
+                                   No cgroup is created in this case;
+                                   the affinity is per-PID and not
+                                   inherited by future siblings
+                                   spawned outside the process tree.
+        <AffinityAllThreads> optional: 1 / true / yes / on
+                                   When the affinity path is taken
+                                   (user@UID.service PIDs, or
+                                   <AllowSession>-opted login-session
+                                   PIDs), apply the mask to every TID
+                                   in /proc/<pid>/task/ instead of
+                                   just the leader. Without this,
+                                   sched_setaffinity only constrains
+                                   the main thread; existing worker
+                                   threads keep their previous mask.
+                                   Recommended for multithreaded
+                                   apps such as games, browsers, and
+                                   media engines. No effect on PIDs
+                                   that go through the cgroup
+                                   transient-scope path (cgroups
+                                   already cover every thread).
+    -->
+
+    <!--
+      Optional <DefaultProcess> catch-all. When present, it is applied
+      to any user-session PID (under user@UID.service, or login-session
+      scopes if <AllowSession> is set on the default) whose comm is
+      NOT matched by a specific <Process> entry above.
+
+      The typical use case is to reset child processes that inherited
+      a restrictive affinity mask from a user_initiated ancestor (for
+      example, a kernel build spawned by gnome-terminal: gnome-terminal
+      is classified user_initiated, so make/cc1/ld inherit
+      Pcores+Ecores).
+      Setting <DefaultProcess> to span every group / all CPUs lifts
+      that inherited restriction for unclassified workloads.
+
+      System-slice PIDs are NEVER touched by <DefaultProcess>: those
+      either match a named entry or are left alone.
+
+      Accepts the same per-process tags as <Process> (without <Name>).
+      Uncomment and adjust to enable:
+    -->
+
+    <DefaultProcess>
+        <Classification>unclassified</Classification>
+        <ActiveCores>ActivePcores, ActiveEcores, ActiveLcores</ActiveCores>
+        <AffinityAllThreads>1</AffinityAllThreads>
+    </DefaultProcess>
+
+    <!-- ===================================================== -->
+    <!-- =============== SYSTEMD CORE (background) =========== -->
+    <!-- ===================================================== -->
+
+    <!--
+      NOTE: The systemd main process (PID 1) is intentionally NOT listed
+      here. Placing it in a cpuset cgroup causes systemd to continuously
+      react to cgroup changes, resulting in a service-restart loop and
+      high CPU usage. Leave PID 1 unconstrained.
+    -->
+    <Process>
+        <Name>systemd-journal</Name>
+        <Classification>background</Classification>
+        <!-- Demo: pin journald to LP E-cores only (overrides background default). -->
+        <ActiveCores>ActiveLcores</ActiveCores>
+    </Process>
+    <Process>
+        <Name>systemd-udevd</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>systemd-logind</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>systemd-resolve</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>systemd-network</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>systemd-timesyn</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>systemd-oomd</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>systemd-homed</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>systemd-userdbd</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>systemd-machine</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>systemd-coredum</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>(sd-pam)</Name>
+        <Classification>background</Classification>
+    </Process>
+
+    <!-- ===================================================== -->
+    <!-- =============== NETWORK / CONNECTIVITY ============== -->
+    <!-- ===================================================== -->
+
+    <Process>
+        <Name>NetworkManager</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>nm-dispatcher</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>wpa_supplicant</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>iwd</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>ModemManager</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>avahi-daemon</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>sshd</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <!-- Per-connection sshd worker (OpenSSH >= 9.8) -->
+        <Name>sshd-session</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <!-- Samba winbind daemon -->
+        <Name>winbindd</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <!-- Winbind idmap helper -->
+        <Name>wb-idmap</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <!-- NFSv4 GSS user-space daemon -->
+        <Name>rpc.gssd</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>chronyd</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>dhclient</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>dhcpcd</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>firewalld</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>rpcbind</Name>
+        <Classification>background</Classification>
+    </Process>
+
+    <!-- ===================================================== -->
+    <!-- =============== SYSTEM / IPC / SECURITY ============= -->
+    <!-- ===================================================== -->
+
+    <Process>
+        <Name>dbus-daemon</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>dbus-broker</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>dbus-broker-lau</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>polkitd</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <!-- PC/SC smart-card resource manager -->
+        <Name>pcscd</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>accounts-daemon</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>rsyslogd</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>cron</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>crond</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>anacron</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>atd</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>auditd</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>audisp-syslog</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>apparmor_parser</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>multipathd</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>sssd</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>sssd_be</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>sssd_nss</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>sssd_pam</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>sssd_kcm</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>gssproxy</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>rtkit-daemon</Name>
+        <Classification>background</Classification>
+    </Process>
+
+    <!-- ===================================================== -->
+    <!-- =============== HARDWARE / POWER ==================== -->
+    <!-- ===================================================== -->
+
+    <Process>
+        <Name>thermald</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>intel_lpmd</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>tuned</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <!-- tuned power-profiles-daemon shim -->
+        <Name>tuned-ppd</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>irqbalance</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>upowerd</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>udisksd</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>fwupd</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>bluetoothd</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <!-- Thunderbolt / USB4 device manager -->
+        <Name>boltd</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>cupsd</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>cups-browsed</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>colord</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>switcheroo-cont</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>power-profiles-</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>iio-sensor-prox</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>mcelog</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>smartd</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>rngd</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>low-memory-moni</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <!-- CachyOS auto-nice daemon -->
+        <Name>ananicy-cpp</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>ananicy</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <!-- sched_ext userspace loader (CachyOS) -->
+        <Name>scx_loader</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <!-- sched_ext LAVD scheduler (CachyOS default) -->
+        <Name>scx_lavd</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <!-- Btrfs snapshot management daemon (CachyOS / openSUSE) -->
+        <Name>snapperd</Name>
+        <Classification>background</Classification>
+    </Process>
+
+    <!-- ===================================================== -->
+    <!-- =============== UPDATES / PACKAGING ================= -->
+    <!-- ===================================================== -->
+
+    <!-- Ubuntu / Debian -->
+    <Process>
+        <Name>snapd</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>packagekitd</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>unattended-upgr</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>apt</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>apt-get</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>dpkg</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>aptd</Name>
+        <Classification>background</Classification>
+    </Process>
+    <!-- Fedora / RHEL -->
+    <Process>
+        <Name>dnf</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>dnf-makecache</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>dnf-automatic</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>rpm</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>rpm-ostree</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>flatpak</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>flatpak-system-</Name>
+        <Classification>background</Classification>
+    </Process>
+    <!-- Arch / CachyOS -->
+    <Process>
+        <Name>pacman</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>paru</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>yay</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>makepkg</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>pamac</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>pamac-daemon</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>reflector</Name>
+        <Classification>background</Classification>
+    </Process>
+    <!-- openSUSE (Leap / Tumbleweed / MicroOS / Aeon / Kalpa) -->
+    <Process>
+        <!-- Default openSUSE package manager (zypper) -->
+        <Name>zypper</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <!-- Background package-management daemon used by GNOME
+             Software / KDE Discover on openSUSE -->
+        <Name>packagekitd</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <!-- libsolv-based dependency resolver helper -->
+        <Name>solv</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <!-- SUSEConnect: subscription / registration helper -->
+        <Name>SUSEConnect</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <!-- YaST CLI / ncurses front-end (control center components) -->
+        <Name>yast</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <!-- YaST Ruby/perl wrapper invoked by yast2 -->
+        <Name>y2base</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <!-- Network management daemon (openSUSE default on non-NM
+             setups, e.g. servers and some Leap installs) -->
+        <Name>wickedd</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>wickedd-dhcp4</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>wickedd-dhcp6</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>wickedd-auto4</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>wickedd-nanny</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <!-- Transactional-update reboot manager (MicroOS / Aeon /
+             Kalpa / Leap Micro). Schedules safe reboots after
+             rpm-ostree-like transactional upgrades. -->
+        <Name>rebootmgrd</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <!-- Atomic system update tool used on MicroOS-family
+             desktops (comm truncated to 15 chars from
+             "transactional-update"). -->
+        <Name>transactional-u</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <!-- Periodic btrfs maintenance (scrub / balance / trim)
+             timers shipped by openSUSE. -->
+        <Name>btrfs-balance</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>btrfs-scrub</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>btrfs-trim</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>btrfs</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <!-- snapper command-line front-end (snapperd daemon is
+             listed earlier). -->
+        <Name>snapper</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <!-- openSUSE kernel-purging helper -->
+        <Name>purge-kernels</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <!-- Salt minion is the default config-management agent on
+             openSUSE Leap server profiles and some desktops. -->
+        <Name>salt-minion</Name>
+        <Classification>background</Classification>
+    </Process>
+
+    <!-- ===================================================== -->
+    <!-- =============== DIAGNOSTICS / TELEMETRY ============= -->
+    <!-- ===================================================== -->
+
+    <Process>
+        <Name>whoopsie</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>apport</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>abrtd</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>abrt-dump-journ</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>abrt-applet</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>abrt-dbus</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>kerneloops</Name>
+        <Classification>background</Classification>
+    </Process>
+
+    <!-- ===================================================== -->
+    <!-- =============== DESKTOP BACKGROUND HELPERS ========== -->
+    <!-- ===================================================== -->
+
+    <Process>
+        <Name>gvfsd</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>gvfsd-fuse</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>gvfsd-trash</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>gvfsd-metadata</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>gvfs-udisks2-vo</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>gvfs-mtp-volume</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>gvfs-goa-volume</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>gvfs-afc-volume</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>gvfs-gphoto2-vo</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>gnome-keyring-d</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>tracker-miner-f</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>tracker-extract</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>localsearch-3</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>evolution-calen</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>evolution-addre</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>evolution-sourc</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>goa-daemon</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>goa-identity-se</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>at-spi-bus-laun</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>at-spi2-registr</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>xdg-desktop-por</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>xdg-document-po</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>xdg-permission-</Name>
+        <Classification>background</Classification>
+    </Process>
+    <!-- KDE Plasma background helpers (CachyOS default, also Kubuntu/Fedora KDE) -->
+    <Process>
+        <Name>baloo_file</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>baloo_file_extr</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>kded5</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>kded6</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>kactivitymanage</Name>
+        <Classification>background</Classification>
+    </Process>
+
+    <!-- ===================================================== -->
+    <!-- =============== AUDIO (realtime) ==================== -->
+    <!-- ===================================================== -->
+
+    <Process>
+        <Name>pipewire</Name>
+        <Classification>realtime</Classification>
+    </Process>
+    <Process>
+        <Name>pipewire-pulse</Name>
+        <Classification>realtime</Classification>
+    </Process>
+    <Process>
+        <Name>wireplumber</Name>
+        <Classification>realtime</Classification>
+    </Process>
+    <Process>
+        <Name>pulseaudio</Name>
+        <Classification>realtime</Classification>
+    </Process>
+
+    <!-- ===================================================== -->
+    <!-- =============== DISPLAY / SESSION (user_interactive) ======
+         The compositor / display-server stack always drives the
+         visible UI, so it stays at user_interactive regardless of
+         which window happens to have focus. -->
+    <!-- ===================================================== -->
+
+    <!-- Display managers -->
+    <Process>
+        <Name>gdm</Name>
+        <Classification>user_interactive</Classification>
+    </Process>
+    <Process>
+        <Name>gdm-session-wor</Name>
+        <Classification>user_interactive</Classification>
+    </Process>
+    <Process>
+        <Name>gdm-wayland-ses</Name>
+        <Classification>user_interactive</Classification>
+    </Process>
+    <Process>
+        <Name>gdm-x-session</Name>
+        <Classification>user_interactive</Classification>
+    </Process>
+    <Process>
+        <!-- CachyOS / Kubuntu / Fedora KDE default DM -->
+        <Name>sddm</Name>
+        <Classification>user_interactive</Classification>
+    </Process>
+    <Process>
+        <Name>sddm-helper</Name>
+        <Classification>user_interactive</Classification>
+    </Process>
+    <Process>
+        <!-- CachyOS Plasma display manager (replacement for sddm) -->
+        <Name>plasmalogin</Name>
+        <Classification>user_interactive</Classification>
+    </Process>
+    <Process>
+        <Name>plasmalogin-hel</Name>
+        <Classification>user_interactive</Classification>
+    </Process>
+    <!-- X / Wayland servers -->
+    <Process>
+        <Name>Xorg</Name>
+        <Classification>user_interactive</Classification>
+    </Process>
+    <Process>
+        <Name>Xwayland</Name>
+        <Classification>user_interactive</Classification>
+    </Process>
+    <!-- GNOME shell stack -->
+    <Process>
+        <Name>gnome-shell</Name>
+        <Classification>user_interactive</Classification>
+    </Process>
+    <Process>
+        <Name>mutter</Name>
+        <Classification>user_interactive</Classification>
+    </Process>
+    <Process>
+        <Name>gnome-session-b</Name>
+        <Classification>user_interactive</Classification>
+    </Process>
+    <Process>
+        <Name>gnome-session-c</Name>
+        <Classification>user_interactive</Classification>
+    </Process>
+    <Process>
+        <!-- gnome-session-inhibitor -->
+        <Name>gnome-session-i</Name>
+        <Classification>user_interactive</Classification>
+    </Process>
+    <Process>
+        <!-- gnome-session-selector / gnome-session-systemd -->
+        <Name>gnome-session-s</Name>
+        <Classification>user_interactive</Classification>
+    </Process>
+    <Process>
+        <!-- mutter-x11-frames -->
+        <Name>mutter-x11-fram</Name>
+        <Classification>user_interactive</Classification>
+    </Process>
+    <!-- KDE Plasma shell stack (CachyOS default) -->
+    <Process>
+        <Name>plasmashell</Name>
+        <Classification>user_interactive</Classification>
+    </Process>
+    <Process>
+        <Name>kwin_x11</Name>
+        <Classification>user_interactive</Classification>
+    </Process>
+    <Process>
+        <Name>kwin_wayland</Name>
+        <Classification>user_interactive</Classification>
+    </Process>
+    <Process>
+        <Name>ksmserver</Name>
+        <Classification>user_interactive</Classification>
+    </Process>
+    <Process>
+        <Name>krunner</Name>
+        <Classification>user_interactive</Classification>
+    </Process>
+    <Process>
+        <Name>plasma_waylands</Name>
+        <Classification>user_interactive</Classification>
+    </Process>
+    <!-- Input methods -->
+    <Process>
+        <Name>ibus-daemon</Name>
+        <Classification>user_interactive</Classification>
+    </Process>
+    <Process>
+        <Name>ibus-x11</Name>
+        <Classification>user_interactive</Classification>
+    </Process>
+    <Process>
+        <Name>ibus-extension-</Name>
+        <Classification>user_interactive</Classification>
+    </Process>
+    <Process>
+        <!-- ibus-engine-table / ibus-engine-tb* -->
+        <Name>ibus-engine-tb</Name>
+        <Classification>user_interactive</Classification>
+    </Process>
+    <Process>
+        <Name>fcitx5</Name>
+        <Classification>user_interactive</Classification>
+    </Process>
+
+    <!-- ===================================================== -->
+    <!-- =============== DESKTOP APPS (user_initiated) ============
+         Default tier for GUI apps. intel_lpmd's focus helper
+         promotes whichever app currently owns the focused window
+         to user_interactive, and reverts it on focus loss. -->
+    <!-- ===================================================== -->
+
+    <!-- File managers / shells / utilities (GNOME) -->
+    <Process>
+        <Name>nautilus</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>gnome-terminal-</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>gnome-console</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>gnome-control-c</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>gnome-software</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>gnome-calculato</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>gnome-text-edit</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>gnome-system-mo</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>gnome-logs</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>gnome-disks</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>gedit</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>eog</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>loupe</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>evince</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>papers</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>totem</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>rhythmbox</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>cheese</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>shotwell</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <!-- KDE apps (CachyOS / Kubuntu / Fedora KDE) -->
+    <Process>
+        <Name>dolphin</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>konsole</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>kate</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>okular</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>gwenview</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>ksysguard</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>plasma-systemmo</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>discover</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <!-- Independent terminals (popular on CachyOS) -->
+    <Process>
+        <Name>alacritty</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>kitty</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>foot</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>wezterm-gui</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>terminator</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <!-- Remote-desktop client (RDP/VNC/SSH) -->
+        <Name>remmina</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+
+    <!-- ===================================================== -->
+    <!-- =============== STEAM / GAMING (user_initiated) =========
+         Steam / game launcher processes default to user_initiated
+         and get auto-promoted while focused. Games that need a
+         dedicated profile should use GameProfile{CPU,GPU,Hybrid}. -->
+    <!-- ===================================================== -->
+
+    <Process>
+        <Name>steam</Name>
+	<AllowSession>1</AllowSession>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>steamwebhelper</Name>
+	<AllowSession>1</AllowSession>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <!-- steam-runtime-launcher-service / -interface -->
+        <Name>steam-runtime-l</Name>
+	<AllowSession>1</AllowSession>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <!-- Steam runtime bubblewrap sandbox launcher -->
+        <Name>srt-bwrap</Name>
+	<AllowSession>1</AllowSession>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <!-- Steam runtime logger helper -->
+        <Name>srt-logger</Name>
+	<AllowSession>1</AllowSession>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <!-- pressure-vessel adverb wrapper -->
+        <Name>pv-adverb</Name>
+        <Classification>user_initiated</Classification>
+	<AllowSession>1</AllowSession>
+    </Process>
+    <Process>
+        <!-- Valve gamescope launcher (CachyOS Handheld / SteamOS-like) -->
+        <Name>start-gamescope</Name>
+        <Classification>user_initiated</Classification>
+	<AllowSession>1</AllowSession>
+    </Process>
+    <Process>
+        <!-- gamescope wayland compositor -->
+        <Name>gamescope-wl</Name>
+        <Classification>user_initiated</Classification>
+	<AllowSession>1</AllowSession>
+    </Process>
+    <Process>
+        <!-- MangoHud overlay app companion -->
+        <Name>mangoapp</Name>
+        <Classification>user_initiated</Classification>
+	<AllowSession>1</AllowSession>
+    </Process>
+    <!-- Media -->
+    <Process>
+        <Name>vlc</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>mpv</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <!-- Browsers -->
+    <Process>
+        <Name>firefox</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>Web Content</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>Isolated Web Co</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>chrome</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>chromium</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>brave</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <!-- WebKitGTK content/web process (Evolution, Epiphany,
+             GNOME Online Accounts auth dialog, etc.). comm truncated
+             to 15 chars from "WebKitWebProcess". -->
+        <Name>WebKitWebProces</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <!-- Xfce file manager (also default on some distros / spins) -->
+        <Name>Thunar</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <!-- Mail / office / IDE -->
+    <Process>
+        <Name>thunderbird</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>soffice.bin</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>code</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <!-- Distro update / store front-ends -->
+    <Process>
+        <Name>snap-store</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>update-notifier</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>update-manager</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>evolution-alarm</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>evolution</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <!-- Interactive shells -->
+    <Process>
+        <Name>bash</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>zsh</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <Name>fish</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+
+    <!-- ===================================================== -->
+    <!-- ====== GNOME SETTINGS DAEMON / SHELL HELPERS ======== -->
+    <!-- ===================================================== -->
+    <!--
+      gnome-settings-daemon plugins. Truncated /proc/comm names
+      (15 chars). All run per-session, no UI of their own, so
+      classified as background.
+    -->
+    <Process>
+        <Name>gsd-a11y-settin</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>gsd-color</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>gsd-datetime</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>gsd-housekeepin</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>gsd-keyboard</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>gsd-media-keys</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>gsd-power</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>gsd-print-notif</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>gsd-printer</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>gsd-rfkill</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>gsd-screensaver</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>gsd-sharing</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>gsd-smartcard</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>gsd-sound</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>gsd-wacom</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>gsd-disk-utilit</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>gsd-usb-protect</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>gsd-wwan</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>gsd-xsettings</Name>
+        <Classification>background</Classification>
+    </Process>
+    <!-- gnome-shell helper processes (calendar server, JS plugin host) -->
+    <Process>
+        <Name>gnome-shell-cal</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>gjs</Name>
+        <Classification>background</Classification>
+    </Process>
+    <!-- GNOME remote desktop / RDP backend -->
+    <Process>
+        <Name>gnome-remote-de</Name>
+        <Classification>background</Classification>
+    </Process>
+    <!-- Snap desktop integration helper -->
+    <Process>
+        <Name>snapd-desktop-i</Name>
+        <Classification>background</Classification>
+    </Process>
+    <!-- dconf settings storage -->
+    <Process>
+        <Name>dconf-service</Name>
+        <Classification>background</Classification>
+    </Process>
+    <!-- Additional input-method helpers -->
+    <Process>
+        <Name>ibus-dconf</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>ibus-portal</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>ibus-engine-sim</Name>
+        <Classification>background</Classification>
+    </Process>
+
+    <!-- ===================================================== -->
+    <!-- ====== MISC SYSTEM / LOGIN / FUSE / SSH HELPERS ===== -->
+    <!-- ===================================================== -->
+    <!--
+      systemd user instance (per-user, comm="systemd") is intentionally
+      NOT listed here. Matching on "systemd" would also match PID 1 (the
+      system instance), which causes a service-restart loop when placed
+      in a cpuset cgroup. Leave both unconstrained.
+    -->
+    <Process>
+        <Name>agetty</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>gcr-ssh-agent</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <!-- Some distros expose D-Bus daemon as comm="dbus" rather than
+             "dbus-daemon" (already listed). -->
+        <Name>dbus</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <!-- Ubuntu's GDM is named gdm3; "gdm" entry above only matches
+             Fedora/Arch builds. -->
+        <Name>gdm3</Name>
+        <Classification>user_interactive</Classification>
+    </Process>
+    <Process>
+        <Name>fusermount3</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <Name>sftp-server</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <!-- systemd per-user worker (comm truncated to 15 chars from
+             "systemd-userwork"). Safe to constrain: this is a
+             short-lived helper of the user manager, not PID 1. -->
+        <Name>systemd-userwor</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <!-- Interactive privilege-elevation tool. User-facing. -->
+        <Name>sudo</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+    <Process>
+        <!-- systemctl CLI; short-lived user invocations. -->
+        <Name>systemctl</Name>
+        <Classification>user_initiated</Classification>
+    </Process>
+
+    <Process>
+        <!-- Flatpak / portal D-Bus proxy helper -->
+        <Name>xdg-dbus-proxy</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <!-- Ubuntu / Unity app-indicator host (comm truncated to 15
+             chars from "indicator-application-service" etc.) -->
+        <Name>indicator-appli</Name>
+        <Classification>background</Classification>
+    </Process>
+
+    <!-- ===================================================== -->
+    <!-- ====== ADDITIONAL DESKTOP / SYSTEM HELPERS ========== -->
+    <!-- ===================================================== -->
+
+    <Process>
+        <!-- Legacy GNOME ORBit / orbit-name-server -->
+        <Name>orbit</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <!-- ALSA control / state restore -->
+        <Name>alsactl</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <!-- Geolocation service -->
+        <Name>geoclue</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <!-- Per-user resource arbitration daemon -->
+        <Name>uresourced</Name>
+        <Classification>background</Classification>
+    </Process>
+    <Process>
+        <!-- GLib proxy auto-config (PAC) helper -->
+        <Name>glib-pacrunner</Name>
+        <Classification>background</Classification>
+    </Process>
+
+    <!-- Example on how Steam Games, can be configured with own class 
+    <Process>
+        <Name>Spaceship*</Name>
+	<AllowSession>1</AllowSession>
+	<Classification>game_profile_mixed</Classification>
+        <AffinityAllThreads>1</AffinityAllThreads>
+    </Process>
+
+    <Process>
+        <Name>Strange*</Name>
+	<AllowSession>1</AllowSession>
+	<Classification>game_profile_gpu</Classification>
+        <AffinityAllThreads>1</AffinityAllThreads>
+    </Process>
+
+    <Process>
+        <Name>ShadowOfTheTomb*</Name>
+	<AllowSession>1</AllowSession>
+	<Classification>game_profile_mixed</Classification>
+        <AffinityAllThreads>1</AffinityAllThreads>
+    </Process>
+
+    <Process>
+        <Name>_hitman*</Name>
+	<AllowSession>1</AllowSession>
+	<Classification>game_profile_cpu</Classification>
+        <AffinityAllThreads>1</AffinityAllThreads>
+    </Process>
+    <Process>
+        <Name>Strange*</Name>
+	<AllowSession>1</AllowSession>
+	<Classification>game_profile_gpu</Classification>
+        <AffinityAllThreads>1</AffinityAllThreads>
+    </Process>
+    -->
+</ProcessCpusetConfig>

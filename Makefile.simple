@@ -88,6 +88,8 @@ LPMD_SRCS = \
 	src/lpmd_uevent.c \
 	src/lpmd_util.c \
 	src/lpmd_wlt.c \
+	src/process_cpuset.c \
+	src/lpmd_process_cpuset.c \
 	src/wlt_proxy/spike_mgmt.c \
 	src/wlt_proxy/state_machine.c \
 	src/wlt_proxy/state_manager.c \
@@ -96,8 +98,9 @@ LPMD_SRCS = \
 
 LPMD_OBJS = $(LPMD_SRCS:.c=.o) lpmd-resource.o
 CTRL_OBJS = tools/intel_lpmd_control.o
+FOCUS_OBJS = tools/intel_lpmd_focus_helper.o
 
-ALL_TARGETS := intel_lpmd intel_lpmd_control
+ALL_TARGETS := intel_lpmd intel_lpmd_control intel_lpmd_focus_helper
 ALL_PROGRAMS := $(patsubst %,$(OUTPUT)%,$(ALL_TARGETS))
 
 all: $(ALL_PROGRAMS)
