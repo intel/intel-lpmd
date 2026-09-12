@@ -33,7 +33,7 @@ for Intel Energy Optimizer (LPMD) daemon
 		 0: auto. (opportunistic Low Power Mode enter/exit)
 		 2: Process-CPU affinity based Low Power Mode enter/exit
 	-->
-	<PerformanceDef>2</PerformanceDef>
+	<PerformanceDef>-1</PerformanceDef>
 
 	<!--
 		Default behavior when Balanced power setting is used
@@ -42,7 +42,7 @@ for Intel Energy Optimizer (LPMD) daemon
 		 0: auto. (opportunistic Low Power Mode enter/exit)
 		 2: Process-CPU affinity based Low Power Mode enter/exit
 	-->
-	<BalancedDef>0</BalancedDef>
+	<BalancedDef>-1</BalancedDef>
 
 	<!--
 		Default behavior when Power saver setting is used
@@ -145,7 +145,7 @@ for Intel Energy Optimizer (LPMD) daemon
 		0: disable UseProcessCPUSet upon LP-mode enter and re-enable UseProcessCPUSet upon LP-mode exit
 		1: do not touch UseProcessCPUSet setting during LP-mode enter/exit
 	-->
-	<UseProcessCPUSet>1</UseProcessCPUSet>
+	<UseProcessCPUSet>0</UseProcessCPUSet>
 
 	<!--
 		Slider default configuration for AC and DC
