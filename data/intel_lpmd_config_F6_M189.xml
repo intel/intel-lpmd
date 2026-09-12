@@ -24,7 +24,7 @@ for Intel Energy Optimizer (LPMD) daemon
 		1: Cgroup v2 isolate
 		2: CPU idle injection
 	-->
-	<Mode>1</Mode>
+	<Mode>0</Mode>
 
 	<!--
 		Default behavior when Performance power setting is used
@@ -131,6 +131,13 @@ for Intel Energy Optimizer (LPMD) daemon
 	<IntelPstateMode>0</IntelPstateMode>
 
 	<!--
+		Use pre configured process-CPU affinity settings to determine LP mode enter/exit
+		0: disable UseProcessCPUSet upon LP-mode enter and re-enable UseProcessCPUSet upon LP-mode exit
+		1: do not touch UseProcessCPUSet setting during LP-mode enter/exit
+	-->
+	<UseProcessCPUSet>0</UseProcessCPUSet>
+
+	<!--
 		Example WorkLoad Type hints based config states applied to
 		12Pcore-8Ecore-2Lcore 28W TDP Meteor Lake platform.
 		Need to set WLTHintEnable to make it work.
@@ -144,10 +151,11 @@ for Intel Energy Optimizer (LPMD) daemon
 			<Name> UTIL_IDLE </Name>
 			<WLTType> 1 </WLTType>
 			<EnterGFXLoadThres>50</EnterGFXLoadThres>
-			<IRQMigrate> -1 </IRQMigrate>
+			<IRQMigrate> 1 </IRQMigrate>
 			<EPP> 192 </EPP>
 			<EPB> 8 </EPB>
 			<ITMTState> -1 </ITMTState>
+			<ActiveCPUs>HFI</ActiveCPUs>
 			<MinPollInterval> 1000 </MinPollInterval>
 			<PollIntervalIncrement> 500 </PollIntervalIncrement>
 			<MaxPollInterval> 2000 </MaxPollInterval>
@@ -161,6 +169,7 @@ for Intel Energy Optimizer (LPMD) daemon
 			<EPP> 64 </EPP>
 			<EPB> 8 </EPB>
 			<ITMTState> -1 </ITMTState>
+			<ActiveCPUs>HFI</ActiveCPUs>
 			<MinPollInterval> 1000 </MinPollInterval>
 			<PollIntervalIncrement> 500 </PollIntervalIncrement>
 			<MaxPollInterval> 2000 </MaxPollInterval>
@@ -174,6 +183,7 @@ for Intel Energy Optimizer (LPMD) daemon
 			<EPP> 64 </EPP>
 			<EPB> 8 </EPB>
 			<ITMTState> -1 </ITMTState>
+			<ActiveCPUs>HFI</ActiveCPUs>
 			<MinPollInterval> 1000 </MinPollInterval>
 			<PollIntervalIncrement> 500 </PollIntervalIncrement>
 			<MaxPollInterval> 2000 </MaxPollInterval>
@@ -186,6 +196,7 @@ for Intel Energy Optimizer (LPMD) daemon
 			<EPP> 128 </EPP>
 			<EPB> 8 </EPB>
 			<ITMTState> -1 </ITMTState>
+			<ActiveCPUs>HFI</ActiveCPUs>
 			<MinPollInterval> 1000 </MinPollInterval>
 			<PollIntervalIncrement> 500 </PollIntervalIncrement>
 			<MaxPollInterval> 2000 </MaxPollInterval>
