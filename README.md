@@ -126,7 +126,7 @@ appropriate state based on the load.
 
 ## Releases
 
-### Release 0.1.1 (Test release)
+### Release 0.1.1 (Test release, do not include in any distro release)
 - Add per-process CPU affinity support: processes are classified
 (user interactive, user initiated, utility, background, realtime,
 game and custom profiles) and confined to a selected set of CPUs
