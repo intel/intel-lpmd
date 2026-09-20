@@ -65,14 +65,12 @@ void lpmd_terminate(void)
 	restore_intel_pstate_mode();
 
 	/*
-	 * Stop any transient cpuset scopes synchronously here so that every
+	 * Release process affinity synchronously here so that every
 	 * termination path (SIGINT/SIGTERM handler, D-Bus Terminate from
-	 * `systemctl stop intel_lpmd` or `intel_lpmd_control`) unbinds all
-	 * managed PIDs before the process exits. process_cpuset_stop_all()
-	 * issues a StopUnit D-Bus call per scope, which can exceed the 1s
-	 * grace period below; doing it before signalling the worker
-	 * guarantees cleanup runs to completion. The worker's later call
-	 * is a safe no-op (g_pc_ctx is NULL after this).
+	 * `systemctl stop intel_lpmd` or `intel_lpmd_control`) removes the
+	 * daemon's affinity policy before the process exits. Doing this before
+	 * signalling the worker guarantees cleanup runs to completion; the
+	 * worker's later call is a safe no-op (g_pc_ctx is NULL after this).
 	 */
 	lpmd_process_cpuset_uninit ();
 
@@ -501,9 +499,9 @@ static void *lpmd_core_main_loop(void *arg)
 		wlt_proxy_uninit();
 
 	hfi_kill ();
-	/* Stop any transient cpuset scopes we created before tearing down cgroups. */
+	/* Release process affinity policy before tearing down state cgroups. */
 	lpmd_process_cpuset_uninit();
-	cgroup_cleanup();
+	cgroup_cleanup(&lpmd_config);
 
 	return NULL;
 }
@@ -561,30 +559,33 @@ int lpmd_main(void)
 
 	/* If <UseProcessCPUSet> is set, seed the process_cpuset library with
 	 * the active P/E/LP-E core sets (still alive in core_type_masks[])
-	 * and attach matching processes to transient cpuset scopes. */
+	 * and apply affinity to matching processes. */
 	lpmd_process_cpuset_init(&lpmd_config);
 	ret = irq_init();
 	if (ret)
-		return ret;
+		goto cleanup;
 
 	connect_to_upower_daemon();
 //	 Pipe is used for communication between two processes
 	ret = pipe(wake_fds);
 	if (ret) {
 		lpmd_log_error("pipe creation failed %d:\n", ret);
-		return LPMD_FATAL_ERROR;
+		ret = LPMD_FATAL_ERROR;
+		goto cleanup;
 	}
 	if (fcntl(wake_fds[0], F_SETFL, O_NONBLOCK) < 0) {
 		lpmd_log_error("Cannot set non-blocking on pipe: %s\n", strerror(errno));
 		(void)close(wake_fds[0]);
 		(void)close(wake_fds[1]);
-		return LPMD_FATAL_ERROR;
+		ret = LPMD_FATAL_ERROR;
+		goto cleanup;
 	}
 	if (fcntl(wake_fds[1], F_SETFL, O_NONBLOCK) < 0) {
 		lpmd_log_error("Cannot set non-blocking on pipe: %s\n", strerror(errno));
 		(void)close(wake_fds[0]);
 		(void)close(wake_fds[1]);
-		return LPMD_FATAL_ERROR;
+		ret = LPMD_FATAL_ERROR;
+		goto cleanup;
 	}
 	write_pipe_fd = wake_fds[1];
 
@@ -619,7 +620,8 @@ int lpmd_main(void)
 	    wlt_proxy_init() != LPMD_SUCCESS) {
 		lpmd_config.wlt_proxy_enable = 0;
 		lpmd_log_error("Error setting up WLT Proxy. wlt_proxy_enable disabled\n");
-		return LPMD_ERROR;
+		ret = LPMD_ERROR;
+		goto cleanup;
 	}
 
 	if (lpmd_config.wlt_hint_enable) {
@@ -672,13 +674,17 @@ int lpmd_main(void)
 	 */
 	ret = pthread_create(&lpmd_core_main, &lpmd_attr, lpmd_core_main_loop, NULL);
 	if (ret)
-		return LPMD_FATAL_ERROR;
+		ret = LPMD_FATAL_ERROR;
+	if (ret)
+		goto cleanup;
 
 	lpmd_log_debug("lpmd_init succeeds\n");
 
 	return LPMD_SUCCESS;
 cleanup:
 	restore_intel_pstate_mode();
+	lpmd_process_cpuset_uninit();
+	cgroup_cleanup(&lpmd_config);
 	free_cpu_type_masks(&lpmd_config);
 	return ret;
 }

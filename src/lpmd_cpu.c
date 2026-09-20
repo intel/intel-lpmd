@@ -346,9 +346,6 @@ int detect_cpu_topo(struct lpmd_config_t *lpmd_config)
 		set_max_online_cpu(i);
 	}
 
-	/* Here it is the first time we migrate CPUs, must clear the previous cgroup settings */
-	cgroup_cleanup();
-
 	for (i = 0 ; i < CORE_TYPES_COUNT ; i++)
 		memset(lpmd_config->core_type_masks[i], 0, get_max_cpus() / 8);
 

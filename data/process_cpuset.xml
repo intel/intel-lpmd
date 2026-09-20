@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <!--
-  POC: Per-process CPU affinity via systemd cgroups.
+  Per-process CPU affinity via sched_setaffinity(2).
 
   Unified seed config covering common processes found on default
   installs of:
@@ -123,7 +123,7 @@
       from that class is active. Those tags belong in intel_lpmd_config_*.xml
       under the per-CPU-model <States><ClassDefaults> overlay, not here.
 
-      The effective AllowedCPUs mask is the union of every group plus
+      The effective CPU affinity mask is the union of every group plus
       every literal CPU that appears in the entry. The same syntax is
       accepted in per-process <ActiveCores> overrides.
     -->
@@ -199,26 +199,22 @@
                                    you knowingly launch from a
                                    terminal or .desktop file under a
                                    login session and want pinned.
-                                   No cgroup is created in this case;
-                                   the affinity is per-PID and not
-                                   inherited by future siblings
+                                   No cgroup is created by process
+                                   placement; the affinity is per-PID and
+                                   not inherited by future siblings
                                    spawned outside the process tree.
         <AffinityAllThreads> optional: 1 / true / yes / on
-                                   When the affinity path is taken
-                                   (user@UID.service PIDs, or
-                                   <AllowSession>-opted login-session
-                                   PIDs), apply the mask to every TID
+                                   When set, apply the mask to every TID
                                    in /proc/<pid>/task/ instead of
-                                   just the leader. Without this,
-                                   sched_setaffinity only constrains
-                                   the main thread; existing worker
-                                   threads keep their previous mask.
-                                   Recommended for multithreaded
-                                   apps such as games, browsers, and
-                                   media engines. No effect on PIDs
-                                   that go through the cgroup
-                                   transient-scope path (cgroups
-                                   already cover every thread).
+                                   just the leader. This applies to
+                                   all process locations, including
+                                   <AllowSession>-opted login-session
+                                   PIDs. Without this, sched_setaffinity
+                                   only constrains the main thread;
+                                   existing worker threads keep their
+                                   previous mask. Recommended for
+                                   multithreaded apps such as games,
+                                   browsers, and media engines.
     -->
 
     <!--

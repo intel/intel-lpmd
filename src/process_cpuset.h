@@ -4,8 +4,7 @@
  *
  * Copyright (C) 2026 Intel Corporation. All rights reserved.
  *
- * Library API for per-process CPU affinity via systemd transient scopes
- * (cpuset / AllowedCPUs).
+ * Library API for explicit per-process CPU affinity via sched_setaffinity(2).
  *
  * Designed so it can be linked into intel_lpmd (or any other daemon) and
  * driven from existing event loops, instead of being shipped only as a
@@ -152,18 +151,18 @@ int process_cpuset_override_class_uclamp_defaults(
 	int custom_profile_2_min, int custom_profile_2_max);
 
 /*
- * Scan /proc once and attach any newly-seen matching PIDs to a transient
- * cpuset scope. PIDs already attached in a previous call are skipped.
- * If dry_run is non-zero, prints what would happen but does not call
- * systemd. Returns the number of new PIDs attached this cycle, or -1.
+ * Scan /proc once and apply the resolved affinity to newly-seen matching
+ * PIDs. PIDs already attached in a previous call are skipped. If dry_run
+ * is non-zero, prints what would happen without changing affinity. Returns
+ * the number of new PIDs attached this cycle, or -1.
  */
 int process_cpuset_apply_once(process_cpuset_t *ctx, int dry_run);
 
 /*
  * Apply configuration to a single PID: look up its /proc/<pid>/comm,
- * find a matching <Process> entry and attach it to a transient cpuset
- * scope. Intended for event-driven callers (e.g. the kernel proc
- * connector) that already know which PID just appeared.
+ * find a matching <Process> entry and apply its CPU affinity. Intended for
+ * event-driven callers (e.g. the kernel proc connector) that already know
+ * which PID just appeared.
  *
  * Returns 1 if the PID was newly attached, 0 if no <Process> entry
  * matches / it's already attached / the PID is gone, -1 on error.
@@ -171,22 +170,11 @@ int process_cpuset_apply_once(process_cpuset_t *ctx, int dry_run);
 int process_cpuset_apply_pid(process_cpuset_t *ctx, pid_t pid, int dry_run);
 
 /*
- * Stop every transient scope unit that this context started, by issuing
- * StopUnit on systemd. Useful on daemon shutdown so processes no longer
- * have an LPMD-imposed AllowedCPUs mask. After this call the attached-
- * PID set is empty. Returns the number of scopes stopped, or -1.
- *
- * WARNING: systemd's default scope KillMode signals all processes in
- * the scope on stop. If you need to release PIDs without killing them,
- * use process_cpuset_release_all() instead.
- */
-int process_cpuset_stop_all(process_cpuset_t *ctx);
-
-/*
- * Release every tracked PID without killing it: each PID is migrated
- * out of its proc_cpuset scope into the root cgroup (restoring default
- * affinity), then the now-empty scope unit is stopped. Returns the
- * number of PIDs successfully released, or -1.
+ * Release every tracked PID without killing it by restoring the exact
+ * affinity observed before LPMD changed each leader/TID. Successfully
+ * restored entries are retired; failed entries remain tracked for retry.
+ * Returns the number of completely restored entries, or -1 if entries
+ * remain pending.
  */
 int process_cpuset_release_all(process_cpuset_t *ctx);
 
@@ -194,32 +182,21 @@ int process_cpuset_release_all(process_cpuset_t *ctx);
 size_t process_cpuset_attached_count(const process_cpuset_t *ctx);
 
 /*
- * Returns non-zero if @pid is currently tracked as attached to a
- * transient cpuset scope by this context, 0 otherwise.
+ * Returns non-zero if @pid is currently tracked by this context, 0
+ * otherwise.
  */
 int process_cpuset_is_attached(const process_cpuset_t *ctx, pid_t pid);
 
 /*
- * Read out the attached PID at index @i (0 <= i < attached_count).
- * On success returns 0 and fills *@pid_out (and *@unit_out, if non-NULL,
- * with up to @unit_cap bytes of the systemd scope unit name).
- * Returns -1 on out-of-range or NULL ctx.
- */
-int process_cpuset_attached_get(const process_cpuset_t *ctx, size_t i,
-				pid_t *pid_out, char *unit_out,
-				size_t unit_cap);
-
-/*
- * Extended attached-PID lookup. In addition to the data returned by
- * process_cpuset_attached_get(), also yields the classification name
+ * Read out the attached PID and policy at index @i (0 <= i <
+ * attached_count), yielding the classification name
  * ("background"/"foreground"/"realtime"/"invalid") and three flags
- * indicating which CPU groups (P/E/LP-E cores) form the AllowedCPUs
+ * indicating which CPU groups (P/E/LP-E cores) form the affinity
  * set for this PID. The string returned via *@class_out points into
  * static storage owned by the library; do not free it.
  */
 int process_cpuset_attached_get_ex(const process_cpuset_t *ctx, size_t i,
-				   pid_t *pid_out, char *unit_out,
-				   size_t unit_cap, const char **class_out,
+				   pid_t *pid_out, const char **class_out,
 				   int *use_pcores, int *use_ecores,
 				   int *use_lcores);
 
@@ -248,7 +225,7 @@ int process_cpuset_entry_count(const process_cpuset_t *ctx);
  * focus event will re-promote them.
  *
  * Returns 0 on success (including the "not attached / no-op" case),
- * -1 on sd-bus or parameter error.
+ * -1 on affinity or parameter error.
  */
 int process_cpuset_set_focus_pid(process_cpuset_t *ctx, pid_t pid);
 
@@ -271,7 +248,7 @@ int process_cpuset_set_focus_pid(process_cpuset_t *ctx, pid_t pid);
 int process_cpuset_set_focus_helper_present(process_cpuset_t *ctx, int present);
 
 /*
- * Log (stderr) the resolved AllowedCPUs cpuset for every
+ * Log (stderr) the resolved CPU affinity mask for every
  * classification, plus the active P/E/LP-E core lists. Useful right
  * after process_cpuset_set_groups_cpuset() /
  * process_cpuset_override_class_defaults() to verify what each tier
@@ -288,7 +265,7 @@ void process_cpuset_log_class_defaults(const process_cpuset_t *ctx);
  * @class_out  : if non-NULL, set to a static classification name string
  *               (e.g. "background"). Do not free.
  * @cpus_out   : if non-NULL, filled with a cpuset-style list of the
- *               resolved AllowedCPUs (e.g. "0-3,8-11"). Falls back to a
+ *               resolved CPU affinity mask (e.g. "0-3,8-11"). Falls back to a
  *               symbolic group expression (e.g. "Pcores+Ecores") when the
  *               active CPU groups have not been configured yet.
  * @cpus_cap   : capacity of @cpus_out including the NUL terminator.
@@ -304,7 +281,7 @@ int process_cpuset_classify_name(const process_cpuset_t *ctx,
 				 char *cpus_out, size_t cpus_cap);
 
 /*
- * Resolve a classification's effective default AllowedCPUs list under
+ * Resolve a classification's effective default CPU affinity list under
  * the current CPU groups and class-default table.
  *
  * @classification accepts the same aliases as XML (for example

@@ -780,6 +780,8 @@ static void lpmd_parse_states(xmlDoc *doc, xmlNode *a_node, struct lpmd_config_t
 
 static void lpmd_init_config(struct lpmd_config_t *config)
 {
+	config->mode = LPM_CPU_CGROUPV2;
+	config->mode_configured = 0;
 	config->performance_def = LPM_FORCE_OFF;
 	config->balanced_def = LPM_FORCE_OFF;
 	config->powersaver_def = LPM_FORCE_OFF;
@@ -901,6 +903,7 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, struct lpmd_config_t *
 			    lpmd_config->mode > LPM_CPU_MODE_MAX ||
 			    lpmd_config->mode < 0)
 				goto err;
+			lpmd_config->mode_configured = 1;
 		} else if (!strcmp((const char *)cur_node->name, "HfiLpmEnable")) {
 			errno = 0;
 			lpmd_config->hfi_lpm_enable = strtol(tmp_value, &pos, 10);

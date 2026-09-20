@@ -318,11 +318,10 @@ CPU lists define which CPUs a class can use. Per-process <ActiveCores>
 entries override the class default.
 .IP \(bu 2
 .B Affinity Modes:
-PIDs from system-slice services (daemons) are managed via systemd
-transient cgroup scopes (applies to all threads automatically).
-User-session PIDs use sched_setaffinity(2), which by default only
-affects the leader thread. The <AffinityAllThreads> tag extends
-this to all threads in the process.
+All explicitly named PIDs use sched_setaffinity(2), which by default
+only affects the leader thread. The <AffinityAllThreads> tag extends
+this to all threads in the process. Process placement does not move
+PIDs between cgroups or set systemd AllowedCPUs properties.
 .IP \(bu 2
 .B UClamp (Utilization Clamping):
 Per-class min/max CPU utilization clamps (sched_util_min / sched_util_max)
@@ -352,16 +351,15 @@ Same syntax as <Cores>.
 (optional; 1/true/yes/on) By default, login-session PIDs (gdm, sshd-session,
 sudo, terminal login shell) are skipped to preserve logind/polkit session
 tracking. Set this to opt a specific process into affinity management
-(sched_setaffinity path only, no cgroup). Intended for games and apps
+(sched_setaffinity path). Intended for games and apps
 knowingly launched from a terminal.
 .IP \(bu 2
 .B <AffinityAllThreads>
-(optional; 1/true/yes/on) When applying the affinity path (user-session
-PIDs), walk /proc/PID/task/ and apply the mask to every thread (TID)
+(optional; 1/true/yes/on) Walk /proc/PID/task/ and apply the mask to
+every thread (TID)
 instead of just the leader. Without this, only the main thread is
 constrained; existing worker threads keep their previous mask. Recommended
-for multithreaded apps (games, browsers, media engines). No effect on
-PIDs in cgroup scopes (cgroups already cover all threads).
+for multithreaded apps (games, browsers, media engines).
 .IP \(bu 2
 .B <UClampMin> / <uclamp_min>
 (optional; -1=disable, 0..1024) Minimum CPU utilization clamp for this
@@ -515,12 +513,13 @@ The configuration file format conforms to XML specifications.
 	<lp_mode_cpus>Example CPUs</lp_mode_cpus>
 
 	<!--
-		Mode values
-		0: Cgroup v2
-		1: Cgroup v2 isolate
-		2: CPU idle injection
+		Mode values (optional)
+		omitted: no state-level CPU placement backend
+		0: Cgroup v2; LPMD owns systemd AllowedCPUs for state changes
+		1: Cgroup v2 isolate; LPMD owns /sys/fs/cgroup/lpm
+		2: CPU idle injection; no cpuset or AllowedCPUs side effects
 	-->
-	<Mode>0|1|2</Mode>
+	<Mode>0|1|2</Mode> <!-- omit to disable state CPU placement -->
 
 	<!--
 		Intel P-state mode
@@ -574,7 +573,8 @@ The configuration file format conforms to XML specifications.
 	<!--
 		Enable process cpuset integration
 		0 : No
-		1 : Yes
+		1 : Yes; use sched_setaffinity(2) for matching leaders,
+		    or every TID when AffinityAllThreads is enabled
 	-->
 	<UseProcessCPUSet>0|1</UseProcessCPUSet>
 

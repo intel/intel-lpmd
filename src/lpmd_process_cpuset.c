@@ -454,12 +454,10 @@ static int class_has_live_attached_pid(const char *cls)
 	n = process_cpuset_attached_count(g_pc_ctx);
 	for (i = 0; i < n; i++) {
 		pid_t pid = 0;
-		char unit[128] = { 0 };
 		const char *item_cls = NULL;
 		int use_p = 0, use_e = 0, use_l = 0;
 
-		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, unit,
-					   sizeof(unit), &item_cls,
+		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, &item_cls,
 					   &use_p, &use_e, &use_l) < 0)
 			continue;
 
@@ -956,14 +954,12 @@ static void sync_min_perf_owner(const struct lpmd_config_t *config,
 	n = process_cpuset_attached_count(g_pc_ctx);
 	for (i = 0; i < n; i++) {
 		pid_t pid = 0;
-		char unit[128] = { 0 };
 		const char *cls = NULL;
 		int use_p = 0, use_e = 0, use_l = 0;
 		int val;
 		unsigned int scope;
 
-		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, unit,
-					   sizeof(unit), &cls,
+		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, &cls,
 					   &use_p, &use_e, &use_l) < 0)
 			continue;
 		if (!pid_is_live(pid))
@@ -1045,14 +1041,12 @@ static void sync_max_perf_owner(const struct lpmd_config_t *config,
 	n = process_cpuset_attached_count(g_pc_ctx);
 	for (i = 0; i < n; i++) {
 		pid_t pid = 0;
-		char unit[128] = { 0 };
 		const char *cls = NULL;
 		int use_p = 0, use_e = 0, use_l = 0;
 		int val;
 		unsigned int scope;
 
-		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, unit,
-					   sizeof(unit), &cls,
+		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, &cls,
 					   &use_p, &use_e, &use_l) < 0)
 			continue;
 		if (!pid_is_live(pid))
@@ -1135,13 +1129,11 @@ static void sync_gt_ia_bias_owner(const struct lpmd_config_t *config,
 	n = process_cpuset_attached_count(g_pc_ctx);
 	for (i = 0; i < n; i++) {
 		pid_t pid = 0;
-		char unit[128] = { 0 };
 		const char *cls = NULL;
 		int use_p = 0, use_e = 0, use_l = 0;
 		uint32_t val;
 
-		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, unit,
-					   sizeof(unit), &cls,
+		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, &cls,
 					   &use_p, &use_e, &use_l) < 0)
 			continue;
 		if (!pid_is_live(pid))
@@ -1220,13 +1212,11 @@ static void sync_balance_slider_owner(const struct lpmd_config_t *config,
 	n = process_cpuset_attached_count(g_pc_ctx);
 	for (i = 0; i < n; i++) {
 		pid_t pid = 0;
-		char unit[128] = { 0 };
 		const char *cls = NULL;
 		int use_p = 0, use_e = 0, use_l = 0;
 		int val;
 
-		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, unit,
-					   sizeof(unit), &cls,
+		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, &cls,
 					   &use_p, &use_e, &use_l) < 0)
 			continue;
 		if (!pid_is_live(pid))
@@ -1308,13 +1298,11 @@ static void sync_slider_offset_owner(const struct lpmd_config_t *config,
 	n = process_cpuset_attached_count(g_pc_ctx);
 	for (i = 0; i < n; i++) {
 		pid_t pid = 0;
-		char unit[128] = { 0 };
 		const char *cls = NULL;
 		int use_p = 0, use_e = 0, use_l = 0;
 		int val;
 
-		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, unit,
-					   sizeof(unit), &cls,
+		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, &cls,
 					   &use_p, &use_e, &use_l) < 0)
 			continue;
 		if (!pid_is_live(pid))
@@ -1800,19 +1788,19 @@ int lpmd_process_cpuset_init(struct lpmd_config_t *config)
 
 	/*
      * Do NOT perform the initial bind here: the daemon's state at
-     * startup is LPMD_OFF, and OFF must be fully inert (no transient
-     * cpuset scopes). The first transition to AUTO/PROCESS-PRECONFIG/ON triggers
-     * a rescan that attaches matching PIDs.
+	 * startup is LPMD_OFF, and OFF must be fully inert. The first
+	 * transition to AUTO/PROCESS-PRECONFIG/ON triggers a rescan that
+	 * applies affinity to matching PIDs.
      */
 	return 0;
 }
 
 /*
- * Stop every transient cpuset scope started by this context, then drop
- * the context. Safe to call even if init was never run.
+ * Release every process affinity policy started by this context, then
+ * drop the context. Safe to call even if init was never run.
  *
  * Uses the non-killing release path so processes survive intel_lpmd
- * shutdown / restart with their default (system-inherited) affinity.
+ * shutdown / restart with the affinity they had before LPMD changed it.
  */
 void lpmd_process_cpuset_uninit(void)
 {
@@ -1833,11 +1821,12 @@ void lpmd_process_cpuset_uninit(void)
 }
 
 /*
- * Stop every transient cpuset scope started by this context but keep
+ * Release every process affinity policy started by this context but keep
  * the context alive (config, groups, class defaults are preserved).
- * After this call no PIDs are bound; a subsequent
+ * After successful restoration no PIDs remain bound; a subsequent
  * lpmd_process_cpuset_rescan() (or the periodic rescan) will re-attach
- * matching PIDs from <Process> entries again.
+ * matching PIDs from <Process> entries again. Failed restorations remain
+ * tracked for a later retry.
  */
 void lpmd_process_cpuset_unbind_all(void)
 {
@@ -1855,19 +1844,12 @@ void lpmd_process_cpuset_unbind_all(void)
 		return;
 	}
 
-	/*
-     * Use the release path (migrate PID to root cgroup, then stop the
-     * empty scope) instead of process_cpuset_stop_all(), which would
-     * send SIGTERM to every bound process via systemd's default
-     * scope KillMode.
-     */
+	/* Release affinity without moving the PID between cgroups or killing it. */
 	n = process_cpuset_release_all(g_pc_ctx);
 	if (n < 0)
 		lpmd_log_warn("process_cpuset: unbind-all failed\n");
 	else
-		lpmd_log_msg(
-			"process_cpuset: released %d PID(s) from transient cpuset scopes\n",
-			n);
+		lpmd_log_msg("process_cpuset: released affinity for %d PID(s)\n", n);
 }
 
 /*
@@ -1913,12 +1895,10 @@ void lpmd_process_cpuset_rescan(void)
 	attached_n = process_cpuset_attached_count(g_pc_ctx);
 	for (i = 0; i < attached_n; i++) {
 		pid_t pid = 0;
-		char unit[128] = { 0 };
 		const char *cls = NULL;
 		int use_p = 0, use_e = 0, use_l = 0;
 
-		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, unit,
-						   sizeof(unit), &cls, &use_p,
+		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, &cls, &use_p,
 						   &use_e, &use_l) < 0)
 			continue;
 		sync_min_perf_owner(config, cls);
@@ -2287,35 +2267,8 @@ static int pid_is_kernel_thread(long pid)
 }
 
 /*
- * Return 1 if /proc/<pid>/cgroup mentions a transient cpuset scope
- * named "proc_cpuset_*.scope" (i.e. a scope previously created by any
- * instance of this daemon, including an earlier run whose in-memory
- * attached set is gone). Returns 0 otherwise, or -1 on error.
- */
-static int pid_in_proc_cpuset_scope(long pid)
-{
-	char path[64];
-	char line[512];
-	FILE *f;
-	int found = 0;
-
-	snprintf(path, sizeof(path), "/proc/%ld/cgroup", pid);
-	f = fopen(path, "r");
-	if (!f)
-		return -1;
-	while (fgets(line, sizeof(line), f)) {
-		if (strstr(line, "proc_cpuset_") && strstr(line, ".scope")) {
-			found = 1;
-			break;
-		}
-	}
-	fclose(f);
-	return found;
-}
-
-/*
- * Walk /proc and log every PID that does NOT currently have a transient
- * cpuset scope started by this context (i.e. processes not matched by any
+ * Walk /proc and log every PID that does NOT currently have an affinity
+ * policy started by this context (i.e. processes not matched by any
  * <Process> entry in process_cpuset.xml). If process_cpuset is disabled
  * or not yet initialized, every running PID is reported as unbound.
  *
@@ -2340,9 +2293,8 @@ void lpmd_process_cpuset_print_unbound(int user_only)
 			"process_cpuset: not active; listing all %sPIDs as unbound\n",
 			user_only ? "user " : "");
 	else
-		lpmd_log_msg(
-			"process_cpuset: %sPIDs with no transient cpuset scope\n",
-			user_only ? "user " : "");
+		lpmd_log_msg("process_cpuset: %sPIDs with no affinity policy\n",
+			       user_only ? "user " : "");
 
 	while ((de = readdir(d)) != NULL) {
 		char *end;
@@ -2390,11 +2342,6 @@ void lpmd_process_cpuset_print_unbound(int user_only)
 		if (!is_unclassified) {
 			if (g_pc_ctx &&
 			    process_cpuset_is_attached(g_pc_ctx, (pid_t)pid))
-				continue;
-			/* Also skip PIDs already inside a proc_cpuset_*.scope created by
-         * a prior daemon run; those are bound even though this process's
-         * attached set doesn't track them. */
-			if (pid_in_proc_cpuset_scope(pid) == 1)
 				continue;
 		}
 
@@ -2464,10 +2411,9 @@ void lpmd_process_cpuset_print_unbound(int user_only)
 }
 
 /*
- * Log every PID currently attached to a transient cpuset scope started
- * by this context (i.e. matched by a <Process> entry in
- * process_cpuset.xml). No-op (with a notice) if process_cpuset is not
- * active.
+ * Log every PID currently tracked by the affinity policy started by this
+ * context (i.e. matched by a <Process> entry in process_cpuset.xml).
+ * No-op (with a notice) if process_cpuset is not active.
  */
 void lpmd_process_cpuset_print_bound(void)
 {
@@ -2487,7 +2433,7 @@ void lpmd_process_cpuset_print_bound(void)
 
 	n = process_cpuset_attached_count(g_pc_ctx);
 	lpmd_log_msg(
-		"process_cpuset: %zu PIDs bound to transient cpuset scopes (excluding Unclassified)\n",
+		"process_cpuset: %zu PIDs with configured affinity (excluding Unclassified)\n",
 		n);
 	lpmd_log_msg("  groups: Pcores=[%s] Ecores=[%s] LPEcores=[%s]\n",
 		     p_cpus[0] ? p_cpus : "-", e_cpus[0] ? e_cpus : "-",
@@ -2495,7 +2441,6 @@ void lpmd_process_cpuset_print_bound(void)
 
 	for (i = 0; i < n; i++) {
 		pid_t pid = 0;
-		char unit[128] = { 0 };
 		char path[64];
 		char comm[64] = { 0 };
 		const char *cls = "?";
@@ -2508,8 +2453,7 @@ void lpmd_process_cpuset_print_bound(void)
 		DIR *task_dir;
 		struct dirent *entry;
 
-		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, unit,
-						   sizeof(unit), &cls, &use_p,
+		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, &cls, &use_p,
 						   &use_e, &use_l) < 0)
 			continue;
 		if (cls && !strcasecmp(cls, "Unclassified"))
@@ -2559,10 +2503,8 @@ void lpmd_process_cpuset_print_bound(void)
 			snprintf(cpus_buf, sizeof(cpus_buf), "-");
 
 		/* Print process line */
-		lpmd_log_msg(
-			"  PID=%d comm=%s class=%s groups=%s cpus=[%s] unit=%s\n",
-			(int)pid, comm, cls, groups_buf, cpus_buf,
-			unit[0] ? unit : "<affinity>");
+		lpmd_log_msg("  PID=%d comm=%s class=%s groups=%s cpus=[%s]\n",
+			(int)pid, comm, cls, groups_buf, cpus_buf);
 
 		/* List all threads in this process */
 		snprintf(path, sizeof(path), "/proc/%d/task", (int)pid);
