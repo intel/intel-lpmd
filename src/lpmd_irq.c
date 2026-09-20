@@ -46,6 +46,7 @@ struct info_irqs {
 
 struct info_irqs info_irqs;
 struct info_irqs *info = &info_irqs;
+static int irq_updated;
 
 /* Interrupt Management */
 #define SOCKET_PATH "irqbalance"
@@ -78,10 +79,9 @@ static int native_restore_irqs(void)
 		lpmd_write_str(path, str, LPMD_LOG_DEBUG);
 	}
 	memset(info, 0, sizeof(*info));
+	irq_updated = 0;
 	return 0;
 }
-
-static int irq_updated;
 
 static int update_one_irq(int irq, char *irq_str)
 {
