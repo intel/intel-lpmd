@@ -1,0 +1,229 @@
+<?xml version="1.0"?>
+<!--
+  Slice / unit based CPU affinity policy for intel_lpmd.
+
+  This is the systemd-native counterpart to process_cpuset.xml. Instead of
+  matching processes by /proc/<pid>/comm, policy is keyed on the systemd
+  unit or slice a task already lives in. That identity is assigned by the
+  init system and cannot be forged by the process, and applying policy to
+  a unit never moves a task out of the cgroup its administrator put it in.
+
+  Tasks covered by an enforceable entry below are NOT touched
+  individually: the cgroup does the work, and adding a per-task affinity
+  on top could only conflict with it. Tasks not covered by any entry fall
+  back to sched_setaffinity() within whatever their current cgroup already
+  allows (see <Fallback> below).
+
+  =====================================================================
+  What is actually enforceable
+
+  systemd delegates cpu, io, memory and pids into user@<uid>.service, but
+  NOT cpuset:
+
+      $ systemctl show user@1000.service -p DelegateControllers
+      DelegateControllers=cpu io memory pids
+
+  So AllowedCPUs= is accepted and then silently does nothing on the slices
+  owned by the *user* manager (app.slice, background.slice, session.slice).
+  Units owned by the *system* manager do enforce it:
+
+      system.slice, user.slice, machine.slice, init.scope   enforced
+      system-*.slice and any system service unit             enforced
+      user-<uid>.slice, user@<uid>.service, session-N.scope  enforced
+      app.slice / background.slice / session.slice           INERT
+
+  Delegating cpuset is a prerequisite, not a cure. Two things have to be
+  true before lpmd can set AllowedCPUs= on a unit, and user-manager units
+  fail the second one:
+
+    1. the cgroup must enforce it. Fixable by an administrator, with a
+       drop-in on user@.service:
+
+           [Service]
+           Delegate=cpu cpuset io memory pids
+
+       (Not shipped here: user@.service belongs to the distribution, and
+       the change only takes effect for sessions started afterwards.)
+       Note cpuset must also reach /user.slice - a controller has to be
+       in every ancestor's cgroup.subtree_control to appear in a
+       descendant's cgroup.controllers.
+
+    2. lpmd must be able to *ask* for it. Only the manager that owns a
+       unit can set its properties, and a user manager is reachable only
+       over that user's bus - which authenticates the peer uid and
+       accepts nobody else, root included. So a system daemon cannot
+       write app.slice, background.slice or session.slice even with
+       cpuset fully delegated. lpmd does not try to work around this:
+       spawning a PAM login session per transition to borrow the user's
+       bus is not something a power daemon should do.
+
+  So <Scope>user</Scope> entries are parsed, resolved and reported, and
+  their tasks are handled by <Fallback> - which is why the user entries
+  below say Fallback=affinity. They exist so that LIST-SLICES describes
+  the whole picture, and so a future systemd that exposes this to the
+  system manager needs no config change.
+
+  Run "intel_lpmd_control LIST-SLICES" to see, per entry, whether it is
+  enforceable on the running system and what it currently resolves to.
+
+  =====================================================================
+  Element reference
+
+  <Unit>
+    <Name>              unit or slice name. fnmatch(3) globs allowed
+                        ("system-*.slice"). Safe to glob here: unit names
+                        are assigned by systemd, not chosen by the task.
+    <Scope>             system | user
+                        system = owned by the system manager (enforceable)
+                        user   = inside user@<uid>.service (see above)
+    <Classification>    background | utility | user_initiated |
+                        user_interactive | realtime | game_profile_cpu |
+                        game_profile_gpu | game_profile_mixed |
+                        custom_profile_0..2
+                        Resolved through the same class -> core-group
+                        mapping process_cpuset.xml uses:
+                            realtime         -> Pcores
+                            user_interactive -> Pcores + Ecores
+                            user_initiated   -> Pcores + Ecores
+                            utility          -> Ecores + LPEcores
+                            background       -> LPEcores
+    <Cores>             OPTIONAL explicit override, taking precedence over
+                        <Classification>. Accepts a mix of named groups
+                        (ActivePcores / ActiveEcores / ActiveLcores) and
+                        literal cpuset lists ("0-3,5").
+    <Fallback>          what to do for tasks under this entry when the
+                        entry is not enforceable on this system:
+                            affinity = sched_setaffinity() per task,
+                                       intersected with the cgroup the
+                                       task is already in (best effort;
+                                       not inherited by later children)
+                            none     = leave those tasks alone (default)
+
+  Most specific match wins: an entry naming a leaf service beats one
+  naming its slice, which beats one naming a top-level slice.
+-->
+
+<SliceCpusetConfig>
+
+    <!--
+      Top-level slices are already driven by the global low-power
+      transitions (<Mode>0</Mode> writes AllowedCPUs to system.slice,
+      user.slice and machine.slice directly). They are listed here only
+      so that LIST-SLICES shows the full picture; leaving them out
+      changes nothing.
+    -->
+
+    <!-- ============ user session ============ -->
+
+    <!--
+      background.slice is where a compliant desktop places work with no
+      user interaction and no display output. That placement is the
+      signal process_cpuset.xml's name list is trying to approximate.
+      Inert today (cpuset not delegated), hence Fallback=affinity.
+    -->
+    <Unit>
+        <Name>background.slice</Name>
+        <Scope>user</Scope>
+        <Classification>background</Classification>
+        <Fallback>affinity</Fallback>
+    </Unit>
+
+    <!-- User-launched applications: the default tier for GUI apps. -->
+    <Unit>
+        <Name>app.slice</Name>
+        <Scope>user</Scope>
+        <Classification>user_initiated</Classification>
+        <Fallback>affinity</Fallback>
+    </Unit>
+
+    <!--
+      session.slice holds the core session stack (compositor, portals,
+      the parts that always drive the visible UI). Deliberately left at
+      the interactive tier.
+    -->
+    <Unit>
+        <Name>session.slice</Name>
+        <Scope>user</Scope>
+        <Classification>user_interactive</Classification>
+        <Fallback>none</Fallback>
+    </Unit>
+
+    <!-- ============ system services ============ -->
+
+    <!--
+      These are enforceable today: the system manager owns them, so
+      AllowedCPUs= on the unit takes effect with no task migration and
+      no process-name matching. Add or remove entries per distro; an
+      entry naming a unit that does not exist is simply reported as
+      absent.
+    -->
+
+    <!-- Package management and indexing: no interactive latency need. -->
+    <Unit>
+        <Name>packagekit.service</Name>
+        <Scope>system</Scope>
+        <Classification>background</Classification>
+    </Unit>
+    <Unit>
+        <Name>dnf5daemon-server.service</Name>
+        <Scope>system</Scope>
+        <Classification>background</Classification>
+    </Unit>
+    <Unit>
+        <Name>fwupd.service</Name>
+        <Scope>system</Scope>
+        <Classification>background</Classification>
+    </Unit>
+
+    <!-- Crash collection / reporting. -->
+    <Unit>
+        <Name>abrt*.service</Name>
+        <Scope>system</Scope>
+        <Classification>background</Classification>
+    </Unit>
+
+    <!-- Periodic housekeeping launched into its own slice by systemd. -->
+    <Unit>
+        <Name>system-systemd\x2dfsck.slice</Name>
+        <Scope>system</Scope>
+        <Classification>background</Classification>
+    </Unit>
+
+    <!--
+      Telemetry and monitoring daemons: above background, still not
+      interactive.
+    -->
+    <Unit>
+        <Name>smartd.service</Name>
+        <Scope>system</Scope>
+        <Classification>utility</Classification>
+    </Unit>
+    <Unit>
+        <Name>mcelog.service</Name>
+        <Scope>system</Scope>
+        <Classification>utility</Classification>
+    </Unit>
+
+    <!--
+      Audio: latency sensitive. Listed at the realtime tier so that a
+      distro which runs pipewire as a system service gets the right
+      answer; on a normal desktop pipewire is a *user* unit inside
+      session.slice and is covered by that entry instead.
+    -->
+    <Unit>
+        <Name>pipewire.service</Name>
+        <Scope>system</Scope>
+        <Classification>realtime</Classification>
+    </Unit>
+
+    <!--
+      Never constrain the display manager stack: it owns the visible UI
+      before any user session exists.
+    -->
+    <Unit>
+        <Name>gdm.service</Name>
+        <Scope>system</Scope>
+        <Classification>user_interactive</Classification>
+    </Unit>
+
+</SliceCpusetConfig>

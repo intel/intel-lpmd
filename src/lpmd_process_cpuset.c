@@ -2880,6 +2880,32 @@ void lpmd_process_cpuset_print_bound(void)
 				    sizeof(check_buf));
 		lpmd_log_msg("      %s\n", check_buf);
 
+		/* And whether slice.xml already covers this PID. When it
+		 * does with enforceable=yes, the cgroup is doing the work
+		 * and the per-task path here should not be touching it at
+		 * all -- seeing both is the signal that policy is applied
+		 * twice. */
+		{
+			char slice_unit[128] = { 0 };
+			char slice_cls[64] = { 0 };
+			int enforceable = 0;
+			int cov;
+
+			cov = lpmd_slice_cpuset_pid_coverage(
+				pid, slice_unit, sizeof(slice_unit), slice_cls,
+				sizeof(slice_cls), &enforceable);
+			if (cov == 1)
+				lpmd_log_msg(
+					"      slice=%s class=%s enforceable=%s%s\n",
+					slice_unit, slice_cls,
+					enforceable ? "yes" : "no",
+					enforceable ?
+						" (per-task handling should be skipped)" :
+						"");
+			else if (cov == 0)
+				lpmd_log_msg("      slice=none\n");
+		}
+
 		/* List all threads in this process */
 		snprintf(path, sizeof(path), "/proc/%d/task", (int)pid);
 		task_dir = opendir(path);

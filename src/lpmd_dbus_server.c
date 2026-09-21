@@ -384,7 +384,19 @@ lpmd_dbus_handle_method_call(GDBusConnection       *connection,
 
 	if (g_strcmp0(method_name, "LPM_LIST_BOUND_PROCS") == 0) {
 		g_dbus_method_invocation_return_value(invocation, NULL);
+		/* Two independent ways a task can be bound, reported
+		 * together: per-task affinity/transient scopes, then the
+		 * tasks whose CPU set comes from slice policy alone (no
+		 * migration, no sched_setaffinity). Either subsystem can be
+		 * disabled, so both are called unconditionally. */
 		lpmd_process_cpuset_print_bound();
+		lpmd_slice_cpuset_print_bound();
+		return;
+	}
+
+	if (g_strcmp0(method_name, "LPM_LIST_SLICES") == 0) {
+		g_dbus_method_invocation_return_value(invocation, NULL);
+		lpmd_slice_cpuset_print();
 		return;
 	}
 

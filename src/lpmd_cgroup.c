@@ -357,8 +357,17 @@ static int update_systemd_cgroup(struct lpmd_config_state_t *state)
 static int process_cpu_cgroupv2(struct lpmd_config_state_t *state)
 {
 	int cpuset_enabled;
+	int ret;
 
 	if (cpumask_equal(state->cpumask_idx, CPUMASK_ONLINE)) {
+		/*
+		 * Leaving low-power mode: drop the per-unit refinements before
+		 * putting the top-level slices back, so no unit is left holding
+		 * a narrower runtime property than its parent. This also has to
+		 * precede the "-cpuset" below, since the controller has to be
+		 * enabled for the per-unit writes to take.
+		 */
+		lpmd_slice_cpuset_restore();
 		if (restore_systemd_cgroup_snapshot())
 			return 1;
 		if (cgroup_controller_added) {
@@ -379,7 +388,18 @@ static int process_cpu_cgroupv2(struct lpmd_config_state_t *state)
 			return 1;
 		cgroup_controller_added = 1;
 	}
-	return update_systemd_cgroup(state);
+
+	ret = update_systemd_cgroup(state);
+	if (ret)
+		return ret;
+
+	/*
+	 * Then refine individual units from slice.xml. Ordering matters: the
+	 * per-unit masks are intersected against the parent slice, which the
+	 * call above has just moved. No-op unless <UseSliceCpuset> is set.
+	 */
+	lpmd_slice_cpuset_apply(0);
+	return 0;
 }
 
 static enum cpumask_idx last_applied_cpumask = CPUMASK_NONE;

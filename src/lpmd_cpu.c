@@ -357,6 +357,13 @@ int detect_cpu_topo(struct lpmd_config_t *lpmd_config)
 	 *
 	 * Detecting the CPU topology must not change system state. Cleanup now
 	 * reverts only what this invocation actually wrote, on the way out.
+	 *
+	 * The cost is that a previous lpmd killed with SIGKILL leaves its
+	 * runtime AllowedCPUs= behind until reboot, since it is set with
+	 * runtime=true and nothing on disk records it. That is preferable to
+	 * clobbering an administrator's configuration on every start, because
+	 * lpmd cannot tell the two apart. Recovering it would need lpmd to
+	 * persist what it set (e.g. under /run) and read that back here.
 	 */
 
 	for (i = 0 ; i < CORE_TYPES_COUNT ; i++)

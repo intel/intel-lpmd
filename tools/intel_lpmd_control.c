@@ -33,7 +33,7 @@ int main(int argc, char **argv)
 	if (argc < 2) {
 		fprintf (stderr, "intel_lpmd_control: missing control command\n");
 		fprintf (stderr, "syntax:\n");
-		fprintf (stderr, "intel_lpmd_control ON|OFF|AUTO|PROCESS-PRECONFIG|STATUS|LIST-UNBOUND|LIST-UNBOUND-USER|LIST-BOUND|UNBIND-ALL\n");
+		fprintf (stderr, "intel_lpmd_control ON|OFF|AUTO|PROCESS-PRECONFIG|STATUS|LIST-UNBOUND|LIST-UNBOUND-USER|LIST-BOUND|LIST-SLICES|UNBIND-ALL\n");
 		fprintf (stderr, "intel_lpmd_control ADD-PROCESS <name> <user_interactive|user_initiated|Unclassified|utility|background|realtime|GameProfileCPU|GameProfileGPU|GameProfileMixed|CustomProfile0|CustomProfile1|CustomProfile2> [allow_session:0|1]\n");
 		fprintf (stderr, "intel_lpmd_control GET-PROC-CLASSIFICATION <name>\n");
 		fprintf (stderr, "intel_lpmd_control SET-FOCUS <pid>   (use 0 to clear)\n");
@@ -227,6 +227,8 @@ int main(int argc, char **argv)
 		command = g_string_new ("LPM_LIST_UNBOUND_PROCS");
 	else if (!strncmp (argv[1], "LIST-BOUND", 10))
 		command = g_string_new ("LPM_LIST_BOUND_PROCS");
+	else if (!strncmp (argv[1], "LIST-SLICES", 11))
+		command = g_string_new ("LPM_LIST_SLICES");
 	else if (!strncmp (argv[1], "UNBIND-ALL", 10))
 		command = g_string_new ("LPM_UNBIND_ALL");
 	else {

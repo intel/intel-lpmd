@@ -144,6 +144,16 @@ for Intel Energy Optimizer (LPMD) daemon
 	<UseProcessCPUSet>0</UseProcessCPUSet>
 
 	<!--
+		Use systemd slice/unit based cpuset policy from slice.xml. Policy is
+		keyed on the systemd unit or slice a task already lives in instead of
+		on process names, and is applied with AllowedCPUs= on the unit; no
+		task is moved between cgroups.
+		0: disabled
+		1: enabled
+	-->
+	<UseSliceCpuset>0</UseSliceCpuset>
+
+	<!--
 		Example WorkLoad Type hints based config states applied to
 		12Pcore-8Ecore-2Lcore 28W TDP Meteor Lake platform.
 		Need to set WLTHintEnable to make it work.

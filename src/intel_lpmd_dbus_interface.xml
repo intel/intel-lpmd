@@ -35,6 +35,13 @@
 		<method name="LPM_LIST_BOUND_PROCS">
 		</method>
 
+		<!-- Report slice.xml policy against the running system:
+		     per entry, whether the unit exists, whether its cpuset is
+		     actually enforceable, what it resolves to, and what would
+		     be written. Read-only. -->
+		<method name="LPM_LIST_SLICES">
+		</method>
+
 		<method name="LPM_UNBIND_ALL">
 		</method>
 

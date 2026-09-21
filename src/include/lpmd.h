@@ -304,6 +304,9 @@ struct lpmd_config_t {
 	int wlt_proxy_enable;
 	int wlt_hint_mask;
 	int use_process_cpuset;
+	/* Slice/unit keyed cpuset policy from slice.xml. Independent of
+	 * use_process_cpuset: either, both or neither may be enabled. */
+	int use_slice_cpuset;
 
 	/* Optional per-CPU-model overrides for the process_cpuset.xml
 	 * <ClassDefaults> block. Populated when the matching <States>
@@ -640,6 +643,20 @@ int cpumask_reset(enum cpumask_idx idx);
 
 void free_cpu_type_masks(struct lpmd_config_t *lpmd_config);
 int allocate_cpu_type_masks(struct lpmd_config_t *lpmd_config);
+
+/* lpmd_slice_cpuset.c */
+int  lpmd_slice_cpuset_init(struct lpmd_config_t *config);
+void lpmd_slice_cpuset_uninit(void);
+int  lpmd_slice_cpuset_apply(int dry_run);
+int  lpmd_slice_cpuset_restore(void);
+void lpmd_slice_cpuset_print(void);
+void lpmd_slice_cpuset_print_bound(void);
+/* 1 = @pid is covered by a slice.xml entry (cgroup policy already applies,
+ * so the per-task path must leave it alone), 0 = not covered,
+ * -1 = slice policy inactive. */
+int  lpmd_slice_cpuset_pid_coverage(pid_t pid, char *unit_out, size_t unit_cap,
+				    char *cls_out, size_t cls_cap,
+				    int *enforceable_out);
 
 /* lpmd_process_cpuset.c */
 int  lpmd_process_cpuset_init(struct lpmd_config_t *config);

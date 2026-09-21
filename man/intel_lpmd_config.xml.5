@@ -147,8 +147,12 @@ where they already are, using the CPU list for their classification
 intersected with the CPUs their current cgroup allows. No task is moved
 between cgroups and no cgroup or transient scope unit is created.
 .PP
-A task that already carries an affinity mask narrower than its cgroup
-allows has placed itself there (via
+Two cases are deliberately left alone. A task whose cgroup is already
+governed by an enforceable entry in
+.I slice.xml
+is left to that policy, which is both cheaper and inherited by the unit's
+future children. A task that already carries an affinity mask narrower
+than its cgroup allows has placed itself there (via
 .BR sched_setaffinity (2)
 or
 .BR taskset (1)),
@@ -157,6 +161,19 @@ so it is neither changed nor restored.
 On exit from low power mode each task is returned to the exact mask it had
 beforehand, unless that mask changed in the meantime, in which case the
 task keeps its own.
+.PP
+.B UseSliceCpuset
+Enable systemd slice/unit based cpuset policy (0/1), read from
+.I slice.xml
+in the same directory as this file. Policy is keyed on the systemd unit or
+slice a task already lives in rather than on process names, and is applied by
+setting
+.B AllowedCPUs=
+on the unit at runtime; no task is moved between cgroups. Disabled by default.
+See
+.BR intel_lpmd_control (8)
+.B LIST-SLICES
+to report the configured policy against the running system.
 .PP
 .B EntryDelayMS / ExitDelayMS
 Utilization monitor entry/exit debounce delay in milliseconds.
@@ -628,6 +645,13 @@ The configuration file format conforms to XML specifications.
 		1 : Yes
 	-->
 	<UseProcessCPUSet>0|1</UseProcessCPUSet>
+
+	<!--
+		Enable systemd slice/unit based cpuset policy (slice.xml)
+		0 : No
+		1 : Yes
+	-->
+	<UseSliceCpuset>0|1</UseSliceCpuset>
 
 	<!--
 		Workload type hint polling fallback

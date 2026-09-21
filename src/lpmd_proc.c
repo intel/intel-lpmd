@@ -503,7 +503,14 @@ static void *lpmd_core_main_loop(void *arg)
 	hfi_kill ();
 	/* Stop any transient cpuset scopes we created before tearing down cgroups. */
 	lpmd_process_cpuset_uninit();
-	/* Undo in the reverse of the order enter_state() applies things. */
+	/* Undo in the reverse of the order enter_state() applies things.
+	 *
+	 * The slice restore goes first: it drops the runtime AllowedCPUs= we
+	 * set on individual units so they go back to inheriting from their
+	 * parent slice, which has to happen while the parent slices are still
+	 * as we left them. */
+	lpmd_slice_cpuset_restore();
+	lpmd_slice_cpuset_uninit();
 	cgroup_cleanup(&lpmd_config);
 	irq_cleanup();
 
@@ -565,6 +572,10 @@ int lpmd_main(void)
 	 * the active P/E/LP-E core sets (still alive in core_type_masks[])
 	 * and attach matching processes to transient cpuset scopes. */
 	lpmd_process_cpuset_init(&lpmd_config);
+	/* Slice/unit keyed policy. No-op unless <UseSliceCpuset> is set;
+	 * like process_cpuset it does not apply anything at startup, since
+	 * the daemon begins in LPMD_OFF and OFF must stay inert. */
+	lpmd_slice_cpuset_init(&lpmd_config);
 	ret = irq_init();
 	if (ret)
 		return ret;

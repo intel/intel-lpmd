@@ -25,6 +25,8 @@
  *   - It never creates a cgroup or a transient scope unit.
  *   - It never touches a task that already has an affinity mask of its
  *     own, and never restores one it did not set.
+ *   - It yields to slice.xml: a task whose cgroup is already governed by
+ *     an enforceable <Unit> entry is left to that policy.
  *
  * Earlier revisions attached each PID to a transient
  * proc_cpuset_<comm>_<pid>.scope, which migrated the task out of its own
@@ -1466,11 +1468,14 @@ static int apply_pid_uclamp(process_cpuset_t *ctx, pid_t pid,
  * systemd's own accounting and resource limits (the service's cgroup is
  * left empty while MainPID still points at the moved task), systemctl
  * kill/stop semantics, logind/polkit session tracking, and any
- * cgroup-based observability the admin has set up.
+ * cgroup-based observability the admin has set up. It also destroys the
+ * unit identity that slice.xml policy keys on, so the two features
+ * defeated each other.
  *
  * lpmd now only ever calls sched_setaffinity(2) on the task where it
- * already is (see affinity_bind_pid). No task is moved between cgroups,
- * and no cgroup is created.
+ * already is (see affinity_bind_pid), or sets AllowedCPUs= on a unit
+ * that already exists (see lpmd_slice_cpuset.c). No task is moved
+ * between cgroups, and no cgroup is created.
  * -------------------------------------------------------------------- */
 
 
@@ -2553,9 +2558,13 @@ static int pid_has_own_affinity(pid_t pid, const uint8_t *ceiling,
  * Bind @pid to @want using sched_setaffinity(2) only: no transient scope,
  * no cgroup migration, no change to any unit's AllowedCPUs.
  *
- * Opt-outs, in order:
- *   1. If @pid carries an affinity mask of its own, leave it alone.
- *   2. Otherwise apply (@want AND <the CPUs @pid's cgroup allows>).
+ * Precedence and opt-outs, in order:
+ *   1. If slice.xml already covers @pid's cgroup with an enforceable
+ *      entry, that policy wins and we do nothing -- the cpuset is being
+ *      set on the unit itself, which is both cheaper and inherited by
+ *      the unit's future children.
+ *   2. If @pid carries an affinity mask of its own, leave it alone.
+ *   3. Otherwise apply (@want AND <the CPUs @pid's cgroup allows>).
  *
  * Returns 1 if applied, 0 if deliberately skipped, -1 on error.
  */
@@ -2567,10 +2576,13 @@ static int affinity_bind_pid(process_cpuset_t *ctx, const struct proc_entry *e,
 	uint8_t cur[CPUMASK_BYTES];
 	uint8_t send[CPUMASK_BYTES];
 	char cgpath[512];
+	char slice_unit[256];
+	char slice_cls[64];
 	char dbg_want[MAX_CPULIST];
 	char dbg_send[MAX_CPULIST];
 	char dbg_ceil[MAX_CPULIST];
 	size_t send_len, cur_len = 0;
+	int enforceable = 0;
 	int have_ceiling = 0;
 	int clamped = 0;
 	int own;
@@ -2578,10 +2590,21 @@ static int affinity_bind_pid(process_cpuset_t *ctx, const struct proc_entry *e,
 	if (!ctx || !e || pid <= 0)
 		return -1;
 
+	/* 1. slice.xml has precedence. */
+	if (lpmd_slice_cpuset_pid_coverage(pid, slice_unit, sizeof(slice_unit),
+					   slice_cls, sizeof(slice_cls),
+					   &enforceable) == 1 &&
+	    enforceable) {
+		lpmd_log_debug(
+			"[%s] skip pid %d comm=%s: covered by slice.xml unit=%s class=%s\n",
+			e->name, (int)pid, comm, slice_unit, slice_cls);
+		return 0;
+	}
+
 	memset(ceiling, 0, sizeof(ceiling));
 	mask_to_cpulist(want, want_len, dbg_want, sizeof(dbg_want));
 
-	/* 1. Establish the ceiling from the cgroup the task already lives in. */
+	/* 2. Establish the ceiling from the cgroup the task already lives in. */
 	if (pid_cgroup_path(pid, cgpath, sizeof(cgpath)) == 0 &&
 	    cgroup_effective_cpus(cgpath, ceiling, sizeof(ceiling)) == 0) {
 		have_ceiling = 1;
@@ -2607,7 +2630,7 @@ static int affinity_bind_pid(process_cpuset_t *ctx, const struct proc_entry *e,
 	send_len = mask_significant_len(send, sizeof(send));
 	mask_to_cpulist(send, send_len, dbg_send, sizeof(dbg_send));
 
-	/* 2. Hands off anything that placed itself. Only decidable when we
+	/* 3. Hands off anything that placed itself. Only decidable when we
      * know the cgroup's set: a mask equal to it was inherited, a mask
      * narrower than it can only have come from sched_setaffinity. */
 	own = pid_has_own_affinity(pid, ceiling, cur, &cur_len);
@@ -3321,9 +3344,9 @@ int process_cpuset_apply_once(process_cpuset_t *ctx, int dry_run)
 			(void)loc;
 			if (affinity_bind_pid(ctx, e, pids[j], comm, mask, mlen,
 					      owner_uid, dry_run) != 1) {
-				/* Deliberately skipped (own affinity, or no
-                 * CPU in common): don't count it as newly
-                 * handled. */
+				/* Deliberately skipped (slice-covered, own
+                 * affinity, or no CPU in common): don't count it
+                 * as newly handled. */
 				new_here--;
 				total_new--;
 			}

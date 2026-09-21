@@ -25,6 +25,19 @@ Disables low power mode operation.
 .B AUTO
 Enables operation in automatic mode, allowing system utilization to determine
 low power state activation.
+.TP
+.B LIST-SLICES
+Reports the
+.I slice.xml
+policy against the running system, to the daemon's log: for each configured
+entry, which loaded units it matches, whether
+.B AllowedCPUs=
+is actually enforceable on them, what the entry resolves to, what the cgroup
+currently holds, and what would be written at the next low-power transition.
+Read-only. Requires
+.B UseSliceCpuset
+to be enabled in
+.BR intel_lpmd_config.xml (5).
 
 .SH EXAMPLES
 .TP

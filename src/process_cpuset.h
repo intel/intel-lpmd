@@ -8,8 +8,9 @@
  *
  * Tasks are constrained where they already live: this library never moves
  * a task between cgroups, never creates a cgroup or a transient scope
- * unit, and never touches a task that already carries an affinity mask of
- * its own.
+ * unit, never touches a task that already carries an affinity mask of its
+ * own, and yields to slice.xml policy (see lpmd_slice_cpuset.c) for any
+ * task whose cgroup is already governed by an enforceable <Unit> entry.
  *
  * Designed so it can be linked into intel_lpmd (or any other daemon) and
  * driven from existing event loops, instead of being shipped only as a
