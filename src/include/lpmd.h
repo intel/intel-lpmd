@@ -608,7 +608,7 @@ int process_irq(struct lpmd_config_state_t *state);
 
 /* lpmd_cgroup.c*/
 int cgroup_init(struct lpmd_config_t *config);
-int cgroup_cleanup(void);
+int cgroup_cleanup(struct lpmd_config_t *config);
 int process_cgroup(struct lpmd_config_t *config, struct lpmd_config_state_t *state);
 
 /* lpmd_uevent.c */

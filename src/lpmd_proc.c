@@ -503,7 +503,7 @@ static void *lpmd_core_main_loop(void *arg)
 	hfi_kill ();
 	/* Stop any transient cpuset scopes we created before tearing down cgroups. */
 	lpmd_process_cpuset_uninit();
-	cgroup_cleanup();
+	cgroup_cleanup(&lpmd_config);
 
 	return NULL;
 }

@@ -345,8 +345,19 @@ int detect_cpu_topo(struct lpmd_config_t *lpmd_config)
 		set_max_online_cpu(i);
 	}
 
-	/* Here it is the first time we migrate CPUs, must clear the previous cgroup settings */
-	cgroup_cleanup();
+	/*
+	 * No cgroup_cleanup() here. It used to run at this point to clear
+	 * "previous cgroup settings", but this is called before the config file
+	 * has been parsed, so config->mode is not known yet and every mode paid
+	 * for it, including the ones that never touch a cpuset. What it did was
+	 * write the online CPU mask to system.slice, user.slice and
+	 * machine.slice, which is not a restore: it turns an inherited cpuset
+	 * into an explicit one and discards any AllowedCPUs= an administrator
+	 * had set there.
+	 *
+	 * Detecting the CPU topology must not change system state. Cleanup now
+	 * reverts only what this invocation actually wrote, on the way out.
+	 */
 
 	for (i = 0 ; i < CORE_TYPES_COUNT ; i++)
 		memset(lpmd_config->core_type_masks[i], 0, get_max_cpus() / 8);
