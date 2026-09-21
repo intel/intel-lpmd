@@ -212,7 +212,7 @@
                                    sched_setaffinity acts on a thread,
                                    so binding just the leader leaves
                                    every already-running worker on its
-                                   old mask -- a process classified
+                                   old mask; a process classified
                                    background keeps running on the
                                    performance cores through its
                                    thread pool. Threads created later
