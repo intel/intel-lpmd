@@ -229,6 +229,31 @@ int process_irq(struct lpmd_config_state_t *state)
 	return 0;
 }
 
+/*
+ * Put IRQ affinity back on the way out.
+ *
+ * Without this, stopping the daemon while a low power state is active leaves
+ * every IRQ pinned to the low power CPUs for as long as the machine stays up,
+ * because nothing else moves them back. A state with IRQMigrate set to
+ * SETTING_RESTORE is the only thing that used to undo the migration, and there
+ * is no guarantee the daemon passes through one before it exits.
+ *
+ * Safe to call when nothing was migrated: the cache is empty and the restore
+ * loop does nothing. With irqbalance driving the migration the ban list is
+ * cleared instead, which is the same thing SETTING_RESTORE does.
+ */
+void irq_cleanup(void)
+{
+	if (irqbalance_pid == -1) {
+		if (!irq_updated)
+			return;
+		native_restore_irqs();
+		return;
+	}
+
+	irqbalance_ban_cpus("NULL");
+}
+
 int irq_init(void)
 {
 	DIR *dir;

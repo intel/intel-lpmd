@@ -604,6 +604,7 @@ void process_slider(struct lpmd_config_t *config, struct lpmd_config_state_t *st
 
 /* lpmd_irq.c */
 int irq_init(void);
+void irq_cleanup(void);
 int process_irq(struct lpmd_config_state_t *state);
 
 /* lpmd_cgroup.c*/
