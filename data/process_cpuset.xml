@@ -75,6 +75,57 @@
 
   NOTE: /proc/<pid>/comm is truncated to 15 chars; names below already
         respect that limit.
+
+  Matching a process by <Name> alone is limited by that truncation.
+  71 of the <Name> values below are exactly 15 characters, which means
+  they are prefixes rather than names, and prefixes collide: all three
+  of xdg-desktop-portal.service, xdg-desktop-portal-gnome.service and
+  xdg-desktop-portal-gtk.service report comm "xdg-desktop-por", so one
+  <Name> entry cannot give them different classifications. comm is also
+  writable by the process itself via prctl(PR_SET_NAME), so it is not an
+  identity to rely on.
+
+  <Cgroup> matches the process' cgroup v2 path instead, which names the
+  systemd unit it belongs to and has no length limit:
+
+      <Process>
+          <Cgroup>system.slice/xdg-desktop-portal.service</Cgroup>
+          <Classification>background</Classification>
+      </Process>
+
+  Rules:
+    * <Cgroup> is repeatable; the entry matches if ANY pattern matches.
+    * <Name> and <Cgroup> are OR'ed, so adding a <Cgroup> to an existing
+      entry only widens it. <Name> is optional once a <Cgroup> is given.
+    * A <Cgroup> match outranks a <Name> match when a PID is eligible for
+      more than one entry, regardless of the order they appear here. That
+      is what lets a specific unit be carved out of a colliding <Name>.
+    * A <Cgroup> entry classifies EVERY process in a matching unit, not
+      just the one whose comm resembles the unit name. That is the point
+      of matching by unit, and it picks up helpers a <Name> could never
+      enumerate: matching org.gnome.SettingsDaemon.PrintNotifications
+      also covers the gsd-printer it spawns, and matching
+      xdg-document-portal also covers its fusermount3. Do not point a
+      <Cgroup> at a unit whose children you do not want classified
+      together; use <Name> for that.
+    * The leading '/' is optional on both sides.
+    * '*' is a glob and DOES cross '/', so "system.slice/*" means
+      everything under that slice however deeply nested, and
+      "*/foo.service" means foo.service wherever it lives. This also
+      makes systemd's escaping (app-gnome\x2dsession.slice, and
+      transient names carrying a PID such as
+      app-gnome-org.gnome.SettingsDaemon.DiskUtilityNotify-3711.scope)
+      easy to match without spelling the escapes out.
+
+  Be aware that a cgroup path is only an identity for units systemd
+  itself places: everything under system.slice. Inside the delegated
+  user subtree an unprivileged user can choose their own unit names
+  (a plain "systemd-run" with a user scope and a chosen unit name is
+  enough), so a
+  user.slice pattern is self-asserted. That is acceptable here (the
+  worst case is a user's own process reaching the P-cores, which it
+  could already ask for with sched_setaffinity) but it is not an
+  authorization boundary and must not be treated as one.
 -->
 
 <ProcessCpusetConfig>
@@ -262,6 +313,7 @@
     -->
     <Process>
         <Name>systemd-journal</Name>
+        <Cgroup>system.slice/systemd-journald.service</Cgroup>
         <Classification>background</Classification>
         <!-- Demo: pin journald to LP E-cores only (overrides background default). -->
         <ActiveCores>ActiveLcores</ActiveCores>
@@ -276,6 +328,7 @@
     </Process>
     <Process>
         <Name>systemd-resolve</Name>
+        <Cgroup>system.slice/systemd-resolved.service</Cgroup>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -284,6 +337,7 @@
     </Process>
     <Process>
         <Name>systemd-timesyn</Name>
+        <Cgroup>system.slice/systemd-timesyncd.service</Cgroup>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -296,10 +350,12 @@
     </Process>
     <Process>
         <Name>systemd-userdbd</Name>
+        <Cgroup>system.slice/systemd-userdbd.service</Cgroup>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>systemd-machine</Name>
+        <Cgroup>system.slice/systemd-machined.service</Cgroup>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -411,6 +467,7 @@
     </Process>
     <Process>
         <Name>accounts-daemon</Name>
+        <Cgroup>system.slice/accounts-daemon.service</Cgroup>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -538,10 +595,12 @@
     </Process>
     <Process>
         <Name>switcheroo-cont</Name>
+        <Cgroup>system.slice/switcheroo-control.service</Cgroup>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>power-profiles-</Name>
+        <Cgroup>system.slice/power-profiles-daemon.service</Cgroup>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -562,6 +621,7 @@
     </Process>
     <Process>
         <Name>low-memory-moni</Name>
+        <Cgroup>system.slice/low-memory-monitor.service</Cgroup>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -649,6 +709,7 @@
     </Process>
     <Process>
         <Name>flatpak-system-</Name>
+        <Cgroup>system.slice/flatpak-system-helper.service</Cgroup>
         <Classification>background</Classification>
     </Process>
     <!-- Arch / CachyOS -->
@@ -839,26 +900,33 @@
     </Process>
     <Process>
         <Name>gvfs-udisks2-vo</Name>
+        <Cgroup>*/gvfs-udisks2-volume-monitor.service</Cgroup>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>gvfs-mtp-volume</Name>
+        <Cgroup>*/gvfs-mtp-volume-monitor.service</Cgroup>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>gvfs-goa-volume</Name>
+        <Cgroup>*/gvfs-goa-volume-monitor.service</Cgroup>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>gvfs-afc-volume</Name>
+        <Cgroup>*/gvfs-afc-volume-monitor.service</Cgroup>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>gvfs-gphoto2-vo</Name>
+        <Cgroup>*/gvfs-gphoto2-volume-monitor.service</Cgroup>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>gnome-keyring-d</Name>
+        <Cgroup>*/gnome-keyring-daemon.service</Cgroup>
+        <Cgroup>*/dbus-*org.freedesktop.secrets*.service</Cgroup>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -875,14 +943,17 @@
     </Process>
     <Process>
         <Name>evolution-calen</Name>
+        <Cgroup>*/evolution-calendar-factory.service</Cgroup>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>evolution-addre</Name>
+        <Cgroup>*/evolution-addressbook-factory.service</Cgroup>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>evolution-sourc</Name>
+        <Cgroup>*/evolution-source-registry.service</Cgroup>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -891,26 +962,43 @@
     </Process>
     <Process>
         <Name>goa-identity-se</Name>
+        <Cgroup>*/dbus-*org.gnome.Identity*.service</Cgroup>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>at-spi-bus-laun</Name>
+        <Cgroup>*/at-spi-dbus-bus.service</Cgroup>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>at-spi2-registr</Name>
+        <Cgroup>*/dbus-*org.a11y.atspi.Registry*.service</Cgroup>
         <Classification>background</Classification>
     </Process>
+    <!--
+      The three xdg-desktop-portal* units all report comm
+      "xdg-desktop-por", so <Name> cannot tell them apart. They are listed
+      individually here so each one is matched by unit rather than by a
+      shared 15-character prefix. All three keep the classification the
+      single <Name> entry used to give them; split this into separate
+      <Process> blocks if you want the backends classified differently
+      from the frontend.
+    -->
     <Process>
         <Name>xdg-desktop-por</Name>
+        <Cgroup>*/xdg-desktop-portal.service</Cgroup>
+        <Cgroup>*/xdg-desktop-portal-gnome.service</Cgroup>
+        <Cgroup>*/xdg-desktop-portal-gtk.service</Cgroup>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>xdg-document-po</Name>
+        <Cgroup>*/xdg-document-portal.service</Cgroup>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>xdg-permission-</Name>
+        <Cgroup>*/xdg-permission-store.service</Cgroup>
         <Classification>background</Classification>
     </Process>
     <!-- KDE Plasma background helpers (CachyOS default, also Kubuntu/Fedora KDE) -->
@@ -1022,6 +1110,7 @@
     </Process>
     <Process>
         <Name>gnome-session-c</Name>
+        <Cgroup>*/gnome-session-monitor.service</Cgroup>
         <Classification>user_interactive</Classification>
     </Process>
     <Process>
@@ -1032,11 +1121,14 @@
     <Process>
         <!-- gnome-session-selector / gnome-session-systemd -->
         <Name>gnome-session-s</Name>
+        <Cgroup>*/gnome-session-manager@*.service</Cgroup>
+        <Cgroup>*/gnome-session-signal-init.service</Cgroup>
         <Classification>user_interactive</Classification>
     </Process>
     <Process>
         <!-- mutter-x11-frames -->
         <Name>mutter-x11-fram</Name>
+        <Cgroup>*/org.gnome.Shell@*.service</Cgroup>
         <Classification>user_interactive</Classification>
     </Process>
     <!-- KDE Plasma shell stack (CachyOS default) -->
@@ -1075,6 +1167,7 @@
     </Process>
     <Process>
         <Name>ibus-extension-</Name>
+        <Cgroup>*/org.freedesktop.IBus.session.GNOME.service</Cgroup>
         <Classification>user_interactive</Classification>
     </Process>
     <Process>
@@ -1121,6 +1214,7 @@
     </Process>
     <Process>
         <Name>gnome-text-edit</Name>
+        <Cgroup>*/dbus-*org.gnome.TextEditor*.service</Cgroup>
         <Classification>user_initiated</Classification>
     </Process>
     <Process>
@@ -1364,6 +1458,7 @@
     </Process>
     <Process>
         <Name>evolution-alarm</Name>
+        <Cgroup>*/evolution-alarm-notify.service</Cgroup>
         <Classification>user_initiated</Classification>
     </Process>
     <Process>
@@ -1394,6 +1489,7 @@
     -->
     <Process>
         <Name>gsd-a11y-settin</Name>
+        <Cgroup>*/org.gnome.SettingsDaemon.A11ySettings.service</Cgroup>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -1406,6 +1502,7 @@
     </Process>
     <Process>
         <Name>gsd-housekeepin</Name>
+        <Cgroup>*/org.gnome.SettingsDaemon.Housekeeping.service</Cgroup>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -1422,6 +1519,7 @@
     </Process>
     <Process>
         <Name>gsd-print-notif</Name>
+        <Cgroup>*/org.gnome.SettingsDaemon.PrintNotifications.service</Cgroup>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -1434,6 +1532,7 @@
     </Process>
     <Process>
         <Name>gsd-screensaver</Name>
+        <Cgroup>*/org.gnome.SettingsDaemon.ScreensaverProxy.service</Cgroup>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -1454,10 +1553,12 @@
     </Process>
     <Process>
         <Name>gsd-disk-utilit</Name>
+        <Cgroup>*/app-gnome-org.gnome.SettingsDaemon.DiskUtilityNotify-*.scope</Cgroup>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>gsd-usb-protect</Name>
+        <Cgroup>*/org.gnome.SettingsDaemon.UsbProtection.service</Cgroup>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -1471,6 +1572,7 @@
     <!-- gnome-shell helper processes (calendar server, JS plugin host) -->
     <Process>
         <Name>gnome-shell-cal</Name>
+        <Cgroup>*/dbus-*org.gnome.Shell.CalendarServer*.service</Cgroup>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -1480,6 +1582,8 @@
     <!-- GNOME remote desktop / RDP backend -->
     <Process>
         <Name>gnome-remote-de</Name>
+        <Cgroup>system.slice/gnome-remote-desktop.service</Cgroup>
+        <Cgroup>*/gnome-remote-desktop.service</Cgroup>
         <Classification>background</Classification>
     </Process>
     <!-- Snap desktop integration helper -->
@@ -1503,6 +1607,7 @@
     </Process>
     <Process>
         <Name>ibus-engine-sim</Name>
+        <Cgroup>*/org.freedesktop.IBus.session.GNOME.service</Cgroup>
         <Classification>background</Classification>
     </Process>
 

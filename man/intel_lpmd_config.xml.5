@@ -392,6 +392,33 @@ passed to sched_setattr(2). Range: -1 (disabled), 0..1024.
 .B <Name>
 Process name from /proc/PID/comm (15-char limit). Supports '*' wildcard
 for prefix matching (e.g., "firefox*").
+Optional when at least one <Cgroup> is given.
+.IP \(bu 2
+.B <Cgroup>
+(optional; repeatable) Match the process by its cgroup v2 path instead of
+by comm, e.g. "system.slice/systemd-resolved.service". Because the path
+names the systemd unit, it is not subject to the 15-character comm limit
+and can distinguish units that share a comm prefix: all three of
+xdg\-desktop\-portal.service, xdg\-desktop\-portal\-gnome.service and
+xdg\-desktop\-portal\-gtk.service report comm "xdg-desktop-por".
+The leading '/' is optional. '*' is a glob and, unlike in a shell, it
+crosses '/', so "system.slice/*" matches everything under that slice and
+"*/foo.service" matches foo.service wherever it lives.
+.sp
+<Name> and <Cgroup> are OR'ed, so adding a <Cgroup> to an existing entry
+only widens it. When a PID is eligible for more than one entry, a
+<Cgroup> match wins over a <Name> match regardless of the order the
+entries appear in the file.
+.sp
+A <Cgroup> entry classifies every process in a matching unit, not only
+the one whose comm resembles the unit name; that is what lets it cover
+helpers a <Name> could not enumerate.
+.sp
+Note that a cgroup path is only a trustworthy identity for units that
+systemd itself places, i.e. those under system.slice. Within the
+delegated user subtree an unprivileged user can pick their own unit
+names, so a user.slice pattern is self-asserted and must not be treated
+as an authorization boundary.
 .IP \(bu 2
 .B <Classification>
 One of: realtime, user_interactive, user_initiated, utility, background,
