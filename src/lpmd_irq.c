@@ -90,6 +90,19 @@ static int native_restore_irqs(void)
 	return 0;
 }
 
+/* Whether this IRQ's original affinity is in the cache, and so restorable. */
+static int irq_is_cached(int irq)
+{
+	int i;
+
+	for (i = 0; i < info->nr_irqs; i++) {
+		if (info->irq[i].irq == irq)
+			return 1;
+	}
+
+	return 0;
+}
+
 static int update_one_irq(int irq, char *irq_str)
 {
 	char path[MAX_STR_LENGTH];
@@ -97,38 +110,53 @@ static int update_one_irq(int irq, char *irq_str)
 	size_t size = 0;
 	FILE *filep;
 
-	if (info->nr_irqs >= (MAX_IRQS - 1)) {
-		lpmd_log_error("Too many IRQs\n");
-		return -1;
-	}
-
 	snprintf(path, MAX_STR_LENGTH, "/proc/irq/%i/smp_affinity", irq);
 
-	if (!irq_updated) {
-		info->irq[info->nr_irqs].irq = irq;
-		filep = fopen(path, "r");
-		if (!filep)
-			return -1;
-
-		if (getline(&str, &size, filep) <= 0) {
-			lpmd_log_error("Failed to get IRQ%d smp_affinity\n", irq);
-			free(str);
-			fclose(filep);
+	/*
+	 * The cache is what makes the restore possible, so an IRQ that is not in
+	 * it is left alone rather than migrated with no way back. Once the cache
+	 * is populated that is a lookup, not a count: testing nr_irqs against
+	 * the limit here would refuse every IRQ on a machine whose IRQ count
+	 * filled the cache, so a second low power state would migrate nothing
+	 * and silently keep the first state's affinities.
+	 */
+	if (irq_updated) {
+		if (!irq_is_cached(irq)) {
+			lpmd_log_debug("\tIRQ%d not cached, not migrated\n", irq);
 			return -1;
 		}
 
-		fclose(filep);
-
-		snprintf(info->irq[info->nr_irqs].affinity, MAX_STR_LENGTH, "%s", str);
-
-		free(str);
-
-		/* Remove the Newline */
-		size = strnlen(info->irq[info->nr_irqs].affinity, MAX_STR_LENGTH);
-		info->irq[info->nr_irqs].affinity[size - 1] = '\0';
-
-		info->nr_irqs++;
+		return lpmd_write_str(path, irq_str, LPMD_LOG_DEBUG);
 	}
+
+	if (info->nr_irqs >= MAX_IRQS) {
+		lpmd_log_error("Too many IRQs, IRQ%d not migrated\n", irq);
+		return -1;
+	}
+
+	info->irq[info->nr_irqs].irq = irq;
+	filep = fopen(path, "r");
+	if (!filep)
+		return -1;
+
+	if (getline(&str, &size, filep) <= 0) {
+		lpmd_log_error("Failed to get IRQ%d smp_affinity\n", irq);
+		free(str);
+		fclose(filep);
+		return -1;
+	}
+
+	fclose(filep);
+
+	snprintf(info->irq[info->nr_irqs].affinity, MAX_STR_LENGTH, "%s", str);
+
+	free(str);
+
+	/* Remove the Newline */
+	size = strnlen(info->irq[info->nr_irqs].affinity, MAX_STR_LENGTH);
+	info->irq[info->nr_irqs].affinity[size - 1] = '\0';
+
+	info->nr_irqs++;
 
 	return lpmd_write_str(path, irq_str, LPMD_LOG_DEBUG);
 }
