@@ -62,6 +62,12 @@
 #define MAX_NAME 64
 #define MAX_CPULIST 256
 #define MAX_PROCS 512
+/*
+ * A cgroup v2 path can nest arbitrarily deep, but the ones worth matching on
+ * bottom out around user.slice/user-N.slice/user@N.service/app.slice/x.scope.
+ */
+#define MAX_CGROUP_PATH 256
+#define MAX_CGROUPS_PER_ENTRY 8
 #define MAX_CPUS 1024 /* cap for the POC */
 #define CPUMASK_BYTES (MAX_CPUS / 8)
 
@@ -160,7 +166,30 @@ static int core_spec_is_set(const struct core_spec *s)
 }
 
 struct proc_entry {
+	/*
+	 * <Name> matches /proc/<pid>/comm, which the kernel truncates to 15
+	 * characters and which the process itself can rewrite with
+	 * prctl(PR_SET_NAME). That makes it both collision-prone (the three
+	 * xdg-desktop-portal* services all report "xdg-desktop-por") and not
+	 * something to lean on for identity. Optional when at least one
+	 * <Cgroup> is present.
+	 */
 	char name[MAX_NAME];
+	/*
+	 * <Cgroup> patterns matched against the process' cgroup v2 path with
+	 * the leading '/' stripped, e.g.
+	 * "system.slice/xdg-desktop-portal-gnome.service". Globs as <Name>
+	 * does, except '*' also crosses '/', so "system.slice/*" means
+	 * everything under that slice however deeply nested.
+	 *
+	 * An entry matches a PID if its <Name> matches OR any of its
+	 * <Cgroup> patterns match, so adding one to an existing entry only
+	 * widens it. A cgroup match outranks a comm match when a PID is
+	 * eligible for more than one entry: it names a systemd unit, not a
+	 * 15-character prefix.
+	 */
+	char cgroups[MAX_CGROUPS_PER_ENTRY][MAX_CGROUP_PATH];
+	int n_cgroups;
 	enum classification cls;
 	/* Resolved spec used at apply time (per-process explicit value if
      * present, otherwise the matching ClassDefaults value). */
@@ -697,6 +726,31 @@ static void copy_text(char *dst, size_t cap, const char *src)
 	dst[cap - 1] = '\0';
 }
 
+/*
+ * copy_text() that drops surrounding whitespace. Used for <Cgroup>, whose
+ * values are long enough that they invite being wrapped onto their own
+ * indented line; a stored "\n\t\tsystem.slice/foo.service\n\t" would never
+ * match anything and give no hint why.
+ */
+static void copy_text_trim(char *dst, size_t cap, const char *src)
+{
+	size_t n;
+
+	copy_text(dst, cap, src);
+
+	n = strlen(dst);
+	while (n && isspace((unsigned char)dst[n - 1]))
+		dst[--n] = '\0';
+
+	if (isspace((unsigned char)dst[0])) {
+		char *p = dst;
+
+		while (*p && isspace((unsigned char)*p))
+			p++;
+		memmove(dst, p, strlen(p) + 1);
+	}
+}
+
 static void parse_cpu_groups(xmlDoc *doc, xmlNode *node, struct cpu_groups *g)
 {
 	xmlNode *c;
@@ -846,7 +900,22 @@ static void parse_one_process(const process_cpuset_t *ctx, xmlDoc *doc,
 
 		if (!strcmp((const char *)c->name, "Name"))
 			copy_text(e->name, sizeof(e->name), val);
-		else if (!strcmp((const char *)c->name, "Classification"))
+		else if (!strcmp((const char *)c->name, "Cgroup")) {
+			/* Repeatable: each one is an alternative path pattern. */
+			if (e->n_cgroups >= MAX_CGROUPS_PER_ENTRY) {
+				lpmd_log_debug(
+					"Entry '%s': max %d <Cgroup> patterns, ignoring '%s'\n",
+					e->name[0] ? e->name : "?",
+					MAX_CGROUPS_PER_ENTRY, val);
+			} else {
+				char *slot = e->cgroups[e->n_cgroups];
+
+				copy_text_trim(slot, MAX_CGROUP_PATH, val);
+				/* Don't let an empty tag consume a slot. */
+				if (slot[0])
+					e->n_cgroups++;
+			}
+		} else if (!strcmp((const char *)c->name, "Classification"))
 			e->cls = parse_class(val);
 		else if (!strcmp((const char *)c->name, "ActiveCores"))
 			parse_core_spec(val, &e->explicit_spec);
@@ -899,6 +968,34 @@ static int read_comm(pid_t pid, char *out, size_t cap)
 	if (n && out[n - 1] == '\n')
 		out[n - 1] = '\0';
 	return 0;
+}
+
+/* Read @pid's unified (cgroup v2) path into @out, e.g. "/system.slice/foo.service". */
+static int pid_cgroup_path(pid_t pid, char *out, size_t cap)
+{
+	char path[64];
+	char line[512];
+	FILE *f;
+	int rc = -1;
+
+	snprintf(path, sizeof(path), "/proc/%d/cgroup", (int)pid);
+	f = fopen(path, "r");
+	if (!f)
+		return -1;
+	while (fgets(line, sizeof(line), f)) {
+		size_t l;
+
+		if (strncmp(line, "0::", 3))
+			continue;
+		l = strlen(line);
+		if (l && line[l - 1] == '\n')
+			line[--l] = '\0';
+		snprintf(out, cap, "%s", line + 3);
+		rc = 0;
+		break;
+	}
+	fclose(f);
+	return rc;
 }
 
 /* Best-effort process name lookup for logs. */
@@ -978,6 +1075,135 @@ static int pid_matches_name(pid_t pid, const char *pattern, const char *leader_c
 	}
 	closedir(task_dir);
 	return 0;
+}
+
+/*
+ * Match one <Cgroup> pattern against a cgroup v2 path.
+ *
+ * Both sides are normalised to have no leading '/', so the config can be
+ * written the way the paths read in `systemd-cgls` output
+ * ("system.slice/foo.service") without having to remember a leading slash.
+ *
+ * fnmatch is called without FNM_PATHNAME, so '*' crosses '/' just as it does
+ * in <Name> globs. That is deliberate: "system.slice/*" should mean everything
+ * under system.slice, including units nested below another slice, which is
+ * what anyone writing that pattern expects.
+ */
+static int cgroup_matches_pattern(const char *pattern, const char *cgpath)
+{
+	if (!pattern || !*pattern || !cgpath)
+		return 0;
+
+	while (*pattern == '/')
+		pattern++;
+	while (*cgpath == '/')
+		cgpath++;
+
+	if (!strchr(pattern, '*'))
+		return !strcmp(pattern, cgpath);
+	return fnmatch(pattern, cgpath, 0) == 0;
+}
+
+/* How an entry matched a PID. Higher wins when several entries are eligible. */
+enum entry_match {
+	ENTRY_MATCH_NONE = 0,
+	ENTRY_MATCH_COMM,
+	ENTRY_MATCH_CGROUP,
+};
+
+/*
+ * Test @pid against one <Process> entry.
+ *
+ * The two matchers are OR'ed, so an entry that gains a <Cgroup> keeps matching
+ * everything its <Name> used to. The return value distinguishes them so the
+ * caller can prefer the cgroup match: see the specificity note on
+ * struct proc_entry.cgroups.
+ *
+ * @cgpath may be NULL (or "") when the caller could not read the PID's cgroup,
+ * in which case only the name matcher runs.
+ */
+static enum entry_match pid_matches_entry(pid_t pid, const struct proc_entry *e,
+					  const char *comm, const char *cgpath)
+{
+	int i;
+
+	if (!e)
+		return ENTRY_MATCH_NONE;
+
+	if (cgpath && *cgpath) {
+		for (i = 0; i < e->n_cgroups; i++) {
+			if (cgroup_matches_pattern(e->cgroups[i], cgpath))
+				return ENTRY_MATCH_CGROUP;
+		}
+	}
+
+	if (e->name[0] && pid_matches_name(pid, e->name, comm))
+		return ENTRY_MATCH_COMM;
+
+	return ENTRY_MATCH_NONE;
+}
+
+/*
+ * Pick the entry that should govern @pid, or NULL if none does.
+ *
+ * Entries are scanned in config order and the first comm match is remembered,
+ * but a later cgroup match replaces it, so an entry keyed on a systemd unit
+ * always beats one keyed on a 15-character comm prefix regardless of the order
+ * they appear in the file. Among equally specific matches the first wins, which
+ * is the behaviour entries had before <Cgroup> existed.
+ */
+static const struct proc_entry *find_entry_for_pid(const process_cpuset_t *ctx,
+						   pid_t pid, const char *comm,
+						   const char *cgpath,
+						   enum entry_match *how)
+{
+	const struct proc_entry *best = NULL;
+	enum entry_match best_how = ENTRY_MATCH_NONE;
+
+	for (int i = 0; i < ctx->n_entries; i++) {
+		enum entry_match m = pid_matches_entry(pid, &ctx->entries[i],
+						       comm, cgpath);
+
+		if (m > best_how) {
+			best = &ctx->entries[i];
+			best_how = m;
+			if (best_how == ENTRY_MATCH_CGROUP)
+				break; /* nothing outranks this */
+		}
+	}
+
+	if (how)
+		*how = best_how;
+	return best;
+}
+
+/*
+ * Whether any entry has a <Cgroup> pattern.
+ *
+ * Reading /proc/<pid>/cgroup costs an open/read/close per PID, so the /proc
+ * sweeps skip it entirely on a config that only uses <Name> -- which is every
+ * config predating this feature.
+ */
+static int entries_use_cgroups(const process_cpuset_t *ctx)
+{
+	if (!ctx)
+		return 0;
+	for (int i = 0; i < ctx->n_entries; i++)
+		if (ctx->entries[i].n_cgroups)
+			return 1;
+	return 0;
+}
+
+/* Log label for an entry: <Name> if it has one, else its first <Cgroup>. */
+static const char *entry_label(const struct proc_entry *e)
+{
+	if (!e)
+		return "?";
+	if (e->name[0])
+		return e->name;
+	if (e->n_cgroups)
+		return e->cgroups[0];
+	return "?";
 }
 
 /*
@@ -1122,40 +1348,6 @@ static int pid_get_real_uid(pid_t pid, uid_t *out)
 	}
 	fclose(f);
 	return ok;
-}
-
-static int find_pids_by_name(const char *name, pid_t *out, int max)
-{
-	DIR *d = opendir("/proc");
-	struct dirent *de;
-	char comm[MAX_NAME];
-	int n = 0;
-	pid_t self = getpid();
-
-	if (!d)
-		return -1;
-
-	while ((de = readdir(d)) && n < max) {
-		char *end;
-		long pid = strtol(de->d_name, &end, 10);
-		if (*end != '\0' || pid <= 0)
-			continue;
-		/*
-         * Never bind our own PID into a transient cpuset scope.
-         * Stopping a scope unit sends SIGTERM to the processes in it,
-         * so binding ourselves would let process_cpuset_stop_all()
-         * (UNBIND-ALL / shutdown) kill the daemon.
-         */
-		if ((pid_t)pid == self)
-			continue;
-		if (read_comm((pid_t)pid, comm, sizeof(comm)) < 0)
-			continue;
-		if (!pid_matches_name((pid_t)pid, name, comm))
-			continue;
-		out[n++] = (pid_t)pid;
-	}
-	closedir(d);
-	return n;
 }
 
 /*
@@ -2064,7 +2256,8 @@ int process_cpuset_load_config(process_cpuset_t *ctx, const char *path)
 		if (strcmp((const char *)cur->name, "Process"))
 			continue;
 		parse_one_process(ctx, doc, cur->children, &ctx->entries[n]);
-		if (ctx->entries[n].name[0] &&
+		/* <Name> or at least one <Cgroup> is enough to identify an entry. */
+		if ((ctx->entries[n].name[0] || ctx->entries[n].n_cgroups) &&
 		    ctx->entries[n].cls != CLASS_INVALID)
 			n++;
 		else
@@ -2079,13 +2272,45 @@ int process_cpuset_load_config(process_cpuset_t *ctx, const char *path)
 /*
  * Find an existing <Process> entry by comm name, or -1 if none.
  */
-static int find_entry_index(const process_cpuset_t *ctx, const char *name)
+static int find_entry_index_by_name(const process_cpuset_t *ctx, const char *name)
 {
 	if (!ctx || !name || !*name)
 		return -1;
 	for (int i = 0; i < ctx->n_entries; i++)
 		if (!strcmp(ctx->entries[i].name, name))
 			return i;
+	return -1;
+}
+
+/*
+ * Find the existing entry that @e overrides, or -1 if it is a new one.
+ *
+ * <Name> remains the identity when the entry has one, so overlays keep
+ * overriding the entries they always did. A <Cgroup>-only entry has no name to
+ * key on, so its first pattern stands in: that is what makes an overlay able to
+ * replace a cgroup-keyed entry from the system file instead of silently adding
+ * a second entry matching the same processes.
+ */
+static int find_entry_index(const process_cpuset_t *ctx,
+			    const struct proc_entry *e)
+{
+	if (!ctx || !e)
+		return -1;
+
+	if (e->name[0])
+		return find_entry_index_by_name(ctx, e->name);
+
+	if (!e->n_cgroups)
+		return -1;
+
+	for (int i = 0; i < ctx->n_entries; i++) {
+		const struct proc_entry *cand = &ctx->entries[i];
+
+		if (cand->name[0] || !cand->n_cgroups)
+			continue;
+		if (!strcmp(cand->cgroups[0], e->cgroups[0]))
+			return i;
+	}
 	return -1;
 }
 
@@ -2156,13 +2381,13 @@ int process_cpuset_load_config_overlay(process_cpuset_t *ctx, const char *path)
 			continue;
 
 		parse_one_process(ctx, doc, cur->children, &tmp);
-		if (!tmp.name[0] || tmp.cls == CLASS_INVALID) {
+		if ((!tmp.name[0] && !tmp.n_cgroups) || tmp.cls == CLASS_INVALID) {
 			lpmd_log_debug(
 				"Skipping invalid <Process> entry in overlay\n");
 			continue;
 		}
 
-		idx = find_entry_index(ctx, tmp.name);
+		idx = find_entry_index(ctx, &tmp);
 		if (idx >= 0) {
 			ctx->entries[idx] = tmp;
 			touched++;
@@ -2219,7 +2444,7 @@ int process_cpuset_add_entry_ex(process_cpuset_t *ctx, const char *name,
 	e.allow_session = allow_session ? 1 : 0;
 	e.resolved = *default_spec_for(ctx, cls);
 
-	idx = find_entry_index(ctx, e.name);
+	idx = find_entry_index_by_name(ctx, e.name);
 	if (idx >= 0) {
 		ctx->entries[idx] = e;
 		return 0;
@@ -2413,34 +2638,6 @@ static int affinity_apply(pid_t pid, int all_threads, const uint8_t *mask,
  * intersection ourselves so the logs say what actually happened.
  * -------------------------------------------------------------------- */
 
-/* Read @pid's unified (cgroup v2) path into @out, e.g. "/system.slice/foo.service". */
-static int pid_cgroup_path(pid_t pid, char *out, size_t cap)
-{
-	char path[64];
-	char line[512];
-	FILE *f;
-	int rc = -1;
-
-	snprintf(path, sizeof(path), "/proc/%d/cgroup", (int)pid);
-	f = fopen(path, "r");
-	if (!f)
-		return -1;
-	while (fgets(line, sizeof(line), f)) {
-		size_t l;
-
-		if (strncmp(line, "0::", 3))
-			continue;
-		l = strlen(line);
-		if (l && line[l - 1] == '\n')
-			line[--l] = '\0';
-		snprintf(out, cap, "%s", line + 3);
-		rc = 0;
-		break;
-	}
-	fclose(f);
-	return rc;
-}
-
 static void mask_and(uint8_t *dst, const uint8_t *a, const uint8_t *b, size_t n)
 {
 	size_t i;
@@ -2597,7 +2794,7 @@ static int affinity_bind_pid(process_cpuset_t *ctx, const struct proc_entry *e,
 	    enforceable) {
 		lpmd_log_debug(
 			"[%s] skip pid %d comm=%s: covered by slice.xml unit=%s class=%s\n",
-			e->name, (int)pid, comm, slice_unit, slice_cls);
+			entry_label(e), (int)pid, comm, slice_unit, slice_cls);
 		return 0;
 	}
 
@@ -2624,7 +2821,7 @@ static int affinity_bind_pid(process_cpuset_t *ctx, const struct proc_entry *e,
 	if (mask_is_empty(send, sizeof(send))) {
 		lpmd_log_debug(
 			"[%s] skip pid %d comm=%s: want=[%s] has no CPU in common with cgroup ceiling=[%s]\n",
-			e->name, (int)pid, comm, dbg_want, dbg_ceil);
+			entry_label(e), (int)pid, comm, dbg_want, dbg_ceil);
 		return 0;
 	}
 	send_len = mask_significant_len(send, sizeof(send));
@@ -2644,14 +2841,14 @@ static int affinity_bind_pid(process_cpuset_t *ctx, const struct proc_entry *e,
 		mask_to_cpulist(cur, cur_len, dbg_cur, sizeof(dbg_cur));
 		lpmd_log_debug(
 			"[%s] skip pid %d comm=%s: has own affinity=[%s] (narrower than cgroup ceiling=[%s]); not set, not restored\n",
-			e->name, (int)pid, comm, dbg_cur, dbg_ceil);
+			entry_label(e), (int)pid, comm, dbg_cur, dbg_ceil);
 		return 0;
 	}
 
 	if (dry_run) {
 		lpmd_log_debug(
 			"[%s] (dry) would set affinity pid %d comm=%s cpus=[%s]%s (uid=%u%s)\n",
-			e->name, (int)pid, comm, dbg_send,
+			entry_label(e), (int)pid, comm, dbg_send,
 			clamped ? " (clamped to cgroup)" : "",
 			(unsigned)owner_uid,
 			e->affinity_all_threads ? " all-threads" : "");
@@ -2664,7 +2861,7 @@ static int affinity_bind_pid(process_cpuset_t *ctx, const struct proc_entry *e,
 
 	lpmd_log_debug(
 		"[%s] affinity pid %d comm=%s cpus=[%s]%s was=[%s] (uid=%u%s)\n",
-		e->name, (int)pid, comm, dbg_send,
+		entry_label(e), (int)pid, comm, dbg_send,
 		clamped ? " (clamped to cgroup)" : "", dbg_want,
 		(unsigned)owner_uid,
 		e->affinity_all_threads ? " all-threads" : "");
@@ -3271,132 +3468,143 @@ void process_cpuset_log_class_defaults(const process_cpuset_t *ctx)
 	}
 }
 
-/* Forward decls for catch-all <DefaultProcess> helpers (defined below). */
+/* Forward decl for the catch-all <DefaultProcess> helper (defined below). */
 static int apply_default_to_pid(process_cpuset_t *ctx, pid_t pid,
 				int from_event, int dry_run);
-static int pid_in_entries(const process_cpuset_t *ctx, pid_t pid,
-				  const char *comm);
 
 int process_cpuset_apply_once(process_cpuset_t *ctx, int dry_run)
 {
 	uint8_t mask[CPUMASK_BYTES];
 	int total_new = 0;
+	int n_default = 0;
+	int any_cgroups;
+	pid_t self = getpid();
+	struct dirent *de;
+	DIR *d;
 
 	if (!ctx)
 		return -1;
 
 	pidset_prune_dead(&ctx->attached);
 
-	for (int i = 0; i < ctx->n_entries; i++) {
-		const struct proc_entry *e = &ctx->entries[i];
-		pid_t pids[256];
-		int npids, new_here = 0;
-		size_t mlen;
+	/*
+	 * One sweep over /proc, deciding each PID's entry as we see it.
+	 *
+	 * This used to be the other way round -- a /proc walk per <Process>
+	 * entry -- which reopened and reread the whole directory once for each
+	 * of the ~300 entries the shipped config carries. It also made
+	 * precedence an accident of config order, because whichever entry
+	 * reached a PID first put it in ctx->attached and every later entry
+	 * skipped it. Deciding per PID lets find_entry_for_pid() apply the real
+	 * rule: a <Cgroup> match outranks a <Name> match wherever they collide.
+	 */
+	any_cgroups = entries_use_cgroups(ctx);
 
-		if (build_mask_for(ctx, e, mask, sizeof(mask)) < 0) {
-			lpmd_log_debug( "[%s] invalid CPU list, skipping\n",
-				e->name);
+	/*
+	 * Report unusable <ActiveCores> lists once per config, not once per
+	 * PID that happens to match the broken entry.
+	 */
+	for (int i = 0; i < ctx->n_entries; i++) {
+		if (build_mask_for(ctx, &ctx->entries[i], mask,
+				   sizeof(mask)) < 0)
+			lpmd_log_debug("[%s] invalid CPU list, skipping\n",
+				       entry_label(&ctx->entries[i]));
+	}
+
+	d = opendir("/proc");
+	if (!d)
+		return -1;
+
+	while ((de = readdir(d))) {
+		const struct proc_entry *e;
+		enum entry_match how;
+		char comm[MAX_NAME];
+		char cgpath[MAX_CGROUP_PATH];
+		uid_t owner_uid = 0;
+		enum pid_location loc;
+		size_t mlen;
+		char *end;
+		long pid = strtol(de->d_name, &end, 10);
+
+		if (*end != '\0' || pid <= 0)
+			continue;
+		/*
+		 * Never constrain our own PID: the daemon has to keep
+		 * scheduling to be able to undo any of this.
+		 */
+		if ((pid_t)pid == self)
+			continue;
+		if (pidset_contains(&ctx->attached, (pid_t)pid))
+			continue; /* already handled in a previous cycle */
+		if (read_comm((pid_t)pid, comm, sizeof(comm)) < 0)
+			continue; /* PID likely already gone */
+
+		cgpath[0] = '\0';
+		if (any_cgroups)
+			(void)pid_cgroup_path((pid_t)pid, cgpath, sizeof(cgpath));
+
+		e = find_entry_for_pid(ctx, (pid_t)pid, comm, cgpath, &how);
+		if (!e) {
+			/*
+			 * Catch-all: apply <DefaultProcess> to anything no
+			 * entry claimed. This is what lets e.g. a kernel build
+			 * (cc1/ld/make), which inherited an affinity mask from
+			 * its gnome-terminal ancestor, get reset to the default
+			 * (typically all CPUs).
+			 */
+			if (ctx->has_default_entry &&
+			    apply_default_to_pid(ctx, (pid_t)pid, 0,
+						 dry_run) == 1) {
+				n_default++;
+				total_new++;
+			}
 			continue;
 		}
+
+		/* Already reported above, so just skip it here. */
+		if (build_mask_for(ctx, e, mask, sizeof(mask)) < 0)
+			continue;
 		mlen = mask_significant_len(mask, sizeof(mask));
 
-		npids = find_pids_by_name(e->name, pids, 256);
-		if (npids <= 0)
-			continue;
-
-		for (int j = 0; j < npids; j++) {
-			char comm[MAX_NAME];
-			uid_t owner_uid = 0;
-			enum pid_location loc;
-
-			(void)pid_comm_for_log(pids[j], comm, sizeof(comm));
-
-			if (pidset_contains(&ctx->attached, pids[j]))
-				continue; /* already handled in a previous cycle */
-
-			loc = classify_pid_location(pids[j], &owner_uid);
-			/* Login-session PIDs (sshd-session, sudo, gdm-*,
-             * session-N.scope contents) are normally skipped:
-             * migrating them breaks logind/polkit session tracking
-             * and silently constraining a login shell is surprising.
-             * The <AllowSession> tag opts a specific comm into
-             * sched_setaffinity-based handling -- intended for games
-             * or apps the user knowingly launches from the session
-             * and wants pinned. */
-			if (loc == PID_LOC_USER_SESS) {
-				if (!e->allow_session) {
-					lpmd_log_debug("[%s] skip pid %d (login-session scope)\n",
-						       e->name, (int)pids[j]);
-					continue;
-				}
-				/* Treat as user-session for affinity application. */
-				loc = PID_LOC_USER_MGR;
-				owner_uid = 0;
+		loc = classify_pid_location((pid_t)pid, &owner_uid);
+		/* Login-session PIDs (sshd-session, sudo, gdm-*,
+         * session-N.scope contents) are normally skipped:
+         * migrating them breaks logind/polkit session tracking
+         * and silently constraining a login shell is surprising.
+         * The <AllowSession> tag opts a specific entry into
+         * sched_setaffinity-based handling -- intended for games
+         * or apps the user knowingly launches from the session
+         * and wants pinned. */
+		if (loc == PID_LOC_USER_SESS) {
+			if (!e->allow_session) {
+				lpmd_log_debug("[%s] skip pid %d (login-session scope)\n",
+					       entry_label(e), (int)pid);
+				continue;
 			}
-
-			new_here++;
-			total_new++;
-
-			/* Every PID takes the same path now: sched_setaffinity
-             * on the task where it already lives. @loc no longer
-             * selects a mechanism -- it only decided, above, whether
-             * a login-session PID is eligible at all. */
-			(void)loc;
-			if (affinity_bind_pid(ctx, e, pids[j], comm, mask, mlen,
-					      owner_uid, dry_run) != 1) {
-				/* Deliberately skipped (slice-covered, own
-                 * affinity, or no CPU in common): don't count it
-                 * as newly handled. */
-				new_here--;
-				total_new--;
-			}
+			/* Treat as user-session for affinity application. */
+			loc = PID_LOC_USER_MGR;
+			owner_uid = 0;
 		}
 
-		if (new_here)
-			lpmd_log_debug("[%s] class=%s new=%d total_matches=%d\n",
-				       e->name, class_str(e->cls), new_here, npids);
+		/* Every PID takes the same path now: sched_setaffinity
+         * on the task where it already lives. @loc no longer
+         * selects a mechanism -- it only decided, above, whether
+         * a login-session PID is eligible at all. */
+		(void)loc;
+		if (affinity_bind_pid(ctx, e, (pid_t)pid, comm, mask, mlen,
+				      owner_uid, dry_run) != 1)
+			continue; /* slice-covered, own affinity, or no CPU in common */
+
+		total_new++;
+		lpmd_log_debug("[%s] class=%s pid=%d comm=%s match=%s\n",
+			       entry_label(e), class_str(e->cls), (int)pid, comm,
+			       how == ENTRY_MATCH_CGROUP ? "cgroup" : "name");
 	}
+	closedir(d);
 
-	/* Catch-all pass: apply <DefaultProcess> to user-session PIDs
-     * whose comm isn't matched by any named entry. This is what
-     * lets e.g. a kernel-build (cc1/ld/make), which inherits an
-     * affinity mask from its gnome-terminal ancestor, get reset to
-     * the default (typically all CPUs). */
-	if (ctx->has_default_entry) {
-		DIR *d = opendir("/proc");
-		struct dirent *de;
-		pid_t self = getpid();
-		int n_def = 0;
-
-		if (d) {
-			while ((de = readdir(d))) {
-				char *end;
-				long pid = strtol(de->d_name, &end, 10);
-				char comm[MAX_NAME];
-
-				if (*end != '\0' || pid <= 0)
-					continue;
-				if ((pid_t)pid == self)
-					continue;
-				if (pidset_contains(&ctx->attached, (pid_t)pid))
-					continue;
-				if (read_comm((pid_t)pid, comm, sizeof(comm)) <
-				    0)
-					continue;
-				if (pid_in_entries(ctx, (pid_t)pid, comm))
-					continue; /* will be / was handled by name */
-				if (apply_default_to_pid(ctx, (pid_t)pid, 0,
-							 dry_run) == 1) {
-					n_def++;
-					total_new++;
-				}
-			}
-			closedir(d);
-		}
-		if (n_def)
-			lpmd_log_debug("[*default*] class=%s new=%d\n",
-				       class_str(ctx->default_entry.cls), n_def);
-	}
+	if (n_default)
+		lpmd_log_debug("[*default*] class=%s new=%d\n",
+			       class_str(ctx->default_entry.cls), n_default);
 
 	return total_new;
 }
@@ -3414,6 +3622,8 @@ int process_cpuset_apply_pid(process_cpuset_t *ctx, pid_t pid, int dry_run)
 {
 	uint8_t mask[CPUMASK_BYTES];
 	char comm[MAX_NAME];
+	char cgpath[MAX_CGROUP_PATH];
+	const struct proc_entry *e;
 	size_t mlen;
 	pid_t self = getpid();
 
@@ -3429,35 +3639,37 @@ int process_cpuset_apply_pid(process_cpuset_t *ctx, pid_t pid, int dry_run)
 	/* Decide how this PID should be handled (system-slice scope vs.
      * sched_setaffinity for user-session PIDs vs. skip). The
      * login-session decision is deferred until after we know the
-     * matching <Process> entry, so the per-comm <AllowSession> tag
+     * matching <Process> entry, so the per-entry <AllowSession> tag
      * can override the default skip. */
 	uid_t owner_uid = 0;
 	enum pid_location loc = classify_pid_location(pid, &owner_uid);
 
-	for (int i = 0; i < ctx->n_entries; i++) {
-		const struct proc_entry *e = &ctx->entries[i];
-		if (!pid_matches_name(pid, e->name, comm))
-			continue;
+	cgpath[0] = '\0';
+	if (entries_use_cgroups(ctx))
+		(void)pid_cgroup_path(pid, cgpath, sizeof(cgpath));
 
-		if (loc == PID_LOC_USER_SESS) {
-			if (!e->allow_session)
-				return 0; /* skip login-session PIDs */
-			loc = PID_LOC_USER_MGR;
-			owner_uid = 0;
-		}
-
-		if (build_mask_for(ctx, e, mask, sizeof(mask)) < 0)
-			return -1;
-		mlen = mask_significant_len(mask, sizeof(mask));
-
-		/* One path for every PID: sched_setaffinity where the task
-         * already lives. No transient scope, no cgroup change. */
-		(void)loc;
-		return affinity_bind_pid(ctx, e, pid, comm, mask, mlen,
-					 owner_uid, dry_run);
+	e = find_entry_for_pid(ctx, pid, comm, cgpath, NULL);
+	if (!e) {
+		/* No entry matched -- try the catch-all <DefaultProcess>. */
+		return apply_default_to_pid(ctx, pid, 1, dry_run);
 	}
-	/* No named entry matched -- try the catch-all <DefaultProcess>. */
-	return apply_default_to_pid(ctx, pid, 1, dry_run);
+
+	if (loc == PID_LOC_USER_SESS) {
+		if (!e->allow_session)
+			return 0; /* skip login-session PIDs */
+		loc = PID_LOC_USER_MGR;
+		owner_uid = 0;
+	}
+
+	if (build_mask_for(ctx, e, mask, sizeof(mask)) < 0)
+		return -1;
+	mlen = mask_significant_len(mask, sizeof(mask));
+
+	/* One path for every PID: sched_setaffinity where the task
+     * already lives. No transient scope, no cgroup change. */
+	(void)loc;
+	return affinity_bind_pid(ctx, e, pid, comm, mask, mlen,
+				 owner_uid, dry_run);
 }
 
 /*
@@ -3537,16 +3749,6 @@ static int apply_default_to_pid(process_cpuset_t *ctx, pid_t pid,
 		return 1;
 	}
 	return -1;
-}
-
-/* Returns 1 if @pid/@comm matches the <Name> of any explicit <Process> entry. */
-static int pid_in_entries(const process_cpuset_t *ctx, pid_t pid,
-				  const char *comm)
-{
-	for (int i = 0; i < ctx->n_entries; i++)
-		if (pid_matches_name(pid, ctx->entries[i].name, comm))
-			return 1;
-	return 0;
 }
 
 /* ---------- shutdown: stop transient scopes ---------- */
