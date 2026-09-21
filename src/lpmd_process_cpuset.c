@@ -2205,9 +2205,22 @@ void lpmd_process_cpuset_proc_connector_handle(void)
 		if (get_lpmd_state() == LPMD_OFF)
 			continue;
 
+		/* Always take process_tgid, never process_pid. The connector
+		 * reports the *thread* that caused the event, so process_pid
+		 * is a TID for anything raised by a non-leader thread. Acting
+		 * on that TID treats one thread as if it were a process: the
+		 * thread's own comm is matched against config entries that
+		 * name programs, and every sibling thread raising the same
+		 * event triggers another full re-evaluation of the same
+		 * process. A thread pool that names its workers via
+		 * prctl(PR_SET_NAME) produced one event per worker this way.
+		 * process_tgid is the process in every case, and equals
+		 * process_pid when the leader is the one that acted, so the
+		 * pidset_contains() check in process_cpuset_apply_pid() can
+		 * then collapse the duplicates. */
 		switch (msg.ev.what) {
 		case PROC_EVENT_EXEC:
-			pid = msg.ev.event_data.exec.process_pid;
+			pid = msg.ev.event_data.exec.process_tgid;
 			break;
 		case PROC_EVENT_EXIT: {
 			struct lpmd_config_t *config = get_lpmd_config();
@@ -2222,10 +2235,12 @@ void lpmd_process_cpuset_proc_connector_handle(void)
 			continue;
 		}
 		case PROC_EVENT_COMM:
-			/* A process renamed itself (e.g. via prctl(PR_SET_NAME)).
-             * comm now matches a config entry that didn't match at
-             * exec time, so re-evaluate. */
-			pid = msg.ev.event_data.comm.process_pid;
+			/* A task renamed itself (e.g. via prctl(PR_SET_NAME)),
+             * so a config entry that didn't match at exec time may
+             * match now: re-evaluate the process. Note this fires for
+             * thread renames too, which is why the tgid matters -- we
+             * re-check the process, not the thread that was renamed. */
+			pid = msg.ev.event_data.comm.process_tgid;
 			break;
 		default:
 			continue;
