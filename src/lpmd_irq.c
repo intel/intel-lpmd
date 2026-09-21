@@ -47,6 +47,14 @@ struct info_irqs {
 struct info_irqs info_irqs;
 struct info_irqs *info = &info_irqs;
 
+/*
+ * Set once the pre-restriction smp_affinity of every IRQ has been cached in
+ * info, so that a later low power state does not overwrite the cache with the
+ * already restricted affinities. It has to be cleared wherever the cache is
+ * cleared: the two are one piece of state.
+ */
+static int irq_updated;
+
 /* Interrupt Management */
 #define SOCKET_PATH "irqbalance"
 #define SOCKET_TMPFS "/run/irqbalance"
@@ -78,10 +86,9 @@ static int native_restore_irqs(void)
 		lpmd_write_str(path, str, LPMD_LOG_DEBUG);
 	}
 	memset(info, 0, sizeof(*info));
+	irq_updated = 0;
 	return 0;
 }
-
-static int irq_updated;
 
 static int update_one_irq(int irq, char *irq_str)
 {
@@ -185,7 +192,16 @@ static int native_update_irqs(char *irq_str)
 
 	fclose(filep);
 
-	irq_updated = 1;
+	/*
+	 * Only claim the originals are cached if something actually went into
+	 * the cache. Setting this unconditionally hits the same problem a
+	 * missing reset does: the restore has nothing to put back, while every
+	 * later low power state believes the originals are already saved and so
+	 * never saves them.
+	 */
+	if (info->nr_irqs)
+		irq_updated = 1;
+
 	return 0;
 }
 
