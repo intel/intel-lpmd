@@ -139,7 +139,24 @@ Optional mask applied to workload type hints before matching state masks.
 Enable use of Proxy Workload type hints.
 .PP
 .B UseProcessCPUSet
-Enable per-process cpuset/classification policy integration (0/1).
+Enable per-process classification policy integration (0/1), read from
+.I process_cpuset.xml
+in the same directory as this file. Matched tasks are constrained with
+.BR sched_setaffinity (2)
+where they already are, using the CPU list for their classification
+intersected with the CPUs their current cgroup allows. No task is moved
+between cgroups and no cgroup or transient scope unit is created.
+.PP
+A task that already carries an affinity mask narrower than its cgroup
+allows has placed itself there (via
+.BR sched_setaffinity (2)
+or
+.BR taskset (1)),
+so it is neither changed nor restored.
+.PP
+On exit from low power mode each task is returned to the exact mask it had
+beforehand, unless that mask changed in the meantime, in which case the
+task keeps its own.
 .PP
 .B EntryDelayMS / ExitDelayMS
 Utilization monitor entry/exit debounce delay in milliseconds.
@@ -340,12 +357,14 @@ Named CPU groups (ActivePcores, ActiveEcores, ActiveLcores) or literal
 CPU lists define which CPUs a class can use. Per-process <ActiveCores>
 entries override the class default.
 .IP \(bu 2
-.B Affinity Modes:
-PIDs from system-slice services (daemons) are managed via systemd
-transient cgroup scopes (applies to all threads automatically).
-User-session PIDs use sched_setaffinity(2), which by default only
-affects the leader thread. The <AffinityAllThreads> tag extends
-this to all threads in the process.
+.B Affinity Mode:
+Every PID is bound the same way, with sched_setaffinity(2) applied to
+the task where it already lives; no task is moved between cgroups.
+sched_setaffinity(2) targets a thread, so by default every thread of
+the process is bound (see <AffinityAllThreads>) -- binding the leader
+alone would leave existing workers on their old mask. The effective
+CPU set is the requested mask intersected with the CPUs the task's
+current cgroup allows.
 .IP \(bu 2
 .B UClamp (Utilization Clamping):
 Per-class min/max CPU utilization clamps (sched_util_min / sched_util_max)
@@ -379,12 +398,21 @@ tracking. Set this to opt a specific process into affinity management
 knowingly launched from a terminal.
 .IP \(bu 2
 .B <AffinityAllThreads>
-(optional; 1/true/yes/on) When applying the affinity path (user-session
-PIDs), walk /proc/PID/task/ and apply the mask to every thread (TID)
-instead of just the leader. Without this, only the main thread is
-constrained; existing worker threads keep their previous mask. Recommended
-for multithreaded apps (games, browsers, media engines). No effect on
-PIDs in cgroup scopes (cgroups already cover all threads).
+(optional; default 1) Walk /proc/PID/task/ and apply the mask to every
+thread (TID) rather than the leader alone. Set to 0/false/no/off to opt
+out for a single entry.
+.RS
+.PP
+You almost never want 0. sched_setaffinity(2) acts on a thread, so
+binding only the leader leaves every already-running worker on its old
+mask: a process classified
+.I background
+keeps executing on the performance cores through its thread pool and the
+classification achieves nothing. Threads created after the process is
+bound inherit the mask of the thread that created them, so covering all
+threads once is enough. Opt out only where the application places its
+own workers deliberately.
+.RE
 .IP \(bu 2
 .B <UClampMin> / <uclamp_min>
 (optional; -1=disable, 0..1024) Minimum CPU utilization clamp for this

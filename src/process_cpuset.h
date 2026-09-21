@@ -4,8 +4,12 @@
  *
  * Copyright (C) 2026 Intel Corporation. All rights reserved.
  *
- * Library API for per-process CPU affinity via systemd transient scopes
- * (cpuset / AllowedCPUs).
+ * Library API for per-process CPU affinity via sched_setaffinity(2).
+ *
+ * Tasks are constrained where they already live: this library never moves
+ * a task between cgroups, never creates a cgroup or a transient scope
+ * unit, and never touches a task that already carries an affinity mask of
+ * its own.
  *
  * Designed so it can be linked into intel_lpmd (or any other daemon) and
  * driven from existing event loops, instead of being shipped only as a
@@ -171,22 +175,23 @@ int process_cpuset_apply_once(process_cpuset_t *ctx, int dry_run);
 int process_cpuset_apply_pid(process_cpuset_t *ctx, pid_t pid, int dry_run);
 
 /*
- * Stop every transient scope unit that this context started, by issuing
- * StopUnit on systemd. Useful on daemon shutdown so processes no longer
- * have an LPMD-imposed AllowedCPUs mask. After this call the attached-
- * PID set is empty. Returns the number of scopes stopped, or -1.
+ * DEPRECATED, and inert since this library stopped creating scope units:
+ * it only ever acted on tracked PIDs that owned a transient scope, and
+ * none are created any more. Retained so out-of-tree callers still link.
+ * Use process_cpuset_release_all().
  *
  * WARNING: systemd's default scope KillMode signals all processes in
- * the scope on stop. If you need to release PIDs without killing them,
- * use process_cpuset_release_all() instead.
+ * the scope on stop, so this could kill the very tasks it released.
  */
 int process_cpuset_stop_all(process_cpuset_t *ctx);
 
 /*
- * Release every tracked PID without killing it: each PID is migrated
- * out of its proc_cpuset scope into the root cgroup (restoring default
- * affinity), then the now-empty scope unit is stopped. Returns the
- * number of PIDs successfully released, or -1.
+ * Release every tracked PID, restoring exactly the affinity mask it had
+ * before this library touched it. Nothing is migrated and nothing is
+ * killed. A PID whose mask changed after we set it (the task or an admin
+ * called sched_setaffinity in the meantime) keeps its own mask, and a PID
+ * that was recycled is left alone. Returns the number of PIDs restored,
+ * or -1.
  */
 int process_cpuset_release_all(process_cpuset_t *ctx);
 

@@ -13,6 +13,10 @@
  * to process_cpuset_set_groups_cpuset().
  */
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE /* CPU_ALLOC/CPU_*_S, sched_getaffinity */
+#endif
+
 #include "lpmd.h"
 #include "process_cpuset.h"
 
@@ -2479,6 +2483,293 @@ void lpmd_process_cpuset_print_unbound(int user_only)
 }
 
 /*
+ * Bound-list verification (introspection only; never applies anything).
+ *
+ * The configured CPU list is what our XML asked for; it is not what the
+ * task necessarily runs on. The kernel gives a task
+ *
+ *	effective = requested & cpuset-of-its-cgroup
+ *
+ * and the cgroup wins outright when the intersection is empty (cgroup v2
+ * refuses to leave a cgroup with an empty effective set and falls back to
+ * the parent's). So confirming that our settings took effect means
+ * comparing three masks, not one: what we asked for, the ceiling imposed
+ * by whichever ancestor cgroup actually carries a cpuset, and what
+ * sched_getaffinity() reports.
+ */
+#define DBG_MAX_CPUS 1024
+
+/* Render @set as a compact cpuset-style list ("0-3,5,8"). */
+static void dbg_mask_to_list(const cpu_set_t *set, size_t setsize, char *buf,
+			     size_t cap)
+{
+	size_t off = 0;
+	int i = 0;
+
+	buf[0] = '\0';
+	while (i < DBG_MAX_CPUS && off + 1 < cap) {
+		int first, last, w;
+
+		if (!CPU_ISSET_S(i, setsize, set)) {
+			i++;
+			continue;
+		}
+		first = last = i;
+		while (last + 1 < DBG_MAX_CPUS &&
+		       CPU_ISSET_S(last + 1, setsize, set))
+			last++;
+		if (first == last)
+			w = snprintf(buf + off, cap - off, "%s%d",
+				     off ? "," : "", first);
+		else
+			w = snprintf(buf + off, cap - off, "%s%d-%d",
+				     off ? "," : "", first, last);
+		if (w < 0 || (size_t)w >= cap - off)
+			break;
+		off += w;
+		i = last + 1;
+	}
+	if (!off)
+		snprintf(buf, cap, "-");
+}
+
+/* Parse a cpuset-style list ("4-7", "0,2-3") into @set. Returns 0 on
+ * success, -1 if @list is empty or malformed. */
+static int dbg_list_to_mask(const char *list, cpu_set_t *set, size_t setsize)
+{
+	const char *p = list;
+
+	CPU_ZERO_S(setsize, set);
+	if (!list || !*list || !strcmp(list, "-"))
+		return -1;
+
+	while (*p) {
+		char *end;
+		long a, b;
+
+		while (*p == ',' || *p == ' ')
+			p++;
+		if (!*p)
+			break;
+		a = strtol(p, &end, 10);
+		if (end == p)
+			return -1;
+		p = end;
+		b = a;
+		if (*p == '-') {
+			p++;
+			b = strtol(p, &end, 10);
+			if (end == p)
+				return -1;
+			p = end;
+		}
+		if (a < 0 || b < a || b >= DBG_MAX_CPUS)
+			return -1;
+		for (; a <= b; a++)
+			CPU_SET_S((int)a, setsize, set);
+	}
+	return 0;
+}
+
+/* Copy the cgroup v2 path of @pid (third field of the "0::" line). */
+static int dbg_pid_cgroup(pid_t pid, char *buf, size_t cap)
+{
+	char path[64];
+	char line[512];
+	FILE *f;
+
+	snprintf(path, sizeof(path), "/proc/%d/cgroup", (int)pid);
+	f = fopen(path, "r");
+	if (!f)
+		return -1;
+
+	buf[0] = '\0';
+	while (fgets(line, sizeof(line), f)) {
+		size_t len;
+
+		if (strncmp(line, "0::", 3))
+			continue;
+		len = strlen(line);
+		if (len && line[len - 1] == '\n')
+			line[len - 1] = '\0';
+		snprintf(buf, cap, "%s", line + 3);
+		break;
+	}
+	fclose(f);
+	return buf[0] ? 0 : -1;
+}
+
+/*
+ * Find the cpuset ceiling that actually applies to @pid: walk from its
+ * own cgroup towards the root and return the first ancestor that has a
+ * readable, non-empty cpuset.cpus.effective. The walk is required, not
+ * cosmetic -- cpuset is not delegated into user@<uid>.service, so a
+ * desktop app's own cgroup and several ancestors have no cpuset files at
+ * all. @from receives the cgroup the ceiling came from.
+ */
+static int dbg_cgroup_ceiling(pid_t pid, cpu_set_t *set, size_t setsize,
+			      char *from, size_t from_cap)
+{
+	char cg[512];
+	char path[640];
+	char val[256];
+
+	if (dbg_pid_cgroup(pid, cg, sizeof(cg)) < 0)
+		return -1;
+
+	for (;;) {
+		char *slash;
+		FILE *f;
+
+		snprintf(path, sizeof(path),
+			 "/sys/fs/cgroup%s/cpuset.cpus.effective",
+			 strcmp(cg, "/") ? cg : "");
+		f = fopen(path, "r");
+		if (f) {
+			val[0] = '\0';
+			if (fgets(val, sizeof(val), f)) {
+				size_t len = strlen(val);
+
+				if (len && val[len - 1] == '\n')
+					val[len - 1] = '\0';
+			}
+			fclose(f);
+			if (dbg_list_to_mask(val, set, setsize) == 0) {
+				snprintf(from, from_cap, "%s", cg);
+				return 0;
+			}
+		}
+		if (!strcmp(cg, "/"))
+			return -1;
+		slash = strrchr(cg, '/');
+		if (!slash)
+			return -1;
+		if (slash == cg)
+			cg[1] = '\0'; /* "/foo" -> "/" */
+		else
+			*slash = '\0';
+	}
+}
+
+/* Classify @actual against @expect. */
+static const char *dbg_verdict(const cpu_set_t *actual, const cpu_set_t *expect,
+			       size_t setsize)
+{
+	int only_actual = 0, only_expect = 0;
+	int i;
+
+	for (i = 0; i < DBG_MAX_CPUS; i++) {
+		int a = CPU_ISSET_S(i, setsize, actual);
+		int e = CPU_ISSET_S(i, setsize, expect);
+
+		if (a && !e)
+			only_actual = 1;
+		else if (e && !a)
+			only_expect = 1;
+	}
+	if (!only_actual && !only_expect)
+		return "MATCH";
+	if (!only_actual)
+		return "NARROWER"; /* someone else restricted it further */
+	if (!only_expect)
+		return "WIDER"; /* our mask is not in effect */
+	return "DIVERGED";
+}
+
+/*
+ * Build the verification line for @pid against the configured CPU list
+ * @want_list. Reports:
+ *
+ *	want	 the list our configuration resolved to
+ *	ceiling	 the cpuset of the nearest ancestor cgroup that has one,
+ *		 annotated with which cgroup that was
+ *	expect	 want & ceiling, or the ceiling alone when they are
+ *		 disjoint (the kernel's own fallback)
+ *	actual	 what sched_getaffinity() reports right now
+ *	verdict	 MATCH / NARROWER / WIDER / DIVERGED
+ *
+ * "clamped" is appended when want is not a subset of the ceiling, i.e.
+ * the cgroup, not our configuration, is deciding the outcome.
+ */
+static void dbg_bound_check_str(pid_t pid, const char *want_list, char *out,
+				size_t cap)
+{
+	size_t setsize = CPU_ALLOC_SIZE(DBG_MAX_CPUS);
+	cpu_set_t *want = CPU_ALLOC(DBG_MAX_CPUS);
+	cpu_set_t *ceiling = CPU_ALLOC(DBG_MAX_CPUS);
+	cpu_set_t *expect = CPU_ALLOC(DBG_MAX_CPUS);
+	cpu_set_t *actual = CPU_ALLOC(DBG_MAX_CPUS);
+	char ceiling_buf[256] = { 0 };
+	char ceiling_from[512] = { 0 };
+	char expect_buf[256] = { 0 };
+	char actual_buf[256] = { 0 };
+	int have_want, have_ceiling, clamped = 0;
+	int i;
+
+	out[0] = '\0';
+	if (!want || !ceiling || !expect || !actual)
+		goto done;
+
+	have_want = dbg_list_to_mask(want_list, want, setsize) == 0;
+	have_ceiling = dbg_cgroup_ceiling(pid, ceiling, setsize, ceiling_from,
+					  sizeof(ceiling_from)) == 0;
+
+	if (sched_getaffinity(pid, setsize, actual) != 0) {
+		snprintf(out, cap, "want=[%s] actual=[?] verdict=GONE",
+			 want_list);
+		goto done;
+	}
+	dbg_mask_to_list(actual, setsize, actual_buf, sizeof(actual_buf));
+
+	if (!have_ceiling) {
+		snprintf(ceiling_buf, sizeof(ceiling_buf), "?");
+		snprintf(ceiling_from, sizeof(ceiling_from), "?");
+	} else {
+		dbg_mask_to_list(ceiling, setsize, ceiling_buf,
+				 sizeof(ceiling_buf));
+	}
+
+	if (!have_want) {
+		snprintf(out, cap,
+			 "want=[-] ceiling=[%s]@%s actual=[%s] verdict=NO-CONFIG",
+			 ceiling_buf, ceiling_from, actual_buf);
+		goto done;
+	}
+
+	/* expect = want & ceiling; the ceiling alone if disjoint. */
+	CPU_ZERO_S(setsize, expect);
+	if (have_ceiling) {
+		for (i = 0; i < DBG_MAX_CPUS; i++) {
+			if (CPU_ISSET_S(i, setsize, want) &&
+			    CPU_ISSET_S(i, setsize, ceiling))
+				CPU_SET_S(i, setsize, expect);
+			else if (CPU_ISSET_S(i, setsize, want))
+				clamped = 1;
+		}
+		if (!CPU_COUNT_S(setsize, expect))
+			memcpy(expect, ceiling, setsize);
+	} else {
+		memcpy(expect, want, setsize);
+	}
+	dbg_mask_to_list(expect, setsize, expect_buf, sizeof(expect_buf));
+
+	snprintf(out, cap,
+		 "want=[%s] ceiling=[%s]@%s expect=[%s] actual=[%s] verdict=%s%s",
+		 want_list, ceiling_buf, ceiling_from, expect_buf, actual_buf,
+		 dbg_verdict(actual, expect, setsize), clamped ? " clamped" : "");
+
+done:
+	if (want)
+		CPU_FREE(want);
+	if (ceiling)
+		CPU_FREE(ceiling);
+	if (expect)
+		CPU_FREE(expect);
+	if (actual)
+		CPU_FREE(actual);
+}
+
+/*
  * Log every PID currently attached to a transient cpuset scope started
  * by this context (i.e. matched by a <Process> entry in
  * process_cpuset.xml). No-op (with a notice) if process_cpuset is not
@@ -2502,7 +2793,7 @@ void lpmd_process_cpuset_print_bound(void)
 
 	n = process_cpuset_attached_count(g_pc_ctx);
 	lpmd_log_msg(
-		"process_cpuset: %zu PIDs bound to transient cpuset scopes (excluding Unclassified)\n",
+		"process_cpuset: %zu PIDs bound by sched_setaffinity, in place (no cgroup change; excluding Unclassified)\n",
 		n);
 	lpmd_log_msg("  groups: Pcores=[%s] Ecores=[%s] LPEcores=[%s]\n",
 		     p_cpus[0] ? p_cpus : "-", e_cpus[0] ? e_cpus : "-",
@@ -2517,6 +2808,7 @@ void lpmd_process_cpuset_print_bound(void)
 		int use_p = 0, use_e = 0, use_l = 0;
 		char groups_buf[64];
 		char cpus_buf[256];
+		char check_buf[1024];
 		size_t off;
 		FILE *f;
 		size_t len;
@@ -2574,10 +2866,19 @@ void lpmd_process_cpuset_print_bound(void)
 			snprintf(cpus_buf, sizeof(cpus_buf), "-");
 
 		/* Print process line */
+		/* unit is always empty now: lpmd no longer creates a scope
+		 * for a task. A non-empty one can only be a leftover from an
+		 * older build still tracked across this run. */
 		lpmd_log_msg(
-			"  PID=%d comm=%s class=%s groups=%s cpus=[%s] unit=%s\n",
+			"  PID=%d comm=%s class=%s groups=%s cpus=[%s] via=%s\n",
 			(int)pid, comm, cls, groups_buf, cpus_buf,
-			unit[0] ? unit : "<affinity>");
+			unit[0] ? unit : "sched_setaffinity");
+
+		/* Then what the kernel actually has, and whether that
+		 * agrees with what we configured. */
+		dbg_bound_check_str(pid, cpus_buf, check_buf,
+				    sizeof(check_buf));
+		lpmd_log_msg("      %s\n", check_buf);
 
 		/* List all threads in this process */
 		snprintf(path, sizeof(path), "/proc/%d/task", (int)pid);
@@ -2588,6 +2889,7 @@ void lpmd_process_cpuset_print_bound(void)
 				char tid_comm[64] = { 0 };
 				char tid_path[64];
 				char tid_groups_buf[64];
+				char tid_check[1024];
 				FILE *tid_f;
 				size_t tid_len, tid_off;
 
@@ -2632,8 +2934,16 @@ void lpmd_process_cpuset_print_bound(void)
 				if (!tid_off)
 					snprintf(tid_groups_buf, sizeof(tid_groups_buf), "none");
 
-				lpmd_log_msg("\t\tTID=%d comm=%s class=%s groups=%s\n", (int)tid,
-					     tid_comm, cls, tid_groups_buf);
+				/* Per-thread, deliberately: /proc/<pid>/status
+				 * and a leader-only sched_getaffinity() report
+				 * the main thread alone, so a mask set on one
+				 * worker thread is invisible there. */
+				dbg_bound_check_str(tid, cpus_buf, tid_check,
+						    sizeof(tid_check));
+				lpmd_log_msg(
+					"\t\tTID=%d comm=%s class=%s groups=%s %s\n",
+					(int)tid, tid_comm, cls, tid_groups_buf,
+					tid_check);
 			}
 			closedir(task_dir);
 		}

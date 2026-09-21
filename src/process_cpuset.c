@@ -4,8 +4,7 @@
  *
  * Copyright (C) 2026 Intel Corporation. All rights reserved.
  *
- * Library implementation: per-process CPU affinity via systemd transient
- * scopes (cpuset / AllowedCPUs).
+ * Library implementation: per-process CPU affinity via sched_setaffinity(2).
  *
  * Public API: process_cpuset.h
  * CLI driver: process_cpuset_main.c
@@ -16,14 +15,21 @@
  * What apply_once does:
  *   1. For every loaded <Process>, scans /proc to find matching PIDs by
  *      comm name.
- *   2. For each matched PID not yet attached, asks systemd to create a
- *      transient scope unit (proc_cpuset_<name>_<pid>.scope) containing
- *      that PID, with the AllowedCPUs cpuset bitmask derived from the
- *      chosen CPU list.
+ *   2. For each matched PID not yet handled, applies sched_setaffinity(2)
+ *      to the task where it already is, using the CPU list for its
+ *      classification intersected with the CPUs its current cgroup
+ *      allows.
  *
- * NOTE: This is intentionally minimal POC code. Scopes created here are
- *       not stopped on context destruction; they die naturally with their
- *       PID.
+ * What it deliberately does NOT do:
+ *   - It never moves a task between cgroups.
+ *   - It never creates a cgroup or a transient scope unit.
+ *   - It never touches a task that already has an affinity mask of its
+ *     own, and never restores one it did not set.
+ *
+ * Earlier revisions attached each PID to a transient
+ * proc_cpuset_<comm>_<pid>.scope, which migrated the task out of its own
+ * service's cgroup. That is gone; see the "no process migration" note
+ * further down for why.
  */
 
 #define _GNU_SOURCE
@@ -167,16 +173,22 @@ struct proc_entry {
      * file under a login session and want pinned. Set via the
      * <AllowSession> tag in process_cpuset.xml. */
 	int allow_session;
-	/* If non-zero, the affinity path (sched_setaffinity) walks
-     * /proc/<pid>/task/ and applies the mask to every TID instead of
-     * just the leader. sched_setaffinity targets a TID, so the
-     * default per-PID call only constrains the main thread; threads
-     * that already exist keep their previous (usually all-CPUs)
-     * mask. Use this for multithreaded apps -- games, browsers,
-     * media engines -- where you want every worker pinned. Set via
-     * the <AffinityAllThreads> tag. Has no effect on PIDs that go
-     * through the cgroup transient-scope path (cgroups already
-     * apply to every thread). */
+	/* If non-zero, walk /proc/<pid>/task/ and apply the mask to every
+     * TID instead of just the leader.
+     *
+     * Defaults to 1, and you almost never want 0. sched_setaffinity(2)
+     * targets a *thread*, so binding only the leader leaves every
+     * already-running worker on its old (usually all-CPUs) mask: a
+     * process whose leader sits on the LP-E cores keeps executing on
+     * the P-cores through its thread pool, and the classification
+     * achieves nothing. The cgroup path this library used to take
+     * constrained all threads implicitly, because cgroup membership is
+     * per-process; leader-only affinity does not, so the default has
+     * to cover threads to preserve that behaviour.
+     *
+     * Set <AffinityAllThreads>0</AffinityAllThreads> to opt out for an
+     * entry whose workers are deliberately placed by the application
+     * itself. */
 	int affinity_all_threads;
 };
 
@@ -188,18 +200,36 @@ struct cpu_groups {
 	char l_cores[MAX_CPULIST];
 };
 
-/* Tracked PIDs already attached to a scope (avoids re-issuing
- * StartTransientUnit, which systemd would refuse). The unit name is
- * remembered so we can later stop the transient scope on shutdown.
+/* Tracked PIDs lpmd has already bound, so a later pass does not
+ * re-evaluate (and so re-decide) a task it is already responsible for.
  * cls/groups capture the classification and resolved CPU group mask
  * used at attach time so introspection (LIST-BOUND) can show them
- * without re-parsing the XML. */
+ * without re-parsing the XML.
+ *
+ * @unit is empty for every PID this build binds: affinity is applied
+ * in place and there is no unit to remember. It stays in the struct
+ * only to recognise a scope left behind by an older lpmd that still
+ * migrated tasks (see process_cpuset_release_all). */
 struct attached_entry {
 	pid_t pid;
 	char unit[128];
 	enum classification cls;
 	unsigned int groups;
 	uid_t owner_uid; /* 0 = system manager, else user manager */
+	int all_threads; /* affinity was applied to every TID, not just the leader */
+
+	/* Exact-restore bookkeeping for the sched_setaffinity path
+	 * (unit[0] == '\0'). orig_* is the mask the task had before lpmd
+	 * touched it; set_* is what lpmd wrote. On release we only restore
+	 * orig_* if the task's current mask still equals set_*: anything
+	 * else means the task (or an admin) changed its own affinity after
+	 * we bound it, and overwriting that would be worse than leaving it.
+	 * start_time guards against PID reuse between attach and release. */
+	uint8_t orig_mask[CPUMASK_BYTES];
+	size_t orig_mlen;
+	uint8_t set_mask[CPUMASK_BYTES];
+	size_t set_mlen;
+	unsigned long long start_time;
 };
 struct pid_set {
 	struct attached_entry *items;
@@ -801,6 +831,9 @@ static void parse_one_process(const process_cpuset_t *ctx, xmlDoc *doc,
 
 	memset(e, 0, sizeof(*e));
 	e->cls = CLASS_INVALID;
+	/* Cover every thread unless the entry explicitly opts out: see
+	 * affinity_all_threads in struct proc_entry. */
+	e->affinity_all_threads = 1;
 
 	for (c = node; c; c = c->next) {
 		if (c->type != XML_ELEMENT_NODE)
@@ -822,8 +855,14 @@ static void parse_one_process(const process_cpuset_t *ctx, xmlDoc *doc,
 				e->allow_session = 1;
 		} else if (!strcmp((const char *)c->name,
 				   "AffinityAllThreads")) {
-			if (!strcasecmp(val, "1") || !strcasecmp(val, "true") ||
-			    !strcasecmp(val, "yes") || !strcasecmp(val, "on"))
+			/* Defaults to on, so this tag only matters as an
+			 * explicit opt-out. Anything unrecognised leaves
+			 * the default alone rather than guessing. */
+			if (!strcasecmp(val, "0") || !strcasecmp(val, "false") ||
+			    !strcasecmp(val, "no") || !strcasecmp(val, "off"))
+				e->affinity_all_threads = 0;
+			else if (!strcasecmp(val, "1") || !strcasecmp(val, "true") ||
+				 !strcasecmp(val, "yes") || !strcasecmp(val, "on"))
 				e->affinity_all_threads = 1;
 		}
 
@@ -983,46 +1022,6 @@ static pid_t pid_to_tgid(pid_t pid)
 	return tgid;
 }
 
-/*
- * If @pid currently lives inside a transient "proc_cpuset_*.scope"
- * cgroup (created by any prior run of this library, including an
- * earlier daemon instance whose in-memory attached set is gone),
- * copy that scope's unit name into @unit_out and return 1.
- * Returns 0 if no such scope is found, -1 on read error.
- */
-static int pid_existing_proc_cpuset_unit(pid_t pid, char *unit_out, size_t cap)
-{
-	char path[64];
-	char line[512];
-	FILE *f;
-	int found = 0;
-
-	if (!unit_out || cap == 0)
-		return -1;
-	snprintf(path, sizeof(path), "/proc/%d/cgroup", (int)pid);
-	f = fopen(path, "r");
-	if (!f)
-		return -1;
-	while (fgets(line, sizeof(line), f)) {
-		char *p = strstr(line, "proc_cpuset_");
-		char *e;
-		size_t len;
-		if (!p)
-			continue;
-		e = strstr(p, ".scope");
-		if (!e)
-			continue;
-		len = (size_t)(e - p) + sizeof(".scope") - 1;
-		if (len >= cap)
-			len = cap - 1;
-		memcpy(unit_out, p, len);
-		unit_out[len] = '\0';
-		found = 1;
-		break;
-	}
-	fclose(f);
-	return found;
-}
 
 /*
  * Classify where a PID lives in the cgroup hierarchy.
@@ -1160,14 +1159,18 @@ static int find_pids_by_name(const char *name, pid_t *out, int max)
 /*
  * Apply @mask to @pid (and all its threads) using sched_setaffinity(2).
  *
- * Used as an alternative to creating a transient cpuset scope for
- * PIDs that live inside a user@<UID>.service cgroup. The user-mode
- * systemd manager normally does NOT have the cgroup v2 cpuset
- * controller delegated, so calling StartTransientUnit on it with
- * AllowedCPUs= fails with -EBADR ("Invalid request descriptor").
- * sched_setaffinity has no such limitation, doesn't touch cgroups
- * at all, and so leaves the systemd-logind / polkit session
- * tracking intact.
+ * This is the only way lpmd binds an individual task. It doesn't touch
+ * cgroups at all, so the task stays in its own service's or session's
+ * cgroup and systemd accounting, resource limits, systemctl
+ * kill/stop semantics and logind / polkit session tracking all remain
+ * intact. It also works for tasks under user@<UID>.service, where the
+ * user-mode systemd manager normally does not have the cgroup v2
+ * cpuset controller delegated and a cgroup-based approach would fail
+ * with -EBADR ("Invalid request descriptor") anyway.
+ *
+ * The effective set is the requested mask intersected with the
+ * task's cpuset, so the cgroup it lives in is a hard ceiling;
+ * affinity_bind_pid applies that intersection explicitly.
  *
  * Caveat: sched_setaffinity is not inherited by future siblings
  * spawned outside this PID's process tree -- but the proc-connector
@@ -1453,190 +1456,23 @@ static int apply_pid_uclamp(process_cpuset_t *ctx, pid_t pid,
 	}
 }
 
-/* ---------- systemd: StartTransientUnit with AllowedCPUs + PIDs ----------
+/* ---------- no process migration -------------------------------------
  *
- * Equivalent to:
- *   systemd-run --scope -p AllowedCPUs=<mask> --unit=<name> \
- *               <pid attached via PIDs property>
+ * Earlier revisions attached each matched PID to a transient scope unit
+ * (proc_cpuset_<comm>_<pid>.scope) created with StartTransientUnit and
+ * the PIDs= property, which *moves* the task out of its own service's
+ * cgroup. That was removed deliberately. Moving a task out of, say,
+ * systemd-journald.service breaks everything keyed on cgroup membership:
+ * systemd's own accounting and resource limits (the service's cgroup is
+ * left empty while MainPID still points at the moved task), systemctl
+ * kill/stop semantics, logind/polkit session tracking, and any
+ * cgroup-based observability the admin has set up.
  *
- * but we need to attach an *existing* PID, so we use the
- * StartTransientUnit DBus method directly. Always issued against the
- * system manager: PIDs in user@<UID>.service must NOT take this path
- * (the system manager rejects them with -EBADR because they belong
- * to a delegated cgroup subtree).
- */
-static void reset_failed_unit(const char *unit); /* fwd, defined below */
+ * lpmd now only ever calls sched_setaffinity(2) on the task where it
+ * already is (see affinity_bind_pid). No task is moved between cgroups,
+ * and no cgroup is created.
+ * -------------------------------------------------------------------- */
 
-static int start_scope_for_pid(const char *unit, pid_t pid, const uint8_t *mask,
-			       size_t mask_len)
-{
-	sd_bus_error err = SD_BUS_ERROR_NULL;
-	sd_bus_message *m = NULL;
-	sd_bus *bus = NULL;
-	uint32_t pid_arr[1] = { (uint32_t)pid };
-	int r;
-
-	r = sd_bus_open_system(&bus);
-	if (r < 0) {
-		lpmd_log_debug( "sd_bus_open_system: %s\n", strerror(-r));
-		goto out;
-	}
-
-	r = sd_bus_message_new_method_call(bus, &m, "org.freedesktop.systemd1",
-					   "/org/freedesktop/systemd1",
-					   "org.freedesktop.systemd1.Manager",
-					   "StartTransientUnit");
-	if (r < 0)
-		goto out;
-
-	/* name, mode */
-	r = sd_bus_message_append(m, "ss", unit, "replace");
-	if (r < 0)
-		goto out;
-
-	/* a(sv) properties */
-	r = sd_bus_message_open_container(m, 'a', "(sv)");
-	if (r < 0)
-		goto out;
-
-	/* Description */
-	r = sd_bus_message_append(m, "(sv)", "Description", "s",
-				  "POC: per-process cpuset scope");
-	if (r < 0)
-		goto out;
-
-	/* PIDs = au */
-	r = sd_bus_message_open_container(m, 'r', "sv");
-	if (r < 0)
-		goto out;
-	r = sd_bus_message_append(m, "s", "PIDs");
-	if (r < 0)
-		goto out;
-	r = sd_bus_message_open_container(m, 'v', "au");
-	if (r < 0)
-		goto out;
-	r = sd_bus_message_append_array(m, 'u', pid_arr, sizeof(pid_arr));
-	if (r < 0)
-		goto out;
-	sd_bus_message_close_container(m); /* v */
-	sd_bus_message_close_container(m); /* (sv) */
-
-	/* AllowedCPUs = ay (cpuset bitmask) */
-	if (mask_len > 0) {
-		r = sd_bus_message_open_container(m, 'r', "sv");
-		if (r < 0)
-			goto out;
-		r = sd_bus_message_append(m, "s", "AllowedCPUs");
-		if (r < 0)
-			goto out;
-		r = sd_bus_message_open_container(m, 'v', "ay");
-		if (r < 0)
-			goto out;
-		r = sd_bus_message_append_array(m, 'y', mask, mask_len);
-		if (r < 0)
-			goto out;
-		sd_bus_message_close_container(m); /* v */
-		sd_bus_message_close_container(m); /* (sv) */
-	}
-
-	sd_bus_message_close_container(m); /* a(sv) */
-
-	/* aux a(sa(sv)) - empty */
-	r = sd_bus_message_open_container(m, 'a', "(sa(sv))");
-	if (r < 0)
-		goto out;
-	sd_bus_message_close_container(m);
-
-	r = sd_bus_call(bus, m, 0, &err, NULL);
-	if (r < 0) {
-		const char *msg = err.message ? err.message : strerror(-r);
-		/* systemd refuses to load a transient unit whose name is
-         * already known (e.g. a previous instance lingering in the
-         * "failed"/"loaded-but-inactive" state). Retry once after
-         * ResetFailedUnit. */
-		if (msg && (strstr(msg, "already loaded") ||
-			    strstr(msg, "already exists") ||
-			    strstr(msg, "AlreadyExists"))) {
-			reset_failed_unit(unit);
-			sd_bus_error_free(&err);
-			err = SD_BUS_ERROR_NULL;
-			sd_bus_message_unref(m);
-			m = NULL;
-			r = sd_bus_message_new_method_call(
-				bus, &m, "org.freedesktop.systemd1",
-				"/org/freedesktop/systemd1",
-				"org.freedesktop.systemd1.Manager",
-				"StartTransientUnit");
-			if (r < 0)
-				goto out;
-			r = sd_bus_message_append(m, "ss", unit, "replace");
-			if (r < 0)
-				goto out;
-			r = sd_bus_message_open_container(m, 'a', "(sv)");
-			if (r < 0)
-				goto out;
-			r = sd_bus_message_append(
-				m, "(sv)", "Description", "s",
-				"POC: per-process cpuset scope");
-			if (r < 0)
-				goto out;
-			r = sd_bus_message_open_container(m, 'r', "sv");
-			if (r < 0)
-				goto out;
-			r = sd_bus_message_append(m, "s", "PIDs");
-			if (r < 0)
-				goto out;
-			r = sd_bus_message_open_container(m, 'v', "au");
-			if (r < 0)
-				goto out;
-			r = sd_bus_message_append_array(m, 'u', pid_arr,
-							sizeof(pid_arr));
-			if (r < 0)
-				goto out;
-			sd_bus_message_close_container(m); /* v */
-			sd_bus_message_close_container(m); /* (sv) */
-			if (mask_len > 0) {
-				r = sd_bus_message_open_container(m, 'r', "sv");
-				if (r < 0)
-					goto out;
-				r = sd_bus_message_append(m, "s",
-							  "AllowedCPUs");
-				if (r < 0)
-					goto out;
-				r = sd_bus_message_open_container(m, 'v', "ay");
-				if (r < 0)
-					goto out;
-				r = sd_bus_message_append_array(m, 'y', mask,
-								mask_len);
-				if (r < 0)
-					goto out;
-				sd_bus_message_close_container(m); /* v */
-				sd_bus_message_close_container(m); /* (sv) */
-			}
-			sd_bus_message_close_container(m); /* a(sv) */
-			r = sd_bus_message_open_container(m, 'a', "(sa(sv))");
-			if (r < 0)
-				goto out;
-			sd_bus_message_close_container(m);
-			r = sd_bus_call(bus, m, 0, &err, NULL);
-			if (r < 0)
-				lpmd_log_debug(
-					"StartTransientUnit(%s) retry failed: %s\n",
-					unit,
-					err.message ? err.message :
-						      strerror(-r));
-		} else {
-			lpmd_log_debug( "StartTransientUnit(%s) failed: %s\n",
-				unit, msg);
-		}
-	}
-
-out:
-	sd_bus_error_free(&err);
-	sd_bus_message_unref(m);
-	sd_bus_unref(bus);
-	return r < 0 ? -1 : 0;
-}
 
 /* ---------- per-classification mask ---------- */
 
@@ -1677,26 +1513,14 @@ static int build_mask_for(const process_cpuset_t *ctx,
 	return 0;
 }
 
-static void sanitize_unit_name(const char *in, char *out, size_t cap)
-{
-	size_t i;
-	for (i = 0; in[i] && i + 1 < cap; i++) {
-		char c = in[i];
-		out[i] = (isalnum((unsigned char)c) || c == '_' || c == '-') ?
-				 c :
-				 '_';
-	}
-	out[i] = '\0';
-}
-
 /*
  * Read /proc/<pid>/stat field 22 (process start time, in clock ticks
  * since boot). This is unique per process invocation across the
- * lifetime of the kernel, so combining it with the PID guarantees
- * a globally-unique transient-unit name even when PIDs get recycled.
+ * lifetime of the kernel, so pairing it with the PID distinguishes a
+ * tracked task from an unrelated one that later reused its PID.
  *
- * Returns the value on success, 0 if anything fails (in which case
- * the caller should fall back to PID-only naming).
+ * Returns the value on success, 0 if anything fails (in which case the
+ * caller simply skips the PID-reuse check).
  *
  * /proc/<pid>/stat format: pid (comm) state ppid ... where (comm)
  * itself may contain spaces or ')', so we have to skip past the
@@ -1741,28 +1565,6 @@ static unsigned long long pid_start_time(pid_t pid)
 	return starttime;
 }
 
-/*
- * Tell the system manager to forget about a failed/exited transient
- * unit, so a subsequent StartTransientUnit with the same name will
- * succeed instead of returning "already loaded".
- *
- * Best effort: failures are ignored.
- */
-static void reset_failed_unit(const char *unit)
-{
-	sd_bus_error err = SD_BUS_ERROR_NULL;
-	sd_bus *bus = NULL;
-
-	if (sd_bus_open_system(&bus) < 0)
-		goto out;
-	(void)sd_bus_call_method(bus, "org.freedesktop.systemd1",
-				 "/org/freedesktop/systemd1",
-				 "org.freedesktop.systemd1.Manager",
-				 "ResetFailedUnit", &err, NULL, "s", unit);
-out:
-	sd_bus_error_free(&err);
-	sd_bus_unref(bus);
-}
 
 /* ---------- attached-PID tracking ---------- */
 
@@ -1774,10 +1576,19 @@ static int pidset_contains(const struct pid_set *s, pid_t p)
 	return 0;
 }
 
-static int pidset_add(struct pid_set *s, pid_t p, const char *unit,
-		      enum classification cls, unsigned int groups,
-		      uid_t owner_uid)
+/*
+ * Record @p as attached. @orig/@set carry the exact-restore bookkeeping
+ * used by the sched_setaffinity path; pass NULL/0 for both when there is
+ * nothing to restore (scope-managed or reclaimed PIDs).
+ */
+static int pidset_add_full(struct pid_set *s, pid_t p, const char *unit,
+			   enum classification cls, unsigned int groups,
+			   uid_t owner_uid, const uint8_t *orig,
+			   size_t orig_len, const uint8_t *set, size_t set_len,
+			   unsigned long long start_time)
 {
+	struct attached_entry *it;
+
 	if (s->n == s->cap) {
 		size_t ncap = s->cap ? s->cap * 2 : 64;
 		struct attached_entry *np =
@@ -1787,14 +1598,36 @@ static int pidset_add(struct pid_set *s, pid_t p, const char *unit,
 		s->items = np;
 		s->cap = ncap;
 	}
-	s->items[s->n].pid = p;
-	snprintf(s->items[s->n].unit, sizeof(s->items[s->n].unit), "%s",
-		 unit ? unit : "");
-	s->items[s->n].cls = cls;
-	s->items[s->n].groups = groups;
-	s->items[s->n].owner_uid = owner_uid;
+	it = &s->items[s->n];
+	memset(it, 0, sizeof(*it));
+	it->pid = p;
+	snprintf(it->unit, sizeof(it->unit), "%s", unit ? unit : "");
+	it->cls = cls;
+	it->groups = groups;
+	it->owner_uid = owner_uid;
+	it->start_time = start_time;
+	if (orig && orig_len) {
+		if (orig_len > sizeof(it->orig_mask))
+			orig_len = sizeof(it->orig_mask);
+		memcpy(it->orig_mask, orig, orig_len);
+		it->orig_mlen = orig_len;
+	}
+	if (set && set_len) {
+		if (set_len > sizeof(it->set_mask))
+			set_len = sizeof(it->set_mask);
+		memcpy(it->set_mask, set, set_len);
+		it->set_mlen = set_len;
+	}
 	s->n++;
 	return 0;
+}
+
+static int pidset_add(struct pid_set *s, pid_t p, const char *unit,
+		      enum classification cls, unsigned int groups,
+		      uid_t owner_uid)
+{
+	return pidset_add_full(s, p, unit, cls, groups, owner_uid, NULL, 0,
+			       NULL, 0, 0);
 }
 
 static void pidset_prune_dead(struct pid_set *s)
@@ -2565,6 +2398,265 @@ static int affinity_apply(pid_t pid, int all_threads, const uint8_t *mask,
 	return rc;
 }
 
+/* ---------- cgroup ceiling / hands-off detection ---------------------
+ *
+ * lpmd never moves a task between cgroups. Whatever cgroup a task is in
+ * is where it stays, which means the CPUs its cgroup allows are a hard
+ * ceiling on anything we can usefully ask for: sched_setaffinity's
+ * effective set is (requested AND cpuset), so a request reaching outside
+ * the cgroup is silently trimmed by the kernel anyway. We do the
+ * intersection ourselves so the logs say what actually happened.
+ * -------------------------------------------------------------------- */
+
+/* Read @pid's unified (cgroup v2) path into @out, e.g. "/system.slice/foo.service". */
+static int pid_cgroup_path(pid_t pid, char *out, size_t cap)
+{
+	char path[64];
+	char line[512];
+	FILE *f;
+	int rc = -1;
+
+	snprintf(path, sizeof(path), "/proc/%d/cgroup", (int)pid);
+	f = fopen(path, "r");
+	if (!f)
+		return -1;
+	while (fgets(line, sizeof(line), f)) {
+		size_t l;
+
+		if (strncmp(line, "0::", 3))
+			continue;
+		l = strlen(line);
+		if (l && line[l - 1] == '\n')
+			line[--l] = '\0';
+		snprintf(out, cap, "%s", line + 3);
+		rc = 0;
+		break;
+	}
+	fclose(f);
+	return rc;
+}
+
+static void mask_and(uint8_t *dst, const uint8_t *a, const uint8_t *b, size_t n)
+{
+	size_t i;
+
+	for (i = 0; i < n; i++)
+		dst[i] = a[i] & b[i];
+}
+
+static int mask_is_empty(const uint8_t *m, size_t n)
+{
+	size_t i;
+
+	for (i = 0; i < n; i++)
+		if (m[i])
+			return 0;
+	return 1;
+}
+
+/* 1 if every bit of @a is in @b and @a != @b (i.e. @a is strictly narrower). */
+static int mask_is_strict_subset(const uint8_t *a, const uint8_t *b, size_t n)
+{
+	int differs = 0;
+	size_t i;
+
+	for (i = 0; i < n; i++) {
+		if (a[i] & ~b[i])
+			return 0; /* a has a bit b lacks: not a subset */
+		if (a[i] != b[i])
+			differs = 1;
+	}
+	return differs;
+}
+
+/*
+ * Effective CPU set of cgroup @cgpath. cpuset.cpus.effective only exists
+ * where the cpuset controller is enabled, so walk towards the root until
+ * a readable one is found; the root always has it. Returns 0 on success
+ * (@mask filled), -1 if no readable cpuset was found anywhere up the tree.
+ */
+static int cgroup_effective_cpus(const char *cgpath, uint8_t *mask, size_t cap)
+{
+	char work[512];
+	char path[600];
+	char buf[MAX_CPULIST];
+
+	snprintf(work, sizeof(work), "%s", cgpath);
+	for (;;) {
+		char *slash;
+		FILE *f;
+
+		snprintf(path, sizeof(path),
+			 "/sys/fs/cgroup%s/cpuset.cpus.effective",
+			 strcmp(work, "/") ? work : "");
+		f = fopen(path, "r");
+		if (f) {
+			char *got = fgets(buf, sizeof(buf), f);
+			fclose(f);
+			if (got) {
+				size_t l = strlen(buf);
+
+				if (l && buf[l - 1] == '\n')
+					buf[--l] = '\0';
+				/* cpulist_to_mask returns 0 on success. An
+				 * empty file is not an answer -- keep walking. */
+				if (l && cpulist_to_mask(buf, mask, cap) == 0 &&
+				    !mask_is_empty(mask, cap))
+					return 0;
+			}
+		}
+
+		slash = strrchr(work, '/');
+		if (!slash)
+			return -1;
+		if (slash == work) {
+			if (!strcmp(work, "/"))
+				return -1; /* root had nothing readable */
+			work[1] = '\0';
+		} else {
+			*slash = '\0';
+		}
+	}
+}
+
+/*
+ * Decide whether @pid has an affinity mask of its own that lpmd must not
+ * disturb.
+ *
+ * A task that has never called sched_setaffinity(2) reports exactly its
+ * cgroup's effective CPU set. A mask strictly narrower than that set can
+ * only have come from the task itself (or from something acting on its
+ * behalf, e.g. taskset). Those are deliberate placements -- a thread pool
+ * pinned to specific CPUs, a latency-sensitive helper, an admin's
+ * taskset -- so we leave them alone and, because we never wrote them, we
+ * also never restore them.
+ *
+ * Fills @cur with the current mask (@cur must be CPUMASK_BYTES wide) and
+ * returns 1 for hands-off, 0 for "inherited, safe to set", -1 if the mask
+ * could not be read.
+ */
+static int pid_has_own_affinity(pid_t pid, const uint8_t *ceiling,
+			       uint8_t *cur, size_t *cur_len)
+{
+	size_t len;
+
+	memset(cur, 0, CPUMASK_BYTES);
+	len = snapshot_pid_mask(pid, cur, CPUMASK_BYTES);
+	if (!len)
+		return -1;
+	if (cur_len)
+		*cur_len = len;
+	return mask_is_strict_subset(cur, ceiling, CPUMASK_BYTES);
+}
+
+/*
+ * Bind @pid to @want using sched_setaffinity(2) only: no transient scope,
+ * no cgroup migration, no change to any unit's AllowedCPUs.
+ *
+ * Opt-outs, in order:
+ *   1. If @pid carries an affinity mask of its own, leave it alone.
+ *   2. Otherwise apply (@want AND <the CPUs @pid's cgroup allows>).
+ *
+ * Returns 1 if applied, 0 if deliberately skipped, -1 on error.
+ */
+static int affinity_bind_pid(process_cpuset_t *ctx, const struct proc_entry *e,
+			     pid_t pid, const char *comm, const uint8_t *want,
+			     size_t want_len, uid_t owner_uid, int dry_run)
+{
+	uint8_t ceiling[CPUMASK_BYTES];
+	uint8_t cur[CPUMASK_BYTES];
+	uint8_t send[CPUMASK_BYTES];
+	char cgpath[512];
+	char dbg_want[MAX_CPULIST];
+	char dbg_send[MAX_CPULIST];
+	char dbg_ceil[MAX_CPULIST];
+	size_t send_len, cur_len = 0;
+	int have_ceiling = 0;
+	int clamped = 0;
+	int own;
+
+	if (!ctx || !e || pid <= 0)
+		return -1;
+
+	memset(ceiling, 0, sizeof(ceiling));
+	mask_to_cpulist(want, want_len, dbg_want, sizeof(dbg_want));
+
+	/* 1. Establish the ceiling from the cgroup the task already lives in. */
+	if (pid_cgroup_path(pid, cgpath, sizeof(cgpath)) == 0 &&
+	    cgroup_effective_cpus(cgpath, ceiling, sizeof(ceiling)) == 0) {
+		have_ceiling = 1;
+		mask_and(send, want, ceiling, sizeof(send));
+		clamped = memcmp(send, want, sizeof(send)) != 0;
+		mask_to_cpulist(ceiling, sizeof(ceiling), dbg_ceil,
+				sizeof(dbg_ceil));
+	} else {
+		/* No readable cpuset anywhere up the tree: nothing constrains
+		 * the task, so the request stands as-is. Without a ceiling we
+		 * cannot tell an inherited mask from a self-set one, so the
+		 * hands-off check below is skipped rather than guessed at. */
+		memcpy(send, want, sizeof(send));
+		snprintf(dbg_ceil, sizeof(dbg_ceil), "unknown");
+	}
+
+	if (mask_is_empty(send, sizeof(send))) {
+		lpmd_log_debug(
+			"[%s] skip pid %d comm=%s: want=[%s] has no CPU in common with cgroup ceiling=[%s]\n",
+			e->name, (int)pid, comm, dbg_want, dbg_ceil);
+		return 0;
+	}
+	send_len = mask_significant_len(send, sizeof(send));
+	mask_to_cpulist(send, send_len, dbg_send, sizeof(dbg_send));
+
+	/* 2. Hands off anything that placed itself. Only decidable when we
+     * know the cgroup's set: a mask equal to it was inherited, a mask
+     * narrower than it can only have come from sched_setaffinity. */
+	own = pid_has_own_affinity(pid, ceiling, cur, &cur_len);
+	if (own < 0)
+		return 0; /* gone */
+	if (own && !have_ceiling)
+		own = 0;
+	if (own) {
+		char dbg_cur[MAX_CPULIST];
+
+		mask_to_cpulist(cur, cur_len, dbg_cur, sizeof(dbg_cur));
+		lpmd_log_debug(
+			"[%s] skip pid %d comm=%s: has own affinity=[%s] (narrower than cgroup ceiling=[%s]); not set, not restored\n",
+			e->name, (int)pid, comm, dbg_cur, dbg_ceil);
+		return 0;
+	}
+
+	if (dry_run) {
+		lpmd_log_debug(
+			"[%s] (dry) would set affinity pid %d comm=%s cpus=[%s]%s (uid=%u%s)\n",
+			e->name, (int)pid, comm, dbg_send,
+			clamped ? " (clamped to cgroup)" : "",
+			(unsigned)owner_uid,
+			e->affinity_all_threads ? " all-threads" : "");
+		return 1;
+	}
+
+	if (affinity_apply(pid, e->affinity_all_threads, send, send_len,
+			   class_str(e->cls)) < 0)
+		return -1;
+
+	lpmd_log_debug(
+		"[%s] affinity pid %d comm=%s cpus=[%s]%s was=[%s] (uid=%u%s)\n",
+		e->name, (int)pid, comm, dbg_send,
+		clamped ? " (clamped to cgroup)" : "", dbg_want,
+		(unsigned)owner_uid,
+		e->affinity_all_threads ? " all-threads" : "");
+
+	/* unit="" marks this as affinity-only: no scope to stop on release. */
+	if (pidset_add_full(&ctx->attached, pid, "", e->cls, e->resolved.groups,
+			    owner_uid, cur, cur_len, send, send_len,
+			    pid_start_time(pid)) == 0)
+		ctx->attached.items[ctx->attached.n - 1].all_threads =
+			e->affinity_all_threads ? 1 : 0;
+	(void)apply_pid_uclamp(ctx, pid, e->cls, class_str(e->cls),
+			       e->affinity_all_threads ? 1 : 0);
+	return 1;
+}
+
 /*
  * Collect every descendant TGID of @root (children, grandchildren, ...)
  * by walking /proc/<pid>/task/<tid>/children. Skips @root itself and
@@ -3177,7 +3269,6 @@ int process_cpuset_apply_once(process_cpuset_t *ctx, int dry_run)
 		pid_t pids[256];
 		int npids, new_here = 0;
 		size_t mlen;
-		char safe_name[MAX_NAME];
 
 		if (build_mask_for(ctx, e, mask, sizeof(mask)) < 0) {
 			lpmd_log_debug( "[%s] invalid CPU list, skipping\n",
@@ -3190,10 +3281,7 @@ int process_cpuset_apply_once(process_cpuset_t *ctx, int dry_run)
 		if (npids <= 0)
 			continue;
 
-		sanitize_unit_name(e->name, safe_name, sizeof(safe_name));
-
 		for (int j = 0; j < npids; j++) {
-			char unit[128];
 			char comm[MAX_NAME];
 			uid_t owner_uid = 0;
 			enum pid_location loc;
@@ -3226,118 +3314,18 @@ int process_cpuset_apply_once(process_cpuset_t *ctx, int dry_run)
 			new_here++;
 			total_new++;
 
-			/* User-session PIDs (under user@<UID>.service): apply
-             * affinity directly. The user systemd manager doesn't
-             * have the cpuset cgroup controller delegated, so we
-             * can't use a transient scope there. */
-			if (loc == PID_LOC_USER_MGR) {
-				if (dry_run) {
-					lpmd_log_debug("[%s] (dry) would set affinity pid %d comm=%s (uid=%u%s)\n",
-						       e->name, (int)pids[j],
-						       comm,
-						       (unsigned)owner_uid,
-						       e->affinity_all_threads ?
-							       " all-threads" :
-							       "");
-					continue;
-				}
-				if (e->affinity_all_threads) {
-					int n = set_pid_affinity_all_threads(
-						pids[j], mask, mlen,
-						class_str(e->cls));
-					if (n > 0) {
-						lpmd_log_debug("[%s] affinity pid %d comm=%s (uid=%u tids=%d)\n",
-							       e->name, (int)pids[j],
-							       comm,
-							       (unsigned)owner_uid, n);
-						pidset_add(&ctx->attached,
-							   pids[j], "", e->cls,
-							   e->resolved.groups,
-							   owner_uid);
-						(void)apply_pid_uclamp(ctx, pids[j],
-							       e->cls,
-						       class_str(e->cls), 1);
-					}
-				} else if (set_pid_affinity_from_mask(
-						   pids[j], mask, mlen) == 0) {
-					lpmd_log_debug("[%s] affinity pid %d comm=%s (uid=%u)\n",
-						       e->name, (int)pids[j],
-						       comm,
-						       (unsigned)owner_uid);
-					/* unit="" marks this as affinity-only (no scope
-                     * to stop on shutdown). */
-					pidset_add(&ctx->attached, pids[j], "",
-						   e->cls, e->resolved.groups,
-						   owner_uid);
-					(void)apply_pid_uclamp(ctx, pids[j], e->cls,
-						       class_str(e->cls), 0);
-				}
-				continue;
-			}
-
-			/* System slice: create a transient cpuset scope. */
-			{
-				unsigned long long st = pid_start_time(pids[j]);
-				if (st)
-					snprintf(unit, sizeof(unit),
-						 "proc_cpuset_%s_%d_%llu.scope",
-						 safe_name, (int)pids[j], st);
-				else
-					snprintf(unit, sizeof(unit),
-						 "proc_cpuset_%s_%d.scope",
-						 safe_name, (int)pids[j]);
-			}
-
-			/* If the PID is already inside a proc_cpuset_*.scope (e.g.
-             * left over from a previous daemon run), just reclaim it
-             * into the in-memory tracking set. Otherwise systemd would
-             * reject the StartTransientUnit with "already loaded". */
-			{
-				char existing[128];
-				if (pid_existing_proc_cpuset_unit(
-					    pids[j], existing,
-					    sizeof(existing)) == 1) {
-					if (dry_run)
-						lpmd_log_debug("[%s] (dry) reattach pid %d comm=%s -> %s\n",
-							       e->name, (int)pids[j],
-							       comm,
-							       existing);
-					else
-						lpmd_log_debug("[%s] reattached pid %d comm=%s -> %s\n",
-							       e->name, (int)pids[j],
-							       comm,
-							       existing);
-					pidset_add(&ctx->attached, pids[j],
-						   existing, e->cls,
-						   e->resolved.groups, 0);
-					(void)apply_pid_uclamp(ctx, pids[j], e->cls,
-						       class_str(e->cls), 0);
-					continue;
-				}
-			}
-
-			if (dry_run) {
-				char mask_hex[(CPUMASK_BYTES * 2) + 1];
-
-				for (size_t k = 0;
-				     k < mlen && (k * 2 + 1) < sizeof(mask_hex); k++)
-					snprintf(mask_hex + (k * 2),
-						 sizeof(mask_hex) - (k * 2),
-						 "%02x", mask[k]);
-				mask_hex[mlen * 2] = '\0';
-				lpmd_log_debug("[%s] (dry) would attach pid %d comm=%s -> %s (mask=%s)\n",
-					       e->name, (int)pids[j], comm, unit, mask_hex);
-				continue;
-			}
-
-			if (start_scope_for_pid(unit, pids[j], mask, mlen) ==
-			    0) {
-				lpmd_log_debug("[%s] attached pid %d comm=%s -> %s\n", e->name,
-					       (int)pids[j], comm, unit);
-				pidset_add(&ctx->attached, pids[j], unit,
-					   e->cls, e->resolved.groups, 0);
-				(void)apply_pid_uclamp(ctx, pids[j], e->cls,
-					       class_str(e->cls), 0);
+			/* Every PID takes the same path now: sched_setaffinity
+             * on the task where it already lives. @loc no longer
+             * selects a mechanism -- it only decided, above, whether
+             * a login-session PID is eligible at all. */
+			(void)loc;
+			if (affinity_bind_pid(ctx, e, pids[j], comm, mask, mlen,
+					      owner_uid, dry_run) != 1) {
+				/* Deliberately skipped (own affinity, or no
+                 * CPU in common): don't count it as newly
+                 * handled. */
+				new_here--;
+				total_new--;
 			}
 		}
 
@@ -3403,8 +3391,6 @@ int process_cpuset_apply_pid(process_cpuset_t *ctx, pid_t pid, int dry_run)
 {
 	uint8_t mask[CPUMASK_BYTES];
 	char comm[MAX_NAME];
-	char safe_name[MAX_NAME];
-	char unit[128];
 	size_t mlen;
 	pid_t self = getpid();
 
@@ -3441,103 +3427,11 @@ int process_cpuset_apply_pid(process_cpuset_t *ctx, pid_t pid, int dry_run)
 			return -1;
 		mlen = mask_significant_len(mask, sizeof(mask));
 
-		/* User-session PIDs: sched_setaffinity, no cgroup. */
-		if (loc == PID_LOC_USER_MGR) {
-			if (dry_run) {
-				lpmd_log_debug("[%s] (dry) would set affinity pid %d comm=%s (event uid=%u%s)\n",
-					       e->name, (int)pid,
-					       comm,
-					       (unsigned)owner_uid,
-					       e->affinity_all_threads ?
-						       " all-threads" :
-						       "");
-				return 1;
-			}
-			if (e->affinity_all_threads) {
-				int n = set_pid_affinity_all_threads(
-					pid, mask, mlen, class_str(e->cls));
-				if (n > 0) {
-					lpmd_log_debug("[%s] affinity pid %d comm=%s (event uid=%u tids=%d)\n",
-						       e->name, (int)pid,
-						       comm,
-						       (unsigned)owner_uid, n);
-					pidset_add(&ctx->attached, pid, "",
-						   e->cls, e->resolved.groups,
-						   owner_uid);
-					(void)apply_pid_uclamp(ctx, pid, e->cls,
-						       class_str(e->cls), 1);
-					return 1;
-				}
-			} else if (set_pid_affinity_from_mask(pid, mask,
-							      mlen) == 0) {
-				lpmd_log_debug("[%s] affinity pid %d comm=%s (event uid=%u)\n",
-					       e->name, (int)pid,
-					       comm,
-					       (unsigned)owner_uid);
-				pidset_add(&ctx->attached, pid, "", e->cls,
-					   e->resolved.groups, owner_uid);
-				(void)apply_pid_uclamp(ctx, pid, e->cls,
-					       class_str(e->cls), 0);
-				return 1;
-			}
-			return -1;
-		}
-
-		/* System slice: transient cpuset scope. */
-		sanitize_unit_name(e->name, safe_name, sizeof(safe_name));
-		{
-			unsigned long long st = pid_start_time(pid);
-			if (st)
-				snprintf(unit, sizeof(unit),
-					 "proc_cpuset_%s_%d_%llu.scope",
-					 safe_name, (int)pid, st);
-			else
-				snprintf(unit, sizeof(unit),
-					 "proc_cpuset_%s_%d.scope", safe_name,
-					 (int)pid);
-		}
-
-		/* Reclaim an existing proc_cpuset_*.scope (e.g. from a prior
-         * daemon run) instead of asking systemd to start one with the
-         * same name, which would fail with "already loaded". */
-		{
-			char existing[128];
-			if (pid_existing_proc_cpuset_unit(
-				    pid, existing, sizeof(existing)) == 1) {
-				if (dry_run)
-					lpmd_log_debug("[%s] (dry) reattach pid %d comm=%s -> %s\n",
-						       e->name, (int)pid,
-						       comm,
-						       existing);
-				else
-					lpmd_log_debug("[%s] reattached pid %d comm=%s -> %s (event)\n",
-						       e->name, (int)pid,
-						       comm,
-						       existing);
-				pidset_add(&ctx->attached, pid, existing,
-					   e->cls, e->resolved.groups, 0);
-				(void)apply_pid_uclamp(ctx, pid, e->cls,
-					       class_str(e->cls), 0);
-				return 1;
-			}
-		}
-
-		if (dry_run) {
-			lpmd_log_debug("[%s] (dry) would attach pid %d comm=%s -> %s\n",
-				       e->name, (int)pid, comm, unit);
-			return 1;
-		}
-
-		if (start_scope_for_pid(unit, pid, mask, mlen) == 0) {
-			lpmd_log_debug("[%s] attached pid %d comm=%s -> %s (event)\n",
-				       e->name, (int)pid, comm, unit);
-			pidset_add(&ctx->attached, pid, unit, e->cls,
-				   e->resolved.groups, 0);
-			(void)apply_pid_uclamp(ctx, pid, e->cls,
-			       class_str(e->cls), 0);
-			return 1;
-		}
-		return -1;
+		/* One path for every PID: sched_setaffinity where the task
+         * already lives. No transient scope, no cgroup change. */
+		(void)loc;
+		return affinity_bind_pid(ctx, e, pid, comm, mask, mlen,
+					 owner_uid, dry_run);
 	}
 	/* No named entry matched -- try the catch-all <DefaultProcess>. */
 	return apply_default_to_pid(ctx, pid, 1, dry_run);
@@ -3682,48 +3576,10 @@ int process_cpuset_stop_all(process_cpuset_t *ctx)
 }
 
 /*
- * Move a single PID out of its current cgroup back to the root cgroup,
- * which removes it from the proc_cpuset scope without killing it.
- * Returns 0 on success, -1 on failure (PID may already be gone).
- *
- * Uses cgroup v2 unified hierarchy (/sys/fs/cgroup/cgroup.procs).
- * Writing a single PID atomically migrates it; this restores its
- * inherited (system-default) cpu affinity since the root cgroup
- * imposes no AllowedCPUs constraint.
- */
-static int migrate_pid_to_root_cgroup(pid_t pid)
-{
-	static const char root_procs[] = "/sys/fs/cgroup/cgroup.procs";
-	char buf[32];
-	int fd, n, w;
-
-	fd = open(root_procs, O_WRONLY | O_CLOEXEC);
-	if (fd < 0)
-		return -1;
-
-	n = snprintf(buf, sizeof(buf), "%d\n", (int)pid);
-	if (n < 0 || n >= (int)sizeof(buf)) {
-		close(fd);
-		return -1;
-	}
-
-	do {
-		w = write(fd, buf, (size_t)n);
-	} while (w < 0 && errno == EINTR);
-	close(fd);
-
-	/* ESRCH = process already gone; treat as success. */
-	if (w < 0 && errno != ESRCH)
-		return -1;
-	return 0;
-}
-
-/*
- * Release every tracked PID back to default (no AllowedCPUs) without
- * killing it. For each scope:
- *   1. Move its PID to the root cgroup (drops the cpuset constraint).
- *   2. Stop the now-empty scope unit (no SIGTERM is delivered because
- *      cgroup.procs is empty).
+ * Release every tracked PID, restoring exactly what it had before lpmd
+ * touched it. Nothing is migrated and nothing is killed: a task that set
+ * its own affinity after we bound it keeps that affinity, and a task
+ * whose PID was recycled is left alone.
  * Clears the tracking set on completion. Returns the number of PIDs
  * successfully released, or -1 on a NULL context.
  */
@@ -3735,36 +3591,56 @@ int process_cpuset_release_all(process_cpuset_t *ctx)
 		return -1;
 
 	for (size_t i = 0; i < ctx->attached.n; i++) {
-		pid_t pid = ctx->attached.items[i].pid;
-		const char *unit = ctx->attached.items[i].unit;
+		struct attached_entry *it = &ctx->attached.items[i];
+		pid_t pid = it->pid;
+		uint8_t now[CPUMASK_BYTES];
+		char comm[MAX_NAME];
+		size_t now_len;
 
-		if (unit[0]) {
-			/* Scope-managed PID: drop cpuset constraint, then stop
-             * the (now empty) scope. */
-			if (migrate_pid_to_root_cgroup(pid) == 0)
+		if (it->unit[0]) {
+			/* A scope left over from an older lpmd that still
+             * migrated tasks. Do NOT move the task back out -- that
+             * would be another migration, and stopping a non-empty
+             * scope would SIGTERM it. Unsetting AllowedCPUs= lifts
+             * the cpuset constraint in place; the scope then dies
+             * with its task. */
+			if (set_scope_allowed_cpus(it->unit, NULL, 0) == 0)
 				released++;
-			(void)stop_scope_unit(unit);
-		} else {
-			/* Affinity-only PID: re-allow all online CPUs. */
-			cpu_set_t *all;
-			long ncpus = sysconf(_SC_NPROCESSORS_ONLN);
-			size_t setsize;
-			if (ncpus <= 0)
-				ncpus = 1;
-			/* Guard CPU_ALLOC/CPU_ALLOC_SIZE math against bogus sysconf values. */
-			if (ncpus > MAX_CPUS)
-				ncpus = MAX_CPUS;
-			all = CPU_ALLOC(ncpus);
-			if (all) {
-				setsize = CPU_ALLOC_SIZE(ncpus);
-				CPU_ZERO_S(setsize, all);
-				for (long c = 0; c < ncpus; c++)
-					CPU_SET_S(c, setsize, all);
-				if (sched_setaffinity(pid, setsize, all) == 0)
-					released++;
-				CPU_FREE(all);
-			}
+			continue;
 		}
+
+		/* Affinity-only PID: restore the exact mask it had before we
+         * touched it, but only if it still carries what we wrote. A
+         * different mask means the task (or an admin) set its own
+         * affinity after we bound it -- that is the task's decision,
+         * so leave it. */
+		if (it->start_time && pid_start_time(pid) != it->start_time) {
+			lpmd_log_debug(
+				"release: pid %d start_time changed (PID reused); not restoring\n",
+				(int)pid);
+			continue;
+		}
+		if (!it->orig_mlen)
+			continue; /* nothing recorded: nothing to undo */
+
+		memset(now, 0, sizeof(now));
+		now_len = snapshot_pid_mask(pid, now, sizeof(now));
+		if (!now_len)
+			continue; /* gone */
+		if (it->set_mlen &&
+		    memcmp(now, it->set_mask, sizeof(now)) != 0) {
+			char dbg_now[MAX_CPULIST];
+
+			mask_to_cpulist(now, now_len, dbg_now, sizeof(dbg_now));
+			lpmd_log_debug(
+				"release: pid %d comm=%s affinity=[%s] was changed since we set it; left alone\n",
+				(int)pid, pid_comm_for_log(pid, comm, sizeof(comm)),
+				dbg_now);
+			continue;
+		}
+		if (affinity_apply(pid, it->all_threads, it->orig_mask,
+				   it->orig_mlen, class_str(it->cls)) == 0)
+			released++;
 	}
 
 	ctx->attached.n = 0;

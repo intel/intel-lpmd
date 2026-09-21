@@ -203,22 +203,24 @@
                                    the affinity is per-PID and not
                                    inherited by future siblings
                                    spawned outside the process tree.
-        <AffinityAllThreads> optional: 1 / true / yes / on
-                                   When the affinity path is taken
-                                   (user@UID.service PIDs, or
-                                   <AllowSession>-opted login-session
-                                   PIDs), apply the mask to every TID
-                                   in /proc/<pid>/task/ instead of
-                                   just the leader. Without this,
-                                   sched_setaffinity only constrains
-                                   the main thread; existing worker
-                                   threads keep their previous mask.
-                                   Recommended for multithreaded
-                                   apps such as games, browsers, and
-                                   media engines. No effect on PIDs
-                                   that go through the cgroup
-                                   transient-scope path (cgroups
-                                   already cover every thread).
+        <AffinityAllThreads> optional, default 1. Set 0 / false / no /
+                                   off to opt out.
+                                   Applies the mask to every TID in
+                                   /proc/<pid>/task/ rather than the
+                                   leader alone.
+                                   You almost never want 0.
+                                   sched_setaffinity acts on a thread,
+                                   so binding just the leader leaves
+                                   every already-running worker on its
+                                   old mask -- a process classified
+                                   background keeps running on the
+                                   performance cores through its
+                                   thread pool. Threads created later
+                                   inherit the mask of the thread that
+                                   created them, so covering all
+                                   threads once is enough.
+                                   Opt out only where the application
+                                   places its own workers on purpose.
     -->
 
     <!--
