@@ -194,6 +194,17 @@ int cgroup_cleanup(void)
 
 int cgroup_init(struct lpmd_config_t *config)
 {
+	/*
+	 * Only the modes that actually apply a cpuset may touch the cgroup
+	 * hierarchy. Enabling the cpuset controller is a system-wide change, so
+	 * it must not happen for a mode that will never use it.
+	 */
+	if (config->mode != LPM_CPU_CGROUPV2 && config->mode != LPM_CPU_ISOLATE) {
+		lpmd_log_info("Mode %d: no cpuset mechanism, skip cgroup init\n",
+			      config->mode);
+		return 0;
+	}
+
 	if (lpmd_write_str(PATH_CG2_SUBTREE_CONTROL, "+cpuset", LPMD_LOG_DEBUG))
 		return 1;
 	if (config->mode == LPM_CPU_ISOLATE)
@@ -208,6 +219,26 @@ int process_cgroup(struct lpmd_config_t *config, struct lpmd_config_state_t *sta
 
 	if (state->cpumask_idx == CPUMASK_NONE) {
 		lpmd_log_debug("Ignore cgroup processing - CPUMASK empty\n");
+		return 0;
+	}
+
+	/*
+	 * A state asked for a CPU mask, but no cpuset mechanism is configured.
+	 * Say so, and say what would have been applied: otherwise a transition
+	 * that deliberately changed no CPU affinity is indistinguishable from
+	 * one that was never requested. This covers HFI as well, because the
+	 * HFI mask arrives here like any other and is dropped at this point.
+	 *
+	 * Returning before last_applied_cpumask is set also means a later
+	 * switch to a cpuset mode does not believe a mask is already applied.
+	 */
+	if (mode == LPM_CPU_NONE) {
+		/* NULL when the mask is unallocated or has no CPUs set. */
+		char *cpus = get_cpus_str(state->cpumask_idx, false);
+
+		lpmd_log_debug(
+			"Skip cgroup: state %s requested CPU mask [%s], <Mode>-1</Mode> disables all cpuset changes\n",
+			state->name, cpus ? cpus : "");
 		return 0;
 	}
 
