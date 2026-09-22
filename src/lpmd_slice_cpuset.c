@@ -115,6 +115,7 @@ static void applied_record(const char *unit, uid_t uid, const uint8_t *prev,
 			   size_t len)
 {
 	struct slice_applied *a;
+	size_t ulen = strlen(unit);
 
 	if (g_n_applied >= SLICE_MAX_APPLIED) {
 		lpmd_log_warn(
@@ -122,9 +123,21 @@ static void applied_record(const char *unit, uid_t uid, const uint8_t *prev,
 			unit);
 		return;
 	}
+	/*
+	 * Never keep a shortened name. It would not match the unit that was
+	 * actually written, so restore() would put nothing back and leave that
+	 * one confined after we exit. Callers hand us SLICE_NAME_MAX buffers,
+	 * so this cannot trigger today; refuse loudly if that ever changes.
+	 */
+	if (ulen >= SLICE_NAME_MAX) {
+		lpmd_log_warn(
+			"slice_cpuset: unit name over %d bytes; %s will not be restored\n",
+			SLICE_NAME_MAX - 1, unit);
+		return;
+	}
 	a = &g_applied[g_n_applied++];
 	memset(a, 0, sizeof(*a));
-	snprintf(a->unit, sizeof(a->unit), "%s", unit);
+	memcpy(a->unit, unit, ulen + 1);
 	a->uid = uid;
 	if (prev && len) {
 		if (len > sizeof(a->prev))
