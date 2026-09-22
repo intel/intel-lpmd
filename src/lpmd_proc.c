@@ -252,21 +252,35 @@ static int proc_message(struct message_capsul_t *msg)
 		restore_intel_pstate_mode();
 		if (lpmd_config.use_process_cpuset)
 			lpmd_process_cpuset_unbind_all();
+		if (prev_state == LPMD_PROCESS_PRECONFIG)
+			cgroup_restore_slices_no_transition(&lpmd_config);
 		// Never enter LPM mode
 		update_lpmd_state(LPMD_OFF);
 		break;
 	case LPM_AUTO:
 		(void)process_intel_pstate_mode(&lpmd_config);
+		/*
+		 * Leaving PROCESS-PRECONFIG for AUTO need not change any
+		 * cpumask, so process_cgroup() may skip its teardown. Drop the
+		 * per-unit masks here and let the state machine reapply them
+		 * on the next low-power transition.
+		 */
+		if (prev_state == LPMD_PROCESS_PRECONFIG)
+			cgroup_restore_slices_no_transition(&lpmd_config);
 		// Enable oppotunistic LPM
 		update_lpmd_state(LPMD_AUTO);
 		break;
 	case LPM_PROCESS_PRECONFIG:
 		(void)process_intel_pstate_mode(&lpmd_config);
-		// PROCESS-PRECONFIG: only per-process cpuset is active; no LPM
-		// transitions are driven by util/HFI/WLT.
+		// PROCESS-PRECONFIG: no LPM transitions are driven by
+		// util/HFI/WLT, but the policy the config asks for still
+		// applies -- per-process cpuset AND the per-unit masks in
+		// slice.xml. Neither is a transition: both are a fixed
+		// placement that holds for as long as the state does.
 		update_lpmd_state(LPMD_PROCESS_PRECONFIG);
 		if (lpmd_config.use_process_cpuset && prev_state == LPMD_OFF)
 			lpmd_process_cpuset_rescan();
+		cgroup_apply_slices_no_transition(&lpmd_config);
 		break;
 	default:
 		break;

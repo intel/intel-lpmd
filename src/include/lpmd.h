@@ -627,6 +627,9 @@ int process_irq(struct lpmd_config_state_t *state);
 int cgroup_init(struct lpmd_config_t *config);
 int cgroup_cleanup(struct lpmd_config_t *config);
 int process_cgroup(struct lpmd_config_t *config, struct lpmd_config_state_t *state);
+/* slice.xml policy for states that never drive a low-power transition. */
+int cgroup_apply_slices_no_transition(struct lpmd_config_t *config);
+int cgroup_restore_slices_no_transition(struct lpmd_config_t *config);
 
 /* lpmd_uevent.c */
 int uevent_init(void);

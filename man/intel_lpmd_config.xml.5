@@ -110,7 +110,11 @@ specifies the default behavior for a given power profile.
 .IP \(bu 2
 1 : Always stay in Low Power Mode.
 .IP \(bu 2
-2 : Process preconfig mode (only process-cpuset policy is active).
+2 : Process preconfig mode. The configured placement policy is applied and
+then held: per-process cpuset (\fBUseProcessCPUSet\fR) and the per-unit masks
+in slice.xml (\fBUseSliceCpuset\fR) both take effect. What is suppressed is
+the low-power state machine \(em no transition is driven by
+utilization, HFI or WLT hints, and the top-level slices are left at every CPU.
 .PP
 .B HfiLpmEnable
 specifies if the HFI monitor can capture the HFI hints for Low Power Mode.
@@ -671,7 +675,8 @@ The configuration file format conforms to XML specifications.
 	<!--
 		Default behavior when Performance power setting is used
 		-1: force off. (Never enter Low Power Mode)
-		 2: process preconfig mode (process cpuset only)
+		 2: process preconfig mode (apply process cpuset and slice.xml,
+		    but never transition)
 		 1: force on. (Always stay in Low Power Mode)
 		 0: auto. (opportunistic Low Power Mode enter/exit)
 	-->
@@ -680,7 +685,8 @@ The configuration file format conforms to XML specifications.
 	<!--
 		Default behavior when Balanced power setting is used
 		-1: force off. (Never enter Low Power Mode)
-		 2: process preconfig mode (process cpuset only)
+		 2: process preconfig mode (apply process cpuset and slice.xml,
+		    but never transition)
 		 1: force on. (Always stay in Low Power Mode)
 		 0: auto. (opportunistic Low Power Mode enter/exit)
 	-->
@@ -689,7 +695,8 @@ The configuration file format conforms to XML specifications.
 	<!--
 		Default behavior when Power saver setting is used
 		-1: force off. (Never enter Low Power Mode)
-		 2: process preconfig mode (process cpuset only)
+		 2: process preconfig mode (apply process cpuset and slice.xml,
+		    but never transition)
 		 1: force on. (Always stay in Low Power Mode)
 		 0: auto. (opportunistic Low Power Mode enter/exit)
 	-->

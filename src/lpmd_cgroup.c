@@ -413,6 +413,78 @@ enum cgroup_backend {
 /* Only clean up a backend that this invocation explicitly initialized. */
 static enum cgroup_backend active_backend = CGROUP_BACKEND_NONE;
 
+/*
+ * PROCESS-PRECONFIG applies the configured policy without ever driving a
+ * low-power transition, so it cannot reach slice.xml through
+ * process_cpu_cgroupv2(): that function only refines units on the branch it
+ * takes when *entering* a low-power state, and process_cgroup() short-circuits
+ * on "cpumask unchanged" long before it anyway.
+ *
+ * Apply the per-unit masks directly instead. Two differences from the
+ * low-power path, both deliberate:
+ *
+ *   - the top-level slices are left wide. Narrowing them is the global
+ *     transition this state exists to avoid, and per-unit masks are
+ *     intersected against the parent, so leaving the parent at every CPU is
+ *     what makes the per-unit value the effective one.
+ *   - cpuset stays enabled on the root subtree for as long as the state
+ *     lasts. cgroup_init() turns it on at startup for the cgroup modes, but
+ *     a previous exit from low-power mode will have turned it back off, and
+ *     without it a per-unit AllowedCPUs= is accepted and silently ignored.
+ *
+ * Enabling it goes through the same cgroup_controller_added bookkeeping as
+ * process_cpu_cgroupv2(), so that a controller an administrator had already
+ * enabled is never disabled on the way out.
+ */
+int cgroup_apply_slices_no_transition(struct lpmd_config_t *config)
+{
+	int cpuset_enabled;
+
+	if (config->mode != LPM_CPU_CGROUPV2 || !config->use_slice_cpuset)
+		return 0;
+
+	if (active_backend == CGROUP_BACKEND_NONE) {
+		lpmd_log_debug("Skip slice cpuset: no backend was initialized\n");
+		return 0;
+	}
+
+	cpuset_enabled = cgroup_cpuset_enabled();
+	if (cpuset_enabled < 0)
+		return 1;
+	if (!cpuset_enabled) {
+		if (lpmd_write_str(PATH_CG2_SUBTREE_CONTROL, "+cpuset",
+				    LPMD_LOG_DEBUG))
+			return 1;
+		cgroup_controller_added = 1;
+	}
+
+	lpmd_slice_cpuset_apply(0);
+	return 0;
+}
+
+/*
+ * Undo the above. Needed because the ordinary teardown lives on the
+ * process_cgroup() path, which "cpumask unchanged" can skip: leaving
+ * PROCESS-PRECONFIG for OFF changes no cpumask, so nothing else would drop
+ * the per-unit properties this state wrote.
+ */
+int cgroup_restore_slices_no_transition(struct lpmd_config_t *config)
+{
+	if (config->mode != LPM_CPU_CGROUPV2 || !config->use_slice_cpuset)
+		return 0;
+
+	lpmd_slice_cpuset_restore();
+
+	if (cgroup_controller_added) {
+		if (lpmd_write_str(PATH_CG2_SUBTREE_CONTROL, "-cpuset",
+				    LPMD_LOG_DEBUG))
+			return 1;
+		cgroup_controller_added = 0;
+	}
+
+	return 0;
+}
+
 /* Support for cgroup based cpu isolation */
 static int process_cpu_isolate(struct lpmd_config_state_t *state)
 {
