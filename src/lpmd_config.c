@@ -952,6 +952,13 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, struct lpmd_config_t *
 			lpmd_config->use_slice_cpuset = strtol (tmp_value, &pos, 10);
 			if (errno || *pos != '\0' || (lpmd_config->use_slice_cpuset != 1 && lpmd_config->use_slice_cpuset != 0))
 				goto err;
+		} else if (!strcmp((const char *)cur_node->name, "UseSliceClassification")) {
+			errno = 0;
+			lpmd_config->use_slice_classification = strtol (tmp_value, &pos, 10);
+			if (errno || *pos != '\0' ||
+			    (lpmd_config->use_slice_classification != 1 &&
+			     lpmd_config->use_slice_classification != 0))
+				goto err;
 		} else if (!strncmp((const char *)cur_node->name,
 				    "EntryDelayMS", strlen("EntryDelayMS"))) {
 			errno = 0;

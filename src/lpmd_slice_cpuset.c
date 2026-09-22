@@ -140,6 +140,14 @@ static void applied_record(const char *unit, uid_t uid, const uint8_t *prev,
 static process_cpuset_t *g_resolver;
 
 static int g_active; /* config parsed and resolver seeded */
+/*
+ * <UseSliceClassification>. Off by default: turning it on lets slice
+ * membership override the curated process_cpuset.xml name list for any task
+ * inside a classified slice, which is a deliberate policy change and not
+ * something to inherit silently on upgrade.
+ */
+static int g_intent_classification;
+
 /* ------------------------------------------------------------------ */
 /* config parsing						      */
 /* ------------------------------------------------------------------ */
@@ -1201,8 +1209,14 @@ int lpmd_slice_cpuset_init(struct lpmd_config_t *config)
 	char path[MAX_STR_LENGTH];
 	size_t setsize;
 
-	if (!config || !config->use_slice_cpuset)
+	if (!config || !config->use_slice_cpuset) {
+		/* Intent classification reads slice.xml, so it cannot do
+		 * anything on its own. Say so rather than look enabled. */
+		if (config && config->use_slice_classification)
+			lpmd_log_warn(
+				"slice_cpuset: UseSliceClassification needs UseSliceCpuset=1; ignored\n");
 		return 0;
+	}
 
 	snprintf(path, sizeof(path), "%s/%s", TDCONFDIR,
 		 SLICE_CPUSET_CONFIG_FILE);
@@ -1231,7 +1245,18 @@ int lpmd_slice_cpuset_init(struct lpmd_config_t *config)
 	}
 
 	g_active = 1;
+	g_intent_classification = config->use_slice_classification ? 1 : 0;
 	lpmd_log_info("slice_cpuset: %d entries from %s\n", g_n_entries, path);
+	if (g_intent_classification && !config->use_process_cpuset) {
+		/* Nothing acts on an intent but the per-task path, so without it
+		 * the setting is inert. Say so rather than look enabled. */
+		lpmd_log_warn(
+			"slice_cpuset: UseSliceClassification needs UseProcessCPUSet=1 to have any effect\n");
+		g_intent_classification = 0;
+	}
+	if (g_intent_classification)
+		lpmd_log_info(
+			"slice_cpuset: intent classification on; slice membership outranks process names\n");
 	return 0;
 }
 
@@ -1243,6 +1268,7 @@ void lpmd_slice_cpuset_uninit(void)
 	}
 	g_n_entries = 0;
 	g_active = 0;
+	g_intent_classification = 0;
 }
 
 /*
@@ -1388,6 +1414,92 @@ int lpmd_slice_cpuset_pid_coverage(pid_t pid, char *unit_out, size_t unit_cap,
 			owner == 0 &&
 			cgpath_cpuset_enforceable(cgpath, best_unit) == 1;
 	}
+	return 1;
+}
+
+/*
+ * Intent-based classification: what does @pid's slice membership say the
+ * task *is*, for a task the cgroup itself will not constrain?
+ *
+ * The premise is that a desktop which places work in background.slice has
+ * already declared that work to be background, and that declaration is
+ * better evidence than a process name: systemd assigns it, the task cannot
+ * forge it, and it covers programs nobody thought to list. Where the
+ * cgroup can enforce that itself, it does (see pid_coverage above and the
+ * <Fallback> discussion in slice.xml) and this function stays out of the
+ * way; where it cannot -- every slice inside user@<uid>.service, because
+ * cpuset is not delegated there -- the classification is still good
+ * information, and sched_setaffinity(2) can act on it.
+ *
+ * So this deliberately reports only the non-enforceable case, and only for
+ * entries whose <Fallback> asked for affinity. An entry with
+ * <Fallback>none</Fallback> is declaring "leave my tasks alone", which is
+ * an answer, not an omission.
+ *
+ * Fills @cls_out with the configured classification name and @cores_out
+ * with the entry's explicit <Cores> override ("" if it has none) -- kept
+ * separate because pid_coverage() conflates them for reporting and a
+ * caller acting on the result needs to tell a class from a literal CPU
+ * list. @cores_out is expanded to a literal list here, so the caller does
+ * not have to understand this file's <Cores> vocabulary (which accepts
+ * short aliases <ActiveCores> does not); a classification name, by
+ * contrast, is passed through unresolved so it resolves against the
+ * caller's own <ClassDefaults> rather than this file's resolver.
+ *
+ * Returns 1 when an intent applies, 0 when none does, -1 when slice
+ * policy is inactive or intent classification is switched off.
+ */
+int lpmd_slice_cpuset_pid_intent(pid_t pid, char *unit_out, size_t unit_cap,
+				 char *cls_out, size_t cls_cap, char *cores_out,
+				 size_t cores_cap)
+{
+	char cgpath[SLICE_CGPATH_MAX];
+	char best_unit[SLICE_NAME_MAX] = { 0 };
+	char cpus[SLICE_CPULIST_MAX];
+	const struct slice_entry *best;
+	uid_t owner;
+
+	if (unit_out && unit_cap)
+		unit_out[0] = '\0';
+	if (cls_out && cls_cap)
+		cls_out[0] = '\0';
+	if (cores_out && cores_cap)
+		cores_out[0] = '\0';
+
+	if (!g_active || !g_intent_classification)
+		return -1;
+
+	best = slice_entry_for_pid(pid, best_unit, sizeof(best_unit), cgpath,
+				   sizeof(cgpath));
+	if (!best)
+		return 0;
+	if (best->fallback != SLICE_FALLBACK_AFFINITY)
+		return 0; /* entry asked for its tasks to be left alone */
+	if (!best->cls[0] && !best->cores[0])
+		return 0; /* nothing to say about this one */
+
+	/* Where the cgroup will do it, let the cgroup do it: applying a task
+	 * affinity on top of an enforced AllowedCPUs= could only conflict. */
+	owner = cgpath_manager_uid(cgpath);
+	if (owner == 0 && cgpath_cpuset_enforceable(cgpath, best_unit) == 1)
+		return 0;
+
+	cpus[0] = '\0';
+	if (best->cores[0] &&
+	    expand_cores_spec(best->cores, cpus, sizeof(cpus)) < 0) {
+		/* Unusable <Cores>. Fall back to the classification if the
+		 * entry has one; otherwise there is nothing left to report. */
+		cpus[0] = '\0';
+		if (!best->cls[0])
+			return 0;
+	}
+
+	if (unit_out)
+		snprintf(unit_out, unit_cap, "%s", best_unit);
+	if (cls_out)
+		snprintf(cls_out, cls_cap, "%s", best->cls);
+	if (cores_out)
+		snprintf(cores_out, cores_cap, "%s", cpus);
 	return 1;
 }
 

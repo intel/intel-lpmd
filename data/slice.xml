@@ -67,6 +67,33 @@
   enforceable on the running system and what it currently resolves to.
 
   =====================================================================
+  Intent-based classification
+
+  With <UseSliceClassification>1</UseSliceClassification> in
+  intel_lpmd_config.xml, a non-enforceable entry with Fallback=affinity
+  does more than authorise a per-task affinity: its <Classification>
+  becomes the classification of every task under it, outranking the
+  process_cpuset.xml <Name> list.
+
+  The argument is that where a desktop puts a task is better evidence of
+  what that task is than its executable name. systemd assigns the slice,
+  the task cannot forge it, and it covers programs nobody thought to list.
+  The name list is a hand-maintained approximation of the same signal.
+
+  Two things still outrank slice membership, because a slice cannot
+  express them:
+
+    - a <Process> entry with an explicit <ActiveCores> list, and
+    - the realtime, game_profile_* and custom_profile_* classes,
+
+  both of which are statements about one specific program. A plain
+  <Name>foo</Name> + <Classification> entry is not, and loses.
+
+  Off by default: it changes which policy wins for configs that already
+  exist. It also needs <UseProcessCPUSet>1</UseProcessCPUSet>, since the
+  per-task path is what acts on the result.
+
+  =====================================================================
   Element reference
 
   <Unit>

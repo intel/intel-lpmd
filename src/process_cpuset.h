@@ -222,6 +222,14 @@ int process_cpuset_attached_get_ex(const process_cpuset_t *ctx, size_t i,
 				   int *use_lcores);
 
 /*
+ * Non-zero if @pid's classification came from the slice it lives in rather
+ * than from a <Process> entry (see <UseSliceClassification>). 0 for a PID
+ * that is not tracked. Reporting only: the two policies are applied
+ * identically once chosen.
+ */
+int process_cpuset_attached_from_intent(const process_cpuset_t *ctx, pid_t pid);
+
+/*
  * Retrieve the active CPU group lists (cpuset-style strings as given
  * via process_cpuset_set_groups()) for this context. Any of the output
  * pointers may be NULL. Returns 0 on success.

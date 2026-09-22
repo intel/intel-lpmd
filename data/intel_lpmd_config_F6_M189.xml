@@ -154,6 +154,20 @@ for Intel Energy Optimizer (LPMD) daemon
 	<UseSliceCpuset>0</UseSliceCpuset>
 
 	<!--
+		Derive a task's classification from the slice it lives in, for
+		slices whose cgroup cannot enforce a cpuset itself. Where the
+		desktop puts a task is treated as better evidence of what it is
+		than its process name, so this outranks the process_cpuset.xml
+		name list, except for entries naming an explicit <ActiveCores>
+		list or one of the realtime / game_profile_* / custom_profile_*
+		classes, which a slice cannot express. See slice.xml.
+		Needs UseSliceCpuset and UseProcessCPUSet enabled.
+		0: disabled
+		1: enabled
+	-->
+	<UseSliceClassification>0</UseSliceClassification>
+
+	<!--
 		Example WorkLoad Type hints based config states applied to
 		12Pcore-8Ecore-2Lcore 28W TDP Meteor Lake platform.
 		Need to set WLTHintEnable to make it work.

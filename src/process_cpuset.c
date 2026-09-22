@@ -21,8 +21,11 @@
  * that already exist and never move a task into one.
  *
  * What apply_once does:
- *   1. Walks /proc once, matching each PID against the loaded <Process>
- *      entries by cgroup path or comm name (see find_entry_for_pid).
+ *   1. Walks /proc once, deciding each PID's policy as it goes: a <Process>
+ *      entry matched by cgroup path or comm name (see find_entry_for_pid),
+ *      or -- with <UseSliceClassification> on -- the classification the
+ *      PID's slice implies, which outranks all but a hand-curated entry
+ *      (see resolve_policy_for_pid).
  *   2. For each matched PID not yet handled, applies sched_setaffinity(2)
  *      to the task where it already is, using the CPU list for its
  *      classification intersected with the CPUs its current cgroup
@@ -254,6 +257,10 @@ struct attached_entry {
 	unsigned int groups;
 	uid_t owner_uid; /* 0 = system manager, else user manager */
 	int all_threads; /* affinity was applied to every TID, not just the leader */
+	/* The classification came from the task's slice rather than from a
+	 * <Process> entry. Reported by LIST-BOUND so an operator can see which
+	 * of the two policies actually decided this PID. */
+	int from_intent;
 
 	/* Exact-restore bookkeeping. orig_* is the mask the task had before
 	 * lpmd touched it; set_* is what lpmd wrote. On release we only
@@ -1969,6 +1976,17 @@ int process_cpuset_attached_get_ex(const process_cpuset_t *ctx, size_t i,
 	return 0;
 }
 
+int process_cpuset_attached_from_intent(const process_cpuset_t *ctx, pid_t pid)
+{
+	if (!ctx)
+		return 0;
+	for (size_t i = 0; i < ctx->attached.n; i++) {
+		if (ctx->attached.items[i].pid == pid)
+			return ctx->attached.items[i].from_intent;
+	}
+	return 0;
+}
+
 int process_cpuset_groups_get(const process_cpuset_t *ctx, char *p_out,
 			      size_t p_cap, char *e_out, size_t e_cap,
 			      char *l_out, size_t l_cap)
@@ -3350,6 +3368,156 @@ void process_cpuset_log_class_defaults(const process_cpuset_t *ctx)
 static int apply_default_to_pid(process_cpuset_t *ctx, pid_t pid,
 				int from_event, int dry_run);
 
+/* ---------- slice-intent classification ---------- */
+
+/*
+ * Whether @e says something about this program in particular, as opposed to
+ * something a slice could have said just as well.
+ *
+ * An explicit <ActiveCores> is a hand-written CPU list for one program; the
+ * realtime, game-profile and custom-profile classes exist to single out a
+ * specific workload. Neither is expressible as "everything in this slice", so
+ * neither is something slice membership should overrule. A plain
+ * <Name>foo</Name><Classification>background</Classification> entry, by
+ * contrast, is a guess at exactly what a slice states outright, and loses.
+ */
+static int entry_is_curated(const struct proc_entry *e)
+{
+	if (!e)
+		return 0;
+	if (core_spec_is_set(&e->explicit_spec))
+		return 1;
+	switch (e->cls) {
+	case CLASS_REALTIME:
+	case CLASS_GAME_PROFILE_CPU:
+	case CLASS_GAME_PROFILE_GPU:
+	case CLASS_GAME_PROFILE_HYBRID:
+	case CLASS_CUSTOM_PROFILE_0:
+	case CLASS_CUSTOM_PROFILE_1:
+	case CLASS_CUSTOM_PROFILE_2:
+		return 1;
+	default:
+		return 0;
+	}
+}
+
+/*
+ * Synthesise an entry from the classification @pid's slice implies, so the
+ * rest of this file can apply it through exactly the same path a <Process>
+ * entry takes -- masks, cgroup ceiling, hands-off rules, release tracking and
+ * uclamp all included.
+ *
+ * <Name> is filled in with the slice unit so the debug log names the source of
+ * the decision; nothing matches against it, since the entry never enters
+ * ctx->entries. A <Cores> override arrives already expanded to a literal CPU
+ * list (see lpmd_slice_cpuset_pid_intent), and is treated as <ActiveCores>
+ * would be; otherwise the classification resolves against this file's
+ * <ClassDefaults>, which is what makes an intent behave identically to a
+ * <Process> entry of the same class.
+ *
+ * Returns 1 if @out was filled in, 0 if there is no intent for @pid.
+ */
+static int intent_entry_for_pid(const process_cpuset_t *ctx, pid_t pid,
+				struct proc_entry *out)
+{
+	char unit[MAX_NAME];
+	char cls_name[32];
+	char cores[MAX_CPULIST];
+
+	if (!ctx || !out)
+		return 0;
+	if (lpmd_slice_cpuset_pid_intent(pid, unit, sizeof(unit), cls_name,
+					 sizeof(cls_name), cores,
+					 sizeof(cores)) != 1)
+		return 0;
+
+	memset(out, 0, sizeof(*out));
+	snprintf(out->name, sizeof(out->name), "%s", unit);
+	/* Same default as an XML entry with no <AffinityAllThreads>. */
+	out->affinity_all_threads = 1;
+	out->cls = parse_class(cls_name);
+
+	if (cores[0]) {
+		parse_core_spec(cores, &out->explicit_spec);
+		out->resolved = out->explicit_spec;
+		/* A <Cores>-only entry still needs a class for uclamp and for
+		 * the attached-set bookkeeping; unclassified is the tier that
+		 * claims nothing about the workload. */
+		if (out->cls == CLASS_INVALID)
+			out->cls = CLASS_UNCLASSIFIED;
+		return core_spec_is_set(&out->explicit_spec) ? 1 : 0;
+	}
+
+	if (out->cls == CLASS_INVALID)
+		return 0; /* classification this build does not know */
+	out->resolved = *default_spec_for(ctx, out->cls);
+	return 1;
+}
+
+/*
+ * Pick the policy that governs @pid: a <Process> entry, the classification
+ * @pid's slice implies, or neither.
+ *
+ * Precedence, highest first:
+ *   1. A curated <Process> entry -- explicit <ActiveCores>, or a class only a
+ *      curated list can mean. See entry_is_curated().
+ *   2. The slice intent, where one applies.
+ *   3. Any remaining <Process> match, by <Cgroup> or by <Name>.
+ *   4. Nothing: the caller falls back to <DefaultProcess>.
+ *
+ * Step 2 sitting above step 3 is the whole point of intent classification:
+ * where the desktop put a task is better evidence of what it is than a
+ * 15-character comm prefix somebody added to a list. It only applies at all
+ * when <UseSliceClassification> is on, so a config that does not ask for it
+ * sees the old order.
+ *
+ * @intent_buf is storage the caller owns; the returned pointer is it when the
+ * intent won, and *@from_intent says which happened. @how is only meaningful
+ * for a <Process> entry.
+ */
+static const struct proc_entry *
+resolve_policy_for_pid(const process_cpuset_t *ctx, pid_t pid, const char *comm,
+		       const char *cgpath, struct proc_entry *intent_buf,
+		       enum entry_match *how, int *from_intent)
+{
+	const struct proc_entry *e;
+
+	*from_intent = 0;
+	e = find_entry_for_pid(ctx, pid, comm, cgpath, how);
+	if (e && entry_is_curated(e))
+		return e;
+
+	if (intent_entry_for_pid(ctx, pid, intent_buf)) {
+		if (how)
+			*how = ENTRY_MATCH_NONE;
+		*from_intent = 1;
+		return intent_buf;
+	}
+
+	return e;
+}
+
+/* How a PID's policy was chosen, for the debug log. */
+static const char *match_str(enum entry_match how, int from_intent)
+{
+	if (from_intent)
+		return "slice-intent";
+	return how == ENTRY_MATCH_CGROUP ? "cgroup" : "name";
+}
+
+/*
+ * Note on the tracking record that @pid's class came from its slice, so
+ * LIST-BOUND can report which policy decided it. A no-op for a dry run, which
+ * tracks nothing.
+ */
+static void attached_mark_intent(process_cpuset_t *ctx, pid_t pid)
+{
+	struct attached_entry *it = attached_find_mut(ctx, pid);
+
+	if (it)
+		it->from_intent = 1;
+}
+
 int process_cpuset_apply_once(process_cpuset_t *ctx, int dry_run)
 {
 	uint8_t mask[CPUMASK_BYTES];
@@ -3395,11 +3563,13 @@ int process_cpuset_apply_once(process_cpuset_t *ctx, int dry_run)
 
 	while ((de = readdir(d))) {
 		const struct proc_entry *e;
+		struct proc_entry intent;
 		enum entry_match how;
 		char comm[MAX_NAME];
 		char cgpath[MAX_CGROUP_PATH];
 		uid_t owner_uid = 0;
 		enum pid_location loc;
+		int from_intent;
 		size_t mlen;
 		char *end;
 		long pid = strtol(de->d_name, &end, 10);
@@ -3421,7 +3591,8 @@ int process_cpuset_apply_once(process_cpuset_t *ctx, int dry_run)
 		if (any_cgroups)
 			(void)pid_cgroup_path((pid_t)pid, cgpath, sizeof(cgpath));
 
-		e = find_entry_for_pid(ctx, (pid_t)pid, comm, cgpath, &how);
+		e = resolve_policy_for_pid(ctx, (pid_t)pid, comm, cgpath,
+					   &intent, &how, &from_intent);
 		if (!e) {
 			/*
 			 * Catch-all: apply <DefaultProcess> to anything no
@@ -3474,9 +3645,11 @@ int process_cpuset_apply_once(process_cpuset_t *ctx, int dry_run)
 			continue; /* slice-covered, own affinity, or no CPU in common */
 
 		total_new++;
+		if (from_intent)
+			attached_mark_intent(ctx, (pid_t)pid);
 		lpmd_log_debug("[%s] class=%s pid=%d comm=%s match=%s\n",
 			       entry_label(e), class_str(e->cls), (int)pid, comm,
-			       how == ENTRY_MATCH_CGROUP ? "cgroup" : "name");
+			       match_str(how, from_intent));
 	}
 	closedir(d);
 
@@ -3502,7 +3675,11 @@ int process_cpuset_apply_pid(process_cpuset_t *ctx, pid_t pid, int dry_run)
 	char comm[MAX_NAME];
 	char cgpath[MAX_CGROUP_PATH];
 	const struct proc_entry *e;
+	struct proc_entry intent;
+	enum entry_match how;
+	int from_intent;
 	size_t mlen;
+	int rc;
 	pid_t self = getpid();
 
 	if (!ctx || pid <= 0)
@@ -3526,9 +3703,10 @@ int process_cpuset_apply_pid(process_cpuset_t *ctx, pid_t pid, int dry_run)
 	if (entries_use_cgroups(ctx))
 		(void)pid_cgroup_path(pid, cgpath, sizeof(cgpath));
 
-	e = find_entry_for_pid(ctx, pid, comm, cgpath, NULL);
+	e = resolve_policy_for_pid(ctx, pid, comm, cgpath, &intent, &how,
+				   &from_intent);
 	if (!e) {
-		/* No entry matched -- try the catch-all <DefaultProcess>. */
+		/* Nothing claimed it -- try the catch-all <DefaultProcess>. */
 		return apply_default_to_pid(ctx, pid, 1, dry_run);
 	}
 
@@ -3546,8 +3724,16 @@ int process_cpuset_apply_pid(process_cpuset_t *ctx, pid_t pid, int dry_run)
 	/* One path for every PID: sched_setaffinity where the task
      * already lives. No transient scope, no cgroup change. */
 	(void)loc;
-	return affinity_bind_pid(ctx, e, pid, comm, mask, mlen,
-				 owner_uid, dry_run);
+	rc = affinity_bind_pid(ctx, e, pid, comm, mask, mlen, owner_uid,
+			       dry_run);
+	if (rc == 1) {
+		if (from_intent)
+			attached_mark_intent(ctx, pid);
+		lpmd_log_debug("[%s] class=%s pid=%d comm=%s match=%s (event)\n",
+			       entry_label(e), class_str(e->cls), (int)pid, comm,
+			       match_str(how, from_intent));
+	}
+	return rc;
 }
 
 /*

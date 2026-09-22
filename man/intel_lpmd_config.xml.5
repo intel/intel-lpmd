@@ -184,6 +184,41 @@ See
 .B LIST-SLICES
 to report the configured policy against the running system.
 .PP
+.B UseSliceClassification
+Derive a task's classification from the slice it lives in (0/1), for slices
+whose cgroup cannot enforce a cpuset itself. Requires
+.B UseSliceCpuset
+and
+.BR UseProcessCPUSet ,
+since
+.I slice.xml
+supplies the classification and the per-task path is what applies it.
+Disabled by default.
+.PP
+The premise is that where a desktop places work already declares what that
+work is: a task in
+.I background.slice
+was put there by systemd, cannot forge it, and needs nobody to have added its
+name to a list. So a slice classification outranks a
+.I process_cpuset.xml
+.B <Process>
+entry that matched only by name or cgroup. Two kinds of entry still win,
+because no slice can state them: one carrying an explicit
+.B <ActiveCores>
+list, and one classified
+.BR realtime ,
+.BR game_profile_* " or " custom_profile_* .
+Both are statements about a single program.
+.PP
+Only entries that are not enforceable on the running system and that declare
+.B <Fallback>affinity</Fallback>
+take part; an entry the cgroup can enforce is left to the cgroup, and
+.B <Fallback>none</Fallback>
+means the entry is declining to say anything about its tasks. Run
+.BR intel_lpmd_control (8)
+.B LIST-BOUND
+to see which decision applied to each task.
+.PP
 .B EntryDelayMS / ExitDelayMS
 Utilization monitor entry/exit debounce delay in milliseconds.
 .PP

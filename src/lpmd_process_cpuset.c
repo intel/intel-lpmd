@@ -2848,10 +2848,15 @@ void lpmd_process_cpuset_print_bound(void)
 			snprintf(cpus_buf, sizeof(cpus_buf), "-");
 
 		/* Print process line. "via" is not a variable: every PID is
-		 * bound the same way, so there is nothing else it could say. */
+		 * bound the same way, so there is nothing else it could say.
+		 * "by" is: the class came either from a <Process> entry or from
+		 * the task's slice, and which one it was is not otherwise
+		 * visible. */
 		lpmd_log_msg(
-			"  PID=%d comm=%s class=%s groups=%s cpus=[%s] via=sched_setaffinity\n",
-			(int)pid, comm, cls, groups_buf, cpus_buf);
+			"  PID=%d comm=%s class=%s groups=%s cpus=[%s] via=sched_setaffinity by=%s\n",
+			(int)pid, comm, cls, groups_buf, cpus_buf,
+			process_cpuset_attached_from_intent(g_pc_ctx, pid) ?
+				"slice-intent" : "process-entry");
 
 		/* Then what the kernel actually has, and whether that
 		 * agrees with what we configured. */

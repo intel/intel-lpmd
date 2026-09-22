@@ -307,6 +307,19 @@ struct lpmd_config_t {
 	/* Slice/unit keyed cpuset policy from slice.xml. Independent of
 	 * use_process_cpuset: either, both or neither may be enabled. */
 	int use_slice_cpuset;
+	/*
+	 * Derive a task's classification from the slice it lives in, for
+	 * slices whose cgroup cannot enforce a cpuset itself (everything
+	 * inside user@<uid>.service). Requires use_slice_cpuset.
+	 *
+	 * Where a desktop places work already says what that work is, so
+	 * this outranks the process_cpuset.xml name list -- except for
+	 * entries the name list can express and a slice cannot: an explicit
+	 * <ActiveCores>, or one of the realtime / game_profile_* /
+	 * custom_profile_* classes. Off by default; it changes which policy
+	 * wins for existing configs.
+	 */
+	int use_slice_classification;
 
 	/* Optional per-CPU-model overrides for the process_cpuset.xml
 	 * <ClassDefaults> block. Populated when the matching <States>
@@ -657,6 +670,22 @@ void lpmd_slice_cpuset_print_bound(void);
 int  lpmd_slice_cpuset_pid_coverage(pid_t pid, char *unit_out, size_t unit_cap,
 				    char *cls_out, size_t cls_cap,
 				    int *enforceable_out);
+/*
+ * The classification implied by @pid's slice, for the case the cgroup cannot
+ * enforce a cpuset itself and the entry asked (<Fallback>affinity</Fallback>)
+ * for the per-task path to do it instead.
+ *
+ * 1 = an intent was found; @cls_out is the classification name and @cores_out
+ * the entry's <Cores> override, either of which may be empty. 0 = no intent
+ * for this PID. -1 = slice policy or intent classification is off.
+ *
+ * Unlike pid_coverage(), which folds a <Cores> override into @cls_out, these
+ * are reported separately: a caller applying a classification needs to know
+ * which it got.
+ */
+int  lpmd_slice_cpuset_pid_intent(pid_t pid, char *unit_out, size_t unit_cap,
+				  char *cls_out, size_t cls_cap,
+				  char *cores_out, size_t cores_cap);
 
 /* lpmd_process_cpuset.c */
 int  lpmd_process_cpuset_init(struct lpmd_config_t *config);
