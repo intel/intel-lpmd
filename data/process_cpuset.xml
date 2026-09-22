@@ -126,6 +126,49 @@
   worst case is a user's own process reaching the P-cores, which it
   could already ask for with sched_setaffinity) but it is not an
   authorization boundary and must not be treated as one.
+
+  <Unit> matches the systemd unit name that owns the process, as
+  reported by sd_pid_get_unit() and sd_pid_get_user_unit():
+
+      <Process>
+          <Unit>xdg-desktop-portal.service</Unit>
+          <Classification>background</Classification>
+      </Process>
+
+  This is the same idea as <Cgroup> but asks systemd for the answer
+  rather than pattern-matching the path, which matters for units that
+  delegate: a udev worker sits in
+  system.slice/systemd-udevd.service/udev, so the <Cgroup> pattern
+  "system.slice/systemd-udevd.service" does not match it while
+  <Unit>systemd-udevd.service</Unit> does. Prefer <Unit> when you mean
+  a unit, and keep <Cgroup> for slice-wide patterns.
+
+  Rules:
+    * <Unit> is repeatable, up to 4 patterns; the entry matches if ANY
+      of them matches. Names are compared literally unless the pattern
+      contains '*', in which case it is a glob.
+    * Both names are consulted. A system service has only the one
+      sd_pid_get_unit() returns. A process in your session has
+      "user@1000.service" from sd_pid_get_unit() and its own unit, such
+      as "app-firefox-1234.scope", from sd_pid_get_user_unit(); an entry
+      naming either one matches.
+    * <Unit> outranks <Cgroup>, which outranks <Name>, whichever order
+      the entries appear here.
+    * A <Unit> match also outranks the classification implied by the
+      process' slice (see <UseSliceClassification> in slice.xml), which
+      a <Cgroup> or <Name> match does not. Naming a unit is a specific
+      statement; a slice default is not.
+    * Like <Cgroup>, a <Unit> entry classifies EVERY process in the
+      unit, including helpers it spawns. Unlike <Cgroup>, it also
+      classifies processes in subtrees the unit delegated.
+    * A process with no unit at all, such as a kernel thread, matches no
+      <Unit> pattern, not even "*".
+    * The same caveat as <Cgroup> applies inside the user session: unit
+      names there are chosen by the user, so a user unit pattern is
+      self-asserted and is not an authorization boundary.
+    * Resolving a unit name costs two /proc reads per process, so it is
+      only done at all when some entry has a <Unit>. A config without
+      one pays nothing.
 -->
 
 <ProcessCpusetConfig>

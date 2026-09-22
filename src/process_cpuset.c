@@ -12,20 +12,28 @@
  * Mirrors the XML-config pattern used by intel_lpmd (see
  * src/lpmd_config.c).
  *
- * sched_setaffinity(2) is the only mechanism here. This file talks to
- * neither systemd nor the cgroup filesystem: it has no sd-bus
- * dependency, opens no cgroup file for writing, and has no code path
- * that could place a task anywhere other than where it already is.
- * Everything cgroup-related lives in lpmd_cgroup.c (whole-slice cpuset)
- * and lpmd_slice_cpuset.c (per-unit AllowedCPUs=), which act on cgroups
- * that already exist and never move a task into one.
+ * sched_setaffinity(2) is the only mechanism here. This file opens no
+ * cgroup file for writing and has no code path that could place a task
+ * anywhere other than where it already is. Everything cgroup-related
+ * lives in lpmd_cgroup.c (whole-slice cpuset) and lpmd_slice_cpuset.c
+ * (per-unit AllowedCPUs=), which act on cgroups that already exist and
+ * never move a task into one.
+ *
+ * It has no sd-bus dependency and contacts no daemon. The one systemd
+ * interface it uses is sd_pid_get_unit()/sd_pid_get_user_unit(), for
+ * <Unit> matching, and those are sd-login calls: inside libsystemd they
+ * are a read-only parse of /proc/<pid>/cgroup, not a bus round trip.
+ * Checked rather than assumed -- with /run/systemd and /run/dbus masked
+ * by a tmpfs and the bus environment unset, both still answer
+ * correctly.
  *
  * What apply_once does:
  *   1. Walks /proc once, deciding each PID's policy as it goes: a <Process>
- *      entry matched by cgroup path or comm name (see find_entry_for_pid),
- *      or -- with <UseSliceClassification> on -- the classification the
- *      PID's slice implies, which outranks all but a hand-curated entry
- *      (see resolve_policy_for_pid).
+ *      entry matched by systemd unit name, cgroup path or comm name (see
+ *      find_entry_for_pid), or -- with <UseSliceClassification> on -- the
+ *      classification the PID's slice implies, which outranks a comm or
+ *      cgroup match but not a unit match or a hand-curated entry (see
+ *      resolve_policy_for_pid).
  *   2. For each matched PID not yet handled, applies sched_setaffinity(2)
  *      to the task where it already is, using the CPU list for its
  *      classification intersected with the CPUs its current cgroup
@@ -69,6 +77,7 @@
 
 #include <libxml/parser.h>
 #include <libxml/tree.h>
+#include <systemd/sd-login.h>
 
 #define MAX_NAME 64
 #define MAX_CPULIST 256
@@ -79,6 +88,18 @@
  */
 #define MAX_CGROUP_PATH 256
 #define MAX_CGROUPS_PER_ENTRY 8
+/*
+ * A systemd unit name is bounded by NAME_MAX, but the long ones in practice are
+ * escaped D-Bus-activated services like
+ * "dbus-:1.20-org.a11y.atspi.Registry@0.service" at 44 characters. 128 leaves
+ * room without carrying 255 bytes per pattern through a 512-entry table.
+ *
+ * Fewer alternatives per entry than <Cgroup> gets, because a unit pattern needs
+ * fewer: one name is one unit, where a path glob often needs a variant per
+ * nesting depth.
+ */
+#define MAX_UNIT_NAME 128
+#define MAX_UNITS_PER_ENTRY 4
 #define MAX_CPUS 1024 /* cap for the POC */
 #define CPUMASK_BYTES (MAX_CPUS / 8)
 
@@ -201,6 +222,31 @@ struct proc_entry {
 	 */
 	char cgroups[MAX_CGROUPS_PER_ENTRY][MAX_CGROUP_PATH];
 	int n_cgroups;
+	/*
+	 * <Unit> patterns matched against the systemd unit name owning the task,
+	 * as systemd itself reports it: sd_pid_get_unit() for the system
+	 * manager's answer and sd_pid_get_user_unit() for the user manager's. A
+	 * pattern is tried against both, so "gnome-remote-desktop.service"
+	 * matches whether that unit is a system service or a user one.
+	 *
+	 * This is the strongest of the three matchers and outranks them both,
+	 * for two reasons:
+	 *
+	 *  - It is the task's real identity. <Name> is /proc/<pid>/comm, which
+	 *    the process can rewrite at will; a unit name comes from the cgroup
+	 *    path, which only the managing systemd writes. Nothing a process
+	 *    does to itself changes the answer.
+	 *  - It resolves delegated subtrees. A task in
+	 *    "system.slice/systemd-udevd.service/udev" reports unit
+	 *    "systemd-udevd.service", because sd_pid_get_unit() walks up to the
+	 *    owning unit. The <Cgroup> pattern for that same service does not
+	 *    match the nested path unless whoever wrote it remembered a trailing
+	 *    glob -- a footgun a unit name does not have.
+	 *
+	 * Optional, like <Cgroup>: an entry needs any one of the three.
+	 */
+	char units[MAX_UNITS_PER_ENTRY][MAX_UNIT_NAME];
+	int n_units;
 	enum classification cls;
 	/* Resolved spec used at apply time (per-process explicit value if
      * present, otherwise the matching ClassDefaults value). */
@@ -923,6 +969,20 @@ static void parse_one_process(const process_cpuset_t *ctx, xmlDoc *doc,
 				if (slot[0])
 					e->n_cgroups++;
 			}
+		} else if (!strcmp((const char *)c->name, "Unit")) {
+			/* Repeatable, like <Cgroup>: alternatives, not a list. */
+			if (e->n_units >= MAX_UNITS_PER_ENTRY) {
+				lpmd_log_debug(
+					"Entry '%s': max %d <Unit> patterns, ignoring '%s'\n",
+					e->name[0] ? e->name : "?",
+					MAX_UNITS_PER_ENTRY, val);
+			} else {
+				char *slot = e->units[e->n_units];
+
+				copy_text_trim(slot, MAX_UNIT_NAME, val);
+				if (slot[0])
+					e->n_units++;
+			}
 		} else if (!strcmp((const char *)c->name, "Classification"))
 			e->cls = parse_class(val);
 		else if (!strcmp((const char *)c->name, "ActiveCores"))
@@ -1117,26 +1177,97 @@ enum entry_match {
 	ENTRY_MATCH_NONE = 0,
 	ENTRY_MATCH_COMM,
 	ENTRY_MATCH_CGROUP,
+	ENTRY_MATCH_UNIT,
 };
+
+/*
+ * The unit names owning one task, as systemd reports them. Read once per PID
+ * and passed down, because both matchers below want them and each lookup is a
+ * /proc read.
+ *
+ * Either may be empty. A system daemon has @sys only; a task under
+ * user@<uid>.service has @sys "user@1000.service" and @usr the unit inside that
+ * manager ("app-code-18399.scope"); a kernel thread has neither, because
+ * sd_pid_get_unit() answers -ENODATA for a task in the root cgroup.
+ */
+struct pid_units {
+	char sys[MAX_UNIT_NAME];
+	char usr[MAX_UNIT_NAME];
+};
+
+/*
+ * Fill @u for @pid. Never fails: a name we cannot read stays empty, which
+ * simply means no <Unit> pattern can match on it.
+ *
+ * sd_pid_get_unit() and sd_pid_get_user_unit() malloc their result, so each is
+ * copied into the caller's fixed buffer and freed here. A name longer than the
+ * buffer is dropped rather than truncated: a shortened unit name is a different
+ * unit, and matching a pattern against it would claim the wrong task.
+ */
+static void pid_read_units(pid_t pid, struct pid_units *u)
+{
+	char *name = NULL;
+
+	u->sys[0] = '\0';
+	u->usr[0] = '\0';
+
+	if (sd_pid_get_unit(pid, &name) >= 0 && name) {
+		if (strlen(name) < sizeof(u->sys))
+			memcpy(u->sys, name, strlen(name) + 1);
+		free(name);
+		name = NULL;
+	}
+	if (sd_pid_get_user_unit(pid, &name) >= 0 && name) {
+		if (strlen(name) < sizeof(u->usr))
+			memcpy(u->usr, name, strlen(name) + 1);
+		free(name);
+	}
+}
+
+/*
+ * Match one <Unit> pattern against one unit name.
+ *
+ * Globs as <Name> and <Cgroup> do, so "app-*.scope" covers every graphical
+ * app scope and "dbus-*.service" every D-Bus-activated user service. Unit
+ * names contain no '/' -- systemd escapes anything that would -- so there is no
+ * FNM_PATHNAME question to answer here.
+ */
+static int unit_matches_pattern(const char *pattern, const char *unit)
+{
+	if (!pattern || !*pattern || !unit || !*unit)
+		return 0;
+	if (!strchr(pattern, '*'))
+		return !strcmp(pattern, unit);
+	return fnmatch(pattern, unit, 0) == 0;
+}
 
 /*
  * Test @pid against one <Process> entry.
  *
- * The two matchers are OR'ed, so an entry that gains a <Cgroup> keeps matching
- * everything its <Name> used to. The return value distinguishes them so the
- * caller can prefer the cgroup match: see the specificity note on
- * struct proc_entry.cgroups.
+ * The three matchers are OR'ed, so an entry that gains a <Cgroup> or a <Unit>
+ * keeps matching everything its <Name> used to. The return value distinguishes
+ * them so the caller can prefer the more specific one: see the notes on
+ * struct proc_entry.cgroups and .units.
  *
  * @cgpath may be NULL (or "") when the caller could not read the PID's cgroup,
- * in which case only the name matcher runs.
+ * and @units may be NULL or hold empty names; each matcher simply does not fire.
  */
 static enum entry_match pid_matches_entry(pid_t pid, const struct proc_entry *e,
-					  const char *comm, const char *cgpath)
+					  const char *comm, const char *cgpath,
+					  const struct pid_units *units)
 {
 	int i;
 
 	if (!e)
 		return ENTRY_MATCH_NONE;
+
+	if (units) {
+		for (i = 0; i < e->n_units; i++) {
+			if (unit_matches_pattern(e->units[i], units->sys) ||
+			    unit_matches_pattern(e->units[i], units->usr))
+				return ENTRY_MATCH_UNIT;
+		}
+	}
 
 	if (cgpath && *cgpath) {
 		for (i = 0; i < e->n_cgroups; i++) {
@@ -1155,14 +1286,15 @@ static enum entry_match pid_matches_entry(pid_t pid, const struct proc_entry *e,
  * Pick the entry that should govern @pid, or NULL if none does.
  *
  * Entries are scanned in config order and the first comm match is remembered,
- * but a later cgroup match replaces it, so an entry keyed on a systemd unit
- * always beats one keyed on a 15-character comm prefix regardless of the order
- * they appear in the file. Among equally specific matches the first wins, which
- * is the behaviour entries had before <Cgroup> existed.
+ * but a later cgroup or unit match replaces it, so an entry keyed on something
+ * systemd knows always beats one keyed on a 15-character comm prefix regardless
+ * of the order they appear in the file. Among equally specific matches the first
+ * wins, which is the behaviour entries had before <Cgroup> existed.
  */
 static const struct proc_entry *find_entry_for_pid(const process_cpuset_t *ctx,
 						   pid_t pid, const char *comm,
 						   const char *cgpath,
+						   const struct pid_units *units,
 						   enum entry_match *how)
 {
 	const struct proc_entry *best = NULL;
@@ -1170,12 +1302,12 @@ static const struct proc_entry *find_entry_for_pid(const process_cpuset_t *ctx,
 
 	for (int i = 0; i < ctx->n_entries; i++) {
 		enum entry_match m = pid_matches_entry(pid, &ctx->entries[i],
-						       comm, cgpath);
+						       comm, cgpath, units);
 
 		if (m > best_how) {
 			best = &ctx->entries[i];
 			best_how = m;
-			if (best_how == ENTRY_MATCH_CGROUP)
+			if (best_how == ENTRY_MATCH_UNIT)
 				break; /* nothing outranks this */
 		}
 	}
@@ -1202,13 +1334,36 @@ static int entries_use_cgroups(const process_cpuset_t *ctx)
 	return 0;
 }
 
-/* Log label for an entry: <Name> if it has one, else its first <Cgroup>. */
+/*
+ * Whether any entry has a <Unit> pattern.
+ *
+ * Same bargain as entries_use_cgroups(): resolving a PID's unit costs two
+ * /proc reads, so a config that does not use <Unit> -- which is every config
+ * predating this feature -- never pays for it.
+ */
+static int entries_use_units(const process_cpuset_t *ctx)
+{
+	if (!ctx)
+		return 0;
+	for (int i = 0; i < ctx->n_entries; i++)
+		if (ctx->entries[i].n_units)
+			return 1;
+	return 0;
+}
+
+/*
+ * Log label for an entry: <Name> if it has one, else its first <Unit>, else its
+ * first <Cgroup>. Unit before cgroup because an entry carrying both is keyed on
+ * the unit -- that is the one that decides.
+ */
 static const char *entry_label(const struct proc_entry *e)
 {
 	if (!e)
 		return "?";
 	if (e->name[0])
 		return e->name;
+	if (e->n_units)
+		return e->units[0];
 	if (e->n_cgroups)
 		return e->cgroups[0];
 	return "?";
@@ -2287,8 +2442,9 @@ int process_cpuset_load_config(process_cpuset_t *ctx, const char *path)
 		if (strcmp((const char *)cur->name, "Process"))
 			continue;
 		parse_one_process(ctx, doc, cur->children, &ctx->entries[n]);
-		/* <Name> or at least one <Cgroup> is enough to identify an entry. */
-		if ((ctx->entries[n].name[0] || ctx->entries[n].n_cgroups) &&
+		/* Any one of <Name>, <Unit> or <Cgroup> identifies an entry. */
+		if ((ctx->entries[n].name[0] || ctx->entries[n].n_units ||
+		     ctx->entries[n].n_cgroups) &&
 		    ctx->entries[n].cls != CLASS_INVALID)
 			n++;
 		else
@@ -2317,10 +2473,13 @@ static int find_entry_index_by_name(const process_cpuset_t *ctx, const char *nam
  * Find the existing entry that @e overrides, or -1 if it is a new one.
  *
  * <Name> remains the identity when the entry has one, so overlays keep
- * overriding the entries they always did. A <Cgroup>-only entry has no name to
- * key on, so its first pattern stands in: that is what makes an overlay able to
- * replace a cgroup-keyed entry from the system file instead of silently adding
- * a second entry matching the same processes.
+ * overriding the entries they always did. An entry without a name keys on its
+ * first <Unit> pattern, or failing that its first <Cgroup>: that is what makes
+ * an overlay able to replace a unit- or cgroup-keyed entry from the system file
+ * instead of silently adding a second entry matching the same processes.
+ *
+ * Unit before cgroup here for the same reason entry_label() prefers it: an
+ * entry carrying both is understood to be keyed on the unit.
  */
 static int find_entry_index(const process_cpuset_t *ctx,
 			    const struct proc_entry *e)
@@ -2331,13 +2490,25 @@ static int find_entry_index(const process_cpuset_t *ctx,
 	if (e->name[0])
 		return find_entry_index_by_name(ctx, e->name);
 
+	if (e->n_units) {
+		for (int i = 0; i < ctx->n_entries; i++) {
+			const struct proc_entry *cand = &ctx->entries[i];
+
+			if (cand->name[0] || !cand->n_units)
+				continue;
+			if (!strcmp(cand->units[0], e->units[0]))
+				return i;
+		}
+		return -1;
+	}
+
 	if (!e->n_cgroups)
 		return -1;
 
 	for (int i = 0; i < ctx->n_entries; i++) {
 		const struct proc_entry *cand = &ctx->entries[i];
 
-		if (cand->name[0] || !cand->n_cgroups)
+		if (cand->name[0] || cand->n_units || !cand->n_cgroups)
 			continue;
 		if (!strcmp(cand->cgroups[0], e->cgroups[0]))
 			return i;
@@ -2412,7 +2583,8 @@ int process_cpuset_load_config_overlay(process_cpuset_t *ctx, const char *path)
 			continue;
 
 		parse_one_process(ctx, doc, cur->children, &tmp);
-		if ((!tmp.name[0] && !tmp.n_cgroups) || tmp.cls == CLASS_INVALID) {
+		if ((!tmp.name[0] && !tmp.n_units && !tmp.n_cgroups) ||
+		    tmp.cls == CLASS_INVALID) {
 			lpmd_log_debug(
 				"Skipping invalid <Process> entry in overlay\n");
 			continue;
@@ -3461,15 +3633,25 @@ static int intent_entry_for_pid(const process_cpuset_t *ctx, pid_t pid,
  * Precedence, highest first:
  *   1. A curated <Process> entry -- explicit <ActiveCores>, or a class only a
  *      curated list can mean. See entry_is_curated().
- *   2. The slice intent, where one applies.
- *   3. Any remaining <Process> match, by <Cgroup> or by <Name>.
- *   4. Nothing: the caller falls back to <DefaultProcess>.
+ *   2. A <Process> entry matched by <Unit>.
+ *   3. The slice intent, where one applies.
+ *   4. Any remaining <Process> match, by <Cgroup> or by <Name>.
+ *   5. Nothing: the caller falls back to <DefaultProcess>.
  *
- * Step 2 sitting above step 3 is the whole point of intent classification:
+ * Step 3 sitting above step 4 is the whole point of intent classification:
  * where the desktop put a task is better evidence of what it is than a
  * 15-character comm prefix somebody added to a list. It only applies at all
  * when <UseSliceClassification> is on, so a config that does not ask for it
  * sees the old order.
+ *
+ * Step 2 sits above it because the argument for preferring intent does not
+ * apply to a unit name. Intent beats <Name> because a comm is forgeable and
+ * imprecise; a unit name is neither -- systemd assigns it, the task cannot
+ * change it, and it identifies one unit rather than a slice full of them. Where
+ * the config names a specific unit and the slice only implies a default for
+ * everything in it, the specific statement is the better evidence. Nothing in
+ * the shipped config uses <Unit> yet, so this reorders nothing until someone
+ * writes one.
  *
  * @intent_buf is storage the caller owns; the returned pointer is it when the
  * intent won, and *@from_intent says which happened. @how is only meaningful
@@ -3477,14 +3659,18 @@ static int intent_entry_for_pid(const process_cpuset_t *ctx, pid_t pid,
  */
 static const struct proc_entry *
 resolve_policy_for_pid(const process_cpuset_t *ctx, pid_t pid, const char *comm,
-		       const char *cgpath, struct proc_entry *intent_buf,
-		       enum entry_match *how, int *from_intent)
+		       const char *cgpath, const struct pid_units *units,
+		       struct proc_entry *intent_buf, enum entry_match *how,
+		       int *from_intent)
 {
 	const struct proc_entry *e;
+	enum entry_match m = ENTRY_MATCH_NONE;
 
 	*from_intent = 0;
-	e = find_entry_for_pid(ctx, pid, comm, cgpath, how);
-	if (e && entry_is_curated(e))
+	e = find_entry_for_pid(ctx, pid, comm, cgpath, units, &m);
+	if (how)
+		*how = m;
+	if (e && (m == ENTRY_MATCH_UNIT || entry_is_curated(e)))
 		return e;
 
 	if (intent_entry_for_pid(ctx, pid, intent_buf)) {
@@ -3502,7 +3688,14 @@ static const char *match_str(enum entry_match how, int from_intent)
 {
 	if (from_intent)
 		return "slice-intent";
-	return how == ENTRY_MATCH_CGROUP ? "cgroup" : "name";
+	switch (how) {
+	case ENTRY_MATCH_UNIT:
+		return "unit";
+	case ENTRY_MATCH_CGROUP:
+		return "cgroup";
+	default:
+		return "name";
+	}
 }
 
 /*
@@ -3524,6 +3717,7 @@ int process_cpuset_apply_once(process_cpuset_t *ctx, int dry_run)
 	int total_new = 0;
 	int n_default = 0;
 	int any_cgroups;
+	int any_units;
 	pid_t self = getpid();
 	struct dirent *de;
 	DIR *d;
@@ -3542,9 +3736,11 @@ int process_cpuset_apply_once(process_cpuset_t *ctx, int dry_run)
 	 * precedence an accident of config order, because whichever entry
 	 * reached a PID first put it in ctx->attached and every later entry
 	 * skipped it. Deciding per PID lets find_entry_for_pid() apply the real
-	 * rule: a <Cgroup> match outranks a <Name> match wherever they collide.
+	 * rule: a <Unit> match outranks a <Cgroup> match outranks a <Name> match
+	 * wherever they collide.
 	 */
 	any_cgroups = entries_use_cgroups(ctx);
+	any_units = entries_use_units(ctx);
 
 	/*
 	 * Report unusable <ActiveCores> lists once per config, not once per
@@ -3567,6 +3763,7 @@ int process_cpuset_apply_once(process_cpuset_t *ctx, int dry_run)
 		enum entry_match how;
 		char comm[MAX_NAME];
 		char cgpath[MAX_CGROUP_PATH];
+		struct pid_units units;
 		uid_t owner_uid = 0;
 		enum pid_location loc;
 		int from_intent;
@@ -3591,7 +3788,12 @@ int process_cpuset_apply_once(process_cpuset_t *ctx, int dry_run)
 		if (any_cgroups)
 			(void)pid_cgroup_path((pid_t)pid, cgpath, sizeof(cgpath));
 
-		e = resolve_policy_for_pid(ctx, (pid_t)pid, comm, cgpath,
+		units.sys[0] = '\0';
+		units.usr[0] = '\0';
+		if (any_units)
+			pid_read_units((pid_t)pid, &units);
+
+		e = resolve_policy_for_pid(ctx, (pid_t)pid, comm, cgpath, &units,
 					   &intent, &how, &from_intent);
 		if (!e) {
 			/*
@@ -3674,6 +3876,7 @@ int process_cpuset_apply_pid(process_cpuset_t *ctx, pid_t pid, int dry_run)
 	uint8_t mask[CPUMASK_BYTES];
 	char comm[MAX_NAME];
 	char cgpath[MAX_CGROUP_PATH];
+	struct pid_units units;
 	const struct proc_entry *e;
 	struct proc_entry intent;
 	enum entry_match how;
@@ -3703,8 +3906,13 @@ int process_cpuset_apply_pid(process_cpuset_t *ctx, pid_t pid, int dry_run)
 	if (entries_use_cgroups(ctx))
 		(void)pid_cgroup_path(pid, cgpath, sizeof(cgpath));
 
-	e = resolve_policy_for_pid(ctx, pid, comm, cgpath, &intent, &how,
-				   &from_intent);
+	units.sys[0] = '\0';
+	units.usr[0] = '\0';
+	if (entries_use_units(ctx))
+		pid_read_units(pid, &units);
+
+	e = resolve_policy_for_pid(ctx, pid, comm, cgpath, &units, &intent,
+				   &how, &from_intent);
 	if (!e) {
 		/* Nothing claimed it -- try the catch-all <DefaultProcess>. */
 		return apply_default_to_pid(ctx, pid, 1, dry_run);
