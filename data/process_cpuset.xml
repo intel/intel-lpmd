@@ -225,10 +225,26 @@
 
   gnome-shell deliberately has no <Unit>, and the reason generalises. Its
   comm is 11 characters, so it is never truncated and never ambiguous; the
-  shell always lives in session.slice, which slice.xml already classifies
-  user_interactive, so a <Unit> would not change its answer; and the unit
-  hosts helpers the two distros classify differently. A <Unit> is worth
-  adding to fix an unreliable <Name>, not merely because a unit exists.
+  unit hosts helpers the two distros classify differently; and something
+  already covers the whole unit on both, so a <Unit> would change no
+  answer. A <Unit> is worth adding to fix an unreliable <Name>, not merely
+  because a unit exists.
+
+  What already covers it is worth knowing, because it is not what it looks
+  like. It is NOT session.slice: that entry in slice.xml has
+  <Fallback>none</Fallback>, so it supplies no classification to the
+  per-task path at all (see the note beside it there). It is the <Cgroup>
+  pattern */org.gnome.Shell@*.service on the mutter-x11-fram entry below,
+  which already globs the template instance and so matches Fedora's @user
+  and Ubuntu's @wayland alike. Measured: gnome-shell is decided by that
+  entry, reported as match=cgroup.
+
+  One consequence to be honest about. Because <Cgroup> outranks <Name>,
+  that pattern classifies EVERY process in the shell's unit
+  user_interactive, including Ubuntu's gjs, which has its own entry saying
+  background. Dropping gnome-shell's <Unit> avoided deepening that, but
+  did not remove it. The flattening predates this work and lives in the
+  <Cgroup>. See TODO item 5c.
 
   Do not extend this list by guessing unit names from service names. An
   entry with a wrong <Unit> is worse than one with none: it never

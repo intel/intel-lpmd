@@ -195,6 +195,23 @@
       session.slice holds the core session stack (compositor, portals,
       the parts that always drive the visible UI). Deliberately left at
       the interactive tier.
+
+      Note what Fallback=none means here, because it is easy to misread
+      the <Classification> below as doing work. It does not, today. The
+      slice is not enforceable (cpuset is not delegated inside
+      user@<uid>.service), and lpmd_slice_cpuset_pid_intent() returns "no
+      intent" for any entry whose Fallback is not affinity, before it ever
+      looks at the class. So this entry contributes nothing to per-task
+      classification: every task in session.slice is classified by
+      process_cpuset.xml instead, via <Unit>, then <Cgroup>, then <Name>,
+      then <DefaultProcess>. Measured on a GNOME session: all 62
+      slice-intent decisions came from app.slice and none from here.
+
+      That is the intent ("do not steer the interactive session from
+      slice policy, let the process list decide"), and the class is here
+      to state the tier and to take effect if cpuset ever is delegated.
+      But it is a declaration, not a live rule. Do not cite it as the
+      reason some session process ends up interactive.
     -->
     <Unit>
         <Name>session.slice</Name>
