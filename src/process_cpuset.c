@@ -44,9 +44,18 @@
  *   - It never creates a cgroup or a transient scope unit.
  *   - It never sets a cgroup cpuset (AllowedCPUs=) on anything.
  *   - It never touches a task that already has an affinity mask of its
- *     own, and never restores one it did not set.
+ *     own, and never restores one it did not set. A mask a task merely
+ *     inherited from a parent lpmd narrowed is not the task's own; see
+ *     mask_inherited_from_lpmd().
  *   - It yields to slice.xml: a task whose cgroup is already governed by
  *     an enforceable <Unit> entry is left to that policy.
+ *
+ * Because fork(2) copies the affinity mask and execve(2) preserves it,
+ * narrowing a task implicitly narrows every descendant it later spawns.
+ * That is handled on both ends: the bind path recognises an inherited mask
+ * rather than mistaking it for a deliberate self-placement, and release
+ * puts back descendants that are still wearing a mask lpmd wrote even
+ * though they were never matched by a <Process> entry themselves.
  *
  * Earlier revisions attached each PID to a transient
  * proc_cpuset_<comm>_<pid>.scope, which migrated the task out of its own
@@ -1775,6 +1784,46 @@ static unsigned long long pid_start_time(pid_t pid)
 	return starttime;
 }
 
+/*
+ * Parent PID of @pid, or 0 if it could not be read. Same /proc/<pid>/stat
+ * quirk as pid_start_time(): the comm field can contain spaces and ')',
+ * so field counting has to start after the LAST ')'. ppid is field 4.
+ */
+static pid_t pid_ppid(pid_t pid)
+{
+	char path[64];
+	char buf[2048];
+	FILE *f;
+	size_t n;
+	char *p;
+
+	if (pid <= 0)
+		return 0;
+	snprintf(path, sizeof(path), "/proc/%d/stat", (int)pid);
+	f = fopen(path, "r");
+	if (!f)
+		return 0;
+	n = fread(buf, 1, sizeof(buf) - 1, f);
+	fclose(f);
+	if (n == 0)
+		return 0;
+	buf[n] = '\0';
+
+	p = strrchr(buf, ')');
+	if (!p)
+		return 0;
+	p++; /* now between field 2 (comm) and field 3 (state) */
+	while (*p == ' ')
+		p++;
+	/* field 3 is the single-letter state; skip it and its separator */
+	while (*p && *p != ' ')
+		p++;
+	while (*p == ' ')
+		p++;
+	if (!*p)
+		return 0;
+	return (pid_t)strtol(p, NULL, 10);
+}
 
 /* ---------- attached-PID tracking ---------- */
 
@@ -2715,16 +2764,16 @@ static int cgroup_effective_cpus(const char *cgpath, uint8_t *mask, size_t cap)
  * disturb.
  *
  * A task that has never called sched_setaffinity(2) reports exactly its
- * cgroup's effective CPU set. A mask strictly narrower than that set can
- * only have come from the task itself (or from something acting on its
- * behalf, e.g. taskset). Those are deliberate placements -- a thread pool
- * pinned to specific CPUs, a latency-sensitive helper, an admin's
- * taskset -- so we leave them alone and, because we never wrote them, we
- * also never restore them.
+ * cgroup's effective CPU set. A mask strictly narrower than that set has
+ * two possible origins: the task itself (or something acting on its
+ * behalf, e.g. taskset), or a fork(2) from a parent that already carried
+ * a narrower mask -- masks are inherited by children and preserved across
+ * execve(2). Only the first is a deliberate placement to be left alone;
+ * see mask_inherited_from_lpmd() for how the caller tells the two apart.
  *
  * Fills @cur with the current mask (@cur must be CPUMASK_BYTES wide) and
- * returns 1 for hands-off, 0 for "inherited, safe to set", -1 if the mask
- * could not be read.
+ * returns 1 for "narrower than the cgroup allows", 0 for "exactly the
+ * cgroup's set, so untouched by anyone", -1 if the mask could not be read.
  */
 static int pid_has_own_affinity(pid_t pid, const uint8_t *ceiling,
 			       uint8_t *cur, size_t *cur_len)
@@ -2740,6 +2789,63 @@ static int pid_has_own_affinity(pid_t pid, const uint8_t *ceiling,
 	return mask_is_strict_subset(cur, ceiling, CPUMASK_BYTES);
 }
 
+/* How far up the parent chain to look for the task we inherited from.
+ * A shell pipeline or a service's helper script is a handful of levels at
+ * most; the bound is here so a /proc race that reports a cycle cannot
+ * spin us forever. */
+#define INHERIT_MAX_DEPTH 16
+
+/*
+ * Decide whether @pid's mask @cur was inherited across fork(2) from a task
+ * lpmd itself bound, rather than set by the task or an admin.
+ *
+ * fork(2) copies the parent's affinity mask and execve(2) preserves it, so
+ * a child of a task lpmd narrowed comes up already wearing lpmd's mask
+ * while never having called sched_setaffinity(2) itself. To the "is this
+ * mask narrower than the cgroup allows?" test that is indistinguishable
+ * from a deliberate self-placement -- which would mean lpmd refuses to
+ * apply the child's own <Process> policy and, because it never records the
+ * child, never restores it either. The narrowing would then outlive the
+ * daemon.
+ *
+ * So walk up the parent chain and look for a tracked ancestor whose mask
+ * lpmd wrote and which @cur matches exactly. Exact match matters: if the
+ * child has since narrowed further, that part IS its own decision and the
+ * hands-off rule still applies.
+ *
+ * Returns the ancestor's entry (whose orig_mask is the mask the child
+ * would have had if lpmd had never run, and so the right thing to restore
+ * on release), or NULL if the mask did not come from us.
+ *
+ * Residual ambiguity, accepted deliberately: a task that deliberately
+ * sets itself to exactly the mask lpmd gave its parent is read as having
+ * inherited it. The alternative is to leave inherited masks in place
+ * permanently, which is the worse failure.
+ */
+static struct attached_entry *
+mask_inherited_from_lpmd(process_cpuset_t *ctx, pid_t pid, const uint8_t *cur)
+{
+	pid_t walk = pid;
+
+	if (!ctx || !cur)
+		return NULL;
+
+	for (int depth = 0; depth < INHERIT_MAX_DEPTH; depth++) {
+		struct attached_entry *anc;
+
+		walk = pid_ppid(walk);
+		if (walk <= 1)
+			return NULL; /* reached init / unreadable */
+
+		anc = attached_find_mut(ctx, walk);
+		if (!anc || !anc->set_mlen)
+			continue; /* not ours, but its parent still might be */
+		if (memcmp(cur, anc->set_mask, CPUMASK_BYTES) == 0)
+			return anc;
+	}
+	return NULL;
+}
+
 /*
  * Bind @pid to @want using sched_setaffinity(2) only: no transient scope,
  * no cgroup migration, no change to any unit's AllowedCPUs.
@@ -2749,7 +2855,9 @@ static int pid_has_own_affinity(pid_t pid, const uint8_t *ceiling,
  *      entry, that policy wins and we do nothing -- the cpuset is being
  *      set on the unit itself, which is both cheaper and inherited by
  *      the unit's future children.
- *   2. If @pid carries an affinity mask of its own, leave it alone.
+ *   2. If @pid carries an affinity mask of its own, leave it alone. A mask
+ *      inherited across fork(2) from a task lpmd bound does not count as
+ *      the task's own; see mask_inherited_from_lpmd().
  *   3. Otherwise apply (@want AND <the CPUs @pid's cgroup allows>).
  *
  * Returns 1 if applied, 0 if deliberately skipped, -1 on error.
@@ -2767,6 +2875,7 @@ static int affinity_bind_pid(process_cpuset_t *ctx, const struct proc_entry *e,
 	char dbg_want[MAX_CPULIST];
 	char dbg_send[MAX_CPULIST];
 	char dbg_ceil[MAX_CPULIST];
+	struct attached_entry *inherited = NULL;
 	size_t send_len, cur_len = 0;
 	int enforceable = 0;
 	int have_ceiling = 0;
@@ -2817,8 +2926,9 @@ static int affinity_bind_pid(process_cpuset_t *ctx, const struct proc_entry *e,
 	mask_to_cpulist(send, send_len, dbg_send, sizeof(dbg_send));
 
 	/* 3. Hands off anything that placed itself. Only decidable when we
-     * know the cgroup's set: a mask equal to it was inherited, a mask
-     * narrower than it can only have come from sched_setaffinity. */
+     * know the cgroup's set: a mask equal to it was untouched by anyone,
+     * a mask narrower than it came from sched_setaffinity -- either the
+     * task's own call, or a fork(2) from a parent we already narrowed. */
 	own = pid_has_own_affinity(pid, ceiling, cur, &cur_len);
 	if (own < 0)
 		return 0; /* gone */
@@ -2828,10 +2938,24 @@ static int affinity_bind_pid(process_cpuset_t *ctx, const struct proc_entry *e,
 		char dbg_cur[MAX_CPULIST];
 
 		mask_to_cpulist(cur, cur_len, dbg_cur, sizeof(dbg_cur));
+		inherited = mask_inherited_from_lpmd(ctx, pid, cur);
+		if (!inherited) {
+			lpmd_log_debug(
+				"[%s] skip pid %d comm=%s: has own affinity=[%s] (narrower than cgroup ceiling=[%s]); not set, not restored\n",
+				entry_label(e), (int)pid, comm, dbg_cur,
+				dbg_ceil);
+			return 0;
+		}
+		/* Inherited from a task we bound, so not the child's own
+		 * choice. Apply the child's own policy, and remember the
+		 * ancestor's pre-lpmd mask as what to put back on release --
+		 * that is what this task would have had if lpmd had never
+		 * run, and restoring the inherited mask instead would just
+		 * leave a narrower leak behind. */
 		lpmd_log_debug(
-			"[%s] skip pid %d comm=%s: has own affinity=[%s] (narrower than cgroup ceiling=[%s]); not set, not restored\n",
-			entry_label(e), (int)pid, comm, dbg_cur, dbg_ceil);
-		return 0;
+			"[%s] pid %d comm=%s inherited our mask [%s] from pid %d; applying its own policy\n",
+			entry_label(e), (int)pid, comm, dbg_cur,
+			(int)inherited->pid);
 	}
 
 	if (dry_run) {
@@ -2854,6 +2978,15 @@ static int affinity_bind_pid(process_cpuset_t *ctx, const struct proc_entry *e,
 		clamped ? " (clamped to cgroup)" : "", dbg_want,
 		(unsigned)owner_uid,
 		e->affinity_all_threads ? " all-threads" : "");
+
+	/* What to put back on release. Normally the mask the task had when we
+	 * found it; for an inherited mask, the ancestor's pre-lpmd mask. Copy
+	 * it out of the attached array first: pidset_add_full() can realloc,
+	 * which would invalidate @inherited. */
+	if (inherited && inherited->orig_mlen) {
+		memcpy(cur, inherited->orig_mask, CPUMASK_BYTES);
+		cur_len = inherited->orig_mlen;
+	}
 
 	if (pidset_add_full(&ctx->attached, pid, e->cls, e->resolved.groups,
 			    owner_uid, cur, cur_len, send, send_len,
@@ -3887,10 +4020,74 @@ static int apply_default_to_pid(process_cpuset_t *ctx, pid_t pid,
 }
 
 /*
+ * Undo the mask that descendants of @it inherited from it across fork(2).
+ *
+ * A child of a bound task comes up wearing lpmd's mask. If it matches a
+ * <Process> entry the bind path tracks it in its own right and the main
+ * release loop covers it; if it matches nothing, lpmd never visits it, yet
+ * the narrowing is still lpmd's doing and would outlive the daemon. This
+ * catches exactly those: descendants that are not tracked themselves and
+ * whose current mask is still, byte for byte, what lpmd wrote to @it.
+ *
+ * That equality test is the whole safety argument. A descendant that has
+ * since set its own affinity no longer matches and is left alone, so this
+ * can only ever put back a mask lpmd is responsible for.
+ *
+ * Threads follow @it->all_threads rather than always being included: it
+ * mirrors what lpmd would have done to this family had it bound the task
+ * directly, and erring that way can leave a sibling thread narrowed but
+ * can never overwrite a mask a thread chose for itself.
+ *
+ * Returns the number of descendants restored.
+ */
+static int release_inherited_descendants(process_cpuset_t *ctx,
+					 const struct attached_entry *it)
+{
+	pid_t kids[FOCUS_DESC_MAX];
+	size_t nkids;
+	int restored = 0;
+
+	if (!it->set_mlen || !it->orig_mlen)
+		return 0;
+
+	nkids = collect_descendant_tgids(it->pid, kids, FOCUS_DESC_MAX);
+	for (size_t k = 0; k < nkids; k++) {
+		uint8_t now[CPUMASK_BYTES];
+		char comm[MAX_NAME];
+		char dbg[MAX_CPULIST];
+
+		/* Tracked in its own right: the main loop owns it. */
+		if (pidset_contains(&ctx->attached, kids[k]))
+			continue;
+
+		memset(now, 0, sizeof(now));
+		if (!snapshot_pid_mask(kids[k], now, sizeof(now)))
+			continue; /* gone */
+		if (memcmp(now, it->set_mask, CPUMASK_BYTES) != 0)
+			continue; /* not our mask; not ours to undo */
+
+		if (affinity_apply(kids[k], it->all_threads, it->orig_mask,
+				   it->orig_mlen, class_str(it->cls)) == 0) {
+			mask_to_cpulist(it->orig_mask, it->orig_mlen, dbg,
+					sizeof(dbg));
+			lpmd_log_debug(
+				"release: pid %d comm=%s inherited our mask from pid %d; restored to [%s]\n",
+				(int)kids[k],
+				pid_comm_for_log(kids[k], comm, sizeof(comm)),
+				(int)it->pid, dbg);
+			restored++;
+		}
+	}
+	return restored;
+}
+
+/*
  * Release every tracked PID, restoring exactly what it had before lpmd
- * touched it. Nothing is migrated and nothing is killed: a task that set
- * its own affinity after we bound it keeps that affinity, and a task
- * whose PID was recycled is left alone.
+ * touched it, then do the same for descendants that inherited an lpmd mask
+ * across fork(2) without ever being tracked themselves. Nothing is
+ * migrated and nothing is killed: a task that set its own affinity after
+ * we bound it keeps that affinity, and a task whose PID was recycled is
+ * left alone.
  * Clears the tracking set on completion. Returns the number of PIDs
  * successfully released, or -1 on a NULL context.
  */
@@ -3918,6 +4115,15 @@ int process_cpuset_release_all(process_cpuset_t *ctx)
 				(int)pid);
 			continue;
 		}
+
+		/* Sweep descendants before restoring the PID itself, and do it
+		 * even for the cases below that leave the PID alone: a child
+		 * that forked before its parent re-pinned itself still carries
+		 * our mask, and it is still ours to undo. Children of a PID
+		 * that has already exited cannot be reached this way -- they
+		 * were reparented, so there is no chain left to walk. */
+		released += release_inherited_descendants(ctx, it);
+
 		if (!it->orig_mlen)
 			continue; /* nothing recorded: nothing to undo */
 

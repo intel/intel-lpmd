@@ -13,6 +13,13 @@
  * slice.xml policy (see lpmd_slice_cpuset.c) for any task whose cgroup is
  * already governed by an enforceable <Unit> entry.
  *
+ * Affinity masks are inherited across fork(2) and preserved across
+ * execve(2), so a child of a constrained task starts out constrained too.
+ * Such a mask is not treated as the child's own: the child is bound under
+ * its own <Process> entry if it has one, and process_cpuset_release_all()
+ * restores descendants still wearing a mask this library wrote even when
+ * they were never matched by an entry themselves.
+ *
  * sched_setaffinity(2) is the only mechanism, for every PID and on every
  * path including focus promotion. There is no alternative branch to
  * select and no systemd dependency.
@@ -186,8 +193,15 @@ int process_cpuset_apply_pid(process_cpuset_t *ctx, pid_t pid, int dry_run);
  * before this library touched it. Nothing is migrated and nothing is
  * killed. A PID whose mask changed after we set it (the task or an admin
  * called sched_setaffinity in the meantime) keeps its own mask, and a PID
- * that was recycled is left alone. Returns the number of PIDs restored,
- * or -1.
+ * that was recycled is left alone.
+ *
+ * Also restores untracked descendants of tracked PIDs that still carry,
+ * byte for byte, the mask this library wrote to their ancestor -- they
+ * inherited it across fork(2) without ever matching a <Process> entry, so
+ * nothing else would ever put it back. A descendant that has since set its
+ * own affinity no longer matches and is left alone.
+ *
+ * Returns the number of PIDs restored, or -1.
  */
 int process_cpuset_release_all(process_cpuset_t *ctx);
 

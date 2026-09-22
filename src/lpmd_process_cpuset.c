@@ -2077,6 +2077,26 @@ void lpmd_process_cpuset_proc_connector_handle(void)
 		 * pidset_contains() check in process_cpuset_apply_pid() can
 		 * then collapse the duplicates. */
 		switch (msg.ev.what) {
+		case PROC_EVENT_FORK:
+			/* A fork(2) child inherits its parent's affinity mask,
+			 * so a child of a task we narrowed is already running
+			 * on our mask before it has done anything. If it goes
+			 * on to exec, PROC_EVENT_EXEC would cover it -- but a
+			 * child that never execs (a forking daemon's worker, a
+			 * shell subshell) raises no other event, and would keep
+			 * the inherited mask until the next periodic rescan.
+			 * Evaluating it here gets it onto its own policy, and
+			 * tracked so release_all() can put it back.
+			 *
+			 * child_tgid equals parent_tgid when the "fork" was
+			 * really a new thread; the process is already handled,
+			 * so skip those rather than re-evaluating the parent
+			 * once per thread it spawns. */
+			if (msg.ev.event_data.fork.child_tgid ==
+			    msg.ev.event_data.fork.parent_tgid)
+				continue;
+			pid = msg.ev.event_data.fork.child_tgid;
+			break;
 		case PROC_EVENT_EXEC:
 			pid = msg.ev.event_data.exec.process_tgid;
 			break;

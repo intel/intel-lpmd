@@ -171,9 +171,23 @@ or
 .BR taskset (1)),
 so it is neither changed nor restored.
 .PP
+Affinity masks are inherited across
+.BR fork (2)
+and preserved across
+.BR execve (2),
+so a child of a constrained task starts out constrained as well. An
+inherited mask does not count as the task having placed itself: a child
+with its own entry in
+.I process_cpuset.xml
+is bound according to that entry rather than being left on whatever its
+parent happened to be using.
+.PP
 On exit from low power mode each task is returned to the exact mask it had
 beforehand, unless that mask changed in the meantime, in which case the
-task keeps its own.
+task keeps its own. Descendants that inherited a mask
+.B intel_lpmd
+set, but never matched an entry of their own, are restored too, so no
+narrowing outlives the daemon.
 .PP
 .B ProcessCpusetRescanInterval
 How often to rescan
