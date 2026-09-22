@@ -140,7 +140,6 @@ static void applied_record(const char *unit, uid_t uid, const uint8_t *prev,
 static process_cpuset_t *g_resolver;
 
 static int g_active; /* config parsed and resolver seeded */
-
 /* ------------------------------------------------------------------ */
 /* config parsing						      */
 /* ------------------------------------------------------------------ */
@@ -817,6 +816,62 @@ static int unit_cpuset_enforceable(const char *unit, uid_t uid, char *cgpath,
 	return cgroup_has_cpuset_controller(parent);
 }
 
+/*
+ * The same question, asked of a cgroup path instead of a unit name: is
+ * AllowedCPUs= enforced on the cgroup @unit owns, where @unit matched a
+ * component of @cgpath?
+ *
+ * The PID-keyed callers below already read the task's cgroup path out of
+ * /proc, and the unit they matched is by construction a component of it, so
+ * truncating the path after that component gives the unit's own cgroup
+ * directly. That spares a GetUnit round trip per PID -- on a /proc sweep of a
+ * few hundred tasks the D-Bus traffic is the whole cost of the question -- and
+ * it answers it about the cgroup the task is actually in rather than about
+ * whatever GetUnit resolves the name to.
+ *
+ * Returns 1 enforceable, 0 not.
+ */
+static int cgpath_cpuset_enforceable(const char *cgpath, const char *unit)
+{
+	char own[SLICE_CGPATH_MAX];
+	char parent[SLICE_CGPATH_MAX];
+	char *p, *slash;
+	size_t ulen;
+
+	if (!cgpath || !*cgpath || !unit || !*unit)
+		return 0;
+
+	ulen = strlen(unit);
+	snprintf(own, sizeof(own), "%s", cgpath);
+
+	/* Cut after @unit where it appears as a whole component, so a unit
+	 * whose name is a substring of a longer one cannot match. */
+	for (p = own; (p = strstr(p, unit)); p++) {
+		if (p != own && p[-1] != '/')
+			continue;
+		if (p[ulen] != '/' && p[ulen] != '\0')
+			continue;
+		p[ulen] = '\0';
+		break;
+	}
+	if (!p)
+		return 0;
+
+	if (cgroup_has_cpuset_controller(own))
+		return 1;
+
+	snprintf(parent, sizeof(parent), "%s", own);
+	slash = strrchr(parent, '/');
+	if (!slash)
+		return 0;
+	if (slash == parent)
+		parent[1] = '\0'; /* root */
+	else
+		*slash = '\0';
+
+	return cgroup_has_cpuset_controller(parent);
+}
+
 /* ------------------------------------------------------------------ */
 /* resolving an entry to a CPU list				      */
 /* ------------------------------------------------------------------ */
@@ -1191,19 +1246,34 @@ void lpmd_slice_cpuset_uninit(void)
 }
 
 /*
- * Find the entry covering @pid, if any: the longest unit name appearing in
- * the PID's cgroup path wins, so a leaf service beats its slice.
+ * Resolve which configured entry covers @pid: the longest unit name
+ * appearing in the PID's cgroup path wins, so a leaf service beats its
+ * slice.
  *
- * Returns 1 and fills the out params when covered, 0 when not, -1 when
- * slice policy is inactive or the cgroup cannot be read.
+ * Only entries whose <Scope> matches the manager that owns the task's cgroup
+ * are considered. Unit names are not unique across managers -- background.slice
+ * and session.slice exist in the user manager, and a distro may run pipewire as
+ * a system service while a desktop runs it as a user one -- so a system entry
+ * must not answer for a user task. Without this the longest-name rule picks
+ * whichever entry has the longer name, which is how a system
+ * <Name>pipewire.service</Name> entry came to outrank the session.slice entry
+ * that slice.xml says should cover the user-manager copy.
+ *
+ * On success returns the entry and writes the matched unit name to
+ * @unit_out and the PID's cgroup path to @cg_out (either may be NULL).
+ * Returns NULL when no entry matches, when the cgroup cannot be read, or
+ * when slice policy is inactive -- callers that must tell those apart
+ * check g_active themselves.
  */
-int lpmd_slice_cpuset_pid_coverage(pid_t pid, char *unit_out, size_t unit_cap,
-				   char *cls_out, size_t cls_cap,
-				   int *enforceable_out)
+static const struct slice_entry *slice_entry_for_pid(pid_t pid, char *unit_out,
+						     size_t unit_cap,
+						     char *cg_out,
+						     size_t cg_cap)
 {
 	char cgpath[SLICE_CGPATH_MAX];
 	char best_unit[SLICE_NAME_MAX] = { 0 };
 	const struct slice_entry *best = NULL;
+	enum slice_scope scope;
 	size_t best_len = 0;
 	char line[SLICE_CGPATH_MAX];
 	char path[64];
@@ -1211,12 +1281,12 @@ int lpmd_slice_cpuset_pid_coverage(pid_t pid, char *unit_out, size_t unit_cap,
 	int i;
 
 	if (!g_active)
-		return -1;
+		return NULL;
 
 	snprintf(path, sizeof(path), "/proc/%d/cgroup", (int)pid);
 	f = fopen(path, "r");
 	if (!f)
-		return -1;
+		return NULL;
 	cgpath[0] = '\0';
 	while (fgets(line, sizeof(line), f)) {
 		size_t len;
@@ -1231,12 +1301,20 @@ int lpmd_slice_cpuset_pid_coverage(pid_t pid, char *unit_out, size_t unit_cap,
 	}
 	fclose(f);
 	if (!cgpath[0])
-		return -1;
+		return NULL;
+
+	/* Inside user@<uid>.service the user's manager owns everything below;
+	 * anywhere else the system manager does. */
+	scope = cgpath_manager_uid(cgpath) ? SLICE_SCOPE_USER :
+					     SLICE_SCOPE_SYSTEM;
 
 	/* Match each entry against every path component. */
 	for (i = 0; i < g_n_entries; i++) {
 		char work[SLICE_CGPATH_MAX];
 		char *tok, *save;
+
+		if (g_entries[i].scope != scope)
+			continue;
 
 		snprintf(work, sizeof(work), "%s", cgpath);
 		for (tok = strtok_r(work, "/", &save); tok;
@@ -1253,6 +1331,35 @@ int lpmd_slice_cpuset_pid_coverage(pid_t pid, char *unit_out, size_t unit_cap,
 	}
 
 	if (!best)
+		return NULL;
+	if (unit_out)
+		snprintf(unit_out, unit_cap, "%s", best_unit);
+	if (cg_out)
+		snprintf(cg_out, cg_cap, "%s", cgpath);
+	return best;
+}
+
+/*
+ * Find the entry covering @pid, if any: the longest unit name appearing in
+ * the PID's cgroup path wins, so a leaf service beats its slice.
+ *
+ * Returns 1 and fills the out params when covered, 0 when not, -1 when
+ * slice policy is inactive or the cgroup cannot be read.
+ */
+int lpmd_slice_cpuset_pid_coverage(pid_t pid, char *unit_out, size_t unit_cap,
+				   char *cls_out, size_t cls_cap,
+				   int *enforceable_out)
+{
+	char cgpath[SLICE_CGPATH_MAX];
+	char best_unit[SLICE_NAME_MAX] = { 0 };
+	const struct slice_entry *best;
+
+	if (!g_active)
+		return -1;
+
+	best = slice_entry_for_pid(pid, best_unit, sizeof(best_unit), cgpath,
+				   sizeof(cgpath));
+	if (!best)
 		return 0;
 
 	if (unit_out)
@@ -1261,7 +1368,6 @@ int lpmd_slice_cpuset_pid_coverage(pid_t pid, char *unit_out, size_t unit_cap,
 		snprintf(cls_out, cls_cap, "%s",
 			 best->cores[0] ? best->cores : best->cls);
 	if (enforceable_out) {
-		char cg[SLICE_CGPATH_MAX];
 		uid_t owner = cgpath_manager_uid(cgpath);
 
 		/*
@@ -1280,8 +1386,7 @@ int lpmd_slice_cpuset_pid_coverage(pid_t pid, char *unit_out, size_t unit_cap,
 		 */
 		*enforceable_out =
 			owner == 0 &&
-			unit_cpuset_enforceable(best_unit, owner, cg,
-						sizeof(cg)) == 1;
+			cgpath_cpuset_enforceable(cgpath, best_unit) == 1;
 	}
 	return 1;
 }

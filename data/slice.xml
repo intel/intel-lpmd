@@ -99,8 +99,12 @@
                                        not inherited by later children)
                             none     = leave those tasks alone (default)
 
-  Most specific match wins: an entry naming a leaf service beats one
-  naming its slice, which beats one naming a top-level slice.
+  Most specific match wins among entries of the same <Scope>: an entry
+  naming a leaf service beats one naming its slice, which beats one
+  naming a top-level slice. <Scope> is not a tie-breaker but a filter -
+  a task is only ever matched against entries for the manager that owns
+  its cgroup, so the same <Name> can appear once per scope and mean
+  something different in each.
 -->
 
 <SliceCpusetConfig>
@@ -108,9 +112,32 @@
     <!--
       Top-level slices are already driven by the global low-power
       transitions (<Mode>0</Mode> writes AllowedCPUs to system.slice,
-      user.slice and machine.slice directly). They are listed here only
-      so that LIST-SLICES shows the full picture; leaving them out
-      changes nothing.
+      user.slice and machine.slice directly), so they are deliberately
+      not listed here. An entry for one would do harm rather than
+      nothing:
+
+      a slice sitting directly under the root cgroup always passes the
+      enforceability probe, because the probe falls back to the parent's
+      cgroup.controllers and the root's lists every compiled controller.
+      An entry for system.slice would therefore report "the cgroup has
+      this one" for every system service at all times, including in
+      normal mode when no AllowedCPUs= has been written to it - and the
+      per-task path would then skip every daemon, leaving them with no
+      policy at all instead of the one their <Process> entry gives them.
+
+      Deeper entries do not have that problem: cpuset only appears in
+      system.slice's cgroup.controllers while lpmd has +cpuset on the
+      root subtree, so a service entry reports enforceable exactly when
+      the cgroup really will enforce it.
+
+      This is why there is no <Scope>system</Scope> background.slice entry
+      either, even though a system unit placed there has declared itself
+      just as plainly as a user one: it too sits directly under the root
+      cgroup. (Fedora 44 ships background.slice as a user unit only, so
+      nothing is placed there on a stock system in any case.) Fixing the
+      probe to ask "has lpmd actually applied AllowedCPUs= to this unit"
+      rather than "could the cgroup enforce it" would make both entries
+      safe to add; see TODO.txt.
     -->
 
     <!-- ============ user session ============ -->
