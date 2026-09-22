@@ -144,8 +144,17 @@ Enable per-process classification policy integration (0/1), read from
 in the same directory as this file. Matched tasks are constrained with
 .BR sched_setaffinity (2)
 where they already are, using the CPU list for their classification
-intersected with the CPUs their current cgroup allows. No task is moved
-between cgroups and no cgroup or transient scope unit is created.
+intersected with the CPUs their current cgroup allows.
+.BR sched_setaffinity (2)
+is the only mechanism used, including when the focused window is promoted:
+no task is moved between cgroups, no cgroup or transient scope unit is
+created, and no cgroup cpuset
+.RB ( AllowedCPUs= )
+is written. Setting
+.B AllowedCPUs=
+on units that already exist is a separate feature, configured through
+.I slice.xml
+rather than here.
 .PP
 Two cases are deliberately left alone. A task whose cgroup is already
 governed by an enforceable entry in

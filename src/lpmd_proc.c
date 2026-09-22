@@ -65,14 +65,12 @@ void lpmd_terminate(void)
 	restore_intel_pstate_mode();
 
 	/*
-	 * Stop any transient cpuset scopes synchronously here so that every
-	 * termination path (SIGINT/SIGTERM handler, D-Bus Terminate from
-	 * `systemctl stop intel_lpmd` or `intel_lpmd_control`) unbinds all
-	 * managed PIDs before the process exits. process_cpuset_stop_all()
-	 * issues a StopUnit D-Bus call per scope, which can exceed the 1s
-	 * grace period below; doing it before signalling the worker
-	 * guarantees cleanup runs to completion. The worker's later call
-	 * is a safe no-op (g_pc_ctx is NULL after this).
+	 * Restore affinity on every managed PID synchronously here, so that
+	 * every termination path (SIGINT/SIGTERM handler, D-Bus Terminate
+	 * from `systemctl stop intel_lpmd` or `intel_lpmd_control`) unbinds
+	 * before the process exits rather than racing the 1s grace period
+	 * below. The worker's later call is a safe no-op (g_pc_ctx is NULL
+	 * after this).
 	 */
 	lpmd_process_cpuset_uninit ();
 
@@ -501,7 +499,7 @@ static void *lpmd_core_main_loop(void *arg)
 		wlt_proxy_uninit();
 
 	hfi_kill ();
-	/* Stop any transient cpuset scopes we created before tearing down cgroups. */
+	/* Restore per-process affinity before tearing down cgroups. */
 	lpmd_process_cpuset_uninit();
 	/* Undo in the reverse of the order enter_state() applies things.
 	 *
@@ -570,7 +568,7 @@ int lpmd_main(void)
 
 	/* If <UseProcessCPUSet> is set, seed the process_cpuset library with
 	 * the active P/E/LP-E core sets (still alive in core_type_masks[])
-	 * and attach matching processes to transient cpuset scopes. */
+	 * and bind matching processes with sched_setaffinity(2). */
 	lpmd_process_cpuset_init(&lpmd_config);
 	/* Slice/unit keyed policy. No-op unless <UseSliceCpuset> is set;
 	 * like process_cpuset it does not apply anything at startup, since
