@@ -169,6 +169,46 @@
     * Resolving a unit name costs two /proc reads per process, so it is
       only done at all when some entry has a <Unit>. A config without
       one pays nothing.
+
+  How the 57 <Unit> values below were arrived at, and why there are not
+  more of them. Every one was read off a running process on one Fedora 44
+  GNOME workstation with sd_pid_get_unit()/sd_pid_get_user_unit(); none
+  was guessed from a service name. 124 of the 288 <Name> values had a
+  live process to observe at all, and of those, one was added only where
+  the observed unit passed all of:
+
+    * It is stable. Rejected: anything D-Bus activated
+      (dbus-:1.2-org.gnome.OnlineAccounts@0.service carries a bus
+      connection ID that changes every boot), anything carrying a PID
+      (app-code-8194.scope), any per-login session scope
+      (session-2.scope), and any vte-spawn-<uuid>.scope.
+    * One comm resolves to exactly one unit. Rejected: abrt-dump-journ,
+      which is the main process of abrt-journal-core.service,
+      abrt-oops.service and abrt-xorg.service in turn, and dbus-broker,
+      which is both system.slice/dbus-broker.service and the session's
+      at-spi-dbus-bus.service.
+    * The unit holds nothing this file classifies differently. Rejected:
+      org.freedesktop.IBus.session.GNOME.service, whose processes this
+      file splits across user_interactive and background, and
+      org.gnome.SettingsDaemon.XSettings.service, which holds
+      gsd-xsettings (background) and ibus-x11 (user_interactive).
+      Because a <Unit> match outranks a <Name> match, adding one there
+      would silently flatten a distinction the <Name> entries make.
+    * It is not site-local. Rejected: sshd, which is a site-renamed sshd unit
+      on the machine this was measured on and sshd.service everywhere
+      else.
+
+  Where a unit's main process and its helpers both have entries and agree
+  on classification, the <Unit> goes on the main process only and the
+  helpers are picked up by it: gvfsd covers gvfsd-fuse, winbindd covers
+  wb-idmap, gnome-shell covers Xwayland.
+
+  Do not extend this list by guessing unit names from service names. An
+  entry with a wrong <Unit> is worse than one with none: it never
+  matches, but it reads as though the identity problem is solved. The
+  164 entries with no live process here are for other distributions and
+  desktops (KDE/Plasma, snapd, apparmor, tracker/baloo, games), and
+  filling them in needs someone running those.
 -->
 
 <ProcessCpusetConfig>
@@ -363,10 +403,12 @@
     </Process>
     <Process>
         <Name>systemd-udevd</Name>
+        <Unit>systemd-udevd.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>systemd-logind</Name>
+        <Unit>systemd-logind.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -416,6 +458,7 @@
 
     <Process>
         <Name>NetworkManager</Name>
+        <Unit>NetworkManager.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -424,6 +467,7 @@
     </Process>
     <Process>
         <Name>wpa_supplicant</Name>
+        <Unit>wpa_supplicant.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -432,10 +476,12 @@
     </Process>
     <Process>
         <Name>ModemManager</Name>
+        <Unit>ModemManager.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>avahi-daemon</Name>
+        <Unit>avahi-daemon.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -450,6 +496,7 @@
     <Process>
         <!-- Samba winbind daemon -->
         <Name>winbindd</Name>
+        <Unit>winbind.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -460,10 +507,12 @@
     <Process>
         <!-- NFSv4 GSS user-space daemon -->
         <Name>rpc.gssd</Name>
+        <Unit>rpc-gssd.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>chronyd</Name>
+        <Unit>chronyd.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -476,6 +525,7 @@
     </Process>
     <Process>
         <Name>firewalld</Name>
+        <Unit>firewalld.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -501,11 +551,13 @@
     </Process>
     <Process>
         <Name>polkitd</Name>
+        <Unit>polkit.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
         <!-- PC/SC smart-card resource manager -->
         <Name>pcscd</Name>
+        <Unit>pcscd.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -515,6 +567,7 @@
     </Process>
     <Process>
         <Name>rsyslogd</Name>
+        <Unit>rsyslog.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -523,6 +576,7 @@
     </Process>
     <Process>
         <Name>crond</Name>
+        <Unit>crond.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -531,10 +585,12 @@
     </Process>
     <Process>
         <Name>atd</Name>
+        <Unit>atd.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>auditd</Name>
+        <Unit>auditd.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -571,10 +627,12 @@
     </Process>
     <Process>
         <Name>gssproxy</Name>
+        <Unit>gssproxy.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>rtkit-daemon</Name>
+        <Unit>rtkit-daemon.service</Unit>
         <Classification>background</Classification>
     </Process>
 
@@ -592,40 +650,49 @@
     </Process>
     <Process>
         <Name>tuned</Name>
+        <Unit>tuned.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
         <!-- tuned power-profiles-daemon shim -->
         <Name>tuned-ppd</Name>
+        <Unit>tuned-ppd.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>irqbalance</Name>
+        <Unit>irqbalance.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>upowerd</Name>
+        <Unit>upower.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>udisksd</Name>
+        <Unit>udisks2.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>fwupd</Name>
+        <Unit>fwupd.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>bluetoothd</Name>
+        <Unit>bluetooth.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
         <!-- Thunderbolt / USB4 device manager -->
         <Name>boltd</Name>
+        <Unit>bolt.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>cupsd</Name>
+        <Unit>cups.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -634,6 +701,7 @@
     </Process>
     <Process>
         <Name>colord</Name>
+        <Unit>colord.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -652,10 +720,12 @@
     </Process>
     <Process>
         <Name>mcelog</Name>
+        <Unit>mcelog.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>smartd</Name>
+        <Unit>smartd.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -902,6 +972,7 @@
     </Process>
     <Process>
         <Name>abrtd</Name>
+        <Unit>abrtd.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -927,6 +998,7 @@
 
     <Process>
         <Name>gvfsd</Name>
+        <Unit>gvfs-daemon.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -939,6 +1011,7 @@
     </Process>
     <Process>
         <Name>gvfsd-metadata</Name>
+        <Unit>gvfs-metadata.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -982,6 +1055,7 @@
     </Process>
     <Process>
         <Name>localsearch-3</Name>
+        <Unit>localsearch-3.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -1072,14 +1146,17 @@
 
     <Process>
         <Name>pipewire</Name>
+        <Unit>pipewire.service</Unit>
         <Classification>realtime</Classification>
     </Process>
     <Process>
         <Name>pipewire-pulse</Name>
+        <Unit>pipewire-pulse.service</Unit>
         <Classification>realtime</Classification>
     </Process>
     <Process>
         <Name>wireplumber</Name>
+        <Unit>wireplumber.service</Unit>
         <Classification>realtime</Classification>
     </Process>
     <Process>
@@ -1097,6 +1174,7 @@
     <!-- Display managers -->
     <Process>
         <Name>gdm</Name>
+        <Unit>gdm.service</Unit>
         <Classification>user_interactive</Classification>
     </Process>
     <Process>
@@ -1141,6 +1219,7 @@
     <!-- GNOME shell stack -->
     <Process>
         <Name>gnome-shell</Name>
+        <Unit>org.gnome.Shell@user.service</Unit>
         <Classification>user_interactive</Classification>
     </Process>
     <Process>
@@ -1249,6 +1328,7 @@
     </Process>
     <Process>
         <Name>gnome-software</Name>
+        <Unit>gnome-software.service</Unit>
         <Classification>user_initiated</Classification>
     </Process>
     <Process>
@@ -1537,10 +1617,12 @@
     </Process>
     <Process>
         <Name>gsd-color</Name>
+        <Unit>org.gnome.SettingsDaemon.Color.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>gsd-datetime</Name>
+        <Unit>org.gnome.SettingsDaemon.Datetime.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -1550,14 +1632,17 @@
     </Process>
     <Process>
         <Name>gsd-keyboard</Name>
+        <Unit>org.gnome.SettingsDaemon.Keyboard.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>gsd-media-keys</Name>
+        <Unit>org.gnome.SettingsDaemon.MediaKeys.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>gsd-power</Name>
+        <Unit>org.gnome.SettingsDaemon.Power.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -1571,6 +1656,7 @@
     </Process>
     <Process>
         <Name>gsd-rfkill</Name>
+        <Unit>org.gnome.SettingsDaemon.Rfkill.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -1580,14 +1666,17 @@
     </Process>
     <Process>
         <Name>gsd-sharing</Name>
+        <Unit>org.gnome.SettingsDaemon.Sharing.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>gsd-smartcard</Name>
+        <Unit>org.gnome.SettingsDaemon.Smartcard.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>gsd-sound</Name>
+        <Unit>org.gnome.SettingsDaemon.Sound.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -1606,6 +1695,7 @@
     </Process>
     <Process>
         <Name>gsd-wwan</Name>
+        <Unit>org.gnome.SettingsDaemon.Wwan.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -1637,6 +1727,7 @@
     <!-- dconf settings storage -->
     <Process>
         <Name>dconf-service</Name>
+        <Unit>dconf.service</Unit>
         <Classification>background</Classification>
     </Process>
     <!-- Additional input-method helpers -->
@@ -1696,6 +1787,7 @@
              "systemd-userwork"). Safe to constrain: this is a
              short-lived helper of the user manager, not PID 1. -->
         <Name>systemd-userwor</Name>
+        <Unit>systemd-userdbd.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -1728,26 +1820,31 @@
     <Process>
         <!-- Legacy GNOME ORBit / orbit-name-server -->
         <Name>orbit</Name>
+        <Unit>orbit.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
         <!-- ALSA control / state restore -->
         <Name>alsactl</Name>
+        <Unit>alsa-state.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
         <!-- Geolocation service -->
         <Name>geoclue</Name>
+        <Unit>geoclue.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
         <!-- Per-user resource arbitration daemon -->
         <Name>uresourced</Name>
+        <Unit>uresourced.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
         <!-- GLib proxy auto-config (PAC) helper -->
         <Name>glib-pacrunner</Name>
+        <Unit>glib-pacrunner.service</Unit>
         <Classification>background</Classification>
     </Process>
 
