@@ -170,12 +170,13 @@
       only done at all when some entry has a <Unit>. A config without
       one pays nothing.
 
-  How the 57 <Unit> values below were arrived at, and why there are not
-  more of them. Every one was read off a running process on one Fedora 44
-  GNOME workstation with sd_pid_get_unit()/sd_pid_get_user_unit(); none
-  was guessed from a service name. 124 of the 288 <Name> values had a
-  live process to observe at all, and of those, one was added only where
-  the observed unit passed all of:
+  How the 94 <Unit> values below were arrived at, and why there are not
+  more of them. Every one was read off a running process with
+  sd_pid_get_unit()/sd_pid_get_user_unit() on one of two machines (a
+  Fedora 44 GNOME workstation and an Ubuntu 25.10 GNOME laptop), and
+  none was guessed from a service name. Fedora made 122 of the 288 <Name>
+  values observable, Ubuntu 97, and the two together 137. A unit was added
+  only where it passed all of:
 
     * It is stable. Rejected: anything D-Bus activated
       (dbus-:1.2-org.gnome.OnlineAccounts@0.service carries a bus
@@ -194,14 +195,40 @@
       gsd-xsettings (background) and ibus-x11 (user_interactive).
       Because a <Unit> match outranks a <Name> match, adding one there
       would silently flatten a distinction the <Name> entries make.
-    * It is not site-local. Rejected: sshd, which is a site-renamed sshd unit
-      on the machine this was measured on and sshd.service everywhere
-      else.
+      Also rejected for this reason: the session bus, which on Ubuntu is
+      one dbus.service holding gjs, goa-daemon, gnome-shell-cal and
+      ibus-portal, and org.gnome.Shell@wayland.service, which there holds
+      gjs (background) as well as gnome-shell (user_interactive).
+    * It is not site-local. One of the machines measured ships a renamed
+      sshd unit of its own; that name is deliberately absent below, while
+      the two distro names, ssh.service and sshd.service, are present.
+      Expect the same locally: a site can rename any unit, so a <Unit>
+      that only exists on your fleet belongs in an overlay config, not
+      here.
 
   Where a unit's main process and its helpers both have entries and agree
   on classification, the <Unit> goes on the main process only and the
-  helpers are picked up by it: gvfsd covers gvfsd-fuse, winbindd covers
-  wb-idmap, gnome-shell covers Xwayland.
+  helpers are picked up by it: gvfsd covers gvfsd-fuse and gvfsd-trash,
+  winbindd covers wb-idmap, cupsd covers the cups backend named "dbus",
+  and gsd-print-notif covers gsd-printer. Do NOT also put the unit on the
+  helper's own entry: it would be redundant, and it would make the answer
+  depend on which entry appears first here.
+
+  A unit name is distro-specific more often than it looks, which is why
+  <Unit> is repeatable and why a second distro's name is added alongside
+  the first rather than replacing it. Measured differences between the
+  two machines: chronyd is chrony.service on Ubuntu and chronyd.service
+  on Fedora; sshd is ssh.service and sshd.service; gdm3 and gdm are both
+  gdm.service; Fedora's dbus-broker.service is Ubuntu's dbus.service; and
+  gnome-shell is org.gnome.Shell@wayland.service on Ubuntu against
+  org.gnome.Shell@user.service on Fedora.
+
+  gnome-shell deliberately has no <Unit>, and the reason generalises. Its
+  comm is 11 characters, so it is never truncated and never ambiguous; the
+  shell always lives in session.slice, which slice.xml already classifies
+  user_interactive, so a <Unit> would not change its answer; and the unit
+  hosts helpers the two distros classify differently. A <Unit> is worth
+  adding to fix an unreliable <Name>, not merely because a unit exists.
 
   Do not extend this list by guessing unit names from service names. An
   entry with a wrong <Unit> is worse than one with none: it never
@@ -396,6 +423,7 @@
     -->
     <Process>
         <Name>systemd-journal</Name>
+        <Unit>systemd-journald.service</Unit>
         <Cgroup>system.slice/systemd-journald.service</Cgroup>
         <Classification>background</Classification>
         <!-- Demo: pin journald to LP E-cores only (overrides background default). -->
@@ -413,6 +441,7 @@
     </Process>
     <Process>
         <Name>systemd-resolve</Name>
+        <Unit>systemd-resolved.service</Unit>
         <Cgroup>system.slice/systemd-resolved.service</Cgroup>
         <Classification>background</Classification>
     </Process>
@@ -427,6 +456,7 @@
     </Process>
     <Process>
         <Name>systemd-oomd</Name>
+        <Unit>systemd-oomd.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -486,6 +516,8 @@
     </Process>
     <Process>
         <Name>sshd</Name>
+        <Unit>ssh.service</Unit>
+        <Unit>sshd.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -513,6 +545,7 @@
     <Process>
         <Name>chronyd</Name>
         <Unit>chronyd.service</Unit>
+        <Unit>chrony.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -562,6 +595,7 @@
     </Process>
     <Process>
         <Name>accounts-daemon</Name>
+        <Unit>accounts-daemon.service</Unit>
         <Cgroup>system.slice/accounts-daemon.service</Cgroup>
         <Classification>background</Classification>
     </Process>
@@ -572,6 +606,7 @@
     </Process>
     <Process>
         <Name>cron</Name>
+        <Unit>cron.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -642,6 +677,7 @@
 
     <Process>
         <Name>thermald</Name>
+        <Unit>thermald.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -697,6 +733,7 @@
     </Process>
     <Process>
         <Name>cups-browsed</Name>
+        <Unit>cups-browsed.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -706,11 +743,13 @@
     </Process>
     <Process>
         <Name>switcheroo-cont</Name>
+        <Unit>switcheroo-control.service</Unit>
         <Cgroup>system.slice/switcheroo-control.service</Cgroup>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>power-profiles-</Name>
+        <Unit>power-profiles-daemon.service</Unit>
         <Cgroup>system.slice/power-profiles-daemon.service</Cgroup>
         <Classification>background</Classification>
     </Process>
@@ -769,6 +808,7 @@
     <!-- Ubuntu / Debian -->
     <Process>
         <Name>snapd</Name>
+        <Unit>snapd.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -777,6 +817,7 @@
     </Process>
     <Process>
         <Name>unattended-upgr</Name>
+        <Unit>unattended-upgrades.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -1016,31 +1057,37 @@
     </Process>
     <Process>
         <Name>gvfs-udisks2-vo</Name>
+        <Unit>gvfs-udisks2-volume-monitor.service</Unit>
         <Cgroup>*/gvfs-udisks2-volume-monitor.service</Cgroup>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>gvfs-mtp-volume</Name>
+        <Unit>gvfs-mtp-volume-monitor.service</Unit>
         <Cgroup>*/gvfs-mtp-volume-monitor.service</Cgroup>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>gvfs-goa-volume</Name>
+        <Unit>gvfs-goa-volume-monitor.service</Unit>
         <Cgroup>*/gvfs-goa-volume-monitor.service</Cgroup>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>gvfs-afc-volume</Name>
+        <Unit>gvfs-afc-volume-monitor.service</Unit>
         <Cgroup>*/gvfs-afc-volume-monitor.service</Cgroup>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>gvfs-gphoto2-vo</Name>
+        <Unit>gvfs-gphoto2-volume-monitor.service</Unit>
         <Cgroup>*/gvfs-gphoto2-volume-monitor.service</Cgroup>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>gnome-keyring-d</Name>
+        <Unit>gnome-keyring-daemon.service</Unit>
         <Cgroup>*/gnome-keyring-daemon.service</Cgroup>
         <Cgroup>*/dbus-*org.freedesktop.secrets*.service</Cgroup>
         <Classification>background</Classification>
@@ -1060,16 +1107,19 @@
     </Process>
     <Process>
         <Name>evolution-calen</Name>
+        <Unit>evolution-calendar-factory.service</Unit>
         <Cgroup>*/evolution-calendar-factory.service</Cgroup>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>evolution-addre</Name>
+        <Unit>evolution-addressbook-factory.service</Unit>
         <Cgroup>*/evolution-addressbook-factory.service</Cgroup>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>evolution-sourc</Name>
+        <Unit>evolution-source-registry.service</Unit>
         <Cgroup>*/evolution-source-registry.service</Cgroup>
         <Classification>background</Classification>
     </Process>
@@ -1084,6 +1134,7 @@
     </Process>
     <Process>
         <Name>at-spi-bus-laun</Name>
+        <Unit>at-spi-dbus-bus.service</Unit>
         <Cgroup>*/at-spi-dbus-bus.service</Cgroup>
         <Classification>background</Classification>
     </Process>
@@ -1103,6 +1154,9 @@
     -->
     <Process>
         <Name>xdg-desktop-por</Name>
+        <Unit>xdg-desktop-portal.service</Unit>
+        <Unit>xdg-desktop-portal-gnome.service</Unit>
+        <Unit>xdg-desktop-portal-gtk.service</Unit>
         <Cgroup>*/xdg-desktop-portal.service</Cgroup>
         <Cgroup>*/xdg-desktop-portal-gnome.service</Cgroup>
         <Cgroup>*/xdg-desktop-portal-gtk.service</Cgroup>
@@ -1110,11 +1164,13 @@
     </Process>
     <Process>
         <Name>xdg-document-po</Name>
+        <Unit>xdg-document-portal.service</Unit>
         <Cgroup>*/xdg-document-portal.service</Cgroup>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>xdg-permission-</Name>
+        <Unit>xdg-permission-store.service</Unit>
         <Cgroup>*/xdg-permission-store.service</Cgroup>
         <Classification>background</Classification>
     </Process>
@@ -1219,7 +1275,6 @@
     <!-- GNOME shell stack -->
     <Process>
         <Name>gnome-shell</Name>
-        <Unit>org.gnome.Shell@user.service</Unit>
         <Classification>user_interactive</Classification>
     </Process>
     <Process>
@@ -1232,6 +1287,7 @@
     </Process>
     <Process>
         <Name>gnome-session-c</Name>
+        <Unit>gnome-session-monitor.service</Unit>
         <Cgroup>*/gnome-session-monitor.service</Cgroup>
         <Classification>user_interactive</Classification>
     </Process>
@@ -1612,6 +1668,7 @@
     -->
     <Process>
         <Name>gsd-a11y-settin</Name>
+        <Unit>org.gnome.SettingsDaemon.A11ySettings.service</Unit>
         <Cgroup>*/org.gnome.SettingsDaemon.A11ySettings.service</Cgroup>
         <Classification>background</Classification>
     </Process>
@@ -1627,6 +1684,7 @@
     </Process>
     <Process>
         <Name>gsd-housekeepin</Name>
+        <Unit>org.gnome.SettingsDaemon.Housekeeping.service</Unit>
         <Cgroup>*/org.gnome.SettingsDaemon.Housekeeping.service</Cgroup>
         <Classification>background</Classification>
     </Process>
@@ -1647,6 +1705,7 @@
     </Process>
     <Process>
         <Name>gsd-print-notif</Name>
+        <Unit>org.gnome.SettingsDaemon.PrintNotifications.service</Unit>
         <Cgroup>*/org.gnome.SettingsDaemon.PrintNotifications.service</Cgroup>
         <Classification>background</Classification>
     </Process>
@@ -1661,6 +1720,7 @@
     </Process>
     <Process>
         <Name>gsd-screensaver</Name>
+        <Unit>org.gnome.SettingsDaemon.ScreensaverProxy.service</Unit>
         <Cgroup>*/org.gnome.SettingsDaemon.ScreensaverProxy.service</Cgroup>
         <Classification>background</Classification>
     </Process>
@@ -1690,6 +1750,7 @@
     </Process>
     <Process>
         <Name>gsd-usb-protect</Name>
+        <Unit>org.gnome.SettingsDaemon.UsbProtection.service</Unit>
         <Cgroup>*/org.gnome.SettingsDaemon.UsbProtection.service</Cgroup>
         <Classification>background</Classification>
     </Process>
@@ -1715,6 +1776,7 @@
     <!-- GNOME remote desktop / RDP backend -->
     <Process>
         <Name>gnome-remote-de</Name>
+        <Unit>gnome-remote-desktop.service</Unit>
         <Cgroup>system.slice/gnome-remote-desktop.service</Cgroup>
         <Cgroup>*/gnome-remote-desktop.service</Cgroup>
         <Classification>background</Classification>
@@ -1722,6 +1784,7 @@
     <!-- Snap desktop integration helper -->
     <Process>
         <Name>snapd-desktop-i</Name>
+        <Unit>snap.snapd-desktop-integration.snapd-desktop-integration.service</Unit>
         <Classification>background</Classification>
     </Process>
     <!-- dconf settings storage -->
@@ -1760,6 +1823,7 @@
     </Process>
     <Process>
         <Name>gcr-ssh-agent</Name>
+        <Unit>gcr-ssh-agent.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
