@@ -9,12 +9,20 @@
  * Public API: process_cpuset.h
  * CLI driver: process_cpuset_main.c
  *
- * Mirrors the XML-config + sd-bus pattern used by intel_lpmd
- * (see src/lpmd_config.c and src/lpmd_cgroup.c).
+ * Mirrors the XML-config pattern used by intel_lpmd (see
+ * src/lpmd_config.c).
+ *
+ * sched_setaffinity(2) is the only mechanism here. This file talks to
+ * neither systemd nor the cgroup filesystem: it has no sd-bus
+ * dependency, opens no cgroup file for writing, and has no code path
+ * that could place a task anywhere other than where it already is.
+ * Everything cgroup-related lives in lpmd_cgroup.c (whole-slice cpuset)
+ * and lpmd_slice_cpuset.c (per-unit AllowedCPUs=), which act on cgroups
+ * that already exist and never move a task into one.
  *
  * What apply_once does:
- *   1. For every loaded <Process>, scans /proc to find matching PIDs by
- *      comm name.
+ *   1. Walks /proc once, matching each PID against the loaded <Process>
+ *      entries by cgroup path or comm name (see find_entry_for_pid).
  *   2. For each matched PID not yet handled, applies sched_setaffinity(2)
  *      to the task where it already is, using the CPU list for its
  *      classification intersected with the CPUs its current cgroup
@@ -23,6 +31,7 @@
  * What it deliberately does NOT do:
  *   - It never moves a task between cgroups.
  *   - It never creates a cgroup or a transient scope unit.
+ *   - It never sets a cgroup cpuset (AllowedCPUs=) on anything.
  *   - It never touches a task that already has an affinity mask of its
  *     own, and never restores one it did not set.
  *   - It yields to slice.xml: a task whose cgroup is already governed by
@@ -30,11 +39,11 @@
  *
  * Earlier revisions attached each PID to a transient
  * proc_cpuset_<comm>_<pid>.scope, which migrated the task out of its own
- * service's cgroup. That is gone; see the "no process migration" note
- * further down for why.
+ * service's cgroup, and then steered it by rewriting that scope's
+ * AllowedCPUs=. Both halves are gone; see the "no process migration"
+ * note further down for why.
  */
 
-#define _GNU_SOURCE
 #define _GNU_SOURCE
 #include "process_cpuset.h"
 #include "lpmd.h"
@@ -57,7 +66,6 @@
 
 #include <libxml/parser.h>
 #include <libxml/tree.h>
-#include <systemd/sd-bus.h>
 
 #define MAX_NAME 64
 #define MAX_CPULIST 256
@@ -237,25 +245,23 @@ struct cpu_groups {
  * used at attach time so introspection (LIST-BOUND) can show them
  * without re-parsing the XML.
  *
- * @unit is empty for every PID this build binds: affinity is applied
- * in place and there is no unit to remember. It stays in the struct
- * only to recognise a scope left behind by an older lpmd that still
- * migrated tasks (see process_cpuset_release_all). */
+ * There is no unit name here. Binding is always sched_setaffinity(2) on
+ * the task in place, so there is no scope unit to remember and nothing
+ * to stop on release -- only a mask to put back. */
 struct attached_entry {
 	pid_t pid;
-	char unit[128];
 	enum classification cls;
 	unsigned int groups;
 	uid_t owner_uid; /* 0 = system manager, else user manager */
 	int all_threads; /* affinity was applied to every TID, not just the leader */
 
-	/* Exact-restore bookkeeping for the sched_setaffinity path
-	 * (unit[0] == '\0'). orig_* is the mask the task had before lpmd
-	 * touched it; set_* is what lpmd wrote. On release we only restore
-	 * orig_* if the task's current mask still equals set_*: anything
-	 * else means the task (or an admin) changed its own affinity after
-	 * we bound it, and overwriting that would be worse than leaving it.
-	 * start_time guards against PID reuse between attach and release. */
+	/* Exact-restore bookkeeping. orig_* is the mask the task had before
+	 * lpmd touched it; set_* is what lpmd wrote. On release we only
+	 * restore orig_* if the task's current mask still equals set_*:
+	 * anything else means the task (or an admin) changed its own
+	 * affinity after we bound it, and overwriting that would be worse
+	 * than leaving it. start_time guards against PID reuse between
+	 * attach and release. */
 	uint8_t orig_mask[CPUMASK_BYTES];
 	size_t orig_mlen;
 	uint8_t set_mask[CPUMASK_BYTES];
@@ -270,14 +276,11 @@ struct pid_set {
 
 /* One entry per descendant TGID promoted alongside the focused PID.
  * Remembers everything needed to revert that descendant to its prior
- * state when focus moves away (mask + classification + groups +
- * whether we used the cgroup-scope or sched_setaffinity path). */
+ * state when focus moves away: mask + classification + groups. */
 #define FOCUS_DESC_MAX 256
 struct focus_desc {
 	pid_t pid;
-	int used_scope; /* 1 = had a tracked scope unit */
 	int had_entry; /* 1 = was in attached set */
-	char unit[128];
 	uint8_t orig_mask[CPUMASK_BYTES];
 	size_t orig_mlen;
 	enum classification orig_cls;
@@ -308,11 +311,9 @@ struct process_cpuset_ctx {
 
 	/* Currently focused PID (set by process_cpuset_set_focus_pid()).
      * When non-zero, this PID is treated as user_interactive even if
-     * its <Process> entry classifies it differently. focus_unit /
-     * focus_used_scope let us revert the change cleanly on demotion. */
+     * its <Process> entry classifies it differently. focus_orig_* let
+     * us revert the change cleanly on demotion. */
 	pid_t focus_pid;
-	char focus_unit[128];
-	int focus_used_scope; /* 1 = cgroup scope, 0 = sched_setaffinity */
 	int focus_all_threads;
 	uint8_t focus_orig_mask[CPUMASK_BYTES];
 	size_t focus_orig_mlen;
@@ -1662,12 +1663,31 @@ static int apply_pid_uclamp(process_cpuset_t *ctx, pid_t pid,
  * kill/stop semantics, logind/polkit session tracking, and any
  * cgroup-based observability the admin has set up. It also destroys the
  * unit identity that slice.xml policy keys on, so the two features
- * defeated each other.
+ * defeated each other. It is also what stranded tasks in the root
+ * cgroup on shutdown: the release path wrote each PID to
+ * /sys/fs/cgroup/cgroup.procs, which is not where it came from, so the
+ * damage outlived the daemon.
  *
- * lpmd now only ever calls sched_setaffinity(2) on the task where it
- * already is (see affinity_bind_pid), or sets AllowedCPUs= on a unit
- * that already exists (see lpmd_slice_cpuset.c). No task is moved
- * between cgroups, and no cgroup is created.
+ * The scope machinery came in two halves and both are now gone. The
+ * first half created the scope and moved the task into it. The second
+ * half steered the task afterwards by rewriting that scope's
+ * AllowedCPUs= over sd-bus (SetUnitProperties with runtime=true), used
+ * by the focus-promotion path and by release. Removing only the first
+ * half left the second as dead-but-loaded code: every call site was
+ * guarded by a non-empty unit name that nothing could set any more, so
+ * a single future assignment would have quietly re-enabled cgroup
+ * cpuset writes against live service units. The guards, the state they
+ * tested, and the sd-bus calls behind them are deleted, which is why
+ * this file no longer includes sd-bus at all.
+ *
+ * So: this file only ever calls sched_setaffinity(2) on the task where
+ * it already is (see affinity_bind_pid). No task is moved between
+ * cgroups, no cgroup is created, and no cgroup's cpuset is written.
+ *
+ * Setting AllowedCPUs= on a unit that already exists is still a
+ * legitimate mechanism, but it belongs to slice.xml and lives in
+ * lpmd_slice_cpuset.c, keyed on units rather than on PIDs. That module
+ * does not move tasks either.
  * -------------------------------------------------------------------- */
 
 
@@ -1774,11 +1794,11 @@ static int pidset_contains(const struct pid_set *s, pid_t p)
 }
 
 /*
- * Record @p as attached. @orig/@set carry the exact-restore bookkeeping
- * used by the sched_setaffinity path; pass NULL/0 for both when there is
- * nothing to restore (scope-managed or reclaimed PIDs).
+ * Record @p as attached. @orig/@set carry the exact-restore bookkeeping;
+ * pass NULL/0 for both when there is nothing to put back (a PID we
+ * reclaimed rather than bound ourselves).
  */
-static int pidset_add_full(struct pid_set *s, pid_t p, const char *unit,
+static int pidset_add_full(struct pid_set *s, pid_t p,
 			   enum classification cls, unsigned int groups,
 			   uid_t owner_uid, const uint8_t *orig,
 			   size_t orig_len, const uint8_t *set, size_t set_len,
@@ -1798,7 +1818,6 @@ static int pidset_add_full(struct pid_set *s, pid_t p, const char *unit,
 	it = &s->items[s->n];
 	memset(it, 0, sizeof(*it));
 	it->pid = p;
-	snprintf(it->unit, sizeof(it->unit), "%s", unit ? unit : "");
 	it->cls = cls;
 	it->groups = groups;
 	it->owner_uid = owner_uid;
@@ -1819,12 +1838,11 @@ static int pidset_add_full(struct pid_set *s, pid_t p, const char *unit,
 	return 0;
 }
 
-static int pidset_add(struct pid_set *s, pid_t p, const char *unit,
-		      enum classification cls, unsigned int groups,
-		      uid_t owner_uid)
+static int pidset_add(struct pid_set *s, pid_t p, enum classification cls,
+		      unsigned int groups, uid_t owner_uid)
 {
-	return pidset_add_full(s, p, unit, cls, groups, owner_uid, NULL, 0,
-			       NULL, 0, 0);
+	return pidset_add_full(s, p, cls, groups, owner_uid, NULL, 0, NULL, 0,
+			       0);
 }
 
 static void pidset_prune_dead(struct pid_set *s)
@@ -1919,20 +1937,17 @@ int process_cpuset_is_attached(const process_cpuset_t *ctx, pid_t pid)
 }
 
 int process_cpuset_attached_get(const process_cpuset_t *ctx, size_t i,
-				pid_t *pid_out, char *unit_out, size_t unit_cap)
+				pid_t *pid_out)
 {
 	if (!ctx || i >= ctx->attached.n)
 		return -1;
 	if (pid_out)
 		*pid_out = ctx->attached.items[i].pid;
-	if (unit_out && unit_cap)
-		snprintf(unit_out, unit_cap, "%s", ctx->attached.items[i].unit);
 	return 0;
 }
 
 int process_cpuset_attached_get_ex(const process_cpuset_t *ctx, size_t i,
-				   pid_t *pid_out, char *unit_out,
-				   size_t unit_cap, const char **class_out,
+				   pid_t *pid_out, const char **class_out,
 				   int *use_pcores, int *use_ecores,
 				   int *use_lcores)
 {
@@ -1943,8 +1958,6 @@ int process_cpuset_attached_get_ex(const process_cpuset_t *ctx, size_t i,
 	e = &ctx->attached.items[i];
 	if (pid_out)
 		*pid_out = e->pid;
-	if (unit_out && unit_cap)
-		snprintf(unit_out, unit_cap, "%s", e->unit);
 	if (class_out)
 		*class_out = class_str(e->cls);
 	if (use_pcores)
@@ -2463,88 +2476,6 @@ int process_cpuset_add_entry(process_cpuset_t *ctx, const char *name,
 
 /* ---------- focus-driven user_interactive promotion ---------- */
 
-/*
- * Update an existing transient cpuset scope's AllowedCPUs at runtime
- * via systemd's SetUnitProperties("runtime"=true). Best effort: a
- * non-zero return is logged at the call site.
- */
-static int set_scope_allowed_cpus(const char *unit, const uint8_t *mask,
-				  size_t mask_len)
-{
-	sd_bus_error err = SD_BUS_ERROR_NULL;
-	sd_bus_message *m = NULL;
-	sd_bus *bus = NULL;
-	char dbg[MAX_CPULIST] = { 0 };
-	int r;
-
-	if (!unit || !*unit) {
-		lpmd_log_debug(
-			"set_scope_allowed_cpus: empty unit name, skipped\n");
-		return -1;
-	}
-
-	mask_to_cpulist(mask, mask_len, dbg, sizeof(dbg));
-	lpmd_log_debug(
-		"set_scope_allowed_cpus: unit='%s' cpus=[%s] mlen=%zu\n", unit,
-		dbg[0] ? dbg : "<empty>", mask_len);
-
-	r = sd_bus_open_system(&bus);
-	if (r < 0) {
-		lpmd_log_debug(
-			"set_scope_allowed_cpus: sd_bus_open_system failed: %s\n",
-			strerror(-r));
-		goto out;
-	}
-
-	r = sd_bus_message_new_method_call(bus, &m, "org.freedesktop.systemd1",
-					   "/org/freedesktop/systemd1",
-					   "org.freedesktop.systemd1.Manager",
-					   "SetUnitProperties");
-	if (r < 0)
-		goto out;
-
-	/* SetUnitProperties(in s name, in b runtime, in a(sv) properties) */
-	r = sd_bus_message_append(m, "sb", unit, 1);
-	if (r < 0)
-		goto out;
-
-	r = sd_bus_message_open_container(m, 'a', "(sv)");
-	if (r < 0)
-		goto out;
-	r = sd_bus_message_open_container(m, 'r', "sv");
-	if (r < 0)
-		goto out;
-	r = sd_bus_message_append(m, "s", "AllowedCPUs");
-	if (r < 0)
-		goto out;
-	r = sd_bus_message_open_container(m, 'v', "ay");
-	if (r < 0)
-		goto out;
-	r = sd_bus_message_append_array(m, 'y', mask, mask_len);
-	if (r < 0)
-		goto out;
-	sd_bus_message_close_container(m); /* v */
-	sd_bus_message_close_container(m); /* (sv) */
-	sd_bus_message_close_container(m); /* a(sv) */
-
-	r = sd_bus_call(bus, m, 0, &err, NULL);
-	if (r < 0) {
-		lpmd_log_debug(
-			"SetUnitProperties(%s, AllowedCPUs=[%s]) failed: %s\n",
-			unit, dbg[0] ? dbg : "<empty>",
-			err.message ? err.message : strerror(-r));
-	} else {
-		lpmd_log_debug(
-			"set_scope_allowed_cpus: unit='%s' cpus=[%s] applied OK\n",
-			unit, dbg[0] ? dbg : "<empty>");
-	}
-out:
-	sd_bus_error_free(&err);
-	sd_bus_message_unref(m);
-	sd_bus_unref(bus);
-	return r < 0 ? -1 : 0;
-}
-
 /* Locate the attached_entry for @pid, NULL if not tracked. */
 static struct attached_entry *attached_find_mut(process_cpuset_t *ctx,
 						pid_t pid)
@@ -2866,8 +2797,7 @@ static int affinity_bind_pid(process_cpuset_t *ctx, const struct proc_entry *e,
 		(unsigned)owner_uid,
 		e->affinity_all_threads ? " all-threads" : "");
 
-	/* unit="" marks this as affinity-only: no scope to stop on release. */
-	if (pidset_add_full(&ctx->attached, pid, "", e->cls, e->resolved.groups,
+	if (pidset_add_full(&ctx->attached, pid, e->cls, e->resolved.groups,
 			    owner_uid, cur, cur_len, send, send_len,
 			    pid_start_time(pid)) == 0)
 		ctx->attached.items[ctx->attached.n - 1].all_threads =
@@ -2992,11 +2922,6 @@ static int focus_promote_descendant(process_cpuset_t *ctx, pid_t pid,
 		desc->had_entry = 1;
 		desc->orig_cls = ent->cls;
 		desc->orig_groups = ent->groups;
-		if (ent->unit[0]) {
-			desc->used_scope = 1;
-			snprintf(desc->unit, sizeof(desc->unit), "%s",
-				 ent->unit);
-		}
 		ent->cls = CLASS_USER_INTERACTIVE;
 		ent->groups =
 			ctx->class_defaults[CLASS_USER_INTERACTIVE].groups;
@@ -3010,20 +2935,12 @@ static int focus_promote_descendant(process_cpuset_t *ctx, pid_t pid,
 				sizeof(old_list));
 		lpmd_log_debug(
 			"process_cpuset: focus: promote-desc pid=%d comm='%s' "
-			"unit='%s' cpus [%s] -> [%s]\n",
+			"cpus [%s] -> [%s]\n",
 			(int)pid, comm,
-			desc->used_scope ? desc->unit : "(affinity)",
 			old_list[0] ? old_list : "?",
 			ui_list[0] ? ui_list : "?");
 	}
 
-	if (desc->used_scope) {
-		if (set_scope_allowed_cpus(desc->unit, ui_mask, ui_mlen) < 0)
-			return -1;
-		(void)apply_pid_uclamp(ctx, pid, CLASS_USER_INTERACTIVE,
-			       class_str(CLASS_USER_INTERACTIVE), 0);
-		return 0;
-	}
 	if (affinity_apply(pid, /*all_threads=*/1, ui_mask, ui_mlen,
 			  class_str(CLASS_USER_INTERACTIVE)) < 0)
 		return -1;
@@ -3043,25 +2960,13 @@ static void focus_demote_descendant(process_cpuset_t *ctx,
 			ent->groups = desc->orig_groups;
 		}
 	}
-	lpmd_log_debug(
-		"process_cpuset: focus: demote-desc pid=%d unit='%s' "
-		"cls->%s\n",
-		(int)desc->pid, desc->used_scope ? desc->unit : "(affinity)",
-		class_str(desc->orig_cls));
-	if (desc->used_scope && desc->unit[0]) {
-		(void)set_scope_allowed_cpus(desc->unit, desc->orig_mask,
-					     desc->orig_mlen);
-		if (desc->orig_cls != CLASS_INVALID)
-			(void)apply_pid_uclamp(ctx, desc->pid, desc->orig_cls,
-				       class_str(desc->orig_cls), 0);
-	} else {
-		(void)affinity_apply(desc->pid, /*all_threads=*/1,
-				     desc->orig_mask, desc->orig_mlen,
-				     class_str(desc->orig_cls));
-		if (desc->orig_cls != CLASS_INVALID)
-			(void)apply_pid_uclamp(ctx, desc->pid, desc->orig_cls,
+	lpmd_log_debug("process_cpuset: focus: demote-desc pid=%d cls->%s\n",
+		       (int)desc->pid, class_str(desc->orig_cls));
+	(void)affinity_apply(desc->pid, /*all_threads=*/1, desc->orig_mask,
+			     desc->orig_mlen, class_str(desc->orig_cls));
+	if (desc->orig_cls != CLASS_INVALID)
+		(void)apply_pid_uclamp(ctx, desc->pid, desc->orig_cls,
 				       class_str(desc->orig_cls), 1);
-	}
 }
 
 /* Build the user_interactive AllowedCPUs mask from current
@@ -3086,18 +2991,19 @@ static size_t build_user_interactive_mask(const process_cpuset_t *ctx,
  * if @pid == 0, demote the previously promoted PID back to its
  * original mask.
  *
- * Promotion strategy:
- *   - System-slice PID with a tracked scope unit:
- *       SetUnitProperties(unit, AllowedCPUs=<UI mask>, runtime=true)
- *   - User-session PID (affinity-only, unit==""):
- *       sched_setaffinity(pid, <UI mask>) (all-threads if entry asked)
- *   - PID not in attached set yet: no-op (the proc-connector / rescan
- *     will attach it shortly with its default class).
+ * Promotion is sched_setaffinity(pid, <UI mask>) over every TID, on the
+ * task where it already is -- the same mechanism used for every other
+ * PID here, and for the same reason: promoting the focused window must
+ * not relocate it out of its own service or session cgroup.
+ *
+ * A PID that is not in the attached set yet is a no-op; the
+ * proc-connector / periodic rescan will attach it shortly with its
+ * default class, and the helper's next focus event picks it up.
  *
  * On the next call (with a different @pid, or 0) the previous focus
  * PID is reverted to its remembered mask.
  *
- * Returns 0 on success, -1 on parameter / sd-bus error.
+ * Returns 0 on success, -1 on parameter error.
  */
 int process_cpuset_set_focus_pid(process_cpuset_t *ctx, pid_t pid)
 {
@@ -3142,35 +3048,18 @@ int process_cpuset_set_focus_pid(process_cpuset_t *ctx, pid_t pid)
 			prev_ent->cls = ctx->focus_orig_cls;
 			prev_ent->groups = ctx->focus_orig_groups;
 		}
-		lpmd_log_debug(
-			"process_cpuset: focus: demote pid=%d unit=%s scope=%d "
-			"cls->%s\n",
-			(int)prev,
-			ctx->focus_unit[0] ? ctx->focus_unit : "(none)",
-			ctx->focus_used_scope, class_str(ctx->focus_orig_cls));
-		if (ctx->focus_used_scope && ctx->focus_unit[0]) {
-			set_scope_allowed_cpus(ctx->focus_unit,
-					       ctx->focus_orig_mask,
-					       ctx->focus_orig_mlen);
-			if (ctx->focus_orig_cls != CLASS_INVALID)
-				(void)apply_pid_uclamp(ctx, prev,
-					       ctx->focus_orig_cls,
-					       class_str(ctx->focus_orig_cls), 0);
-		} else {
-			/* Affinity-only path: best effort, the PID may be gone. */
-			(void)affinity_apply(prev, ctx->focus_all_threads,
-					     ctx->focus_orig_mask,
-					     ctx->focus_orig_mlen,
-					     class_str(ctx->focus_orig_cls));
-			if (ctx->focus_orig_cls != CLASS_INVALID)
-				(void)apply_pid_uclamp(ctx, prev,
-					       ctx->focus_orig_cls,
+		lpmd_log_debug("process_cpuset: focus: demote pid=%d cls->%s\n",
+			       (int)prev, class_str(ctx->focus_orig_cls));
+		/* Best effort: the PID may be gone. */
+		(void)affinity_apply(prev, ctx->focus_all_threads,
+				     ctx->focus_orig_mask,
+				     ctx->focus_orig_mlen,
+				     class_str(ctx->focus_orig_cls));
+		if (ctx->focus_orig_cls != CLASS_INVALID)
+			(void)apply_pid_uclamp(ctx, prev, ctx->focus_orig_cls,
 					       class_str(ctx->focus_orig_cls),
 					       ctx->focus_all_threads);
-		}
 		ctx->focus_pid = 0;
-		ctx->focus_unit[0] = '\0';
-		ctx->focus_used_scope = 0;
 		ctx->focus_all_threads = 0;
 		ctx->focus_orig_mlen = 0;
 		ctx->focus_orig_cls = CLASS_INVALID;
@@ -3217,12 +3106,11 @@ int process_cpuset_set_focus_pid(process_cpuset_t *ctx, pid_t pid)
 	if (mlen == ctx->focus_orig_mlen &&
 	    memcmp(mask, ctx->focus_orig_mask, mlen) == 0) {
 		lpmd_log_debug(
-			"process_cpuset: focus: pid=%d comm='%s' unit='%s': "
+			"process_cpuset: focus: pid=%d comm='%s': "
 			"user_interactive mask matches current mask exactly "
 			"(no visible change). Update <ClassDefaults> so "
 			"<UserInteractive> differs from the PID's current class.\n",
-			(int)pid, comm,
-			ent->unit[0] ? ent->unit : "(affinity)");
+			(int)pid, comm);
 	} else {
 		char ui_list[MAX_CPULIST] = { 0 };
 		char old_list[MAX_CPULIST] = { 0 };
@@ -3231,38 +3119,29 @@ int process_cpuset_set_focus_pid(process_cpuset_t *ctx, pid_t pid)
 				old_list, sizeof(old_list));
 		lpmd_log_debug(
 			"process_cpuset: focus: promote pid=%d comm='%s' "
-			"unit='%s' cpus [%s] -> [%s]\n",
-			(int)pid, comm, ent->unit[0] ? ent->unit : "(affinity)",
+			"cpus [%s] -> [%s]\n",
+			(int)pid, comm,
 			old_list[0] ? old_list : "?",
 			ui_list[0] ? ui_list : "?");
 	}
 
 	ctx->focus_pid = pid;
-	ctx->focus_used_scope = (ent->unit[0] != '\0');
-	snprintf(ctx->focus_unit, sizeof(ctx->focus_unit), "%s", ent->unit);
 	ctx->focus_orig_cls = ent->cls;
 	ctx->focus_orig_groups = ent->groups;
 	ent->cls = CLASS_USER_INTERACTIVE;
 	ent->groups = ctx->class_defaults[CLASS_USER_INTERACTIVE].groups;
 
-	if (ctx->focus_used_scope) {
-		if (set_scope_allowed_cpus(ent->unit, mask, mlen) < 0)
-			return -1;
-		(void)apply_pid_uclamp(ctx, pid, CLASS_USER_INTERACTIVE,
-			       class_str(CLASS_USER_INTERACTIVE), 0);
-	} else {
-		/* Affinity-only. Focus promotion is a whole-process semantic:
-         * always cover every TID in the leader's task list, regardless
-         * of the matching entry's <AffinityAllThreads> setting. This is
-         * especially important for browsers, whose top-level window PID
-         * is often a worker TID rather than the process leader. */
-		ctx->focus_all_threads = 1;
-		if (affinity_apply(pid, /*all_threads=*/1, mask, mlen,
-				   class_str(CLASS_USER_INTERACTIVE)) < 0)
-			return -1;
-		(void)apply_pid_uclamp(ctx, pid, CLASS_USER_INTERACTIVE,
+	/* Focus promotion is a whole-process semantic: always cover every TID
+     * in the leader's task list, regardless of the matching entry's
+     * <AffinityAllThreads> setting. This is especially important for
+     * browsers, whose top-level window PID is often a worker TID rather
+     * than the process leader. */
+	ctx->focus_all_threads = 1;
+	if (affinity_apply(pid, /*all_threads=*/1, mask, mlen,
+			   class_str(CLASS_USER_INTERACTIVE)) < 0)
+		return -1;
+	(void)apply_pid_uclamp(ctx, pid, CLASS_USER_INTERACTIVE,
 			       class_str(CLASS_USER_INTERACTIVE), 1);
-	}
 
 	/* Step 4: promote descendant TGIDs (browser content / GPU / RDD
      * sub-processes, etc.). Each gets the same UI mask applied
@@ -3329,16 +3208,10 @@ static int reapply_attached_class(process_cpuset_t *ctx,
 			continue;
 		if (ctx->focus_pid > 0 && ent->pid == ctx->focus_pid)
 			continue;
-		if (ent->unit[0]) {
-			(void)set_scope_allowed_cpus(ent->unit, mask, mlen);
-			(void)apply_pid_uclamp(ctx, ent->pid, target_cls,
-				       class_str(target_cls), 0);
-		} else {
-			(void)affinity_apply(ent->pid, /*all_threads=*/1, mask,
-					     mlen, class_str(target_cls));
-			(void)apply_pid_uclamp(ctx, ent->pid, target_cls,
+		(void)affinity_apply(ent->pid, /*all_threads=*/1, mask, mlen,
+				     class_str(target_cls));
+		(void)apply_pid_uclamp(ctx, ent->pid, target_cls,
 				       class_str(target_cls), 1);
-		}
 		/* Keep the stored groups in sync so LIST-BOUND displays the
 		 * correct CPU group names after a class-default change
 		 * (e.g. focus-helper handshake flipping USER_INITIATED). */
@@ -3732,7 +3605,7 @@ static int apply_default_to_pid(process_cpuset_t *ctx, pid_t pid,
 				       (int)pid, comm,
 				       (unsigned)owner_uid, n,
 				       from_event ? " event" : "");
-			pidset_add(&ctx->attached, pid, "", e->cls,
+			pidset_add(&ctx->attached, pid, e->cls,
 				   e->resolved.groups, owner_uid);
 			(void)apply_pid_uclamp(ctx, pid, e->cls,
 			       class_str(e->cls), 1);
@@ -3743,61 +3616,12 @@ static int apply_default_to_pid(process_cpuset_t *ctx, pid_t pid,
 			       (int)pid, comm,
 			       (unsigned)owner_uid,
 			       from_event ? " event" : "");
-		pidset_add(&ctx->attached, pid, "", e->cls, e->resolved.groups,
+		pidset_add(&ctx->attached, pid, e->cls, e->resolved.groups,
 			   owner_uid);
 		(void)apply_pid_uclamp(ctx, pid, e->cls, class_str(e->cls), 0);
 		return 1;
 	}
 	return -1;
-}
-
-/* ---------- shutdown: stop transient scopes ---------- */
-
-static int stop_scope_unit(const char *unit)
-{
-	sd_bus_error err = SD_BUS_ERROR_NULL;
-	sd_bus *bus = NULL;
-	int r;
-
-	r = sd_bus_open_system(&bus);
-	if (r < 0) {
-		lpmd_log_debug( "sd_bus_open_system: %s\n", strerror(-r));
-		goto out;
-	}
-
-	r = sd_bus_call_method(bus, "org.freedesktop.systemd1",
-			       "/org/freedesktop/systemd1",
-			       "org.freedesktop.systemd1.Manager", "StopUnit",
-			       &err, NULL, "ss", unit, "replace");
-	if (r < 0) {
-		/* Unit may already be gone (process exited): not fatal. */
-		const char *msg = err.message ? err.message : strerror(-r);
-		if (!strstr(msg, "not loaded"))
-			lpmd_log_debug( "StopUnit(%s) failed: %s\n", unit, msg);
-	}
-
-out:
-	sd_bus_error_free(&err);
-	sd_bus_unref(bus);
-	return r < 0 ? -1 : 0;
-}
-
-int process_cpuset_stop_all(process_cpuset_t *ctx)
-{
-	int stopped = 0;
-
-	if (!ctx)
-		return -1;
-
-	for (size_t i = 0; i < ctx->attached.n; i++) {
-		if (ctx->attached.items[i].unit[0] &&
-		    stop_scope_unit(ctx->attached.items[i].unit) == 0)
-			stopped++;
-	}
-
-	/* Clear the tracking set; the scopes (if still alive) are gone now. */
-	ctx->attached.n = 0;
-	return stopped;
 }
 
 /*
@@ -3822,23 +3646,10 @@ int process_cpuset_release_all(process_cpuset_t *ctx)
 		char comm[MAX_NAME];
 		size_t now_len;
 
-		if (it->unit[0]) {
-			/* A scope left over from an older lpmd that still
-             * migrated tasks. Do NOT move the task back out -- that
-             * would be another migration, and stopping a non-empty
-             * scope would SIGTERM it. Unsetting AllowedCPUs= lifts
-             * the cpuset constraint in place; the scope then dies
-             * with its task. */
-			if (set_scope_allowed_cpus(it->unit, NULL, 0) == 0)
-				released++;
-			continue;
-		}
-
-		/* Affinity-only PID: restore the exact mask it had before we
-         * touched it, but only if it still carries what we wrote. A
-         * different mask means the task (or an admin) set its own
-         * affinity after we bound it -- that is the task's decision,
-         * so leave it. */
+		/* Restore the exact mask the PID had before we touched it, but
+         * only if it still carries what we wrote. A different mask means
+         * the task (or an admin) set its own affinity after we bound it
+         * -- that is the task's decision, so leave it. */
 		if (it->start_time && pid_start_time(pid) != it->start_time) {
 			lpmd_log_debug(
 				"release: pid %d start_time changed (PID reused); not restoring\n",

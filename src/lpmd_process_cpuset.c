@@ -458,12 +458,10 @@ static int class_has_live_attached_pid(const char *cls)
 	n = process_cpuset_attached_count(g_pc_ctx);
 	for (i = 0; i < n; i++) {
 		pid_t pid = 0;
-		char unit[128] = { 0 };
 		const char *item_cls = NULL;
 		int use_p = 0, use_e = 0, use_l = 0;
 
-		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, unit,
-					   sizeof(unit), &item_cls,
+		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, &item_cls,
 					   &use_p, &use_e, &use_l) < 0)
 			continue;
 
@@ -960,14 +958,12 @@ static void sync_min_perf_owner(const struct lpmd_config_t *config,
 	n = process_cpuset_attached_count(g_pc_ctx);
 	for (i = 0; i < n; i++) {
 		pid_t pid = 0;
-		char unit[128] = { 0 };
 		const char *cls = NULL;
 		int use_p = 0, use_e = 0, use_l = 0;
 		int val;
 		unsigned int scope;
 
-		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, unit,
-					   sizeof(unit), &cls,
+		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, &cls,
 					   &use_p, &use_e, &use_l) < 0)
 			continue;
 		if (!pid_is_live(pid))
@@ -1049,14 +1045,12 @@ static void sync_max_perf_owner(const struct lpmd_config_t *config,
 	n = process_cpuset_attached_count(g_pc_ctx);
 	for (i = 0; i < n; i++) {
 		pid_t pid = 0;
-		char unit[128] = { 0 };
 		const char *cls = NULL;
 		int use_p = 0, use_e = 0, use_l = 0;
 		int val;
 		unsigned int scope;
 
-		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, unit,
-					   sizeof(unit), &cls,
+		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, &cls,
 					   &use_p, &use_e, &use_l) < 0)
 			continue;
 		if (!pid_is_live(pid))
@@ -1139,13 +1133,11 @@ static void sync_gt_ia_bias_owner(const struct lpmd_config_t *config,
 	n = process_cpuset_attached_count(g_pc_ctx);
 	for (i = 0; i < n; i++) {
 		pid_t pid = 0;
-		char unit[128] = { 0 };
 		const char *cls = NULL;
 		int use_p = 0, use_e = 0, use_l = 0;
 		uint32_t val;
 
-		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, unit,
-					   sizeof(unit), &cls,
+		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, &cls,
 					   &use_p, &use_e, &use_l) < 0)
 			continue;
 		if (!pid_is_live(pid))
@@ -1224,13 +1216,11 @@ static void sync_balance_slider_owner(const struct lpmd_config_t *config,
 	n = process_cpuset_attached_count(g_pc_ctx);
 	for (i = 0; i < n; i++) {
 		pid_t pid = 0;
-		char unit[128] = { 0 };
 		const char *cls = NULL;
 		int use_p = 0, use_e = 0, use_l = 0;
 		int val;
 
-		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, unit,
-					   sizeof(unit), &cls,
+		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, &cls,
 					   &use_p, &use_e, &use_l) < 0)
 			continue;
 		if (!pid_is_live(pid))
@@ -1312,13 +1302,11 @@ static void sync_slider_offset_owner(const struct lpmd_config_t *config,
 	n = process_cpuset_attached_count(g_pc_ctx);
 	for (i = 0; i < n; i++) {
 		pid_t pid = 0;
-		char unit[128] = { 0 };
 		const char *cls = NULL;
 		int use_p = 0, use_e = 0, use_l = 0;
 		int val;
 
-		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, unit,
-					   sizeof(unit), &cls,
+		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, &cls,
 					   &use_p, &use_e, &use_l) < 0)
 			continue;
 		if (!pid_is_live(pid))
@@ -1837,11 +1825,11 @@ void lpmd_process_cpuset_uninit(void)
 }
 
 /*
- * Stop every transient cpuset scope started by this context but keep
- * the context alive (config, groups, class defaults are preserved).
- * After this call no PIDs are bound; a subsequent
- * lpmd_process_cpuset_rescan() (or the periodic rescan) will re-attach
- * matching PIDs from <Process> entries again.
+ * Unbind every PID this context bound, but keep the context alive
+ * (config, groups, class defaults are preserved). After this call no
+ * PIDs are bound; a subsequent lpmd_process_cpuset_rescan() (or the
+ * periodic rescan) will re-bind matching PIDs from <Process> entries
+ * again.
  */
 void lpmd_process_cpuset_unbind_all(void)
 {
@@ -1860,18 +1848,16 @@ void lpmd_process_cpuset_unbind_all(void)
 	}
 
 	/*
-     * Use the release path (migrate PID to root cgroup, then stop the
-     * empty scope) instead of process_cpuset_stop_all(), which would
-     * send SIGTERM to every bound process via systemd's default
-     * scope KillMode.
+     * Restores each PID's original affinity mask in place. Nothing is
+     * moved between cgroups and nothing is signalled -- a PID that set
+     * its own affinity after we bound it keeps it.
      */
 	n = process_cpuset_release_all(g_pc_ctx);
 	if (n < 0)
 		lpmd_log_warn("process_cpuset: unbind-all failed\n");
 	else
-		lpmd_log_msg(
-			"process_cpuset: released %d PID(s) from transient cpuset scopes\n",
-			n);
+		lpmd_log_msg("process_cpuset: restored affinity on %d PID(s)\n",
+			     n);
 }
 
 /*
@@ -1917,12 +1903,10 @@ void lpmd_process_cpuset_rescan(void)
 	attached_n = process_cpuset_attached_count(g_pc_ctx);
 	for (i = 0; i < attached_n; i++) {
 		pid_t pid = 0;
-		char unit[128] = { 0 };
 		const char *cls = NULL;
 		int use_p = 0, use_e = 0, use_l = 0;
 
-		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, unit,
-						   sizeof(unit), &cls, &use_p,
+		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, &cls, &use_p,
 						   &use_e, &use_l) < 0)
 			continue;
 		sync_min_perf_owner(config, cls);
@@ -2801,7 +2785,6 @@ void lpmd_process_cpuset_print_bound(void)
 
 	for (i = 0; i < n; i++) {
 		pid_t pid = 0;
-		char unit[128] = { 0 };
 		char path[64];
 		char comm[64] = { 0 };
 		const char *cls = "?";
@@ -2815,8 +2798,7 @@ void lpmd_process_cpuset_print_bound(void)
 		DIR *task_dir;
 		struct dirent *entry;
 
-		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, unit,
-						   sizeof(unit), &cls, &use_p,
+		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, &cls, &use_p,
 						   &use_e, &use_l) < 0)
 			continue;
 		if (cls && !strcasecmp(cls, "Unclassified"))
@@ -2865,14 +2847,11 @@ void lpmd_process_cpuset_print_bound(void)
 		if (!off)
 			snprintf(cpus_buf, sizeof(cpus_buf), "-");
 
-		/* Print process line */
-		/* unit is always empty now: lpmd no longer creates a scope
-		 * for a task. A non-empty one can only be a leftover from an
-		 * older build still tracked across this run. */
+		/* Print process line. "via" is not a variable: every PID is
+		 * bound the same way, so there is nothing else it could say. */
 		lpmd_log_msg(
-			"  PID=%d comm=%s class=%s groups=%s cpus=[%s] via=%s\n",
-			(int)pid, comm, cls, groups_buf, cpus_buf,
-			unit[0] ? unit : "sched_setaffinity");
+			"  PID=%d comm=%s class=%s groups=%s cpus=[%s] via=sched_setaffinity\n",
+			(int)pid, comm, cls, groups_buf, cpus_buf);
 
 		/* Then what the kernel actually has, and whether that
 		 * agrees with what we configured. */

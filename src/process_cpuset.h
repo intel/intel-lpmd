@@ -8,9 +8,14 @@
  *
  * Tasks are constrained where they already live: this library never moves
  * a task between cgroups, never creates a cgroup or a transient scope
- * unit, never touches a task that already carries an affinity mask of its
- * own, and yields to slice.xml policy (see lpmd_slice_cpuset.c) for any
- * task whose cgroup is already governed by an enforceable <Unit> entry.
+ * unit, never writes a cgroup cpuset (AllowedCPUs=), never touches a task
+ * that already carries an affinity mask of its own, and yields to
+ * slice.xml policy (see lpmd_slice_cpuset.c) for any task whose cgroup is
+ * already governed by an enforceable <Unit> entry.
+ *
+ * sched_setaffinity(2) is the only mechanism, for every PID and on every
+ * path including focus promotion. There is no alternative branch to
+ * select and no systemd dependency.
  *
  * Designed so it can be linked into intel_lpmd (or any other daemon) and
  * driven from existing event loops, instead of being shipped only as a
@@ -157,34 +162,24 @@ int process_cpuset_override_class_uclamp_defaults(
 	int custom_profile_2_min, int custom_profile_2_max);
 
 /*
- * Scan /proc once and attach any newly-seen matching PIDs to a transient
- * cpuset scope. PIDs already attached in a previous call are skipped.
- * If dry_run is non-zero, prints what would happen but does not call
- * systemd. Returns the number of new PIDs attached this cycle, or -1.
+ * Scan /proc once and bind any newly-seen matching PIDs with
+ * sched_setaffinity(2), in place. PIDs already handled in a previous
+ * call are skipped. If dry_run is non-zero, logs what would happen and
+ * changes nothing. Returns the number of new PIDs bound this cycle,
+ * or -1.
  */
 int process_cpuset_apply_once(process_cpuset_t *ctx, int dry_run);
 
 /*
- * Apply configuration to a single PID: look up its /proc/<pid>/comm,
- * find a matching <Process> entry and attach it to a transient cpuset
- * scope. Intended for event-driven callers (e.g. the kernel proc
- * connector) that already know which PID just appeared.
+ * Apply configuration to a single PID: find the matching <Process> entry
+ * (by cgroup path or comm) and bind the task in place. Intended for
+ * event-driven callers (e.g. the kernel proc connector) that already
+ * know which PID just appeared.
  *
- * Returns 1 if the PID was newly attached, 0 if no <Process> entry
- * matches / it's already attached / the PID is gone, -1 on error.
+ * Returns 1 if the PID was newly bound, 0 if no <Process> entry
+ * matches / it's already bound / the PID is gone, -1 on error.
  */
 int process_cpuset_apply_pid(process_cpuset_t *ctx, pid_t pid, int dry_run);
-
-/*
- * DEPRECATED, and inert since this library stopped creating scope units:
- * it only ever acted on tracked PIDs that owned a transient scope, and
- * none are created any more. Retained so out-of-tree callers still link.
- * Use process_cpuset_release_all().
- *
- * WARNING: systemd's default scope KillMode signals all processes in
- * the scope on stop, so this could kill the very tasks it released.
- */
-int process_cpuset_stop_all(process_cpuset_t *ctx);
 
 /*
  * Release every tracked PID, restoring exactly the affinity mask it had
@@ -200,20 +195,18 @@ int process_cpuset_release_all(process_cpuset_t *ctx);
 size_t process_cpuset_attached_count(const process_cpuset_t *ctx);
 
 /*
- * Returns non-zero if @pid is currently tracked as attached to a
- * transient cpuset scope by this context, 0 otherwise.
+ * Returns non-zero if @pid is currently tracked as bound by this
+ * context, 0 otherwise.
  */
 int process_cpuset_is_attached(const process_cpuset_t *ctx, pid_t pid);
 
 /*
  * Read out the attached PID at index @i (0 <= i < attached_count).
- * On success returns 0 and fills *@pid_out (and *@unit_out, if non-NULL,
- * with up to @unit_cap bytes of the systemd scope unit name).
- * Returns -1 on out-of-range or NULL ctx.
+ * On success returns 0 and fills *@pid_out. Returns -1 on out-of-range
+ * or NULL ctx.
  */
 int process_cpuset_attached_get(const process_cpuset_t *ctx, size_t i,
-				pid_t *pid_out, char *unit_out,
-				size_t unit_cap);
+				pid_t *pid_out);
 
 /*
  * Extended attached-PID lookup. In addition to the data returned by
@@ -224,8 +217,7 @@ int process_cpuset_attached_get(const process_cpuset_t *ctx, size_t i,
  * static storage owned by the library; do not free it.
  */
 int process_cpuset_attached_get_ex(const process_cpuset_t *ctx, size_t i,
-				   pid_t *pid_out, char *unit_out,
-				   size_t unit_cap, const char **class_out,
+				   pid_t *pid_out, const char **class_out,
 				   int *use_pcores, int *use_ecores,
 				   int *use_lcores);
 
