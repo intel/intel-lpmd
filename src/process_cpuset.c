@@ -2455,6 +2455,11 @@ int process_cpuset_add_entry_ex(process_cpuset_t *ctx, const char *name,
 	snprintf(e.name, sizeof(e.name), "%s", name);
 	e.cls = cls;
 	e.allow_session = allow_session ? 1 : 0;
+	/* Same default as an XML entry with no <AffinityAllThreads> tag: cover
+	 * every thread. memset() alone would silently mean the opposite, so an
+	 * entry added at runtime would constrain only the group leader while an
+	 * identical entry in the file constrained the whole process. */
+	e.affinity_all_threads = 1;
 	e.resolved = *default_spec_for(ctx, cls);
 
 	idx = find_entry_index_by_name(ctx, e.name);
