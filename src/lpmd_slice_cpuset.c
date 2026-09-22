@@ -1859,26 +1859,48 @@ void lpmd_slice_cpuset_print(void)
 
 /*
  * Read a task's current affinity mask into @out. Returns the number of
- * significant bytes, or 0 if the task is gone.
+ * significant bytes, or 0 on failure with @err set to the errno.
  *
  * cpu_set_t is a plain bitmap with the same byte layout used everywhere else
  * in this file, so the result can be compared against a cgroup cpulist
  * without conversion.
+ *
+ * The cpusetsize has to come from CPU_ALLOC_SIZE() and not from
+ * get_max_cpus() / 8. The kernel rejects a cpusetsize that is not a multiple
+ * of sizeof(unsigned long), and detect_max_cpus() rounds its answer up to a
+ * multiple of 32, which makes get_max_cpus() / 8 equal to 4 on every machine
+ * with 32 CPUs or fewer -- so that form fails with EINVAL for every task on
+ * an ordinary laptop, not just occasionally. Every other affinity call in the
+ * tree already uses CPU_ALLOC_SIZE(); this one was the exception.
  */
-static size_t task_affinity_bytes(pid_t tid, uint8_t *out, size_t cap)
+static size_t task_affinity_bytes(pid_t tid, uint8_t *out, size_t cap, int *err)
 {
-	size_t setsize = (size_t)(get_max_cpus() / 8);
+	size_t setsize = CPU_ALLOC_SIZE(get_max_cpus());
 	size_t used = 0, i;
 
+	*err = 0;
+	/* Never read past @out. Keep the multiple-of-long property while
+	 * clamping, or the syscall would fail for the reason above. */
 	if (setsize > cap)
-		setsize = cap;
-	memset(out, 0, cap);
-	if (sched_getaffinity(tid, setsize, (cpu_set_t *)out) < 0)
+		setsize = cap & ~(sizeof(unsigned long) - 1);
+	if (!setsize) {
+		*err = EINVAL;
 		return 0;
+	}
+
+	memset(out, 0, cap);
+	if (sched_getaffinity(tid, setsize, (cpu_set_t *)out) < 0) {
+		*err = errno;
+		return 0;
+	}
 	for (i = 0; i < setsize; i++) {
 		if (out[i])
 			used = i + 1;
 	}
+	/* A live task always has at least one CPU, so an empty mask is a bug
+	 * in this function rather than a fact about the task. */
+	if (!used)
+		*err = ENODATA;
 	return used;
 }
 
@@ -1963,6 +1985,7 @@ void lpmd_slice_cpuset_print_bound(void)
 			char comm[64] = { 0 };
 			const char *verdict;
 			size_t aff_len;
+			int aff_err;
 			FILE *cf;
 
 			if (pid <= 0)
@@ -1983,10 +2006,15 @@ void lpmd_slice_cpuset_print_bound(void)
 				snprintf(comm, sizeof(comm), "<dead>");
 			}
 
-			aff_len = task_affinity_bytes(pid, aff, sizeof(aff));
+			/* Say why. A task that exited between the comm read and
+			 * here gives ESRCH; anything else is this daemon's
+			 * fault and used to be indistinguishable from it. */
+			aff_len = task_affinity_bytes(pid, aff, sizeof(aff),
+						      &aff_err);
 			if (!aff_len) {
-				lpmd_log_msg("      PID=%d comm=%s gone\n",
-					     (int)pid, comm);
+				lpmd_log_msg(
+					"      PID=%d comm=%s affinity unreadable: %s\n",
+					(int)pid, comm, strerror(aff_err));
 				continue;
 			}
 			bytes_to_cpulist(aff, aff_len, aff_list,
