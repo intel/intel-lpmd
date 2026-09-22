@@ -160,8 +160,9 @@
       This is why there is no <Scope>system</Scope> background.slice entry
       either, even though a system unit placed there has declared itself
       just as plainly as a user one: it too sits directly under the root
-      cgroup. (Fedora 44 ships background.slice as a user unit only, so
-      nothing is placed there on a stock system in any case.) Fixing the
+      cgroup. (A system-level background.slice does exist and is active on
+      Fedora 44, but nothing is placed in it on a stock system, so the
+      entry would buy nothing even if it were safe.) Fixing the
       probe to ask "has lpmd actually applied AllowedCPUs= to this unit"
       rather than "could the cgroup enforce it" would make both entries
       safe to add; see TODO.txt.
