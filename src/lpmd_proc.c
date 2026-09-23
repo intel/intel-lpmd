@@ -503,7 +503,9 @@ static void *lpmd_core_main_loop(void *arg)
 	hfi_kill ();
 	/* Stop any transient cpuset scopes we created before tearing down cgroups. */
 	lpmd_process_cpuset_uninit();
-	cgroup_cleanup();
+	/* Undo in the reverse of the order enter_state() applies things. */
+	cgroup_cleanup(&lpmd_config);
+	irq_cleanup();
 
 	return NULL;
 }

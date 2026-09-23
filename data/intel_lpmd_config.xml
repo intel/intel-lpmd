@@ -13,11 +13,17 @@ for Intel Energy Optimizer (LPMD) daemon
 
 	<!--
 		Mode values
-		0: Cgroup v2
-		1: Cgroup v2 isolate
-		2: CPU idle injection
+		-1: No cpuset mechanism. State transitions still happen and
+		    every other setting is still applied, but nothing writes
+		    a cpuset: the cgroup cpuset controller is not enabled, no
+		    AllowedCPUs= is set on any systemd unit, and no LP mode CPU
+		    mask is applied - including masks derived from HFI.
+		    This is the default.
+		 0: Cgroup v2
+		 1: Cgroup v2 isolate
+		 2: CPU idle injection
 	-->
-	<Mode>0</Mode>
+	<Mode>-1</Mode>
 
 	<!--
 		Default behavior when Performance power setting is used

@@ -447,10 +447,20 @@ struct lpmd_config_t {
 };
 
 enum lpm_cpu_process_mode {
+	/*
+	 * No CPU restriction mechanism at all. State transitions still run and
+	 * every other knob (EPP/EPB, perf pct limits, slider, IRQ affinity) is
+	 * still applied, but nothing writes a cpuset: no cgroup controller is
+	 * enabled, no AllowedCPUs= is set on any systemd unit, and no LP-mode
+	 * CPU mask is applied -- including the masks computed from HFI.
+	 * This is the default.
+	 */
+	LPM_CPU_NONE = -1,
 	LPM_CPU_CGROUPV2,
 	LPM_CPU_ISOLATE,
 	LPM_CPU_POWERCLAMP,
 	LPM_CPU_OFFLINE,
+	LPM_CPU_MODE_MIN = LPM_CPU_NONE,
 	LPM_CPU_MODE_MAX = LPM_CPU_POWERCLAMP,
 };
 
@@ -594,11 +604,12 @@ void process_slider(struct lpmd_config_t *config, struct lpmd_config_state_t *st
 
 /* lpmd_irq.c */
 int irq_init(void);
+void irq_cleanup(void);
 int process_irq(struct lpmd_config_state_t *state);
 
 /* lpmd_cgroup.c*/
 int cgroup_init(struct lpmd_config_t *config);
-int cgroup_cleanup(void);
+int cgroup_cleanup(struct lpmd_config_t *config);
 int process_cgroup(struct lpmd_config_t *config, struct lpmd_config_state_t *state);
 
 /* lpmd_uevent.c */

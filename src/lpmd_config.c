@@ -785,6 +785,13 @@ static void lpmd_init_config(struct lpmd_config_t *config)
 	config->powersaver_def = LPM_FORCE_OFF;
 
 	/*
+	 * Default to not restricting CPUs at all. A config file has to ask for
+	 * a cpuset mechanism explicitly with <Mode>, so a file that omits the
+	 * tag never causes cgroup or cpuset changes.
+	 */
+	config->mode = LPM_CPU_NONE;
+
+	/*
 	 * These options should be either 0 or 1, because they indicate whether
 	 * a given mode is enabled or not.
 	 */
@@ -899,7 +906,7 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, struct lpmd_config_t *
 			lpmd_config->mode = strtol(tmp_value, &pos, 10);
 			if (errno || *pos != '\0' ||
 			    lpmd_config->mode > LPM_CPU_MODE_MAX ||
-			    lpmd_config->mode < 0)
+			    lpmd_config->mode < LPM_CPU_MODE_MIN)
 				goto err;
 		} else if (!strcmp((const char *)cur_node->name, "HfiLpmEnable")) {
 			errno = 0;

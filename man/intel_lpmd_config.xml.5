@@ -68,6 +68,25 @@ platform.
 .B Mode
 specifies the way to migrate the tasks to the lp_mode_cpus.
 .IP \(bu 2
+Mode -1: do not migrate tasks at all. This is the default. Low Power Mode is
+still entered and left as usual, and every other setting a state carries is
+still applied, including
+.BR EPP ", " EPB ", " MinPerfPct ", " MaxPerfPct ", " EnergyPerfBias
+and IRQ affinity. What does not happen is any cpuset change: the cgroup v2
+cpuset controller is not enabled,
+.B AllowedCPUs=
+is not set on
+.IR system.slice ", " user.slice " or " machine.slice ,
+the
+.I /sys/fs/cgroup/lpm
+isolation group is not created, and no lp_mode_cpus mask is applied. This holds
+for masks derived from the Hardware Feedback Interface as well: when
+.B HfiLpmEnable
+is set, HFI updates still drive state transitions, but the CPU mask HFI
+computes is not written to any cgroup. Use this mode to get intel_lpmd's
+power settings without letting it change the CPU affinity of tasks it does
+not own.
+.IP \(bu 2
 Mode 0: set cpuset to the lp_mode_cpus for systemd. All tasks created by
 systemd will run on these CPUs only. This is supported for cgroup v2 based
 systemd only.
@@ -77,6 +96,10 @@ lp_mode_cpus only.
 .IP \(bu 2
 Mode 2: Force idle injection to the non-lp_mode_cpus and leverage the
 scheduler to schedule the other tasks to the lp_mode_cpus.
+.PP
+A config file that has no
+.B Mode
+element behaves as if Mode -1 were given.
 .PP
 .B PerformanceDef / BalancedDef / PowersaverDef
 specifies the default behavior for a given power profile.
