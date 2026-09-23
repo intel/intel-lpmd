@@ -1649,6 +1649,18 @@ int lpmd_process_cpuset_init(struct lpmd_config_t *config)
 	log_class_tuning_overrides(config);
 
 	/*
+	 * Say the rescan cadence out loud. It is the only thing that reaps
+	 * dead PIDs from the attached set, so an operator who turns it off is
+	 * choosing that too and should be able to see the choice took effect.
+	 */
+	if (config->process_cpuset_rescan_interval > 0)
+		lpmd_log_info("process_cpuset: periodic rescan every %d s\n",
+			      config->process_cpuset_rescan_interval);
+	else
+		lpmd_log_info(
+			"process_cpuset: periodic rescan disabled; event-driven only, dead PIDs are not reaped\n");
+
+	/*
      * Do NOT perform the initial bind here: the daemon's state at
      * startup is LPMD_OFF, and OFF must be fully inert (no transient
      * cpuset scopes). The first transition to AUTO/PROCESS-PRECONFIG/ON triggers

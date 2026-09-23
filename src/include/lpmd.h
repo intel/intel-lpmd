@@ -304,6 +304,19 @@ struct lpmd_config_t {
 	int wlt_proxy_enable;
 	int wlt_hint_mask;
 	int use_process_cpuset;
+	/*
+	 * Seconds between periodic /proc rescans, which exist to catch PIDs
+	 * the proc-connector event stream missed (events dropped on ENOBUFS,
+	 * or a PID that was already running when the daemon started).
+	 * PROCESS_CPUSET_RESCAN_DEFAULT if unset; 0 disables the rescan and
+	 * leaves the daemon purely event-driven.
+	 *
+	 * Lowering it also shortens the main loop's poll(2) timeout, since
+	 * the loop has to wake up to notice the rescan is due. Raising it
+	 * does not lengthen that timeout: the same wake-up drives the
+	 * utilisation sampling deadline, which must not be stretched.
+	 */
+	int process_cpuset_rescan_interval;
 	/* Slice/unit keyed cpuset policy from slice.xml. Independent of
 	 * use_process_cpuset: either, both or neither may be enabled. */
 	int use_slice_cpuset;
@@ -523,6 +536,28 @@ enum power_profile_daemon_mode {
 
 #define DEF_POLLING_INTERVAL	100
 #define DEF_HFI_TIMEOUT		1000
+
+/*
+ * Periodic /proc rescan for the per-process cpuset path, in seconds.
+ *
+ * The rescan is a safety net, not the mechanism: PIDs are normally picked up
+ * from proc-connector EXEC/FORK/COMM events as they happen. It exists for the
+ * cases events cannot cover -- processes already running at daemon start, and
+ * anything missed while the kernel was dropping events on ENOBUFS -- and it
+ * is also the only thing that reaps dead PIDs from the attached set, since
+ * PROC_EVENT_EXIT does not.
+ *
+ * Measured cost on a 490-process desktop with the 289-entry shipped config:
+ * 8.6 ms warm, 22 ms cold. At the 60 s default that is 0.014% of one core,
+ * about 2.6 s of CPU per 5 hours -- so raising this is a small saving, and
+ * the knob is really there for the opposite case (lowering it on a machine
+ * that cannot afford to wait a minute for a missed PID).
+ *
+ * 0 disables the rescan entirely. Doing so makes the daemon purely
+ * event-driven, which also means nothing ever prunes dead PIDs.
+ */
+#define PROCESS_CPUSET_RESCAN_DEFAULT	60
+#define PROCESS_CPUSET_RESCAN_MAX	86400
 /*
  * Number of consecutive LP hints that must agree on a smaller LP set before
  * the held LP set is allowed to shrink to it. Guards against ping-ponging on

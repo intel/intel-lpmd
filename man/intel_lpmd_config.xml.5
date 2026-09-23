@@ -175,6 +175,33 @@ On exit from low power mode each task is returned to the exact mask it had
 beforehand, unless that mask changed in the meantime, in which case the
 task keeps its own.
 .PP
+.B ProcessCpusetRescanInterval
+How often to rescan
+.IR /proc ,
+in seconds. Default 60, maximum 86400; 0 disables the rescan. Only meaningful
+with
+.B UseProcessCPUSet
+enabled.
+.PP
+The rescan is a safety net, not the mechanism. Tasks are normally picked up
+from
+.BR proc (5)
+connector EXEC, FORK and COMM events as they happen; the rescan exists for
+what events cannot cover \(em processes already running when the daemon
+started, and anything missed while the kernel was dropping events because the
+receive buffer filled. It is also the only thing that removes exited PIDs from
+the tracked set, since the connector's EXIT event does not, so
+.B 0
+means dead PIDs accumulate until the daemon stops. Lower it on a machine that
+cannot afford to wait a minute for a task the event stream missed.
+.PP
+Raising it saves very little. One rescan measured 8.6 ms warm and 22 ms cold
+on a 490-process desktop with the 289-entry shipped
+.IR process_cpuset.xml ,
+which at the 60-second default is about 0.014% of one core, or roughly 2.6
+seconds of CPU time per five hours of uptime. A daemon using noticeably more
+than that is not spending it here.
+.PP
 .B UseSliceCpuset
 Enable systemd slice/unit based cpuset policy (0/1), read from
 .I slice.xml
@@ -421,6 +448,15 @@ default CPU affinity mask and uclamp limits.
 Named CPU groups (ActivePcores, ActiveEcores, ActiveLcores) or literal
 CPU lists define which CPUs a class can use. Per-process <ActiveCores>
 entries override the class default.
+.sp
+The class-to-CPU mapping has a single home: the <ClassDefaults> block in
+the matching <States> stanza of intel_lpmd_config_*.xml, layered over the
+daemon's built-in table. It is deliberately not settable in
+process_cpuset.xml or process_cpuset_user.xml, because process_cpuset.xml
+is not its only consumer -- slice.xml resolves the same class names -- and
+a copy in one consumer's file made the other resolve a different mask for
+the same name. A <ClassDefaults> block in either of those files is ignored
+with a warning.
 .IP \(bu 2
 .B Affinity Mode:
 Every PID is bound the same way, with sched_setaffinity(2) applied to
@@ -527,8 +563,9 @@ System-slice PIDs are never touched by <DefaultProcess>.
 To override per-class uclamp values or CPU group assignments on specific
 CPU models, add a <ClassDefaults> block inside the appropriate <State>
 definition in intel_lpmd_config_F18_M1.xml, intel_lpmd_config_F6_M189.xml,
-or other model-specific files. These overrides take precedence over
-process_cpuset.xml defaults at runtime.
+or other model-specific files. This is the only place these values can be
+set; they are layered over the daemon's built-in table at runtime, and a
+class the block does not mention keeps its built-in value.
 .PP
 In addition to <Cores>, <UClampMin>, and <UClampMax>, each class override
 inside <ClassDefaults> can define:
@@ -723,6 +760,15 @@ The configuration file format conforms to XML specifications.
 		1 : Yes
 	-->
 	<UseProcessCPUSet>0|1</UseProcessCPUSet>
+
+	<!--
+		Seconds between periodic /proc rescans (default 60, max 86400).
+		The rescan catches PIDs the proc-connector event stream could
+		not: those already running at startup, and those missed while
+		events were being dropped. It is also what reaps exited PIDs.
+		0 disables it, leaving the daemon purely event-driven.
+	-->
+	<ProcessCpusetRescanInterval>60</ProcessCpusetRescanInterval>
 
 	<!--
 		Enable systemd slice/unit based cpuset policy (slice.xml)

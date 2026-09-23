@@ -376,9 +376,13 @@ static void *lpmd_core_main_loop(void *arg)
 	unsigned long long now;
 	int interval, timeout;
 
-	/* Rescan /proc every 60 seconds to bind any matching PIDs spawned
-	 * after lpmd_process_cpuset_init() ran at startup. */
-	const time_t process_cpuset_rescan_interval = 60;
+	/*
+	 * Rescan /proc periodically to bind any matching PIDs spawned after
+	 * lpmd_process_cpuset_init() ran at startup, and to reap dead ones.
+	 * <ProcessCpusetRescanInterval> in seconds; 0 disables it.
+	 */
+	const time_t process_cpuset_rescan_interval =
+		lpmd_config.process_cpuset_rescan_interval;
 	time_t process_cpuset_last_rescan = time(NULL);
 
 	lpmd_config.data.polling_interval = DEF_POLLING_INTERVAL;
@@ -387,10 +391,30 @@ static void *lpmd_core_main_loop(void *arg)
 		if (get_lpmd_state() == LPMD_TERMINATE)
 			break;
 
-		/* Nothing needs polling, only wake up for the periodic rescan */
+		/*
+		 * Nothing needs polling, so this interval only has to be short
+		 * enough that the periodic rescan below is not delayed past
+		 * its due time. It is ALSO the utilisation sampling deadline,
+		 * though, so it must not be stretched by a long rescan
+		 * interval: waking every 24 hours because someone configured
+		 * <ProcessCpusetRescanInterval>86400</> would stop
+		 * util_update() running on anything but an fd event.
+		 *
+		 * Hence the cap at the default. A shorter wake-up than the
+		 * rescan period is always safe -- the rescan keeps its own
+		 * deadline and simply is not due yet -- so this tracks a
+		 * lowered interval and ignores a raised one.
+		 */
 		interval = lpmd_config.data.polling_interval;
-		if (interval <= 0)
-			interval = process_cpuset_rescan_interval * 1000;
+		if (interval <= 0) {
+			time_t wake = process_cpuset_rescan_interval > 0 &&
+					      process_cpuset_rescan_interval <
+						      PROCESS_CPUSET_RESCAN_DEFAULT ?
+					      process_cpuset_rescan_interval :
+					      PROCESS_CPUSET_RESCAN_DEFAULT;
+
+			interval = (int)wake * 1000;
+		}
 
 		now = get_time_ms();
 
@@ -429,8 +453,11 @@ static void *lpmd_core_main_loop(void *arg)
 			}
 		}
 
-		/* Periodic process_cpuset rescan (skipped while OFF) */
-		if (lpmd_config.use_process_cpuset && get_lpmd_state() != LPMD_OFF) {
+		/* Periodic process_cpuset rescan (skipped while OFF, and
+		 * entirely when <ProcessCpusetRescanInterval> is 0) */
+		if (lpmd_config.use_process_cpuset &&
+		    process_cpuset_rescan_interval > 0 &&
+		    get_lpmd_state() != LPMD_OFF) {
 			time_t now = time(NULL);
 			if (now - process_cpuset_last_rescan >= process_cpuset_rescan_interval) {
 				lpmd_process_cpuset_rescan();

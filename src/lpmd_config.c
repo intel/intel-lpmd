@@ -919,6 +919,7 @@ static void lpmd_init_config(struct lpmd_config_t *config)
 	config->intel_pstate_mode = 0;
 	config->wlt_hint_mask = -1;
 	config->wlt_notification_delay = -1;
+	config->process_cpuset_rescan_interval = PROCESS_CPUSET_RESCAN_DEFAULT;
 	config->config_states_present = FALSE;
 	config->config_states_hfi = FALSE;
 }
@@ -988,6 +989,16 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, struct lpmd_config_t *
 			errno = 0;
 			lpmd_config->use_process_cpuset = strtol (tmp_value, &pos, 10);
 			if (errno || *pos != '\0' || (lpmd_config->use_process_cpuset != 1 && lpmd_config->use_process_cpuset != 0))
+				goto err;
+		} else if (!strcmp((const char *)cur_node->name,
+				   "ProcessCpusetRescanInterval")) {
+			errno = 0;
+			lpmd_config->process_cpuset_rescan_interval =
+				strtol(tmp_value, &pos, 10);
+			if (errno || *pos != '\0' ||
+			    lpmd_config->process_cpuset_rescan_interval < 0 ||
+			    lpmd_config->process_cpuset_rescan_interval >
+				    PROCESS_CPUSET_RESCAN_MAX)
 				goto err;
 		} else if (!strncmp((const char*)cur_node->name, "UseSliceCpuset", strlen("UseSliceCpuset"))) {
 			errno = 0;
