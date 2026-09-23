@@ -480,21 +480,25 @@ static char *get_ppd_default_epp(void)
 	return "balance_performance";
 }
 
-int get_epp_epb(int *epp, char *epp_str, int size, int *epb)
+int get_epp_epb(int cpu, int *epp, char *epp_str, int size, int *epb)
 {
 	char path[MAX_STR_LENGTH];
 	int ret;
 
 	*epp = -1;
 	epp_str[0] = '\0';
-	/* CPU0 is always online */
+	if (cpu < 0) {
+		*epb = -1;
+		return 1;
+	}
+
 	snprintf(path, sizeof(path),
-		 "/sys/devices/system/cpu/cpu%d/cpufreq/energy_performance_preference", 0);
+		 "/sys/devices/system/cpu/cpu%d/cpufreq/energy_performance_preference", cpu);
 	get_epp(path, epp, epp_str, size);
 	epp_str[size - 1] = '\0';
 
 	*epb = -1;
-	snprintf(path, MAX_STR_LENGTH, "/sys/devices/system/cpu/cpu%d/power/energy_perf_bias", 0);
+	snprintf(path, MAX_STR_LENGTH, "/sys/devices/system/cpu/cpu%d/power/energy_perf_bias", cpu);
 	ret = lpmd_read_int(path, epb, -1);
 	return ret;
 }

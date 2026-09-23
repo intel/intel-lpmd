@@ -642,7 +642,7 @@ static void dump_data(struct lpmd_config_t *config, int idx)
 	struct lpmd_config_state_t *state = &config->config_states[idx];
 	char buf[MAX_STR_LENGTH];
 	enum cpumask_idx effective_idx = state->cpumask_idx;
-	int epp, epb, ret;
+	int epp, epb, ret, reference_cpu;
 	char epp_str[32];
 	int offset = 0;
 
@@ -699,6 +699,10 @@ static void dump_data(struct lpmd_config_t *config, int idx)
 	if (config->current_override_idx != CPUMASK_NONE)
 		effective_idx = config->current_override_idx;
 
+	reference_cpu = cpumask_first_online_cpu(effective_idx);
+	if (reference_cpu < 0)
+		reference_cpu = cpumask_first_online_cpu(CPUMASK_ONLINE);
+
 	if (effective_idx != CPUMASK_NONE)
 		offset += snprintf(buf + offset, MAX_STR_LENGTH - offset,
 				   "CPUMASK [%s] ",
@@ -711,7 +715,14 @@ static void dump_data(struct lpmd_config_t *config, int idx)
 	offset += snprintf(buf + offset, MAX_STR_LENGTH - offset,
 				   "ITMT [%d] ", get_itmt());
 
-	ret = get_epp_epb(&epp, epp_str, 32, &epb);
+	if (reference_cpu >= 0)
+		ret = get_epp_epb(reference_cpu, &epp, epp_str, 32, &epb);
+	else {
+		epp = -1;
+		epp_str[0] = '\0';
+		epb = -1;
+		ret = 1;
+	}
 	if (ret || epp == -1)
 		offset += snprintf(buf + offset, MAX_STR_LENGTH - offset,
 				   "EPB [%d] EPP[%s] ", epb, epp_str);

@@ -582,7 +582,7 @@ int process_intel_pstate_mode(struct lpmd_config_t *config);
 int restore_intel_pstate_mode(void);
 
 int epp_epb_init(void);
-int get_epp_epb(int *epp, char *epp_str, int size, int *epb);
+int get_epp_epb(int cpu, int *epp, char *epp_str, int size, int *epb);
 int process_epp_epb(struct lpmd_config_state_t *state);
 int min_perf_pct_init(void);
 int process_min_perf_pct(struct lpmd_config_state_t *state);
@@ -627,6 +627,7 @@ int is_cpu_pcore(int cpu);
 
 /* lpmd_cpumask.c */
 int is_cpu_online(int cpu);
+int cpumask_first_online_cpu(enum cpumask_idx idx);
 int get_max_cpus(void);
 void set_max_cpus(int num);
 int get_max_online_cpu(void);

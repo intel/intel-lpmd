@@ -43,6 +43,24 @@ int is_cpu_online(int cpu)
 	return CPU_ISSET_S(cpu, size_cpumask, cpumasks[CPUMASK_ONLINE].mask);
 }
 
+int cpumask_first_online_cpu(enum cpumask_idx idx)
+{
+	int cpu;
+
+	if ((unsigned int)idx >= CPUMASK_MAX || !cpumasks[idx].mask)
+		return -1;
+
+	for (cpu = 0; cpu < topo_max_cpus; cpu++) {
+		if (!is_cpu_online(cpu))
+			continue;
+
+		if (CPU_ISSET_S(cpu, size_cpumask, cpumasks[idx].mask))
+			return cpu;
+	}
+
+	return -1;
+}
+
 int get_max_cpus(void)
 {
 	return topo_max_cpus;
