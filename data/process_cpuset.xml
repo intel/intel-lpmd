@@ -185,13 +185,15 @@
       only done at all when some entry has a <Unit>. A config without
       one pays nothing.
 
-  How the 94 <Unit> values below were arrived at, and why there are not
+  How the 103 <Unit> values below were arrived at, and why there are not
   more of them. Every one was read off a running process with
-  sd_pid_get_unit()/sd_pid_get_user_unit() on one of two machines (a
-  Fedora 44 GNOME workstation and an Ubuntu 25.10 GNOME laptop), and
-  none was guessed from a service name. Fedora made 122 of the 288 <Name>
-  values observable, Ubuntu 97, and the two together 137. A unit was added
-  only where it passed all of:
+  sd_pid_get_unit()/sd_pid_get_user_unit() on one of three machines (a
+  Fedora 44 GNOME workstation, an Ubuntu 25.10 GNOME laptop and a
+  CachyOS KDE Plasma Wayland desktop), and none was guessed from a
+  service name. Fedora made 122 of the then 288 <Name> values
+  observable, Ubuntu 97, and the two together 137; the CachyOS machine
+  added nine units, all Plasma or CachyOS services neither GNOME machine
+  runs. A unit was added only where it passed all of:
 
     * It is stable. Rejected: anything D-Bus activated
       (dbus-:1.2-org.gnome.OnlineAccounts@0.service carries a bus
@@ -264,9 +266,11 @@
   Do not extend this list by guessing unit names from service names. An
   entry with a wrong <Unit> is worse than one with none: it never
   matches, but it reads as though the identity problem is solved. The
-  164 entries with no live process here are for other distributions and
-  desktops (KDE/Plasma, snapd, apparmor, tracker/baloo, games), and
-  filling them in needs someone running those.
+  entries with no live process on any of the three are for other
+  distributions and desktops (snapd, apparmor, tracker, games), plus the
+  Plasma pieces that were not running during the KDE survey (baloo, the
+  Plasma system monitor, X11 KWin), and filling them in needs someone
+  running those.
 -->
 
 <ProcessCpusetConfig>
@@ -736,6 +740,7 @@
     </Process>
     <Process>
         <Name>iio-sensor-prox</Name>
+        <Unit>iio-sensor-proxy.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -760,6 +765,7 @@
     <Process>
         <!-- CachyOS auto-nice daemon -->
         <Name>ananicy-cpp</Name>
+        <Unit>ananicy-cpp.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -1125,22 +1131,25 @@
         <Classification>background</Classification>
     </Process>
     <!--
-      The three xdg-desktop-portal* units all report comm
+      The four xdg-desktop-portal* units all report comm
       "xdg-desktop-por", so <Name> cannot tell them apart. They are listed
       individually here so each one is matched by unit rather than by a
-      shared 15-character prefix. All three keep the classification the
+      shared 15-character prefix. All four keep the classification the
       single <Name> entry used to give them; split this into separate
       <Process> blocks if you want the backends classified differently
-      from the frontend.
+      from the frontend. KDE's backend, plasma-xdg-desktop-portal-kde,
+      fills the four-<Unit> limit, so a fifth backend needs its own block.
     -->
     <Process>
         <Name>xdg-desktop-por</Name>
         <Unit>xdg-desktop-portal.service</Unit>
         <Unit>xdg-desktop-portal-gnome.service</Unit>
         <Unit>xdg-desktop-portal-gtk.service</Unit>
+        <Unit>plasma-xdg-desktop-portal-kde.service</Unit>
         <Cgroup>*/xdg-desktop-portal.service</Cgroup>
         <Cgroup>*/xdg-desktop-portal-gnome.service</Cgroup>
         <Cgroup>*/xdg-desktop-portal-gtk.service</Cgroup>
+        <Cgroup>*/plasma-xdg-desktop-portal-kde.service</Cgroup>
         <Classification>background</Classification>
     </Process>
     <Process>
@@ -1170,10 +1179,12 @@
     </Process>
     <Process>
         <Name>kded6</Name>
+        <Unit>plasma-kded6.service</Unit>
         <Classification>background</Classification>
     </Process>
     <Process>
         <Name>kactivitymanage</Name>
+        <Unit>plasma-kactivitymanagerd.service</Unit>
         <Classification>background</Classification>
     </Process>
 
@@ -1238,6 +1249,7 @@
     <Process>
         <!-- CachyOS Plasma display manager (replacement for sddm) -->
         <Name>plasmalogin</Name>
+        <Unit>plasmalogin.service</Unit>
         <Classification>user_interactive</Classification>
     </Process>
     <Process>
@@ -1293,6 +1305,7 @@
     <!-- KDE Plasma shell stack (CachyOS default) -->
     <Process>
         <Name>plasmashell</Name>
+        <Unit>plasma-plasmashell.service</Unit>
         <Classification>user_interactive</Classification>
     </Process>
     <Process>
@@ -1301,10 +1314,12 @@
     </Process>
     <Process>
         <Name>kwin_wayland</Name>
+        <Unit>plasma-kwin_wayland.service</Unit>
         <Classification>user_interactive</Classification>
     </Process>
     <Process>
         <Name>ksmserver</Name>
+        <Unit>plasma-ksmserver.service</Unit>
         <Classification>user_interactive</Classification>
     </Process>
     <Process>
