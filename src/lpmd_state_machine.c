@@ -80,6 +80,7 @@ int lpmd_init_config_state(struct lpmd_config_state_t *state)
 
 	state->wlt_type = -1;
 	state->wlt_type_mask = -1;
+	state->wlt_long_term_class = WLT_LONG_TERM_ANY;
 
 	state->entry_system_load_thres = 0;
 	state->exit_system_load_thres = 0;
@@ -145,6 +146,7 @@ static int config_state_match_common(struct lpmd_config_t *config, int idx, int 
 	int bcpu = config->data.util_cpu;
 	int bsys = config->data.util_sys;
 	int bgfx = config->data.util_gfx;
+	int wlt_raw = config->data.wlt_hint;
 	int wlt_index = config->data.wlt_hint;
 
 	if (!state->valid)
@@ -162,6 +164,17 @@ static int config_state_match_common(struct lpmd_config_t *config, int idx, int 
 			wlt_index &= config->wlt_hint_mask;
 
 		if (state->wlt_type != wlt_index)
+			return 0;
+	}
+	if (state->wlt_long_term_class != WLT_LONG_TERM_ANY) {
+		int wlt_long_term_class;
+
+		if (wlt_raw < 0)
+			return 0;
+
+		wlt_long_term_class = (wlt_raw & (1 << 4)) ?
+			WLT_LONG_TERM_POWER : WLT_LONG_TERM_PERFORMANCE;
+		if (wlt_long_term_class != state->wlt_long_term_class)
 			return 0;
 	}
 
@@ -331,6 +344,10 @@ static void dump_state(struct lpmd_config_state_t *state, char *str, int debug)
 
 	if (state->wlt_type_mask)
 		offset += snprintf(buf + offset, DUMP_STATE_BUF_SIZE - offset, "WLTMASK [%2d] ", state->wlt_type_mask);
+
+	if (state->wlt_long_term_class != WLT_LONG_TERM_ANY)
+		offset += snprintf(buf + offset, DUMP_STATE_BUF_SIZE - offset,
+				   "WLT_LONG_TERM [%d] ", state->wlt_long_term_class);
 
 	if (state->entry_system_load_thres)
 		offset += snprintf(buf + offset, DUMP_STATE_BUF_SIZE - offset,
@@ -844,6 +861,7 @@ static void dump_states(struct lpmd_config_t *lpmd_config)
 		lpmd_log_info("\texit_gfx_load_hyst:%d\n", state->exit_gfx_load_hyst);
 		lpmd_log_info("\tWLT Type:%d\n", state->wlt_type);
 		lpmd_log_info("\tWLT Type Mask:%d\n", state->wlt_type_mask);
+		lpmd_log_info("\tWLT Long Term Class:%d\n", state->wlt_long_term_class);
 		lpmd_log_info("\tmin_poll_interval:%d\n", state->min_poll_interval);
 		lpmd_log_info("\tmax_poll_interval:%d\n", state->max_poll_interval);
 		lpmd_log_info("\tpoll_interval_increment:%d\n", state->poll_interval_increment);
@@ -972,7 +990,8 @@ static int config_states_update_config(struct lpmd_config_t *config)
 		if (state->cpumask_idx == CPUMASK_HFI)
 			config->hfi_lpm_enable = 1;
 
-		if (state->wlt_type != -1 || state->wlt_type_mask != -1)
+		if (state->wlt_type != -1 || state->wlt_type_mask != -1 ||
+		    state->wlt_long_term_class != WLT_LONG_TERM_ANY)
 			config->wlt_hint_enable = 1;
 
 		if (state->entry_system_load_thres)
@@ -1265,6 +1284,12 @@ int lpmd_build_config_states(struct lpmd_config_t *lpmd_config)
 
 	for (i = CONFIG_STATE_BASE; i < CONFIG_STATE_BASE + lpmd_config->config_state_count; i++) {
 		state = &lpmd_config->config_states[i];
+
+		if (state->wlt_long_term_class == WLT_LONG_TERM_INVALID) {
+			lpmd_log_error("Ignore state %s: invalid WLTLongTermClass\n",
+				       state->name);
+			continue;
+		}
 
 		ret = build_state_cpumask_activecpus(lpmd_config, state);
 		if (ret == -2)
