@@ -207,6 +207,19 @@ static int update_allowed_cpus(const char *unit, uint8_t *vals, int size)
 	int ret;
 	int i;
 
+	/*
+	 * A NULL value array is the empty AllowedCPUs=, which is what a unit an
+	 * administrator never touched reports, and it always arrives with size
+	 * 0. Any other pairing is a caller bug, and not a harmless one: both the
+	 * append below and the log loop would read size bytes from a value that
+	 * is not there.
+	 */
+	if (!vals && size) {
+		lpmd_log_error("%s: %d bytes of AllowedCPUs= with no value\n",
+			       unit, size);
+		return -1;
+	}
+
 	ret = sd_bus_open_system(&bus);
 	if (ret < 0) {
 		lpmd_log_info("Failed to connect to system bus: %s\n", strerror(-ret));
