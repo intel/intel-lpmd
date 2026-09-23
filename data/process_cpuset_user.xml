@@ -4,8 +4,14 @@
 
   This file is layered on top of the system-shipped process_cpuset.xml at
   daemon startup. <Process> entries here ADD to (or REPLACE by <Name>)
-  the entries from the system file. <ClassDefaults>, <CpuGroups>, and
-  <DefaultProcess> may also be overridden.
+  the entries from the system file. <CpuGroups> and <DefaultProcess> may
+  also be overridden.
+
+  <ClassDefaults> may NOT: the class -> core-group mapping has exactly one
+  home, the <ClassDefaults> block in the matching <States> stanza of
+  intel_lpmd_config_*.xml. A block here is ignored with a warning on
+  stderr. To give one process a mask of its own, put <ActiveCores> on its
+  <Process> entry below.
 
   Edits made via:
       intel_lpmd_control ADD-PROCESS <name> <classification>

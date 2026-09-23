@@ -70,6 +70,7 @@ intel_lpmd_SOURCES = \
 	src/wlt_proxy/state_util.c \
 	src/wlt_proxy/state_manager.c \
 	src/process_cpuset.c \
+	src/lpmd_class_resolver.c \
 	src/lpmd_process_cpuset.c \
 	src/lpmd_slice_cpuset.c \
 	lpmd-resource.c

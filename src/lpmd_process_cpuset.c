@@ -1619,15 +1619,13 @@ out:
 /*
  * Initialize the per-process cpuset manager from LPMD state.
  *
- * Must be called AFTER lpmd_build_config_states() (so the active core
- * sets are valid) and BEFORE free_cpu_type_masks() (so core_type_masks[]
- * are still alive). No-op if <UseProcessCPUSet> is not set.
+ * Call ordering constraints are lpmd_class_resolver_new()'s. No-op if
+ * <UseProcessCPUSet> is not set.
  */
 int lpmd_process_cpuset_init(struct lpmd_config_t *config)
 {
-	char path[MAX_FILE_NAME_PATH];
-	size_t setsize;
-	int n;
+	char sys_path[MAX_FILE_NAME_PATH];
+	char user_path[MAX_FILE_NAME_PATH];
 
 	if (!config || !config->use_process_cpuset)
 		return 0;
@@ -1637,153 +1635,13 @@ int lpmd_process_cpuset_init(struct lpmd_config_t *config)
 		return 0;
 	}
 
-	g_pc_ctx = process_cpuset_new();
-	if (!g_pc_ctx) {
-		lpmd_log_error("process_cpuset_new failed\n");
-		return -1;
-	}
-
-	snprintf(path, sizeof(path), "%s/%s", TDCONFDIR,
+	snprintf(sys_path, sizeof(sys_path), "%s/%s", TDCONFDIR,
 		 PROCESS_CPUSET_CONFIG_FILE);
-	n = process_cpuset_load_config(g_pc_ctx, path);
-	if (n < 0) {
-		lpmd_log_error("process_cpuset_load_config(%s) failed\n", path);
-		process_cpuset_free(g_pc_ctx);
-		g_pc_ctx = NULL;
+	user_xml_path(user_path, sizeof(user_path));
+
+	g_pc_ctx = lpmd_class_resolver_new(config, sys_path, user_path, NULL);
+	if (!g_pc_ctx)
 		return -1;
-	}
-	lpmd_log_info("process_cpuset: loaded %d entries from %s\n", n, path);
-
-	/* Layer the user-editable overlay (process_cpuset_user.xml) on top.
-     * Missing file is fine and is silently ignored. */
-	{
-		char user_path[MAX_FILE_NAME_PATH];
-		int un;
-
-		user_xml_path(user_path, sizeof(user_path));
-		un = process_cpuset_load_config_overlay(g_pc_ctx, user_path);
-		if (un > 0)
-			lpmd_log_info(
-				"process_cpuset: merged %d user entries from %s\n",
-				un, user_path);
-		else if (un < 0)
-			lpmd_log_warn(
-				"process_cpuset: parse error in %s (ignored)\n",
-				user_path);
-	}
-
-	/*
-     * Apply CPU-model-specific <ClassDefaults> overrides parsed from
-     * the matching <States> stanza of intel_lpmd_config_*.xml. Empty
-     * fields are left as configured by process_cpuset.xml.
-     */
-	if (config->pc_class_default_realtime[0] ||
-	    config->pc_class_default_user_interactive[0] ||
-	    config->pc_class_default_user_initiated[0] ||
-	    config->pc_class_default_unclassified[0] ||
-	    config->pc_class_default_utility[0] ||
-	    config->pc_class_default_background[0] ||
-	    config->pc_class_default_gp_cpu[0] ||
-	    config->pc_class_default_gp_gpu[0] ||
-	    config->pc_class_default_gp_hybrid[0] ||
-	    config->pc_class_default_custom_profile_0[0] ||
-	    config->pc_class_default_custom_profile_1[0] ||
-	    config->pc_class_default_custom_profile_2[0]) {
-		if (process_cpuset_override_class_defaults(
-			    g_pc_ctx, config->pc_class_default_realtime,
-			    config->pc_class_default_user_interactive,
-			    config->pc_class_default_user_initiated,
-			    config->pc_class_default_unclassified,
-			    config->pc_class_default_utility,
-			    config->pc_class_default_background,
-			    config->pc_class_default_gp_cpu,
-			    config->pc_class_default_gp_gpu,
-			    config->pc_class_default_gp_hybrid,
-			    config->pc_class_default_custom_profile_0,
-			    config->pc_class_default_custom_profile_1,
-			    config->pc_class_default_custom_profile_2) < 0) {
-			lpmd_log_warn(
-				"process_cpuset: ClassDefaults override failed\n");
-		} else {
-			lpmd_log_info(
-				"process_cpuset: applied per-CPU ClassDefaults override\n");
-		}
-	}
-
-	if (config->pc_class_uclamp_min_realtime != LPMD_UCLAMP_INHERIT ||
-	    config->pc_class_uclamp_max_realtime != LPMD_UCLAMP_INHERIT ||
-	    config->pc_class_uclamp_min_user_interactive !=
-		    LPMD_UCLAMP_INHERIT ||
-	    config->pc_class_uclamp_max_user_interactive !=
-		    LPMD_UCLAMP_INHERIT ||
-	    config->pc_class_uclamp_min_user_initiated != LPMD_UCLAMP_INHERIT ||
-	    config->pc_class_uclamp_max_user_initiated != LPMD_UCLAMP_INHERIT ||
-	    config->pc_class_uclamp_min_unclassified != LPMD_UCLAMP_INHERIT ||
-	    config->pc_class_uclamp_max_unclassified != LPMD_UCLAMP_INHERIT ||
-	    config->pc_class_uclamp_min_utility != LPMD_UCLAMP_INHERIT ||
-	    config->pc_class_uclamp_max_utility != LPMD_UCLAMP_INHERIT ||
-	    config->pc_class_uclamp_min_background != LPMD_UCLAMP_INHERIT ||
-	    config->pc_class_uclamp_max_background != LPMD_UCLAMP_INHERIT ||
-	    config->pc_class_uclamp_min_gp_cpu != LPMD_UCLAMP_INHERIT ||
-	    config->pc_class_uclamp_max_gp_cpu != LPMD_UCLAMP_INHERIT ||
-	    config->pc_class_uclamp_min_gp_gpu != LPMD_UCLAMP_INHERIT ||
-	    config->pc_class_uclamp_max_gp_gpu != LPMD_UCLAMP_INHERIT ||
-	    config->pc_class_uclamp_min_gp_hybrid != LPMD_UCLAMP_INHERIT ||
-	    config->pc_class_uclamp_max_gp_hybrid != LPMD_UCLAMP_INHERIT ||
-	    config->pc_class_uclamp_min_custom_profile_0 != LPMD_UCLAMP_INHERIT ||
-	    config->pc_class_uclamp_max_custom_profile_0 != LPMD_UCLAMP_INHERIT ||
-	    config->pc_class_uclamp_min_custom_profile_1 != LPMD_UCLAMP_INHERIT ||
-	    config->pc_class_uclamp_max_custom_profile_1 != LPMD_UCLAMP_INHERIT ||
-	    config->pc_class_uclamp_min_custom_profile_2 != LPMD_UCLAMP_INHERIT ||
-	    config->pc_class_uclamp_max_custom_profile_2 != LPMD_UCLAMP_INHERIT) {
-		if (process_cpuset_override_class_uclamp_defaults(
-			    g_pc_ctx,
-			    config->pc_class_uclamp_min_realtime,
-			    config->pc_class_uclamp_max_realtime,
-			    config->pc_class_uclamp_min_user_interactive,
-			    config->pc_class_uclamp_max_user_interactive,
-			    config->pc_class_uclamp_min_user_initiated,
-			    config->pc_class_uclamp_max_user_initiated,
-			    config->pc_class_uclamp_min_unclassified,
-			    config->pc_class_uclamp_max_unclassified,
-			    config->pc_class_uclamp_min_utility,
-			    config->pc_class_uclamp_max_utility,
-			    config->pc_class_uclamp_min_background,
-			    config->pc_class_uclamp_max_background,
-			    config->pc_class_uclamp_min_gp_cpu,
-			    config->pc_class_uclamp_max_gp_cpu,
-			    config->pc_class_uclamp_min_gp_gpu,
-			    config->pc_class_uclamp_max_gp_gpu,
-			    config->pc_class_uclamp_min_gp_hybrid,
-			    config->pc_class_uclamp_max_gp_hybrid,
-			    config->pc_class_uclamp_min_custom_profile_0,
-			    config->pc_class_uclamp_max_custom_profile_0,
-			    config->pc_class_uclamp_min_custom_profile_1,
-			    config->pc_class_uclamp_max_custom_profile_1,
-			    config->pc_class_uclamp_min_custom_profile_2,
-			    config->pc_class_uclamp_max_custom_profile_2) < 0) {
-			lpmd_log_warn(
-				"process_cpuset: ClassDefaults uclamp override failed\n");
-		} else {
-			lpmd_log_info(
-				"process_cpuset: applied per-CPU ClassDefaults uclamp override\n");
-		}
-	}
-
-	/* core_type_masks[] uses the same little-endian bit layout as
-     * cpu_set_t, so it's safe to cast and pass straight through. */
-	setsize = (size_t)(get_max_cpus() / 8);
-	if (process_cpuset_set_groups_cpuset(
-		    g_pc_ctx,
-		    (const cpu_set_t *)config->core_type_masks[P_CORE],
-		    (const cpu_set_t *)config->core_type_masks[E_CORE],
-		    (const cpu_set_t *)config->core_type_masks[L_CORE],
-		    setsize) < 0) {
-		lpmd_log_error("process_cpuset_set_groups_cpuset failed\n");
-		process_cpuset_free(g_pc_ctx);
-		g_pc_ctx = NULL;
-		return -1;
-	}
 
 	/* Debug: log per-classification cpusets so the operator can
      * see what each tier maps to under the active P/E/LP-E sets. */
@@ -2990,9 +2848,7 @@ int lpmd_process_cpuset_classify(const char *name, char *result,
 	char cpus[512] = { 0 };
 	char conf_sys[MAX_FILE_NAME_PATH];
 	char conf_user[MAX_FILE_NAME_PATH];
-	char p_cpus[256] = { 0 }, e_cpus[256] = { 0 }, l_cpus[256] = { 0 };
 	process_cpuset_t *lookup_ctx;
-	int n;
 	int rc;
 
 	if (!result || !result_cap)
@@ -3009,70 +2865,23 @@ int lpmd_process_cpuset_classify(const char *name, char *result,
 	/* Truncate to /proc/<pid>/comm's 15-char kernel limit. */
 	snprintf(trunc, sizeof(trunc), "%s", name);
 
-	lookup_ctx = process_cpuset_new();
-	if (!lookup_ctx) {
-		snprintf(result, result_cap,
-			 "process:%s, classification:not found, cpuaffinity:-",
-			 trunc);
-		return -1;
-	}
-
 	/*
 	 * Always classify from XML config, not from currently attached/running
-	 * processes. Use the configured policy files under TDCONFDIR.
+	 * processes: use the configured policy files under TDCONFDIR, built
+	 * through the same resolver constructor the runtime path uses so this
+	 * reports the mask the daemon would actually apply.
 	 */
 	snprintf(conf_sys, sizeof(conf_sys), "%s/%s", TDCONFDIR,
 		 PROCESS_CPUSET_CONFIG_FILE);
 	snprintf(conf_user, sizeof(conf_user), "%s/%s", TDCONFDIR,
 		 PROCESS_CPUSET_USER_CONFIG_FILE);
 
-	n = process_cpuset_load_config(lookup_ctx, conf_sys);
-	if (n < 0) {
-		process_cpuset_free(lookup_ctx);
+	lookup_ctx = lpmd_class_resolver_new(config, conf_sys, conf_user, NULL);
+	if (!lookup_ctx) {
 		snprintf(result, result_cap,
 			 "process:%s, classification:not found, cpuaffinity:-",
 			 trunc);
 		return -1;
-	}
-
-	(void)process_cpuset_load_config_overlay(lookup_ctx, conf_user);
-
-	if (config && (config->pc_class_default_realtime[0] ||
-	    config->pc_class_default_user_interactive[0] ||
-	    config->pc_class_default_user_initiated[0] ||
-	    config->pc_class_default_unclassified[0] ||
-	    config->pc_class_default_utility[0] ||
-	    config->pc_class_default_background[0] ||
-	    config->pc_class_default_gp_cpu[0] ||
-	    config->pc_class_default_gp_gpu[0] ||
-	    config->pc_class_default_gp_hybrid[0] ||
-	    config->pc_class_default_custom_profile_0[0] ||
-	    config->pc_class_default_custom_profile_1[0] ||
-	    config->pc_class_default_custom_profile_2[0])) {
-		(void)process_cpuset_override_class_defaults(
-			lookup_ctx, config->pc_class_default_realtime,
-			config->pc_class_default_user_interactive,
-			config->pc_class_default_user_initiated,
-			config->pc_class_default_unclassified,
-			config->pc_class_default_utility,
-			config->pc_class_default_background,
-			config->pc_class_default_gp_cpu,
-			config->pc_class_default_gp_gpu,
-			config->pc_class_default_gp_hybrid,
-			config->pc_class_default_custom_profile_0,
-			config->pc_class_default_custom_profile_1,
-			config->pc_class_default_custom_profile_2);
-	}
-
-	/* Reuse active runtime P/E/LP-E groups if available. */
-	if (g_pc_ctx &&
-	    process_cpuset_groups_get(g_pc_ctx, p_cpus, sizeof(p_cpus), e_cpus,
-				       sizeof(e_cpus), l_cpus,
-				       sizeof(l_cpus)) == 0) {
-		(void)process_cpuset_set_groups(lookup_ctx,
-					p_cpus[0] ? p_cpus : NULL,
-					e_cpus[0] ? e_cpus : NULL,
-					l_cpus[0] ? l_cpus : NULL);
 	}
 
 	rc = process_cpuset_classify_name(lookup_ctx, trunc, &cls, cpus,

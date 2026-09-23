@@ -514,6 +514,7 @@ static void parse_class_tuning_node(xmlDoc *doc, xmlNode *node,
 static void lpmd_parse_class_defaults(xmlDoc *doc, xmlNode *a_node, struct lpmd_config_t *lpmd_config)
 {
 	xmlNode *cur_node, *child_node;
+	int have_element_child;
 	char *val;
 	struct {
 		const char *tag;
@@ -611,16 +612,32 @@ static void lpmd_parse_class_defaults(xmlDoc *doc, xmlNode *a_node, struct lpmd_
 			if (!strcmp((const char *)cur_node->name, map[class_idx].tag))
 				break;
 		}
-		if (class_idx == sizeof(map) / sizeof(map[0]))
+		if (class_idx == sizeof(map) / sizeof(map[0])) {
+			/*
+			 * Say so. This is now the only place the class ->
+			 * core-group mapping can be set, so a name that
+			 * matches nothing here has no second chance -- and the
+			 * comparison is case-sensitive, which is exactly what
+			 * a block hand-migrated from process_cpuset.xml (where
+			 * it was not, and where <Foreground> was an accepted
+			 * alias) gets wrong.
+			 */
+			lpmd_log_warn(
+				"ClassDefaults: unknown class '%s' ignored; expected one of Realtime, UserInteractive, UserInitiated, Unclassified, Utility, Background, GameProfileCPU, GameProfileGPU, GameProfileMixed, CustomProfile0..2\n",
+				(const char *)cur_node->name);
 			continue;
+		}
 
 		/* Look for <Cores> child element */
 		val = NULL;
+		have_element_child = 0;
 		for (child_node = cur_node->children; child_node; child_node = child_node->next) {
 			int ret;
 
 			if (child_node->type != XML_ELEMENT_NODE || !child_node->name)
 				continue;
+
+			have_element_child = 1;
 
 			if (!strcmp((const char *)child_node->name, "Cores")) {
 				val = (char *)xmlNodeListGetString(doc,
@@ -691,6 +708,31 @@ static void lpmd_parse_class_defaults(xmlDoc *doc, xmlNode *a_node, struct lpmd_
 
 			parse_class_tuning_node(doc, child_node,
 						map[class_idx].tuning);
+		}
+
+		/*
+		 * The class name matched but there is nothing here to read:
+		 * the value was written as the class element's own text
+		 * (<Realtime>ActivePcores</Realtime>). No version of this
+		 * parser ever accepted that, but it is the obvious shape to
+		 * write by hand, and the name check above cannot catch it
+		 * because the name is right.
+		 */
+		if (!have_element_child) {
+			val = (char *)xmlNodeListGetString(doc, cur_node->xmlChildrenNode, 1);
+			if (val) {
+				char *p = val;
+
+				while (*p && isspace((unsigned char)*p))
+					p++;
+				if (*p)
+					lpmd_log_warn(
+						"ClassDefaults: %s has its value as element text ('%s'); it is ignored. Wrap it in a <Cores> child: <%s><Cores>%s</Cores></%s>\n",
+						map[class_idx].tag, p,
+						map[class_idx].tag, p,
+						map[class_idx].tag);
+				xmlFree(val);
+			}
 		}
 	}
 }

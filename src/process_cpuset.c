@@ -505,71 +505,9 @@ static void parse_core_spec(const char *s, struct core_spec *out)
 	}
 }
 
-static int parse_uclamp_value(const char *s, int *out)
-{
-	char *end;
-	long v;
-
-	if (!s || !out)
-		return -1;
-
-	errno = 0;
-	v = strtol(s, &end, 10);
-	if (errno || end == s || *end != '\0')
-		return -1;
-
-	if (v == UCLAMP_UNSET ||
-	    (v >= UCLAMP_CLAMP_MIN && v <= UCLAMP_CLAMP_MAX)) {
-		*out = (int)v;
-		return 0;
-	}
-
-	return -1;
-}
-
-static enum classification classdefaults_tag_to_class(const char *tag)
-{
-	if (!tag)
-		return CLASS_INVALID;
-	if (!strcasecmp(tag, "Realtime"))
-		return CLASS_REALTIME;
-	if (!strcasecmp(tag, "Foreground"))
-		return CLASS_USER_INTERACTIVE;
-	if (!strcasecmp(tag, "UserInteractive"))
-		return CLASS_USER_INTERACTIVE;
-	if (!strcasecmp(tag, "UserInitiated"))
-		return CLASS_USER_INITIATED;
-	if (!strcasecmp(tag, "Utility"))
-		return CLASS_UTILITY;
-	if (!strcasecmp(tag, "Unclassified"))
-		return CLASS_UNCLASSIFIED;
-	if (!strcasecmp(tag, "Background"))
-		return CLASS_BACKGROUND;
-	if (!strcasecmp(tag, "game_profile_cpu") ||
-	    !strcasecmp(tag, "GameProfileCPU"))
-		return CLASS_GAME_PROFILE_CPU;
-	if (!strcasecmp(tag, "game_profile_gpu") ||
-	    !strcasecmp(tag, "GameProfileGPU"))
-		return CLASS_GAME_PROFILE_GPU;
-	if (!strcasecmp(tag, "game_profile_mixed") ||
-	    !strcasecmp(tag, "GameProfileMixed"))
-		return CLASS_GAME_PROFILE_HYBRID;
-	if (!strcasecmp(tag, "custom_profile_0") ||
-	    !strcasecmp(tag, "CustomProfile0"))
-		return CLASS_CUSTOM_PROFILE_0;
-	if (!strcasecmp(tag, "custom_profile_1") ||
-	    !strcasecmp(tag, "CustomProfile1"))
-		return CLASS_CUSTOM_PROFILE_1;
-	if (!strcasecmp(tag, "custom_profile_2") ||
-	    !strcasecmp(tag, "CustomProfile2"))
-		return CLASS_CUSTOM_PROFILE_2;
-
-	return CLASS_INVALID;
-}
-
-/* Parse a token list (used by <ActiveCores> and every <ClassDefaults>
- * child) and return only the named-group mask. Kept for callers that
- * don't care about literal CPU lists. */
+/* Parse a token list (used by <ActiveCores>) and return only the
+ * named-group mask. Kept for callers that don't care about literal CPU
+ * lists. */
 static unsigned int parse_active_cores(const char *s)
 {
 	struct core_spec spec;
@@ -823,113 +761,6 @@ static void parse_cpu_groups(xmlDoc *doc, xmlNode *node, struct cpu_groups *g)
 		else if (!strcmp((const char *)c->name, "ActiveLcores"))
 			copy_text(g->l_cores, sizeof(g->l_cores), val);
 		xmlFree(val);
-	}
-}
-
-/* Parse <ClassDefaults> children: <Realtime>/<Foreground>/<Background>/
- * <GameProfile*>, each containing the same token list accepted by
- * <ActiveCores> (named groups and/or literal cpuset list).
- * Any class not mentioned keeps its built-in default. */
-static void parse_class_defaults(xmlDoc *doc, xmlNode *node,
-				 struct core_spec defaults[],
-				 int uclamp_min[], int uclamp_max[])
-{
-	xmlNode *c, *child_node;
-	char *val;
-
-	for (c = node; c; c = c->next) {
-		enum classification cls;
-
-		if (c->type != XML_ELEMENT_NODE)
-			continue;
-
-		cls = classdefaults_tag_to_class((const char *)c->name);
-		if (cls == CLASS_INVALID) {
-			lpmd_log_debug(
-				"warning: unknown <ClassDefaults> child '%s'\n",
-				c->name);
-			continue;
-		}
-
-		/* Legacy alias: map Foreground to both modern user tiers. */
-		if (!strcasecmp((const char *)c->name, "Foreground")) {
-			for (child_node = c->children; child_node;
-			     child_node = child_node->next) {
-				int parsed;
-
-				if (child_node->type != XML_ELEMENT_NODE ||
-				    !child_node->name)
-					continue;
-				val = (char *)xmlNodeListGetString(
-					doc, child_node->xmlChildrenNode, 1);
-				if (!val)
-					continue;
-
-				if (!strcasecmp((const char *)child_node->name,
-					       "Cores")) {
-					parse_core_spec(
-						val,
-						&defaults[CLASS_USER_INTERACTIVE]);
-					parse_core_spec(
-						val,
-						&defaults[CLASS_USER_INITIATED]);
-				} else if (!strcasecmp((const char *)child_node->name,
-						      "UClampMin") ||
-					   !strcasecmp((const char *)child_node->name,
-						      "uclamp_min")) {
-					if (parse_uclamp_value(val, &parsed) == 0) {
-						uclamp_min[CLASS_USER_INTERACTIVE] =
-							parsed;
-						uclamp_min[CLASS_USER_INITIATED] =
-							parsed;
-					}
-				} else if (!strcasecmp((const char *)child_node->name,
-						      "UClampMax") ||
-					   !strcasecmp((const char *)child_node->name,
-						      "uclamp_max")) {
-					if (parse_uclamp_value(val, &parsed) == 0) {
-						uclamp_max[CLASS_USER_INTERACTIVE] =
-							parsed;
-						uclamp_max[CLASS_USER_INITIATED] =
-							parsed;
-					}
-				}
-
-				xmlFree(val);
-			}
-			continue;
-		}
-
-		for (child_node = c->children; child_node; child_node = child_node->next) {
-			int parsed;
-
-			if (child_node->type == XML_ELEMENT_NODE &&
-			    !child_node->name)
-				continue;
-
-			val = (char *)xmlNodeListGetString(
-				doc, child_node->xmlChildrenNode, 1);
-			if (!val)
-				continue;
-
-			if (!strcasecmp((const char *)child_node->name, "Cores")) {
-				parse_core_spec(val, &defaults[cls]);
-			} else if (!strcasecmp((const char *)child_node->name,
-					      "UClampMin") ||
-				   !strcasecmp((const char *)child_node->name,
-					      "uclamp_min")) {
-				if (parse_uclamp_value(val, &parsed) == 0)
-					uclamp_min[cls] = parsed;
-			} else if (!strcasecmp((const char *)child_node->name,
-					      "UClampMax") ||
-				   !strcasecmp((const char *)child_node->name,
-					      "uclamp_max")) {
-				if (parse_uclamp_value(val, &parsed) == 0)
-					uclamp_max[cls] = parsed;
-			}
-
-			xmlFree(val);
-		}
 	}
 }
 
@@ -2038,12 +1869,30 @@ process_cpuset_t *process_cpuset_new(void)
 	if (!ctx)
 		return NULL;
 
-	/* Built-in fallback class defaults. calloc() already zeroed every
-     * slot's cpulist; only the named-group masks need to be set. */
+	/*
+     * THE class -> core-group mapping. This table is the only place a
+     * default lives; the sole way to change it is the <ClassDefaults>
+     * overlay in intel_lpmd_config_*.xml, applied on top by
+     * process_cpuset_override_class_defaults(). Neither
+     * process_cpuset.xml nor process_cpuset_user.xml may set it any
+     * more: the mapping is not process-list data, both the process path
+     * and the slice path need it, and keeping a copy in one consumer's
+     * file is what let the other consumer silently resolve a different
+     * answer for the same classification.
+     *
+     * calloc() already zeroed every slot's cpulist; only the named-group
+     * masks need to be set.
+     *
+     * The defaults are deliberately permissive for the latency-sensitive
+     * tiers: a machine with no per-model <ClassDefaults> should not have
+     * realtime or the focused application quietly taken off the P-cores.
+     * Constraining those is a decision for a config that knows the part.
+     */
 	ctx->class_defaults[CLASS_INVALID].groups = 0;
-	ctx->class_defaults[CLASS_REALTIME].groups = GROUP_PCORES;
+	ctx->class_defaults[CLASS_REALTIME].groups =
+		GROUP_PCORES | GROUP_ECORES | GROUP_LCORES;
 	ctx->class_defaults[CLASS_USER_INTERACTIVE].groups =
-		GROUP_PCORES | GROUP_ECORES;
+		GROUP_PCORES | GROUP_ECORES | GROUP_LCORES;
 	ctx->class_defaults[CLASS_USER_INITIATED].groups =
 		GROUP_PCORES | GROUP_ECORES;
 	ctx->class_defaults[CLASS_UTILITY].groups = GROUP_ECORES | GROUP_LCORES;
@@ -2051,12 +1900,13 @@ process_cpuset_t *process_cpuset_new(void)
 		GROUP_PCORES | GROUP_ECORES | GROUP_LCORES;
 	ctx->class_defaults[CLASS_BACKGROUND].groups = GROUP_LCORES;
 	/* GameProfile* placeholders: pick sensible defaults until the
-     * runtime grows policy specific to each profile. */
+     * runtime grows policy specific to each profile. A GPU-bound title
+     * needs little CPU, so it gets the LP-E cores; a mixed one keeps the
+     * E-cores too. */
 	ctx->class_defaults[CLASS_GAME_PROFILE_CPU].groups = GROUP_PCORES;
-	ctx->class_defaults[CLASS_GAME_PROFILE_GPU].groups =
-		GROUP_PCORES | GROUP_ECORES;
+	ctx->class_defaults[CLASS_GAME_PROFILE_GPU].groups = GROUP_LCORES;
 	ctx->class_defaults[CLASS_GAME_PROFILE_HYBRID].groups =
-		GROUP_PCORES | GROUP_ECORES;
+		GROUP_ECORES | GROUP_LCORES;
 	ctx->class_defaults[CLASS_CUSTOM_PROFILE_0].groups =
 		GROUP_PCORES | GROUP_ECORES | GROUP_LCORES;
 	ctx->class_defaults[CLASS_CUSTOM_PROFILE_1].groups =
@@ -2376,6 +2226,24 @@ int process_cpuset_override_class_uclamp_defaults(
 	return 0;
 }
 
+/*
+ * <ClassDefaults> is no longer honored in a policy file; see the table in
+ * process_cpuset_new(). Say so rather than ignore it silently: a file left
+ * over from an earlier build would otherwise look like it still had an
+ * effect. Both loaders report it identically.
+ *
+ * The child tags (<Cores>, <UClampMin>, <UClampMax>) are spelled the same
+ * in the config file, so a moved block is mostly valid there -- which is
+ * why the three things that are not get named individually.
+ */
+static void warn_classdefaults_ignored(const char *path)
+{
+	fprintf(stderr,
+		"warning: %s: <ClassDefaults> is ignored in this file; set it in the <States> stanza of intel_lpmd_config.xml instead.\n"
+		"warning: %s: class names are matched case-sensitively there, snake_case aliases (game_profile_cpu) are not accepted, and there is no <Foreground> alias, so a moved block may need its class names edited.\n",
+		path, path);
+}
+
 int process_cpuset_load_config(process_cpuset_t *ctx, const char *path)
 {
 	xmlDoc *doc;
@@ -2405,18 +2273,15 @@ int process_cpuset_load_config(process_cpuset_t *ctx, const char *path)
 	ctx->default_entry.cls = CLASS_INVALID;
 	ctx->has_default_entry = 0;
 
-	/* First pass: pick up <CpuGroups>, <ClassDefaults>, and
-     * <DefaultProcess> regardless of where they appear. */
+	/* First pass: pick up <CpuGroups> and <DefaultProcess> regardless of
+     * where they appear. */
 	for (cur = root->children; cur; cur = cur->next) {
 		if (cur->type != XML_ELEMENT_NODE)
 			continue;
 		if (!strcmp((const char *)cur->name, "CpuGroups"))
 			parse_cpu_groups(doc, cur->children, &ctx->groups);
 		else if (!strcmp((const char *)cur->name, "ClassDefaults"))
-			parse_class_defaults(doc, cur->children,
-					     ctx->class_defaults,
-					     ctx->class_uclamp_min,
-					     ctx->class_uclamp_max);
+			warn_classdefaults_ignored(path);
 		else if (!strcmp((const char *)cur->name, "DefaultProcess")) {
 			parse_one_process(ctx, doc, cur->children,
 					  &ctx->default_entry);
@@ -2519,8 +2384,9 @@ static int find_entry_index(const process_cpuset_t *ctx,
 /*
  * Additive load: parse @path and merge its <Process> entries on top of
  * the current ctx state. Entries whose <Name> already exists in the ctx
- * are replaced (so the user file overrides the system file). <CpuGroups>
- * and <ClassDefaults>, if present in the overlay, also override.
+ * are replaced (so the user file overrides the system file). <CpuGroups>,
+ * if present in the overlay, also overrides. <ClassDefaults> does not:
+ * see the table in process_cpuset_new().
  *
  * Unlike process_cpuset_load_config(), the existing entries array is
  * NOT cleared; this is intended for layering a user-editable XML on
@@ -2550,17 +2416,14 @@ int process_cpuset_load_config_overlay(process_cpuset_t *ctx, const char *path)
 		return 0;
 	}
 
-	/* Optional CpuGroups / ClassDefaults / DefaultProcess overrides. */
+	/* Optional CpuGroups / DefaultProcess overrides. */
 	for (cur = root->children; cur; cur = cur->next) {
 		if (cur->type != XML_ELEMENT_NODE)
 			continue;
 		if (!strcmp((const char *)cur->name, "CpuGroups"))
 			parse_cpu_groups(doc, cur->children, &ctx->groups);
 		else if (!strcmp((const char *)cur->name, "ClassDefaults"))
-			parse_class_defaults(doc, cur->children,
-					     ctx->class_defaults,
-					     ctx->class_uclamp_min,
-					     ctx->class_uclamp_max);
+			warn_classdefaults_ignored(path);
 		else if (!strcmp((const char *)cur->name, "DefaultProcess")) {
 			struct proc_entry tmp;
 			parse_one_process(ctx, doc, cur->children, &tmp);

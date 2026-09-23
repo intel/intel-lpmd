@@ -59,19 +59,34 @@
   Entries that don't exist on a given distro simply won't match any
   PID and are silently ignored at runtime.
 
-  Default allowed CPUs per classification (overridable via the
-  <ClassDefaults> block below; built-in fallback shown):
-      realtime           -> Pcores
+  Default allowed CPUs per classification. Not set in this file; see
+  "Per-classification defaults" below. Built-in table:
+      realtime           -> Pcores + Ecores + Lcores
       user_interactive   -> Pcores + Ecores + Lcores  (focused PID)
       user_initiated     -> Pcores + Ecores
       utility            -> Ecores + Lcores
       background         -> Lcores
-      game_profile_cpu     -> Pcores
-      game_profile_gpu     -> Pcores + Ecores
-      game_profile_mixed  -> Pcores + Ecores
-    custom_profile_0    -> Pcores + Ecores + Lcores
-    custom_profile_1    -> Pcores + Ecores + Lcores
-    custom_profile_2    -> Pcores + Ecores + Lcores
+      unclassified       -> Pcores + Ecores + Lcores
+      game_profile_cpu   -> Pcores
+      game_profile_gpu   -> Lcores
+      game_profile_mixed -> Ecores + Lcores
+      custom_profile_0   -> Pcores + Ecores + Lcores
+      custom_profile_1   -> Pcores + Ecores + Lcores
+      custom_profile_2   -> Pcores + Ecores + Lcores
+
+  One caveat on user_initiated: until something registers as a focus
+  helper, there is no focused PID to distinguish, so user_initiated
+  resolves to whatever user_interactive resolves to and its own row above
+  is not reached. With no focus helper and no config overlay both tiers
+  are therefore unconstrained; with the F6_M204 overlay both land on
+  Ecores + Lcores, not the Lcores that overlay's UserInitiated asks for.
+
+  The latency-sensitive tiers are deliberately unconstrained by default:
+  a machine whose intel_lpmd_config_*.xml says nothing about them should
+  not have realtime or the focused application quietly taken off the
+  P-cores. Narrowing them is a decision for a config that knows the part.
+  The effective mapping, after the config overlay and under the active
+  P/E/LP-E sets, is logged once at daemon startup.
 
   NOTE: /proc/<pid>/comm is truncated to 15 chars; names below already
         respect that limit.
@@ -267,78 +282,28 @@
     -->
 
     <!--
-      Per-classification defaults. OPTIONAL. If a <Process> entry omits
-      <ActiveCores>, the groups listed here for its classification are
-      used. Built-in fallbacks (used if a tag is missing) are:
-          realtime           -> ActivePcores
-          user_interactive   -> ActivePcores, ActiveEcores
-          user_initiated     -> ActivePcores, ActiveEcores
-          utility            -> ActiveEcores, ActiveLcores
-          background         -> ActiveLcores
-          game_profile_cpu     -> ActivePcores
-          game_profile_gpu     -> ActivePcores, ActiveEcores
-          game_profile_mixed  -> ActivePcores, ActiveEcores
-          custom_profile_0    -> ActivePcores, ActiveEcores, ActiveLcores
-          custom_profile_1    -> ActivePcores, ActiveEcores, ActiveLcores
-          custom_profile_2    -> ActivePcores, ActiveEcores, ActiveLcores
-      Override any of them by editing this block; remove the whole block
-      to keep all defaults built-in.
+      Per-classification defaults are NOT set here.
 
-      Each entry accepts a comma- / whitespace-separated mix of:
-        * Named groups   : ActivePcores | ActiveEcores | ActiveLcores
-        * Literal CPUs   : cpuset-style list, e.g. "0-3,5,8"
+      The class -> core-group mapping (what "background" or
+      "user_interactive" means in CPUs) is not process-list data. This file
+      answers "which class is this process"; slice.xml answers "which class
+      is this unit"; both then need the same mapping. Keeping a copy of it
+      inside one of the two consumers is what let the other one silently
+      resolve a different mask for the same class name.
 
-      Optional per-class uclamp tags inside each class node (per-PID control):
-          * <UClampMin> / <uclamp_min> : -1(disable) or 0..1024
-          * <UClampMax> / <uclamp_max> : -1(disable) or 0..1024
-          When set, matching PIDs in that classification are updated via
-          sched_setattr() (sched_util_min / sched_util_max).
+      So there is exactly one default table, in process_cpuset_new(), and
+      exactly one way to change it: the <ClassDefaults> block in the
+      matching <States> stanza of intel_lpmd_config_*.xml, which is also
+      where the per-class uclamp and perf-percentage tags live. A class the
+      config does not mention keeps its built-in value.
 
-      NOTE: Other per-class tuning tags (MinPerfPctAC/DC, MaxPerfPctAC/DC,
-      BalanceSliderAC/DC, SliderOffsetAC/DC) are NOT per-PID settings;
-      they are global system state overrides that apply when any process
-      from that class is active. Those tags belong in intel_lpmd_config_*.xml
-      under the per-CPU-model <States><ClassDefaults> overlay, not here.
+      A <ClassDefaults> block left in this file, or in
+      process_cpuset_user.xml, is ignored with a warning on stderr.
 
-      The effective AllowedCPUs mask is the union of every group plus
-      every literal CPU that appears in the entry. The same syntax is
-      accepted in per-process <ActiveCores> overrides.
+      To give one specific process a mask of its own, use <ActiveCores> on
+      its <Process> entry. That is a statement about one program and still
+      outranks everything else.
     -->
-    <ClassDefaults>
-        <Realtime>
-            <Cores>ActivePcores,ActiveEcores,ActiveLcores</Cores>
-        </Realtime>
-        <UserInteractive>
-            <Cores>ActivePcores, ActiveEcores, ActiveLcores</Cores>
-        </UserInteractive>
-        <UserInitiated>
-            <Cores>ActivePcores, ActiveEcores</Cores>
-        </UserInitiated>
-        <Utility>
-            <Cores>ActiveEcores, ActiveLcores</Cores>
-        </Utility>
-        <Background>
-            <Cores>ActiveLcores</Cores>
-        </Background>
-        <GameProfileCPU>
-            <Cores>ActivePcores</Cores>
-        </GameProfileCPU>
-        <GameProfileGPU>
-            <Cores>ActiveLcores</Cores>
-        </GameProfileGPU>
-        <GameProfileMixed>
-            <Cores>ActiveEcores,ActiveLcores</Cores>
-        </GameProfileMixed>
-        <CustomProfile0>
-            <Cores>ActivePcores, ActiveEcores, ActiveLcores</Cores>
-        </CustomProfile0>
-        <CustomProfile1>
-            <Cores>ActivePcores, ActiveEcores, ActiveLcores</Cores>
-        </CustomProfile1>
-        <CustomProfile2>
-            <Cores>ActivePcores, ActiveEcores, ActiveLcores</Cores>
-        </CustomProfile2>
-    </ClassDefaults>
 
     <!--
       Optional per-process tags accepted inside <Process>:
@@ -1287,7 +1252,7 @@
     <Process>
         <Name>Xwayland</Name>
         <Classification>user_interactive</Classification>
-    </Process>
+    </Process> 
     <!-- GNOME shell stack -->
     <Process>
         <Name>gnome-shell</Name>

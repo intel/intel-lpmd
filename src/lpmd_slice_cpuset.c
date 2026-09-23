@@ -1220,7 +1220,6 @@ out:
 int lpmd_slice_cpuset_init(struct lpmd_config_t *config)
 {
 	char path[MAX_STR_LENGTH];
-	size_t setsize;
 
 	if (!config || !config->use_slice_cpuset) {
 		/* Intent classification reads slice.xml, so it cannot do
@@ -1238,21 +1237,21 @@ int lpmd_slice_cpuset_init(struct lpmd_config_t *config)
 		return 0;
 	}
 
-	g_resolver = process_cpuset_new();
+	/*
+	 * Build the resolver the same way the process path does, so that a
+	 * <Classification> here means exactly what the same name means in
+	 * process_cpuset.xml. No <Process> entries are wanted: this resolver
+	 * exists only to turn a class name into a cpulist.
+	 *
+	 * This used to be a bare process_cpuset_new() plus the core masks,
+	 * which skipped the per-CPU-model <ClassDefaults> overlay. An entry
+	 * was then written to the cgroup using the built-in mask for its tier
+	 * even where the config had overridden that tier -- so gdm.service
+	 * and pipewire.service got masks nobody had configured, and
+	 * LIST-SLICES reported them as if they were the configured ones.
+	 */
+	g_resolver = lpmd_class_resolver_new(config, NULL, NULL, NULL);
 	if (!g_resolver) {
-		g_n_entries = 0;
-		return -1;
-	}
-
-	/* core_type_masks[] shares cpu_set_t's bit layout. */
-	setsize = (size_t)(get_max_cpus() / 8);
-	if (process_cpuset_set_groups_cpuset(
-		    g_resolver, (const cpu_set_t *)config->core_type_masks[P_CORE],
-		    (const cpu_set_t *)config->core_type_masks[E_CORE],
-		    (const cpu_set_t *)config->core_type_masks[L_CORE],
-		    setsize) < 0) {
-		process_cpuset_free(g_resolver);
-		g_resolver = NULL;
 		g_n_entries = 0;
 		return -1;
 	}

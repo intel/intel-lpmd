@@ -693,6 +693,20 @@ int  lpmd_slice_cpuset_pid_intent(pid_t pid, char *unit_out, size_t unit_cap,
 /* lpmd_process_cpuset.c */
 int  lpmd_process_cpuset_init(struct lpmd_config_t *config);
 
+/*
+ * The one way to build a context that resolves a <Classification> to CPUs.
+ * Declared with the incomplete struct rather than process_cpuset.h's
+ * process_cpuset_t so this header does not have to include it; the typedef
+ * names the same type, so callers can assign the result straight to a
+ * process_cpuset_t *. Pass NULL for both paths to get the class mapping
+ * alone, with no <Process> entries.
+ */
+struct process_cpuset_ctx;
+struct process_cpuset_ctx *lpmd_class_resolver_new(struct lpmd_config_t *config,
+						   const char *sys_xml,
+						   const char *user_xml,
+						   int *n_entries);
+
 void lpmd_process_cpuset_uninit(void);
 void lpmd_process_cpuset_unbind_all(void);
 void lpmd_process_cpuset_rescan(void);

@@ -107,13 +107,21 @@
                         user_interactive | realtime | game_profile_cpu |
                         game_profile_gpu | game_profile_mixed |
                         custom_profile_0..2
-                        Resolved through the same class -> core-group
-                        mapping process_cpuset.xml uses:
-                            realtime         -> Pcores
-                            user_interactive -> Pcores + Ecores
-                            user_initiated   -> Pcores + Ecores
-                            utility          -> Ecores + LPEcores
-                            background       -> LPEcores
+                        Resolved through the one class -> core-group
+                        mapping the whole daemon shares: the built-in
+                        table, plus the <ClassDefaults> overlay in the
+                        matching <States> stanza of
+                        intel_lpmd_config_*.xml. The same class name
+                        therefore means the same CPUs here as it does in
+                        process_cpuset.xml.
+
+                        The values are deliberately not repeated here.
+                        They were, and the copy drifted: this file
+                        described the built-in table while the config
+                        overlay had already overridden it, so the mask
+                        written to gdm.service and pipewire.service was
+                        not the one either file appeared to promise. The
+                        effective mapping is logged at daemon startup.
     <Cores>             OPTIONAL explicit override, taking precedence over
                         <Classification>. Accepts a mix of named groups
                         (ActivePcores / ActiveEcores / ActiveLcores) and
