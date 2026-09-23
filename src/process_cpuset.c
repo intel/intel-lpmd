@@ -316,6 +316,10 @@ struct attached_entry {
 	 * <Process> entry. Reported by LIST-BOUND so an operator can see which
 	 * of the two policies actually decided this PID. */
 	int from_intent;
+	/* The mask came from the entry's own <ActiveCores>, not from its
+	 * class, so a change to the class's <ClassDefaults> must not touch
+	 * it. */
+	int explicit_cores;
 
 	/* Exact-restore bookkeeping. orig_* is the mask the task had before
 	 * lpmd touched it; set_* is what lpmd wrote. On release we only
@@ -1571,6 +1575,10 @@ static int apply_pid_uclamp(process_cpuset_t *ctx, pid_t pid,
 	int min_v, max_v;
 	int rc;
 
+	/* A class <ClassDefaults> does not set applies nothing, uclamp
+	 * included: process_cpuset_log_class_defaults() warns about it. */
+	if (!core_spec_is_set(default_spec_for(ctx, cls)))
+		return 0;
 	rc = class_uclamp_get(ctx, cls, &min_v, &max_v);
 	if (rc == 1)
 		return 0; /* not configured */
@@ -1919,50 +1927,23 @@ process_cpuset_t *process_cpuset_new(void)
 		return NULL;
 
 	/*
-     * THE class -> core-group mapping. This table is the only place a
-     * default lives; the sole way to change it is the <ClassDefaults>
-     * overlay in intel_lpmd_config_*.xml, applied on top by
-     * process_cpuset_override_class_defaults(). Neither
-     * process_cpuset.xml nor process_cpuset_user.xml may set it any
-     * more: the mapping is not process-list data, both the process path
-     * and the slice path need it, and keeping a copy in one consumer's
-     * file is what let the other consumer silently resolve a different
-     * answer for the same classification.
+     * There is no built-in class -> core-group mapping. calloc() left
+     * every slot unset (groups 0, empty cpulist), and an unset class
+     * means "lpmd does not touch this task": no affinity is written, no
+     * uclamp is applied, a slice keeps whatever AllowedCPUs= it had. The
+     * only way to give a class CPUs is the <ClassDefaults> overlay in
+     * the matching intel_lpmd_config_*.xml, applied on top by
+     * process_cpuset_override_class_defaults(), because only a config
+     * that knows the part can say what a class should run on. Neither
+     * process_cpuset.xml nor process_cpuset_user.xml may set it: the
+     * mapping is not process-list data, and both the process path and
+     * the slice path need the same answer for the same classification.
      *
-     * calloc() already zeroed every slot's cpulist; only the named-group
-     * masks need to be set.
-     *
-     * The defaults are deliberately permissive for the latency-sensitive
-     * tiers: a machine with no per-model <ClassDefaults> should not have
-     * realtime or the focused application quietly taken off the P-cores.
-     * Constraining those is a decision for a config that knows the part.
+     * A table used to live here. It decided placement on every model
+     * without a <ClassDefaults> block -- background silently confined to
+     * the LP-E cores, and resolving to nothing at all on parts that have
+     * none -- which is a policy no per-model config had asked for.
      */
-	ctx->class_defaults[CLASS_INVALID].groups = 0;
-	ctx->class_defaults[CLASS_REALTIME].groups =
-		GROUP_PCORES | GROUP_ECORES | GROUP_LCORES;
-	ctx->class_defaults[CLASS_USER_INTERACTIVE].groups =
-		GROUP_PCORES | GROUP_ECORES | GROUP_LCORES;
-	ctx->class_defaults[CLASS_USER_INITIATED].groups =
-		GROUP_PCORES | GROUP_ECORES;
-	ctx->class_defaults[CLASS_UTILITY].groups = GROUP_ECORES | GROUP_LCORES;
-	ctx->class_defaults[CLASS_UNCLASSIFIED].groups =
-		GROUP_PCORES | GROUP_ECORES | GROUP_LCORES;
-	ctx->class_defaults[CLASS_BACKGROUND].groups = GROUP_LCORES;
-	/* GameProfile* placeholders: pick sensible defaults until the
-     * runtime grows policy specific to each profile. A GPU-bound title
-     * needs little CPU, so it gets the LP-E cores; a mixed one keeps the
-     * E-cores too. */
-	ctx->class_defaults[CLASS_GAME_PROFILE_CPU].groups = GROUP_PCORES;
-	ctx->class_defaults[CLASS_GAME_PROFILE_GPU].groups = GROUP_LCORES;
-	ctx->class_defaults[CLASS_GAME_PROFILE_HYBRID].groups =
-		GROUP_ECORES | GROUP_LCORES;
-	ctx->class_defaults[CLASS_CUSTOM_PROFILE_0].groups =
-		GROUP_PCORES | GROUP_ECORES | GROUP_LCORES;
-	ctx->class_defaults[CLASS_CUSTOM_PROFILE_1].groups =
-		GROUP_PCORES | GROUP_ECORES | GROUP_LCORES;
-	ctx->class_defaults[CLASS_CUSTOM_PROFILE_2].groups =
-		GROUP_PCORES | GROUP_ECORES | GROUP_LCORES;
-
 	for (size_t i = 0;
 	     i < sizeof(ctx->class_uclamp_min) / sizeof(ctx->class_uclamp_min[0]);
 	     i++) {
@@ -2276,7 +2257,7 @@ int process_cpuset_override_class_uclamp_defaults(
 }
 
 /*
- * <ClassDefaults> is no longer honored in a policy file; see the table in
+ * <ClassDefaults> is no longer honored in a policy file; see the comment in
  * process_cpuset_new(). Say so rather than ignore it silently: a file left
  * over from an earlier build would otherwise look like it still had an
  * effect. Both loaders report it identically.
@@ -2435,7 +2416,7 @@ static int find_entry_index(const process_cpuset_t *ctx,
  * the current ctx state. Entries whose <Name> already exists in the ctx
  * are replaced (so the user file overrides the system file). <CpuGroups>,
  * if present in the overlay, also overrides. <ClassDefaults> does not:
- * see the table in process_cpuset_new().
+ * see the comment in process_cpuset_new().
  *
  * Unlike process_cpuset_load_config(), the existing entries array is
  * NOT cleared; this is intended for layering a user-editable XML on
@@ -2990,9 +2971,13 @@ static int affinity_bind_pid(process_cpuset_t *ctx, const struct proc_entry *e,
 
 	if (pidset_add_full(&ctx->attached, pid, e->cls, e->resolved.groups,
 			    owner_uid, cur, cur_len, send, send_len,
-			    pid_start_time(pid)) == 0)
-		ctx->attached.items[ctx->attached.n - 1].all_threads =
-			e->affinity_all_threads ? 1 : 0;
+			    pid_start_time(pid)) == 0) {
+		struct attached_entry *it =
+			&ctx->attached.items[ctx->attached.n - 1];
+
+		it->all_threads = e->affinity_all_threads ? 1 : 0;
+		it->explicit_cores = core_spec_is_set(&e->explicit_spec);
+	}
 	(void)apply_pid_uclamp(ctx, pid, e->cls, class_str(e->cls),
 			       e->affinity_all_threads ? 1 : 0);
 	return 1;
@@ -3185,7 +3170,9 @@ static size_t build_user_interactive_mask(const process_cpuset_t *ctx,
  * Promotion is sched_setaffinity(pid, <UI mask>) over every TID, on the
  * task where it already is -- the same mechanism used for every other
  * PID here, and for the same reason: promoting the focused window must
- * not relocate it out of its own service or session cgroup.
+ * not relocate it out of its own service or session cgroup. If
+ * <ClassDefaults> does not set user_interactive, the <UI mask> is the
+ * task's own pre-lpmd mask: focus lifts its class's placement.
  *
  * A PID that is not in the attached set yet is a no-op; the
  * proc-connector / periodic rescan will attach it shortly with its
@@ -3202,6 +3189,7 @@ int process_cpuset_set_focus_pid(process_cpuset_t *ctx, pid_t pid)
 	size_t mlen;
 	struct attached_entry *ent;
 	char comm[MAX_NAME] = "";
+	int ui_set;
 
 	if (!ctx)
 		return -1;
@@ -3275,11 +3263,34 @@ int process_cpuset_set_focus_pid(process_cpuset_t *ctx, pid_t pid)
 		return 0;
 	}
 
-	mlen = build_user_interactive_mask(ctx, mask, sizeof(mask));
-	if (!mlen) {
-		lpmd_log_debug(
-			"process_cpuset: focus: user_interactive mask is empty\n");
-		return -1;
+	ui_set = core_spec_is_set(&ctx->class_defaults[CLASS_USER_INTERACTIVE]);
+	if (ui_set) {
+		mlen = build_user_interactive_mask(ctx, mask, sizeof(mask));
+		if (!mlen) {
+			lpmd_log_debug(
+				"process_cpuset: focus: user_interactive mask is empty\n");
+			return -1;
+		}
+	} else {
+		/*
+		 * user_interactive is not set in <ClassDefaults>, which means
+		 * lpmd has no placement for it. The focused application is
+		 * then given back the mask it had before lpmd bound it, so
+		 * focus lifts whatever its own class imposed rather than
+		 * inventing a mask nobody configured. With no pre-lpmd mask
+		 * on record there is nothing to lift.
+		 */
+		if (!ent->orig_mlen) {
+			lpmd_log_debug(
+				"process_cpuset: focus: pid=%d comm='%s': "
+				"user_interactive not set in <ClassDefaults> and "
+				"no pre-lpmd mask recorded; left alone\n",
+				(int)pid, comm);
+			return 0;
+		}
+		memset(mask, 0, sizeof(mask));
+		memcpy(mask, ent->orig_mask, ent->orig_mlen);
+		mlen = ent->orig_mlen;
 	}
 
 	/* Remember current (pre-focus) mask so we can revert later. */
@@ -3369,17 +3380,29 @@ int process_cpuset_set_focus_pid(process_cpuset_t *ctx, pid_t pid)
  *
  * The PID currently held by the focus-promote path is skipped: it
  * already wears the USER_INTERACTIVE mask, and the focus path owns
- * the eventual revert via focus_orig_*.
+ * the eventual revert via focus_orig_*. So is any PID whose mask came
+ * from its entry's own <ActiveCores>: the class default never applied
+ * to it.
+ *
+ * If @target_cls is now unset, lpmd has no placement for it any more,
+ * so its PIDs are released exactly as process_cpuset_release_all()
+ * would release them and dropped from the attached set. Leaving them
+ * wearing the old mask would keep enforcing a policy that no longer
+ * exists.
  *
  * Returns the number of PIDs touched, or -1 on parameter error.
  */
+static int release_attached(process_cpuset_t *ctx,
+			    const struct attached_entry *it);
 static int reapply_attached_class(process_cpuset_t *ctx,
 				  enum classification target_cls)
 {
 	uint8_t mask[CPUMASK_BYTES];
-	size_t mlen;
+	size_t mlen = 0;
 	struct proc_entry e;
+	int unset;
 	int n = 0;
+	size_t w = 0;
 
 	if (!ctx)
 		return -1;
@@ -3387,28 +3410,48 @@ static int reapply_attached_class(process_cpuset_t *ctx,
 	memset(&e, 0, sizeof(e));
 	e.cls = target_cls;
 	e.resolved = *default_spec_for(ctx, target_cls);
-	if (build_mask_for(ctx, &e, mask, sizeof(mask)) < 0)
-		return -1;
-	mlen = mask_significant_len(mask, sizeof(mask));
-	if (!mlen)
-		return -1;
+	unset = !core_spec_is_set(&e.resolved);
+	if (!unset) {
+		if (build_mask_for(ctx, &e, mask, sizeof(mask)) < 0)
+			return -1;
+		mlen = mask_significant_len(mask, sizeof(mask));
+		if (!mlen)
+			return -1;
+	}
 
 	for (size_t i = 0; i < ctx->attached.n; i++) {
 		struct attached_entry *ent = &ctx->attached.items[i];
-		if (ent->cls != target_cls)
-			continue;
-		if (ctx->focus_pid > 0 && ent->pid == ctx->focus_pid)
-			continue;
-		(void)affinity_apply(ent->pid, /*all_threads=*/1, mask, mlen,
-				     class_str(target_cls));
-		(void)apply_pid_uclamp(ctx, ent->pid, target_cls,
-				       class_str(target_cls), 1);
-		/* Keep the stored groups in sync so LIST-BOUND displays the
-		 * correct CPU group names after a class-default change
-		 * (e.g. focus-helper handshake flipping USER_INITIATED). */
-		ent->groups = e.resolved.groups;
-		n++;
+		int keep = 1;
+
+		if (ent->cls != target_cls || ent->explicit_cores ||
+		    (ctx->focus_pid > 0 && ent->pid == ctx->focus_pid)) {
+			/* not ours to change */
+		} else if (unset) {
+			lpmd_log_debug(
+				"process_cpuset: class %s no longer set; releasing pid %d\n",
+				class_str(target_cls), (int)ent->pid);
+			(void)release_attached(ctx, ent);
+			keep = 0;
+			n++;
+		} else {
+			(void)affinity_apply(ent->pid, /*all_threads=*/1, mask,
+					     mlen, class_str(target_cls));
+			(void)apply_pid_uclamp(ctx, ent->pid, target_cls,
+					       class_str(target_cls), 1);
+			/* Keep the stored groups in sync so LIST-BOUND displays
+			 * the correct CPU group names after a class-default
+			 * change (e.g. focus-helper handshake flipping
+			 * USER_INITIATED). */
+			ent->groups = e.resolved.groups;
+			n++;
+		}
+		if (keep) {
+			if (w != i)
+				ctx->attached.items[w] = *ent;
+			w++;
+		}
 	}
+	ctx->attached.n = w;
 	return n;
 }
 
@@ -3516,6 +3559,20 @@ void process_cpuset_log_class_defaults(const process_cpuset_t *ctx)
 		memset(&e, 0, sizeof(e));
 		e.cls = order[i];
 		e.resolved = *default_spec_for(ctx, order[i]);
+		(void)class_uclamp_get(ctx, order[i],
+				      &uclamp_min, &uclamp_max);
+		if (!core_spec_is_set(&e.resolved)) {
+			lpmd_log_debug(
+				"process_cpuset: defaults: %-18s = not set (left alone)\n",
+				class_str(order[i]));
+			/* An unset class applies nothing, uclamp included. */
+			if (uclamp_min != UCLAMP_UNSET ||
+			    uclamp_max != UCLAMP_UNSET)
+				lpmd_log_warn(
+					"process_cpuset: <ClassDefaults> gives %s a uclamp but no <Cores>; the uclamp is not applied\n",
+					class_str(order[i]));
+			continue;
+		}
 		if (build_mask_for(ctx, &e, mask, sizeof(mask)) < 0) {
 			lpmd_log_debug(
 				"process_cpuset: defaults: %-18s = <build error>\n",
@@ -3523,8 +3580,6 @@ void process_cpuset_log_class_defaults(const process_cpuset_t *ctx)
 			continue;
 		}
 		mask_to_cpulist(mask, sizeof(mask), list, sizeof(list));
-		(void)class_uclamp_get(ctx, order[i],
-				      &uclamp_min, &uclamp_max);
 		lpmd_log_debug(
 			"process_cpuset: defaults: %-18s = [%s] uclamp_min=%d uclamp_max=%d\n",
 			class_str(order[i]), list[0] ? list : "<empty>",
@@ -3743,6 +3798,9 @@ int process_cpuset_apply_once(process_cpuset_t *ctx, int dry_run)
 	 * PID that happens to match the broken entry.
 	 */
 	for (int i = 0; i < ctx->n_entries; i++) {
+		/* An unset class is reported once, by the startup log. */
+		if (!core_spec_is_set(&ctx->entries[i].resolved))
+			continue;
 		if (build_mask_for(ctx, &ctx->entries[i], mask,
 				   sizeof(mask)) < 0)
 			lpmd_log_debug("[%s] invalid CPU list, skipping\n",
@@ -3808,7 +3866,13 @@ int process_cpuset_apply_once(process_cpuset_t *ctx, int dry_run)
 			continue;
 		}
 
-		/* Already reported above, so just skip it here. */
+		/*
+		 * Already reported, so just skip it here. An unset class is
+		 * not "no CPUs": it means lpmd has no opinion, so the task
+		 * keeps whatever affinity it has and is not tracked.
+		 */
+		if (!core_spec_is_set(&e->resolved))
+			continue;
 		if (build_mask_for(ctx, e, mask, sizeof(mask)) < 0)
 			continue;
 		mlen = mask_significant_len(mask, sizeof(mask));
@@ -3921,6 +3985,9 @@ int process_cpuset_apply_pid(process_cpuset_t *ctx, pid_t pid, int dry_run)
 		owner_uid = 0;
 	}
 
+	/* Class not set in <ClassDefaults>: not ours to place. */
+	if (!core_spec_is_set(&e->resolved))
+		return 0;
 	if (build_mask_for(ctx, e, mask, sizeof(mask)) < 0)
 		return -1;
 	mlen = mask_significant_len(mask, sizeof(mask));
@@ -3979,6 +4046,9 @@ static int apply_default_to_pid(process_cpuset_t *ctx, pid_t pid,
 	if (loc != PID_LOC_USER_MGR)
 		return 0;
 
+	/* A <DefaultProcess> with no <ActiveCores> and an unset class. */
+	if (!core_spec_is_set(&e->resolved))
+		return 0;
 	if (build_mask_for(ctx, e, mask, sizeof(mask)) < 0)
 		return -1;
 	mlen = mask_significant_len(mask, sizeof(mask));
@@ -4000,8 +4070,11 @@ static int apply_default_to_pid(process_cpuset_t *ctx, pid_t pid,
 				       (int)pid, comm,
 				       (unsigned)owner_uid, n,
 				       from_event ? " event" : "");
-			pidset_add(&ctx->attached, pid, e->cls,
-				   e->resolved.groups, owner_uid);
+			if (pidset_add(&ctx->attached, pid, e->cls,
+				       e->resolved.groups, owner_uid) == 0)
+				ctx->attached.items[ctx->attached.n - 1]
+					.explicit_cores = core_spec_is_set(
+					&e->explicit_spec);
 			(void)apply_pid_uclamp(ctx, pid, e->cls,
 			       class_str(e->cls), 1);
 			return 1;
@@ -4011,8 +4084,10 @@ static int apply_default_to_pid(process_cpuset_t *ctx, pid_t pid,
 			       (int)pid, comm,
 			       (unsigned)owner_uid,
 			       from_event ? " event" : "");
-		pidset_add(&ctx->attached, pid, e->cls, e->resolved.groups,
-			   owner_uid);
+		if (pidset_add(&ctx->attached, pid, e->cls, e->resolved.groups,
+			       owner_uid) == 0)
+			ctx->attached.items[ctx->attached.n - 1].explicit_cores =
+				core_spec_is_set(&e->explicit_spec);
 		(void)apply_pid_uclamp(ctx, pid, e->cls, class_str(e->cls), 0);
 		return 1;
 	}
@@ -4082,6 +4157,63 @@ static int release_inherited_descendants(process_cpuset_t *ctx,
 }
 
 /*
+ * Release one tracked PID @it the way process_cpuset_release_all()
+ * describes, without removing it from the attached set; the caller does
+ * that. Returns the number of PIDs restored (the task and any
+ * descendants that inherited its mask).
+ */
+static int release_attached(process_cpuset_t *ctx,
+			    const struct attached_entry *it)
+{
+	pid_t pid = it->pid;
+	uint8_t now[CPUMASK_BYTES];
+	char comm[MAX_NAME];
+	size_t now_len;
+	int released = 0;
+
+	/* Restore the exact mask the PID had before we touched it, but
+	 * only if it still carries what we wrote. A different mask means
+	 * the task (or an admin) set its own affinity after we bound it
+	 * -- that is the task's decision, so leave it. */
+	if (it->start_time && pid_start_time(pid) != it->start_time) {
+		lpmd_log_debug(
+			"release: pid %d start_time changed (PID reused); not restoring\n",
+			(int)pid);
+		return 0;
+	}
+
+	/* Sweep descendants before restoring the PID itself, and do it
+	 * even for the cases below that leave the PID alone: a child
+	 * that forked before its parent re-pinned itself still carries
+	 * our mask, and it is still ours to undo. Children of a PID
+	 * that has already exited cannot be reached this way -- they
+	 * were reparented, so there is no chain left to walk. */
+	released += release_inherited_descendants(ctx, it);
+
+	if (!it->orig_mlen)
+		return released; /* nothing recorded: nothing to undo */
+
+	memset(now, 0, sizeof(now));
+	now_len = snapshot_pid_mask(pid, now, sizeof(now));
+	if (!now_len)
+		return released; /* gone */
+	if (it->set_mlen && memcmp(now, it->set_mask, sizeof(now)) != 0) {
+		char dbg_now[MAX_CPULIST];
+
+		mask_to_cpulist(now, now_len, dbg_now, sizeof(dbg_now));
+		lpmd_log_debug(
+			"release: pid %d comm=%s affinity=[%s] was changed since we set it; left alone\n",
+			(int)pid, pid_comm_for_log(pid, comm, sizeof(comm)),
+			dbg_now);
+		return released;
+	}
+	if (affinity_apply(pid, it->all_threads, it->orig_mask, it->orig_mlen,
+			   class_str(it->cls)) == 0)
+		released++;
+	return released;
+}
+
+/*
  * Release every tracked PID, restoring exactly what it had before lpmd
  * touched it, then do the same for descendants that inherited an lpmd mask
  * across fork(2) without ever being tracked themselves. Nothing is
@@ -4098,54 +4230,8 @@ int process_cpuset_release_all(process_cpuset_t *ctx)
 	if (!ctx)
 		return -1;
 
-	for (size_t i = 0; i < ctx->attached.n; i++) {
-		struct attached_entry *it = &ctx->attached.items[i];
-		pid_t pid = it->pid;
-		uint8_t now[CPUMASK_BYTES];
-		char comm[MAX_NAME];
-		size_t now_len;
-
-		/* Restore the exact mask the PID had before we touched it, but
-         * only if it still carries what we wrote. A different mask means
-         * the task (or an admin) set its own affinity after we bound it
-         * -- that is the task's decision, so leave it. */
-		if (it->start_time && pid_start_time(pid) != it->start_time) {
-			lpmd_log_debug(
-				"release: pid %d start_time changed (PID reused); not restoring\n",
-				(int)pid);
-			continue;
-		}
-
-		/* Sweep descendants before restoring the PID itself, and do it
-		 * even for the cases below that leave the PID alone: a child
-		 * that forked before its parent re-pinned itself still carries
-		 * our mask, and it is still ours to undo. Children of a PID
-		 * that has already exited cannot be reached this way -- they
-		 * were reparented, so there is no chain left to walk. */
-		released += release_inherited_descendants(ctx, it);
-
-		if (!it->orig_mlen)
-			continue; /* nothing recorded: nothing to undo */
-
-		memset(now, 0, sizeof(now));
-		now_len = snapshot_pid_mask(pid, now, sizeof(now));
-		if (!now_len)
-			continue; /* gone */
-		if (it->set_mlen &&
-		    memcmp(now, it->set_mask, sizeof(now)) != 0) {
-			char dbg_now[MAX_CPULIST];
-
-			mask_to_cpulist(now, now_len, dbg_now, sizeof(dbg_now));
-			lpmd_log_debug(
-				"release: pid %d comm=%s affinity=[%s] was changed since we set it; left alone\n",
-				(int)pid, pid_comm_for_log(pid, comm, sizeof(comm)),
-				dbg_now);
-			continue;
-		}
-		if (affinity_apply(pid, it->all_threads, it->orig_mask,
-				   it->orig_mlen, class_str(it->cls)) == 0)
-			released++;
-	}
+	for (size_t i = 0; i < ctx->attached.n; i++)
+		released += release_attached(ctx, &ctx->attached.items[i]);
 
 	ctx->attached.n = 0;
 	return released;
@@ -4246,6 +4332,19 @@ int process_cpuset_classify_name(const process_cpuset_t *ctx,
 	}
 
 	return is_default ? 0 : 1;
+}
+
+int process_cpuset_class_is_set(const process_cpuset_t *ctx,
+				const char *classification)
+{
+	enum classification cls;
+
+	if (!ctx || !classification)
+		return -1;
+	cls = parse_class(classification);
+	if (cls == CLASS_INVALID)
+		return -1;
+	return core_spec_is_set(default_spec_for(ctx, cls)) ? 1 : 0;
 }
 
 int process_cpuset_get_class_cpulist(const process_cpuset_t *ctx,

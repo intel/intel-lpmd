@@ -59,34 +59,21 @@
   Entries that don't exist on a given distro simply won't match any
   PID and are silently ignored at runtime.
 
-  Default allowed CPUs per classification. Not set in this file; see
-  "Per-classification defaults" below. Built-in table:
-      realtime           -> Pcores + Ecores + Lcores
-      user_interactive   -> Pcores + Ecores + Lcores  (focused PID)
-      user_initiated     -> Pcores + Ecores
-      utility            -> Ecores + Lcores
-      background         -> Lcores
-      unclassified       -> Pcores + Ecores + Lcores
-      game_profile_cpu   -> Pcores
-      game_profile_gpu   -> Lcores
-      game_profile_mixed -> Ecores + Lcores
-      custom_profile_0   -> Pcores + Ecores + Lcores
-      custom_profile_1   -> Pcores + Ecores + Lcores
-      custom_profile_2   -> Pcores + Ecores + Lcores
+  Allowed CPUs per classification. Not set in this file, and not built
+  into the daemon either: see "Per-classification defaults" below. A class
+  the matching intel_lpmd_config_*.xml does not set in <ClassDefaults> is
+  not set at all, and intel_lpmd leaves every process of that class
+  exactly as it found it: no affinity, no uclamp. On a CPU model with no
+  <ClassDefaults> block, that is every class, and the classifications
+  below then only take effect through entries with their own
+  <ActiveCores>. The effective mapping, after the config overlay and under
+  the active P/E/LP-E sets, is logged once at daemon startup.
 
   One caveat on user_initiated: until something registers as a focus
   helper, there is no focused PID to distinguish, so user_initiated
-  resolves to whatever user_interactive resolves to and its own row above
-  is not reached. With no focus helper and no config overlay both tiers
-  are therefore unconstrained; with the F6_M204 overlay both land on
-  Ecores + Lcores, not the Lcores that overlay's UserInitiated asks for.
-
-  The latency-sensitive tiers are deliberately unconstrained by default:
-  a machine whose intel_lpmd_config_*.xml says nothing about them should
-  not have realtime or the focused application quietly taken off the
-  P-cores. Narrowing them is a decision for a config that knows the part.
-  The effective mapping, after the config overlay and under the active
-  P/E/LP-E sets, is logged once at daemon startup.
+  resolves to whatever user_interactive resolves to, set or not. With the
+  F6_M204 overlay both land on Ecores + Lcores, not the Lcores that
+  overlay's UserInitiated asks for.
 
   NOTE: /proc/<pid>/comm is truncated to 15 chars; names below already
         respect that limit.
@@ -240,28 +227,14 @@
   gnome-shell is org.gnome.Shell@wayland.service on Ubuntu against
   org.gnome.Shell@user.service on Fedora.
 
-  gnome-shell deliberately has no <Unit>, and the reason generalises. Its
-  comm is 11 characters, so it is never truncated and never ambiguous; the
-  unit hosts helpers the two distros classify differently; and something
-  already covers the whole unit on both, so a <Unit> would change no
-  answer. A <Unit> is worth adding to fix an unreliable <Name>, not merely
-  because a unit exists.
-
-  What already covers it is worth knowing, because it is not what it looks
-  like. It is NOT session.slice: that entry in slice.xml has
-  <Fallback>none</Fallback>, so it supplies no classification to the
-  per-task path at all (see the note beside it there). It is the <Cgroup>
-  pattern */org.gnome.Shell@*.service on the mutter-x11-fram entry below,
-  which already globs the template instance and so matches Fedora's @user
-  and Ubuntu's @wayland alike. Measured: gnome-shell is decided by that
-  entry, reported as match=cgroup.
-
-  One consequence to be honest about. Because <Cgroup> outranks <Name>,
-  that pattern classifies EVERY process in the shell's unit
-  user_interactive, including Ubuntu's gjs, which has its own entry saying
-  background. Dropping gnome-shell's <Unit> avoided deepening that, but
-  did not remove it. The flattening predates this work and lives in the
-  <Cgroup>. See TODO item 5c.
+  gnome-shell deliberately has no <Unit>, nor anything else keyed on its
+  unit. Its comm is 11 characters, so it is never truncated and never
+  ambiguous, and the unit also hosts helpers classified differently (gjs
+  is background; gnome-shell, mutter-x11-frames and Xwayland are
+  user_interactive), so any key on the unit would override the <Name>
+  entries for all of them. Each is decided by its own <Name>. A <Unit> is
+  worth adding to fix an unreliable <Name>, not merely because a unit
+  exists.
 
   Do not extend this list by guessing unit names from service names. An
   entry with a wrong <Unit> is worse than one with none: it never
@@ -295,11 +268,11 @@
       inside one of the two consumers is what let the other one silently
       resolve a different mask for the same class name.
 
-      So there is exactly one default table, in process_cpuset_new(), and
-      exactly one way to change it: the <ClassDefaults> block in the
-      matching <States> stanza of intel_lpmd_config_*.xml, which is also
-      where the per-class uclamp and perf-percentage tags live. A class the
-      config does not mention keeps its built-in value.
+      So there is exactly one place a class gets CPUs: the <ClassDefaults>
+      block in the matching <States> stanza of intel_lpmd_config_*.xml,
+      which is also where the per-class uclamp and perf-percentage tags
+      live. There is no built-in fallback. A class the config does not
+      mention is not set, and processes of that class are left alone.
 
       A <ClassDefaults> block left in this file, or in
       process_cpuset_user.xml, is ignored with a warning on stderr.
@@ -1299,7 +1272,6 @@
     <Process>
         <!-- mutter-x11-frames -->
         <Name>mutter-x11-fram</Name>
-        <Cgroup>*/org.gnome.Shell@*.service</Cgroup>
         <Classification>user_interactive</Classification>
     </Process>
     <!-- KDE Plasma shell stack (CachyOS default) -->

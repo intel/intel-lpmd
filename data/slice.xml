@@ -108,16 +108,17 @@
                         game_profile_gpu | game_profile_mixed |
                         custom_profile_0..2
                         Resolved through the one class -> core-group
-                        mapping the whole daemon shares: the built-in
-                        table, plus the <ClassDefaults> overlay in the
-                        matching <States> stanza of
-                        intel_lpmd_config_*.xml. The same class name
-                        therefore means the same CPUs here as it does in
-                        process_cpuset.xml.
+                        mapping the whole daemon shares: the
+                        <ClassDefaults> block in the matching <States>
+                        stanza of intel_lpmd_config_*.xml. The same class
+                        name therefore means the same CPUs here as it
+                        does in process_cpuset.xml. A class that block
+                        does not set is not set: the entry is skipped
+                        and the unit keeps the AllowedCPUs= it has.
 
                         The values are deliberately not repeated here.
                         They were, and the copy drifted: this file
-                        described the built-in table while the config
+                        described the daemon's own table while the config
                         overlay had already overridden it, so the mask
                         written to gdm.service and pipewire.service was
                         not the one either file appeared to promise. The

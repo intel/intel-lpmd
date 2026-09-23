@@ -228,8 +228,11 @@ for Intel Energy Optimizer (LPMD) daemon
 		    SliderOffsetAC / SliderOffsetDC
 
 		  Tags omitted in a class are left unchanged (no fallback forced).
-		  Classes not listed here keep the daemon's built-in default,
-		  which is logged once at startup.
+		  A class not listed here, or listed without <Cores>, is not
+		  set: intel_lpmd leaves tasks of that class exactly as it
+		  found them: no affinity, no uclamp, no AllowedCPUs=. There
+		  is no built-in default to fall back to. The resolved value of
+		  every class is logged once at startup.
 		-->
 		<ClassDefaults>
 			<Realtime>
@@ -241,12 +244,18 @@ for Intel Energy Optimizer (LPMD) daemon
 			<UserInitiated>
 				<Cores>ActiveLcores</Cores>
 			</UserInitiated>
+			<Utility>
+				<Cores>ActiveEcores, ActiveLcores</Cores>
+			</Utility>
 			<Background>
 				<Cores>ActiveLcores</Cores>
 			</Background>
 			<Unclassified>
 				<Cores>ActivePcores, ActiveEcores, ActiveLcores</Cores>
 			</Unclassified>
+			<GameProfileCPU>
+				<Cores>ActivePcores</Cores>
+			</GameProfileCPU>
 			<GameProfileGPU>
 				<OverrideGlobalCPUSettings>1</OverrideGlobalCPUSettings>
 				<Cores>ActiveEcores, ActiveLcores</Cores>

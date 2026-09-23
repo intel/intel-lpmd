@@ -7,9 +7,9 @@
  * Both policy files name classifications: process_cpuset.xml says which
  * class a process is, slice.xml says which class a systemd unit is. What a
  * class *means* in CPUs is a third thing, shared by both, and it lives in
- * exactly two places -- the built-in table in process_cpuset_new() and the
- * <ClassDefaults> overlay in the matching <States> stanza of
- * intel_lpmd_config_*.xml.
+ * exactly one place -- the <ClassDefaults> overlay in the matching <States>
+ * stanza of intel_lpmd_config_*.xml. A class that overlay does not name has
+ * no CPUs, and lpmd leaves tasks of that class alone.
  *
  * This file exists so that "build a context that resolves classes" is one
  * function rather than a sequence each caller reproduces. It used to be
@@ -38,7 +38,7 @@
 
 /*
  * Build a resolver whose class -> core-group mapping is the one the whole
- * daemon agrees on: the built-in table from process_cpuset_new(), then the
+ * daemon agrees on: every class unset in process_cpuset_new(), then the
  * per-CPU-model <ClassDefaults> and uclamp overlays parsed from the
  * matching <States> stanza of intel_lpmd_config_*.xml, then the active
  * P/E/LP-E sets.
@@ -46,8 +46,8 @@
  * Every consumer of a <Classification> has to build its resolver through
  * here. The slice path used to call process_cpuset_new() and hand it
  * nothing but the core masks, so one class name resolved two ways: gdm.service
- * and pipewire.service were given the built-in mask for their tier while the
- * config had explicitly overridden it, and nothing said so.
+ * and pipewire.service were given the daemon's own mask for their tier while
+ * the config had explicitly overridden it, and nothing said so.
  *
  * @sys_xml and @user_xml are optional. NULL for both yields the class
  * mapping with no <Process> entries at all, which is everything a caller
@@ -112,8 +112,8 @@ struct process_cpuset_ctx *lpmd_class_resolver_new(struct lpmd_config_t *config,
 
 	/*
      * Apply the CPU-model-specific <ClassDefaults> overlay. This is the
-     * only place a class default can be changed; a class the config leaves
-     * empty keeps the built-in value.
+     * only place a class gets CPUs; a class the config leaves empty stays
+     * unset, and tasks of that class are not touched.
      */
 	if (config->pc_class_default_realtime[0] ||
 	    config->pc_class_default_user_interactive[0] ||

@@ -334,11 +334,11 @@ struct lpmd_config_t {
 	 */
 	int use_slice_classification;
 
-	/* Optional per-CPU-model overrides for the process_cpuset.xml
-	 * <ClassDefaults> block. Populated when the matching <States>
-	 * stanza in intel_lpmd_config_*.xml contains a <ClassDefaults>
-	 * child. Empty strings mean "use the value from process_cpuset.xml
-	 * (or its built-in fallback)". Token syntax matches <ActiveCores>:
+	/* The per-CPU-model class -> CPU mapping. Populated when the
+	 * matching <States> stanza in intel_lpmd_config_*.xml contains a
+	 * <ClassDefaults> child. An empty string means the class is not
+	 * set, and lpmd leaves tasks of that class alone. There is no
+	 * fallback. Token syntax matches <ActiveCores>:
 	 * comma- or whitespace-separated "ActivePcores" / "ActiveEcores" /
 	 * "ActiveLcores". */
 	char pc_class_default_realtime[MAX_CONFIG_LEN];

@@ -964,6 +964,20 @@ static int entry_want_cpulist(const struct slice_entry *e, char *out,
 }
 
 /*
+ * Why an entry resolved to no CPUs: its class is not set in
+ * <ClassDefaults> (lpmd has no placement for it), or it is set but names
+ * core groups this machine does not have. Only meaningful after
+ * entry_want_cpulist() returned an empty list.
+ */
+static const char *entry_empty_reason(const struct slice_entry *e)
+{
+	if (!e->cores[0] && g_resolver &&
+	    process_cpuset_class_is_set(g_resolver, e->cls) == 0)
+		return "not set in <ClassDefaults>";
+	return "has no CPUs on this system";
+}
+
+/*
  * Intersect @want with the ceiling the parent cgroup already imposes.
  *
  * This matters because the kernel does not fail a disjoint request: cgroup
@@ -1245,8 +1259,8 @@ int lpmd_slice_cpuset_init(struct lpmd_config_t *config)
 	 *
 	 * This used to be a bare process_cpuset_new() plus the core masks,
 	 * which skipped the per-CPU-model <ClassDefaults> overlay. An entry
-	 * was then written to the cgroup using the built-in mask for its tier
-	 * even where the config had overridden that tier -- so gdm.service
+	 * was then written to the cgroup using the daemon's own mask for its
+	 * tier even where the config had overridden that tier -- so gdm.service
 	 * and pipewire.service got masks nobody had configured, and
 	 * LIST-SLICES reported them as if they were the configured ones.
 	 */
@@ -1572,18 +1586,20 @@ int lpmd_slice_cpuset_apply(int dry_run)
 		}
 
 		/*
-		 * A class can legitimately map to a core group this machine
-		 * does not have (background -> LPEcores with no LP-E cores).
-		 * There is nothing to write; writing an empty AllowedCPUs=
-		 * would mean "inherit", i.e. a silent no-op.
+		 * The class is not set in <ClassDefaults>, or maps only to a
+		 * core group this machine does not have (background ->
+		 * LPEcores with no LP-E cores). There is nothing to write;
+		 * writing an empty AllowedCPUs= would mean "inherit", i.e. a
+		 * silent no-op. The unit keeps whatever it had.
 		 */
 		if (!want[0]) {
 			slice_log_skip(
 				dry_run,
-				"slice_cpuset: %s: class %s has no CPUs on this system; skipped\n",
+				"slice_cpuset: %s: class %s %s; skipped\n",
 				g_entries[i].name,
 				g_entries[i].cores[0] ? g_entries[i].cores :
-							g_entries[i].cls);
+							g_entries[i].cls,
+				entry_empty_reason(&g_entries[i]));
 			continue;
 		}
 
@@ -1765,14 +1781,16 @@ void lpmd_slice_cpuset_print(void)
 				     "none");
 
 		/*
-		 * An empty resolution is not a config error: a class can map
-		 * to a core group this machine does not have (background ->
-		 * LPEcores on a part with no low-power E-cores). Say so,
-		 * because the entry is then skipped entirely.
+		 * An empty resolution is not a config error: the class may be
+		 * left out of <ClassDefaults>, or map to a core group this
+		 * machine does not have (background -> LPEcores on a part with
+		 * no low-power E-cores). Say which, because the entry is then
+		 * skipped entirely.
 		 */
 		if (!want[0] || !strcmp(want, "?")) {
-			lpmd_log_msg(
-				"      (class resolves to no CPUs on this system; entry skipped)\n");
+			lpmd_log_msg("      (class %s; entry skipped)\n",
+				     want[0] ? "resolves to no CPUs on this system" :
+					       entry_empty_reason(&g_entries[i]));
 			continue;
 		}
 

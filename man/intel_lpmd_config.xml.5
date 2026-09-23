@@ -464,8 +464,11 @@ CPU lists define which CPUs a class can use. Per-process <ActiveCores>
 entries override the class default.
 .sp
 The class-to-CPU mapping has a single home: the <ClassDefaults> block in
-the matching <States> stanza of intel_lpmd_config_*.xml, layered over the
-daemon's built-in table. It is deliberately not settable in
+the matching <States> stanza of intel_lpmd_config_*.xml. There is no
+built-in fallback: a class that block does not set is not set, and
+intel_lpmd leaves processes and slices of that class exactly as it found
+them, with no affinity, no uclamp and no AllowedCPUs= written. It is
+deliberately not settable in
 process_cpuset.xml or process_cpuset_user.xml, because process_cpuset.xml
 is not its only consumer -- slice.xml resolves the same class names -- and
 a copy in one consumer's file made the other resolve a different mask for
@@ -578,8 +581,9 @@ To override per-class uclamp values or CPU group assignments on specific
 CPU models, add a <ClassDefaults> block inside the appropriate <State>
 definition in intel_lpmd_config_F18_M1.xml, intel_lpmd_config_F6_M189.xml,
 or other model-specific files. This is the only place these values can be
-set; they are layered over the daemon's built-in table at runtime, and a
-class the block does not mention keeps its built-in value.
+set. A class the block does not mention, or mentions without <Cores>, is
+not set: intel_lpmd does not touch tasks of that class, and a <UClampMin>
+or <UClampMax> given to it is not applied (a warning is logged at startup).
 .PP
 In addition to <Cores>, <UClampMin>, and <UClampMax>, each class override
 inside <ClassDefaults> can define:

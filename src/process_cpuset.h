@@ -324,11 +324,23 @@ int process_cpuset_classify_name(const process_cpuset_t *ctx,
 				 char *cpus_out, size_t cpus_cap);
 
 /*
+ * Is @classification given CPUs by <ClassDefaults>? An unset class means
+ * lpmd leaves tasks of that class alone, which is different from a class
+ * that is set but maps to core groups this machine does not have.
+ *
+ * Returns 1 if set, 0 if not, -1 on invalid input / unknown class.
+ */
+int process_cpuset_class_is_set(const process_cpuset_t *ctx,
+				const char *classification);
+
+/*
  * Resolve a classification's effective default AllowedCPUs list under
  * the current CPU groups and class-default table.
  *
  * @classification accepts the same aliases as XML (for example
  * "GameProfileGPU" / "game_profile_gpu").
+ *
+ * An unset class resolves to an empty list.
  *
  * Returns 0 on success, -1 on invalid input / unknown class / mask
  * build error.

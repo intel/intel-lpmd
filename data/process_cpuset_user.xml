@@ -12,6 +12,8 @@
   intel_lpmd_config_*.xml. A block here is ignored with a warning on
   stderr. To give one process a mask of its own, put <ActiveCores> on its
   <Process> entry below.
+  A classification that block does not set has no CPUs: an entry here
+  naming it, and no <ActiveCores>, is loaded but leaves its process alone.
 
   Edits made via:
       intel_lpmd_control ADD-PROCESS <name> <classification>
