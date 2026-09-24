@@ -120,8 +120,8 @@
                         They were, and the copy drifted: this file
                         described the daemon's own table while the config
                         overlay had already overridden it, so the mask
-                        written to gdm.service and pipewire.service was
-                        not the one either file appeared to promise. The
+                        written to the system-service entries was not
+                        the one either file appeared to promise. The
                         effective mapping is logged at daemon startup.
     <Cores>             OPTIONAL explicit override, taking precedence over
                         <Classification>. Accepts a mix of named groups
@@ -237,6 +237,15 @@
       no process-name matching. Add or remove entries per distro; an
       entry naming a unit that does not exist is simply reported as
       absent.
+
+      An entry here can only narrow a service, never widen it. Its mask
+      is intersected with what system.slice already has, and in
+      low-power mode system.slice is already on the low-power CPUs. So
+      in low-power mode these entries change little, and an entry asking
+      for more CPUs than that changes nothing at all. They matter in
+      PROCESS-PRECONFIG (*Def=2), where system.slice stays on every CPU
+      and a background entry keeps maintenance work off the performance
+      cores. List services to push down, not services to protect.
     -->
 
     <!-- Package management and indexing: no interactive latency need. -->
@@ -286,25 +295,12 @@
     </Unit>
 
     <!--
-      Audio: latency sensitive. Listed at the realtime tier so that a
-      distro which runs pipewire as a system service gets the right
-      answer; on a normal desktop pipewire is a *user* unit inside
-      session.slice and is covered by that entry instead.
+      Deliberately absent: pipewire.service and gdm.service. Both would
+      be listed to protect them, which an entry here cannot do (see
+      above). pipewire also runs as a user unit on a normal desktop,
+      where AllowedCPUs= has no effect, so a system entry for it matches
+      nothing. gdm.service holds only the display manager daemon; the
+      login screen and every user session run under user.slice.
     -->
-    <Unit>
-        <Name>pipewire.service</Name>
-        <Scope>system</Scope>
-        <Classification>realtime</Classification>
-    </Unit>
-
-    <!--
-      Never constrain the display manager stack: it owns the visible UI
-      before any user session exists.
-    -->
-    <Unit>
-        <Name>gdm.service</Name>
-        <Scope>system</Scope>
-        <Classification>user_interactive</Classification>
-    </Unit>
 
 </SliceCpusetConfig>
