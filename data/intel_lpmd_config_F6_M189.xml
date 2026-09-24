@@ -176,6 +176,87 @@ for Intel Energy Optimizer (LPMD) daemon
 		<CPUFamily> 6 </CPUFamily>
 		<CPUModel> 189 </CPUModel>
 		<CPUConfig> * </CPUConfig>
+
+		<!--
+		  Per-CPU-model class -> core-group mapping. THIS IS THE ONLY
+		  PLACE IT CAN BE SET: a <ClassDefaults> block in
+		  process_cpuset.xml or process_cpuset_user.xml is ignored with
+		  a warning on stderr. Inside each class, "Cores" accepts the
+		  same token list as ActiveCores ("ActivePcores" /
+		  "ActiveEcores" / "ActiveLcores", comma- or
+		  whitespace-separated).
+
+		  Class names are matched case-sensitively and exactly as
+		  spelled below. The block that used to live in
+		  process_cpuset.xml spelled its <Cores> / <UClampMin> /
+		  <UClampMax> children the same way, so a moved block is
+		  mostly valid here, but three things it accepted are not
+		  accepted here: a class name in the wrong case, a snake_case
+		  alias (game_profile_cpu), and the <Foreground> alias for the
+		  two user tiers. Each is reported as a warning and ignored.
+
+		  Supported class nodes in this overlay:
+		    Realtime, UserInteractive, UserInitiated, Unclassified,
+		    Utility, Background, GameProfileCPU, GameProfileGPU,
+		    GameProfileMixed, CustomProfile0, CustomProfile1,
+		    CustomProfile2
+
+		  Optional per-class keys are also supported:
+		    UClampMin / UClampMax (aliases: uclamp_min / uclamp_max)
+
+		  Optional per-class tuning tags are also supported:
+		    MinPerfPctAC / MinPerfPctDC
+		      (aliases: min_perf_pct_ac / min_perf_pct_dc)
+		    MaxPerfPctAC / MaxPerfPctDC (aliases: MaxPerfAC / MaxPerfDC)
+		      (aliases: max_perf_pct_ac / max_perf_pct_dc)
+		    BalanceSliderAC / BalanceSliderDC
+		      (aliases: SliderBalanceAC / SliderBalanceDC,
+		       SliderBalnceAC / SliderBalnceDC)
+		    SliderOffsetAC / SliderOffsetDC
+
+		  Tags omitted in a class are left unchanged (no fallback forced).
+		  A class not listed here, or listed without <Cores>, is not
+		  set: intel_lpmd leaves tasks of that class exactly as it
+		  found them: no affinity, no uclamp, no AllowedCPUs=. There
+		  is no built-in default to fall back to. The resolved value of
+		  every class is logged once at startup.
+		-->
+		<ClassDefaults>
+			<Realtime>
+				<Cores>ActivePcores, ActiveLcores</Cores>
+			</Realtime>
+			<UserInteractive>
+				<Cores>ActivePcores, ActiveLcores</Cores>
+			</UserInteractive>
+			<UserInitiated>
+				<Cores>ActiveLcores</Cores>
+			</UserInitiated>
+			<Utility>
+				<Cores>ActiveLcores</Cores>
+			</Utility>
+			<Background>
+				<Cores>ActiveLcores</Cores>
+			</Background>
+			<Unclassified>
+				<Cores>ActivePcores, ActiveLcores</Cores>
+			</Unclassified>
+			<GameProfileCPU>
+				<Cores>ActivePcores</Cores>
+			</GameProfileCPU>
+			<GameProfileGPU>
+				<OverrideGlobalCPUSettings>1</OverrideGlobalCPUSettings>
+				<Cores>ActiveLcores</Cores>
+				<MinPerfPctAC>50</MinPerfPctAC>
+				<BalanceSliderAC>4</BalanceSliderAC>
+				<SliderOffsetAC>2</SliderOffsetAC>
+			</GameProfileGPU>
+			<GameProfileMixed>
+				<Cores>ActivePcores, ActiveLcores</Cores>
+				<BalanceSliderAC>4</BalanceSliderAC>
+				<SliderOffsetAC>0</SliderOffsetAC>
+			</GameProfileMixed>
+		</ClassDefaults>
+
 		<State>
 			<ID> 1 </ID>
 			<Name> UTIL_IDLE </Name>
