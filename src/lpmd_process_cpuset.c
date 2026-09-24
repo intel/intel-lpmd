@@ -2445,6 +2445,20 @@ static int dbg_list_to_mask(const char *list, cpu_set_t *set, size_t setsize)
 	return 0;
 }
 
+/* Rewrite @buf in place as one merged list, so "0-1,2-9,10-13" reads
+ * "0-13". Left as is if it does not parse. */
+static void dbg_list_normalize(char *buf, size_t cap)
+{
+	size_t setsize = CPU_ALLOC_SIZE(DBG_MAX_CPUS);
+	cpu_set_t *set = CPU_ALLOC(DBG_MAX_CPUS);
+
+	if (!set)
+		return;
+	if (dbg_list_to_mask(buf, set, setsize) == 0)
+		dbg_mask_to_list(set, setsize, buf, cap);
+	CPU_FREE(set);
+}
+
 /* Copy the cgroup v2 path of @pid (third field of the "0::" line). */
 static int dbg_pid_cgroup(pid_t pid, char *buf, size_t cap)
 {
@@ -2644,15 +2658,15 @@ done:
 }
 
 /*
- * Log every PID currently attached to a transient cpuset scope started
- * by this context (i.e. matched by a <Process> entry in
- * process_cpuset.xml). No-op (with a notice) if process_cpuset is not
- * active.
+ * Log every PID this context has bound with sched_setaffinity(), i.e.
+ * matched by a <Process> entry in process_cpuset.xml or classified by
+ * its slice. Unclassified PIDs are counted but not listed. No-op (with
+ * a notice) if process_cpuset is not active.
  */
 void lpmd_process_cpuset_print_bound(void)
 {
 	size_t n, i;
-	size_t listed = 0;
+	size_t listed = 0, unclassified = 0;
 	char p_cpus[256] = { 0 };
 	char e_cpus[256] = { 0 };
 	char l_cpus[256] = { 0 };
@@ -2667,7 +2681,7 @@ void lpmd_process_cpuset_print_bound(void)
 
 	n = process_cpuset_attached_count(g_pc_ctx);
 	lpmd_log_msg(
-		"process_cpuset: %zu PIDs bound by sched_setaffinity, in place (no cgroup change; excluding Unclassified)\n",
+		"process_cpuset: %zu PIDs bound by sched_setaffinity, in place (no cgroup change; including Unclassified)\n",
 		n);
 	lpmd_log_msg("  groups: Pcores=[%s] Ecores=[%s] LPEcores=[%s]\n",
 		     p_cpus[0] ? p_cpus : "-", e_cpus[0] ? e_cpus : "-",
@@ -2691,8 +2705,10 @@ void lpmd_process_cpuset_print_bound(void)
 		if (process_cpuset_attached_get_ex(g_pc_ctx, i, &pid, &cls, &use_p,
 						   &use_e, &use_l) < 0)
 			continue;
-		if (cls && !strcasecmp(cls, "Unclassified"))
+		if (cls && !strcasecmp(cls, "Unclassified")) {
+			unclassified++;
 			continue;
+		}
 
 		snprintf(path, sizeof(path), "/proc/%d/comm", (int)pid);
 		f = fopen(path, "r");
@@ -2736,6 +2752,8 @@ void lpmd_process_cpuset_print_bound(void)
 					"%s%s", off ? "," : "", l_cpus);
 		if (!off)
 			snprintf(cpus_buf, sizeof(cpus_buf), "-");
+		else
+			dbg_list_normalize(cpus_buf, sizeof(cpus_buf));
 
 		/* Print process line. "via" is not a variable: every PID is
 		 * bound the same way, so there is nothing else it could say.
@@ -2851,8 +2869,8 @@ void lpmd_process_cpuset_print_bound(void)
 		listed++;
 	}
 
-	lpmd_log_msg("process_cpuset: listed %zu bound PIDs after Unclassified filter\n",
-		     listed);
+	lpmd_log_msg("process_cpuset: listed %zu bound PIDs (%zu Unclassified not listed)\n",
+		     listed, unclassified);
 }
 
 /*
