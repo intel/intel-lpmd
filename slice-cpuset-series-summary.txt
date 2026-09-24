@@ -1,0 +1,142 @@
+Changes on top of intel_lpmd_next (v0.1.1-test, cdc762c)
+========================================================
+
+Process name truncation
+-----------------------
+
+<Name> is matched against /proc/<pid>/comm, which the kernel truncates
+to 15 characters and which a process can rewrite with
+prctl(PR_SET_NAME). In the seed config, 71 of the 289 <Name> values
+are exactly 15 characters long, so they are prefixes that can collide.
+For example, xdg-desktop-portal, xdg-desktop-portal-gnome and
+xdg-desktop-portal-gtk all report "xdg-desktop-por", so one entry
+cannot tell them apart. Some truncated names do not resemble their
+unit at all: gnome-session-c is gnome-session-monitor.service.
+
+Now:
+
+  - <Process> entries can also match on identity that systemd assigns,
+    which has no length limit and which the task cannot change:
+      - <Cgroup>: a glob matched against the task's cgroup v2 path;
+      - <Unit>: matched against sd_pid_get_unit() and
+        sd_pid_get_user_unit(). This also covers units that delegate,
+        such as udev workers under systemd-udevd.service.
+  - <Name>, <Cgroup> and <Unit> are OR'ed, so existing configs match as
+    before. <Name> becomes optional once another tag is present, which
+    lets a colliding prefix be replaced rather than only supplemented.
+  - A <Unit> or <Cgroup> match outranks a <Name> match.
+  - 44 of the 71 truncated entries now carry a <Cgroup> or <Unit>. The
+    other 27 still match on comm only: their unit was not seen on a
+    running system, its name is not stable (a PID, bus ID or session
+    number in it), or it holds processes this file classifies
+    differently.
+
+Per-process CPU placement (process_cpuset)
+------------------------------------------
+
+  - Tasks are no longer moved into transient
+    proc_cpuset_<comm>_<pid>.scope units, and releasing a task no longer
+    writes it to the root cgroup. StartTransientUnit and
+    migrate_pid_to_root_cgroup() are removed, and process_cpuset.c no
+    longer uses sd-bus.
+  - sched_setaffinity(2) on the task where it already lives is the only
+    binding mechanism:
+      - the mask is the class's CPU list intersected with the CPUs the
+        task's cgroup allows, and a task with no CPU in common is
+        skipped;
+      - a task whose mask is already narrower than its cgroup is left
+        alone and never restored;
+      - a mask inherited across fork() from a task lpmd bound is treated
+        as lpmd's own, and PROC_EVENT_FORK is now handled;
+      - on leaving low-power mode each task, and any descendant still
+        carrying lpmd's mask, gets back the exact mask it had before.
+  - <AffinityAllThreads> defaults to 1, including for entries added at
+    runtime.
+  - Proc connector EXEC/COMM events act on the process (tgid), not the
+    thread that raised them.
+  - Seed config entries are keyed on unit names seen on Fedora 44
+    GNOME, Ubuntu 25.10 GNOME and CachyOS KDE sessions.
+  - Matching order: curated entry (explicit <ActiveCores>, or a
+    realtime/game/custom class), <Unit>, slice intent, <Cgroup>/<Name>,
+    then <DefaultProcess>. /proc is walked once per rescan instead of
+    once per entry.
+  - Fixed: process_cpuset.xml failed to parse ("--" inside a comment),
+    so no <Process> entry was ever loaded.
+
+Slice/unit keyed policy (new)
+-----------------------------
+
+  - New data/slice.xml, enabled with <UseSliceCpuset> (default 0).
+    Entries are applied with runtime SetUnitProperties(AllowedCPUs=) on
+    existing units. No task is moved.
+  - Entries match only units of their own manager (<Scope>system|user).
+  - Enforceability is probed per unit. cpuset is not delegated into
+    user@<uid>.service, so AllowedCPUs= has no effect there.
+  - Masks are intersected with the parent slice before being written.
+  - The per-task path leaves alone tasks that an enforceable slice entry
+    covers.
+  - New <UseSliceClassification> (default 0): where the cgroup cannot
+    enforce, slice membership classifies the task and the per-task path
+    applies it.
+  - Unit masks are applied after the top-level slices are narrowed, and
+    removed before those slices are restored and on exit.
+    PROCESS-PRECONFIG (*Def=2) applies them while leaving the top-level
+    slices at every CPU.
+
+Limits of slice.xml:
+
+  - Delegation. systemd delegates cpu, io, memory and pids into
+    user@<uid>.service, but not cpuset. AllowedCPUs= on app.slice,
+    session.slice or background.slice is accepted and then has no
+    effect, whoever writes it. slice.xml can therefore only enforce
+    placement for system-manager units, mostly system.slice services,
+    and not for anything in the user's session.
+  - app.slice is one slice for everything the user launches: browser,
+    IDE, compiler, games, and short-lived helpers. Slice membership says
+    "an app", not which one, so one classification (user_initiated) and
+    one CPU mask have to fit all of them. Any mask is wrong for some of
+    them: narrow enough for an idle chat client is too narrow for a
+    build or a game, and the reverse. Until a focus helper registers,
+    user_initiated also resolves to the user_interactive mask, so every
+    app gets the same CPUs as the focused one.
+  - The units under app.slice cannot fix this. Each app runs in its own
+    app-<name>-<pid>.scope or app-<name>@<uuid>.service, whose name
+    changes on every launch, so no entry can be keyed on it.
+  - The result is coverage, not placement. <UseSliceClassification>
+    gives a policy to tasks nothing named before, but the policy is the
+    same for all of app.slice, so it cannot separate background work
+    from what the user is waiting on. That separation in the session
+    still comes from <Process> entries applied with
+    sched_setaffinity(2).
+
+Class -> core-group mapping
+---------------------------
+
+  - <ClassDefaults> in intel_lpmd_config_*.xml is the only source. The
+    built-in table is removed. <ClassDefaults> in process_cpuset*.xml is
+    ignored with a warning.
+  - A class the config does not set is left alone: no affinity, no
+    AllowedCPUs=, no uclamp.
+  - The process path, CLASSIFY and the slice path share one resolver.
+    Previously the slice path ignored the config overlay.
+  - F6_M204 gains Utility and GameProfileCPU, so its behaviour is
+    unchanged.
+
+Configuration and interfaces
+----------------------------
+
+  - New config: <UseSliceCpuset>, <UseSliceClassification>,
+    <ProcessCpusetRescanInterval> (default 60 s, 0 = event-driven only).
+  - New D-Bus method LPM_LIST_SLICES and intel_lpmd_control LIST-SLICES.
+    Both are read only.
+  - LIST-BOUND reports, per PID and thread, the configured mask, the
+    cgroup ceiling, the expected and actual masks, and which policy
+    decided the PID. It also lists slice-covered tasks.
+  - Man pages updated: intel_lpmd_config.xml(5), intel_lpmd_control(8).
+
+Not yet included
+----------------
+
+  - A build-time switch to compile the per-process code out.
+  - Excluding machine.slice and non-initial PID namespaces from the
+    per-process path.
