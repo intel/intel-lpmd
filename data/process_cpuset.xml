@@ -1100,6 +1100,7 @@
     </Process>
     <Process>
         <Name>at-spi2-registr</Name>
+        <Unit>dbus-*org.a11y.atspi.Registry@*.service</Unit>
         <Cgroup>*/dbus-*org.a11y.atspi.Registry*.service</Cgroup>
         <Classification>background</Classification>
     </Process>
