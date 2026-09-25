@@ -2776,24 +2776,31 @@ void lpmd_process_cpuset_print_bound(void)
 		 * does with enforceable=yes, the cgroup is doing the work
 		 * and the per-task path here should not be touching it at
 		 * all -- seeing both is the signal that policy is applied
-		 * twice. */
+		 * twice. Where it cannot enforce, the fallback says whether
+		 * the entry's class is used at all: with fallback=none it is
+		 * only a declaration, and the class came from elsewhere. */
 		{
 			char slice_unit[128] = { 0 };
 			char slice_cls[64] = { 0 };
 			int enforceable = 0;
+			int fallback_affinity = 0;
 			int cov;
 
 			cov = lpmd_slice_cpuset_pid_coverage(
 				pid, slice_unit, sizeof(slice_unit), slice_cls,
-				sizeof(slice_cls), &enforceable);
-			if (cov == 1)
+				sizeof(slice_cls), &enforceable,
+				&fallback_affinity);
+			if (cov == 1 && enforceable)
 				lpmd_log_msg(
-					"      slice=%s class=%s enforceable=%s%s\n",
+					"      slice=%s class=%s enforceable=yes (per-task handling should be skipped)\n",
+					slice_unit, slice_cls);
+			else if (cov == 1)
+				lpmd_log_msg(
+					"      slice=%s class=%s enforceable=no fallback=%s\n",
 					slice_unit, slice_cls,
-					enforceable ? "yes" : "no",
-					enforceable ?
-						" (per-task handling should be skipped)" :
-						"");
+					fallback_affinity ?
+						"affinity" :
+						"none (class not applied)");
 			else if (cov == 0)
 				lpmd_log_msg("      slice=none\n");
 		}

@@ -2869,7 +2869,7 @@ static int affinity_bind_pid(process_cpuset_t *ctx, const struct proc_entry *e,
 	/* 1. slice.xml has precedence. */
 	if (lpmd_slice_cpuset_pid_coverage(pid, slice_unit, sizeof(slice_unit),
 					   slice_cls, sizeof(slice_cls),
-					   &enforceable) == 1 &&
+					   &enforceable, NULL) == 1 &&
 	    enforceable) {
 		lpmd_log_debug(
 			"[%s] skip pid %d comm=%s: covered by slice.xml unit=%s class=%s\n",

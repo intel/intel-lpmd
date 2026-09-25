@@ -1395,12 +1395,19 @@ static const struct slice_entry *slice_entry_for_pid(pid_t pid, char *unit_out,
  * Find the entry covering @pid, if any: the longest unit name appearing in
  * the PID's cgroup path wins, so a leaf service beats its slice.
  *
+ * @fallback_affinity_out, if not NULL, is set to 1 when the entry says
+ * <Fallback>affinity</Fallback>, 0 when it says none. Only an affinity
+ * entry can classify a task it cannot enforce on (see
+ * lpmd_slice_cpuset_pid_intent), so this is what tells a report reader
+ * whether a non-enforceable entry is doing anything.
+ *
  * Returns 1 and fills the out params when covered, 0 when not, -1 when
  * slice policy is inactive or the cgroup cannot be read.
  */
 int lpmd_slice_cpuset_pid_coverage(pid_t pid, char *unit_out, size_t unit_cap,
 				   char *cls_out, size_t cls_cap,
-				   int *enforceable_out)
+				   int *enforceable_out,
+				   int *fallback_affinity_out)
 {
 	char cgpath[SLICE_CGPATH_MAX];
 	char best_unit[SLICE_NAME_MAX] = { 0 };
@@ -1419,6 +1426,9 @@ int lpmd_slice_cpuset_pid_coverage(pid_t pid, char *unit_out, size_t unit_cap,
 	if (cls_out)
 		snprintf(cls_out, cls_cap, "%s",
 			 best->cores[0] ? best->cores : best->cls);
+	if (fallback_affinity_out)
+		*fallback_affinity_out =
+			best->fallback == SLICE_FALLBACK_AFFINITY;
 	if (enforceable_out) {
 		uid_t owner = cgpath_manager_uid(cgpath);
 

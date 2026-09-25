@@ -707,7 +707,8 @@ void lpmd_slice_cpuset_print_bound(void);
  * -1 = slice policy inactive. */
 int  lpmd_slice_cpuset_pid_coverage(pid_t pid, char *unit_out, size_t unit_cap,
 				    char *cls_out, size_t cls_cap,
-				    int *enforceable_out);
+				    int *enforceable_out,
+				    int *fallback_affinity_out);
 /*
  * The classification implied by @pid's slice, for the case the cgroup cannot
  * enforce a cpuset itself and the entry asked (<Fallback>affinity</Fallback>)
