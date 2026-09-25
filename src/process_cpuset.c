@@ -3700,9 +3700,13 @@ static int intent_entry_for_pid(const process_cpuset_t *ctx, pid_t pid,
  * imprecise; a unit name is neither -- systemd assigns it, the task cannot
  * change it, and it identifies one unit rather than a slice full of them. Where
  * the config names a specific unit and the slice only implies a default for
- * everything in it, the specific statement is the better evidence. Nothing in
- * the shipped config uses <Unit> yet, so this reorders nothing until someone
- * writes one.
+ * everything in it, the specific statement is the better evidence. The
+ * shipped config keys many entries on <Unit>, and each of those is decided
+ * here before intent is consulted.
+ *
+ * A <Cgroup> match is in step 4, not step 2, even though systemd assigns the
+ * path too: a glob over the whole path can span a slice as easily as name one
+ * unit. An entry that has to win over its slice needs a <Unit>.
  *
  * @intent_buf is storage the caller owns; the returned pointer is it when the
  * intent won, and *@from_intent says which happened. @how is only meaningful
