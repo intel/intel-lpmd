@@ -431,7 +431,6 @@ static void parse_class_tuning_node(xmlDoc *doc, xmlNode *node,
 	if (!val)
 		return;
 
-	ret = 0;
 	if (!strcmp((const char *)node->name, "MinPerfPctAC") ||
 	    !strcmp((const char *)node->name, "min_perf_pct_ac")) {
 		ret = read_min_perf_pct_and_validate(&ovr->min_perf_pct_ac,
