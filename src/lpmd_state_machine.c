@@ -748,7 +748,7 @@ static void dump_data(struct lpmd_config_t *config, int idx)
 int lpmd_enter_next_state(void)
 {
 	struct lpmd_config_t *config = get_lpmd_config();
-	int idx = current_idx;
+	int idx;
 
 	lpmd_lock();
 
