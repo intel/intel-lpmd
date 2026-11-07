@@ -212,6 +212,7 @@ struct lpmd_config_state_t {
 	char name[MAX_STATE_NAME];
 	int wlt_type;
 	int wlt_type_mask;
+	int wlt_long_term_class;
 	int entry_system_load_thres;
 	int exit_system_load_thres;
 	int exit_system_load_hyst;
@@ -496,6 +497,13 @@ enum wlt_type_t {
 	WLT_SUSTAINED = 2,
 	WLT_BURSTY = 3,
 	WLT_INVALID = 4,
+};
+
+enum wlt_long_term_class_t {
+	WLT_LONG_TERM_ANY = 0,
+	WLT_LONG_TERM_PERFORMANCE = 1,
+	WLT_LONG_TERM_POWER = 2,
+	WLT_LONG_TERM_INVALID = 3,
 };
 
 enum power_profile_daemon_mode {

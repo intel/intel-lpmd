@@ -241,6 +241,15 @@ Mask of workload type values to enter into this state. This has higher priority
 than WLTType. If this value is defined then utilization based entry triggers
 are not used.
 .PP
+.B WLTLongTermClass
+Optional long-term workload classification for Panther Lake. The value is
+case-insensitive and may be \fBany\fR (the default), \fBperformance\fR, or
+\fBpower\fR. Panther Lake reports the long-term classification in bit 4 of
+\fBworkload_type_index\fR: a clear bit selects performance and a set bit selects
+power. Existing WLTType, WLTTypeMask, and WLTHintMask matching is unchanged;
+the selector is evaluated independently against raw bit 4. \fBany\fR ignores
+bit 4.
+.PP
 .B ActiveCPUs
 Active CPUs in this state. The list can be comma separated or use "-" for
 a range. This is optional to have active CPUs in a state.
