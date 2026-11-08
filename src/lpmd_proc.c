@@ -225,6 +225,10 @@ static void connect_to_upower_daemon(void)
 	g_signal_connect(upower_client, "notify", G_CALLBACK(upower_daemon_cb), NULL);
 
 	devices = up_client_get_devices2(upower_client);
+	if (!devices) {
+		g_warning("upowerd returned no devices, skipping device signal hookup");
+		return;
+	}
 	for (i = 0; i < devices->len; i++) {
 		device = g_ptr_array_index(devices, i);
 		g_signal_connect(device, "notify", G_CALLBACK(upower_daemon_cb), NULL);
