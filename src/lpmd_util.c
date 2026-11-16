@@ -483,7 +483,7 @@ static int parse_proc_stat(void)
 	busy_sys = calculate_busypct(&proc_stat_cur[sys_idx], &proc_stat_prev[sys_idx]);
 
 	busy_cpu = 0;
-	for (i = 1; i <= get_max_online_cpu(); i++) {
+	for (i = 0; i <= get_max_online_cpu(); i++) {
 		if (!proc_stat_cur[i].valid)
 			continue;
 
