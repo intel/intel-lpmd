@@ -90,6 +90,7 @@ int lpmd_init_config_state(struct lpmd_config_state_t *state)
 	state->enter_gfx_load_thres = 0;
 	state->exit_gfx_load_thres = 0;
 	state->exit_gfx_load_hyst = 0;
+	state->load_hyst_from_thres = 0;
 
 	state->min_poll_interval = 0;
 	state->max_poll_interval = 0;
@@ -183,7 +184,8 @@ static int config_state_match_common(struct lpmd_config_t *config, int idx, int 
 		if (bcpu > state->enter_cpu_load_thres) {
 			if (!hyst)
 				return 0;
-			if (bcpu > state->entry_load_cpu + hyst ||
+			if ((!state->load_hyst_from_thres &&
+			     bcpu > state->entry_load_cpu + hyst) ||
 			    bcpu > state->enter_cpu_load_thres + hyst)
 				return 0;
 		}
@@ -202,7 +204,8 @@ static int config_state_match_common(struct lpmd_config_t *config, int idx, int 
 		if (bgfx > state->enter_gfx_load_thres) {
 			if (!hyst)
 				return 0;
-			if (bgfx > state->entry_load_gfx + hyst ||
+			if ((!state->load_hyst_from_thres &&
+			     bgfx > state->entry_load_gfx + hyst) ||
 			    bgfx > state->enter_gfx_load_thres + hyst)
 				return 0;
 		}
@@ -221,7 +224,8 @@ static int config_state_match_common(struct lpmd_config_t *config, int idx, int 
 		if (bsys > state->entry_system_load_thres) {
 			if (!hyst)
 				return 0;
-			if (bsys > state->entry_load_sys + hyst ||
+			if ((!state->load_hyst_from_thres &&
+			     bsys > state->entry_load_sys + hyst) ||
 			    bsys > state->entry_system_load_thres + hyst)
 				return 0;
 		}
@@ -814,6 +818,7 @@ static void dump_states(struct lpmd_config_t *lpmd_config)
 	lpmd_log_info("Util Enable:%d\n", lpmd_config->util_monitor);
 	lpmd_log_info("Util entry threshold:%d\n", lpmd_config->util_entry_threshold);
 	lpmd_log_info("Util exit threshold:%d\n", lpmd_config->util_exit_threshold);
+	lpmd_log_info("Util exit hysteresis:%d\n", lpmd_config->util_exit_hysteresis);
 	lpmd_log_info("Util LP Mode CPUs:%s\n", lpmd_config->lp_mode_cpus);
 	lpmd_log_info("EPP in LP Mode:%d\n", lpmd_config->lp_mode_epp);
 	lpmd_log_info("CPU Family:%d\n", lpmd_config->cpu_family);
@@ -929,6 +934,15 @@ static int build_default_states(struct lpmd_config_t *config)
 	snprintf(state->name, MAX_STATE_NAME, "UTIL_POWER");
 	state->entry_system_load_thres = config->util_entry_threshold;
 	state->enter_cpu_load_thres = config->util_exit_threshold;
+	/*
+	 * Stay in LP mode until the system load exceeds
+	 * util_entry_threshold + util_exit_hysteresis, so that a load
+	 * hovering around the entry threshold does not ping-pong.
+	 */
+	if (config->util_entry_threshold) {
+		state->exit_system_load_hyst = config->util_exit_hysteresis;
+		state->load_hyst_from_thres = 1;
+	}
 	state->itmt_state = config->ignore_itmt ? SETTING_IGNORE : 0;
 	state->irq_migrate = 1;
 	state->min_poll_interval = 100;

@@ -975,6 +975,13 @@ static int lpmd_fill_config(xmlDoc *doc, xmlNode *a_node, struct lpmd_config_t *
 			    lpmd_config->util_exit_threshold < 0 ||
 			    lpmd_config->util_exit_threshold > 100)
 				goto err;
+		} else if (!strcmp((const char *)cur_node->name, "util_exit_hysteresis")) {
+			errno = 0;
+			lpmd_config->util_exit_hysteresis = strtol(tmp_value, &pos, 10);
+			if (errno || *pos != '\0' ||
+			    lpmd_config->util_exit_hysteresis < 0 ||
+			    lpmd_config->util_exit_hysteresis > 100)
+				goto err;
 		} else if (!strcmp((const char *)cur_node->name, "EntryHystMS")) {
 			errno = 0;
 			lpmd_config->util_entry_hyst = strtol(tmp_value, &pos, 10);

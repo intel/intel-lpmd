@@ -71,11 +71,25 @@ for Intel Energy Optimizer (LPMD) daemon
 	<util_entry_threshold>10</util_entry_threshold>
 
 	<!--
-		System utilization threshold to exit LP mode
+		Busiest CPU utilization threshold to exit LP mode
 		from 0 - 100
+		LP mode is left when any CPU is busier than this, e.g. an LP
+		mode CPU is saturated. This is not compared with the system
+		utilization.
 		clear both util_entry_threshold and util_exit_threshold to disable util monitor
 	-->
 	<util_exit_threshold>95</util_exit_threshold>
+
+	<!--
+		System utilization hysteresis to exit LP mode
+		from 0 - 100
+		Once in LP mode, stay there until the system utilization exceeds
+		util_entry_threshold + util_exit_hysteresis. Avoids switching
+		in and out of LP mode on every poll when the system utilization
+		hovers around util_entry_threshold.
+		0 : no hysteresis, exit as soon as util_entry_threshold is exceeded
+	-->
+	<util_exit_hysteresis>0</util_exit_hysteresis>
 
 	<!--
 		Entry delay. Minimum delay in non Low Power mode to

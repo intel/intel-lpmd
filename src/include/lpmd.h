@@ -221,6 +221,12 @@ struct lpmd_config_state_t {
 	int enter_gfx_load_thres;
 	int exit_gfx_load_thres;
 	int exit_gfx_load_hyst;
+	/*
+	 * Exit*LoadHysteresis normally widens the band only up to the load
+	 * the state was entered at plus the hysteresis. When set, the band is
+	 * the threshold plus the hysteresis regardless of the entry load.
+	 */
+	int load_hyst_from_thres;
 	int min_poll_interval;
 	int max_poll_interval;
 	int poll_interval_increment;
@@ -417,6 +423,7 @@ struct lpmd_config_t {
 	};
 	int util_entry_threshold;
 	int util_exit_threshold;
+	int util_exit_hysteresis;
 	int util_entry_delay;
 	int util_exit_delay;
 	int util_entry_hyst;
