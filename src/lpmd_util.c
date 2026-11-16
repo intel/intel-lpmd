@@ -383,7 +383,8 @@ static int parse_proc_stat(void)
 	FILE *filep;
 	int i;
 	int val;
-	int count = get_max_online_cpu() + 1;
+	/* Reserve a separate slot after the highest CPU index for the aggregate. */
+	int count = get_max_online_cpu() + 2;
 	int sys_idx = count - 1;
 	size_t size = sizeof(struct proc_stat_info) * count;
 
