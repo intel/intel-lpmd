@@ -447,7 +447,11 @@ static int parse_proc_stat(void)
 		if (ret == -1 && !(strncmp(p, "cpu", 3))) {
 			/* Read system line */
 			info = &proc_stat_cur[sys_idx];
-		} else if (ret == 1) {
+		} else if (ret == 1 && cpu >= 0 && cpu < sys_idx) {
+			/*
+			 * The arrays are sized from the highest CPU online at
+			 * startup. Skip CPUs onlined later with a higher index.
+			 */
 			info = &proc_stat_cur[cpu];
 		} else {
 			free(tmpline);
