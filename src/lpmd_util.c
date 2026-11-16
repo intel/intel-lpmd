@@ -383,7 +383,8 @@ static int parse_proc_stat(void)
 	FILE *filep;
 	int i;
 	int val;
-	int count = get_max_online_cpu() + 1;
+	/* Reserve a separate slot after the highest CPU index for the aggregate. */
+	int count = get_max_online_cpu() + 2;
 	int sys_idx = count - 1;
 	size_t size = sizeof(struct proc_stat_info) * count;
 
@@ -446,7 +447,11 @@ static int parse_proc_stat(void)
 		if (ret == -1 && !(strncmp(p, "cpu", 3))) {
 			/* Read system line */
 			info = &proc_stat_cur[sys_idx];
-		} else if (ret == 1) {
+		} else if (ret == 1 && cpu >= 0 && cpu < sys_idx) {
+			/*
+			 * The arrays are sized from the highest CPU online at
+			 * startup. Skip CPUs onlined later with a higher index.
+			 */
 			info = &proc_stat_cur[cpu];
 		} else {
 			free(tmpline);
@@ -482,7 +487,7 @@ static int parse_proc_stat(void)
 	busy_sys = calculate_busypct(&proc_stat_cur[sys_idx], &proc_stat_prev[sys_idx]);
 
 	busy_cpu = 0;
-	for (i = 1; i <= get_max_online_cpu(); i++) {
+	for (i = 0; i <= get_max_online_cpu(); i++) {
 		if (!proc_stat_cur[i].valid)
 			continue;
 

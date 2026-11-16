@@ -159,6 +159,16 @@ The system workload is considered to not fit the lp_mode_cpus capacity when
 the utilization of the busiest lp_mode_cpus is above this threshold.
 Setting to 0 or leaving this empty disables the utilization monitor.
 .PP
+.B util_exit_hysteresis
+specifies, in percent from 0 to 100, how far the system utilization may rise
+above util_entry_threshold before Low Power Mode is exited. Low Power Mode is
+entered when the system utilization is at or below util_entry_threshold, and
+is left only once it exceeds util_entry_threshold + util_exit_hysteresis
+(or the util_exit_threshold condition is met). This avoids switching in and
+out of Low Power Mode on every poll when the system utilization hovers around
+util_entry_threshold. Only used when no States are defined and
+util_entry_threshold is set. Default is 0, no hysteresis.
+.PP
 .B IgnoreITMT
 Avoid changing scheduler ITMT flag. This means that during transition to
 low power mode, ITMT flag is not changed. This reduces latency during
@@ -628,10 +638,16 @@ The configuration file format conforms to XML specifications.
 	<util_entry_threshold>Example threshold</util_entry_threshold>
 
 	<!--
-		System utilization threshold to exit LP mode
+		Busiest CPU utilization threshold to exit LP mode
 		from 0 - 100
 	-->
 	<util_exit_threshold>Example threshold</util_exit_threshold>
+
+	<!--
+		System utilization hysteresis to exit LP mode
+		from 0 - 100
+	-->
+	<util_exit_hysteresis>Example hysteresis</util_exit_hysteresis>
 
 	<!--
 		EPP to use in Low Power Mode
