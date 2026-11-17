@@ -414,17 +414,24 @@ int update_perf_diffs(float *sum_norm_perf, int stat_init_only)
 			continue;
 
 		/*
+		 * There is no delta without a previous sample, e.g. on the first
+		 * poll after the perf group of this CPU was reopened. Skip the
+		 * CPU, otherwise it would inherit next_load and next_s0 of the
+		 * CPU evaluated before it.
+		 */
+		if (!perf_stats[t].tsc_diff)
+			continue;
+
+		/*
 		 * Normalized perf metric defined as pperf per load per time.
 		 * The rationale is detailed here:
 		 * github.com/intel/psst >whitepapers >Generic_perf_per_watt.pdf
 		 * Given that delta_load = delta_mperf/delta_tsc, we can rewrite
 		 * as given below.
 		 */
-		if (perf_stats[t].tsc_diff) {
-			next_load = (float)100 * perf_stats[t].mperf_diff /
-				    perf_stats[t].tsc_diff;
-			perf_stats[t].l0 = next_load;
-		}
+		next_load = (float)100 * perf_stats[t].mperf_diff /
+			    perf_stats[t].tsc_diff;
+		perf_stats[t].l0 = next_load;
 
 		if (A_LTE_B(max_load, next_load)) {
 			max_load = next_load;
