@@ -435,7 +435,7 @@ int update_perf_diffs(float *sum_norm_perf, int stat_init_only)
 	struct thread_data tdata;
 	int maxed_cpu = -1;
 
-	for (t = 0; t < get_max_online_cpu(); t++) {
+	for (t = 0; t <= get_max_online_cpu(); t++) {
 		if (!cpu_applicable(t, get_cur_state()))
 			continue;
 
@@ -627,7 +627,7 @@ int state_max_avg(void)
 /* return multi threaded false if at least one cpu is under utilizied */
 int max_mt_detected(enum state_idx state)
 {
-	for (int t = 0; t < get_max_online_cpu(); t++) {
+	for (int t = 0; t <= get_max_online_cpu(); t++) {
 		if (!cpu_applicable(t, state))
 			continue;
 
@@ -642,7 +642,8 @@ int util_init_proxy(void)
 {
 	float dummy;
 
-	if (init_perf_calculations(get_max_online_cpu()) < 0) {
+	/* get_max_online_cpu() is the highest CPU index, not a count */
+	if (init_perf_calculations(get_max_online_cpu() + 1) < 0) {
 		lpmd_log_error("WLT_Proxy: error initializing perf calculations");
 		return LPMD_ERROR;
 	}
