@@ -77,7 +77,7 @@ man8_MANS = man/intel_lpmd.8 man/intel_lpmd_control.8
 man5_MANS = man/intel_lpmd_config.xml.5
 
 lpmd-resource.c: $(top_srcdir)/lpmd-resource.gresource.xml
-	$(AM_V_GEN) glib-compile-resources --generate-source lpmd-resource.gresource.xml
+	$(AM_V_GEN) glib-compile-resources --generate-source --sourcedir="$(top_srcdir)" --target="$@" "$<"
 
 install-data-hook:
 	gzip -f -k "$(DESTDIR)$(mandir)/man8/intel_lpmd.8";
