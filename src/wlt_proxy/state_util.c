@@ -107,6 +107,9 @@ static int perf_stat_init(void)
 	}
 
 	for (int t = 0; t < max_cpus; t++) {
+		perf_stats[t].aperf_fd = -1;
+		perf_stats[t].mperf_fd = -1;
+		perf_stats[t].pperf_fd = -1;
 		if (!is_cpu_online(t))
 			continue;
 
@@ -285,6 +288,8 @@ static long open_perf_counter(int cpu, unsigned int type, unsigned int config,
 	return fd;
 }
 
+static void close_amperf_fd(int cpu);
+
 /* helper - pperf reading */
 static void open_amperf_fd(int cpu)
 {
@@ -294,14 +299,24 @@ static void open_amperf_fd(int cpu)
 	const unsigned int pperf_config = read_pperf_config();
 
 	perf_stats[cpu].aperf_fd = open_perf_counter(cpu, msr_type, aperf_config, -1, PERF_FORMAT_GROUP);
+	if (perf_stats[cpu].aperf_fd < 0)
+		return;
 	perf_stats[cpu].mperf_fd = open_perf_counter(cpu, msr_type, mperf_config, perf_stats[cpu].aperf_fd, PERF_FORMAT_GROUP);
+	if (perf_stats[cpu].mperf_fd < 0)
+		goto fail;
 	perf_stats[cpu].pperf_fd = open_perf_counter(cpu, msr_type, pperf_config, perf_stats[cpu].aperf_fd, PERF_FORMAT_GROUP);
+	if (perf_stats[cpu].pperf_fd < 0)
+		goto fail;
+	return;
+
+fail:
+	close_amperf_fd(cpu);
 }
 
 /* helper - pperf reading */
 static int get_amperf_fd(int cpu)
 {
-	if (perf_stats[cpu].aperf_fd)
+	if (perf_stats[cpu].aperf_fd >= 0)
 		return perf_stats[cpu].aperf_fd;
 
 	open_amperf_fd(cpu);
@@ -346,10 +361,24 @@ static int read_aperf_mperf_tsc_perf(struct thread_data *t, int cpu)
 	 */
 	t->tsc = rdtsc();
 
-	const int n = read(fd_amperf, &cnt.as_array[0], sizeof(cnt.as_array));
+	ssize_t n;
+	do {
+		n = read(fd_amperf, &cnt.as_array[0], sizeof(cnt.as_array));
+	} while (n < 0 && errno == EINTR);
 
-	if (n != sizeof(cnt.as_array))
+	if (n != (ssize_t)sizeof(cnt.as_array) || cnt.nr_entries != 3) {
+		/* CPU offline/online (including resume) can leave an existing
+		 * per-CPU perf group returning EOF or missing group members. Drop it;
+		 * the next poll will reopen it once the CPU is available again.
+		 * Fresh counters start at zero, so discard their old deltas too.
+		 */
+		close_amperf_fd(cpu);
+		last_aperf[cpu] = 0;
+		last_mperf[cpu] = 0;
+		last_pperf[cpu] = 0;
+		last_tsc[cpu] = 0;
 		return -2;
+	}
 
 	t->aperf = cnt.aperf;
 	t->mperf = cnt.mperf;
@@ -440,12 +469,15 @@ int update_perf_diffs(float *sum_norm_perf, int stat_init_only)
 /* close perf fd's */
 static void close_amperf_fd(int cpu)
 {
-	if (perf_stats[cpu].aperf_fd)
+	if (perf_stats[cpu].aperf_fd >= 0)
 		close(perf_stats[cpu].aperf_fd);
-	if (perf_stats[cpu].mperf_fd)
+	if (perf_stats[cpu].mperf_fd >= 0)
 		close(perf_stats[cpu].mperf_fd);
-	if (perf_stats[cpu].pperf_fd)
+	if (perf_stats[cpu].pperf_fd >= 0)
 		close(perf_stats[cpu].pperf_fd);
+	perf_stats[cpu].aperf_fd = -1;
+	perf_stats[cpu].mperf_fd = -1;
+	perf_stats[cpu].pperf_fd = -1;
 }
 
 /* cleanup perf_stat structure */
