@@ -32,6 +32,8 @@ struct perf_stats_t {
 	int aperf_fd;
 	int mperf_fd;
 	int pperf_fd;
+	/* opening the counters failed with an error retrying cannot fix */
+	int perf_unavailable;
 
 	uint64_t aperf_diff;
 	uint64_t mperf_diff;
@@ -107,6 +109,9 @@ static int perf_stat_init(void)
 	}
 
 	for (int t = 0; t < max_cpus; t++) {
+		perf_stats[t].aperf_fd = -1;
+		perf_stats[t].mperf_fd = -1;
+		perf_stats[t].pperf_fd = -1;
 		if (!is_cpu_online(t))
 			continue;
 
@@ -285,24 +290,73 @@ static long open_perf_counter(int cpu, unsigned int type, unsigned int config,
 	return fd;
 }
 
+static void close_amperf_fd(int cpu);
+
+/*
+ * perf_event_open() errors that retrying cannot fix: the msr PMU or one of
+ * the events is not supported, or access is denied. Anything else, ENODEV
+ * for an offline CPU in particular, may go away and is retried on the next
+ * poll.
+ */
+static int perf_open_error_is_permanent(int err)
+{
+	switch (err) {
+	case EINVAL:
+	case ENOENT:
+	case EOPNOTSUPP:
+	case EACCES:
+	case EPERM:
+		return 1;
+	default:
+		return 0;
+	}
+}
+
 /* helper - pperf reading */
 static void open_amperf_fd(int cpu)
 {
-	const unsigned int msr_type = read_msr_type();
-	const unsigned int aperf_config = read_aperf_config();
-	const unsigned int mperf_config = read_mperf_config();
-	const unsigned int pperf_config = read_pperf_config();
+	/* The msr PMU description does not change, read it only once */
+	static unsigned int msr_type, aperf_config, mperf_config, pperf_config;
+	static int msr_config_read;
+	int err;
+
+	if (!msr_config_read) {
+		msr_type = read_msr_type();
+		aperf_config = read_aperf_config();
+		mperf_config = read_mperf_config();
+		pperf_config = read_pperf_config();
+		msr_config_read = 1;
+	}
 
 	perf_stats[cpu].aperf_fd = open_perf_counter(cpu, msr_type, aperf_config, -1, PERF_FORMAT_GROUP);
+	if (perf_stats[cpu].aperf_fd < 0)
+		goto fail;
 	perf_stats[cpu].mperf_fd = open_perf_counter(cpu, msr_type, mperf_config, perf_stats[cpu].aperf_fd, PERF_FORMAT_GROUP);
+	if (perf_stats[cpu].mperf_fd < 0)
+		goto fail;
 	perf_stats[cpu].pperf_fd = open_perf_counter(cpu, msr_type, pperf_config, perf_stats[cpu].aperf_fd, PERF_FORMAT_GROUP);
+	if (perf_stats[cpu].pperf_fd < 0)
+		goto fail;
+	return;
+
+fail:
+	err = errno;
+	close_amperf_fd(cpu);
+	if (perf_open_error_is_permanent(err)) {
+		perf_stats[cpu].perf_unavailable = 1;
+		lpmd_log_warn("WLT_Proxy: perf counters unavailable for cpu %d: %s, not retrying\n",
+			      cpu, strerror(err));
+	}
 }
 
 /* helper - pperf reading */
 static int get_amperf_fd(int cpu)
 {
-	if (perf_stats[cpu].aperf_fd)
+	if (perf_stats[cpu].aperf_fd >= 0)
 		return perf_stats[cpu].aperf_fd;
+
+	if (perf_stats[cpu].perf_unavailable)
+		return -1;
 
 	open_amperf_fd(cpu);
 
@@ -346,10 +400,24 @@ static int read_aperf_mperf_tsc_perf(struct thread_data *t, int cpu)
 	 */
 	t->tsc = rdtsc();
 
-	const int n = read(fd_amperf, &cnt.as_array[0], sizeof(cnt.as_array));
+	ssize_t n;
+	do {
+		n = read(fd_amperf, &cnt.as_array[0], sizeof(cnt.as_array));
+	} while (n < 0 && errno == EINTR);
 
-	if (n != sizeof(cnt.as_array))
+	if (n != (ssize_t)sizeof(cnt.as_array) || cnt.nr_entries != 3) {
+		/* CPU offline/online (including resume) can leave an existing
+		 * per-CPU perf group returning EOF or missing group members. Drop it;
+		 * the next poll will reopen it once the CPU is available again.
+		 * Fresh counters start at zero, so discard their old deltas too.
+		 */
+		close_amperf_fd(cpu);
+		last_aperf[cpu] = 0;
+		last_mperf[cpu] = 0;
+		last_pperf[cpu] = 0;
+		last_tsc[cpu] = 0;
 		return -2;
+	}
 
 	t->aperf = cnt.aperf;
 	t->mperf = cnt.mperf;
@@ -367,8 +435,12 @@ int update_perf_diffs(float *sum_norm_perf, int stat_init_only)
 	struct thread_data tdata;
 	int maxed_cpu = -1;
 
-	for (t = 0; t < get_max_online_cpu(); t++) {
+	for (t = 0; t <= get_max_online_cpu(); t++) {
 		if (!cpu_applicable(t, get_cur_state()))
+			continue;
+
+		/* Already reported when opening the counters failed */
+		if (perf_stats[t].perf_unavailable)
 			continue;
 
 		/*reading through perf api*/
@@ -385,17 +457,24 @@ int update_perf_diffs(float *sum_norm_perf, int stat_init_only)
 			continue;
 
 		/*
+		 * There is no delta without a previous sample, e.g. on the first
+		 * poll after the perf group of this CPU was reopened. Skip the
+		 * CPU, otherwise it would inherit next_load and next_s0 of the
+		 * CPU evaluated before it.
+		 */
+		if (!perf_stats[t].tsc_diff)
+			continue;
+
+		/*
 		 * Normalized perf metric defined as pperf per load per time.
 		 * The rationale is detailed here:
 		 * github.com/intel/psst >whitepapers >Generic_perf_per_watt.pdf
 		 * Given that delta_load = delta_mperf/delta_tsc, we can rewrite
 		 * as given below.
 		 */
-		if (perf_stats[t].tsc_diff) {
-			next_load = (float)100 * perf_stats[t].mperf_diff /
-				    perf_stats[t].tsc_diff;
-			perf_stats[t].l0 = next_load;
-		}
+		next_load = (float)100 * perf_stats[t].mperf_diff /
+			    perf_stats[t].tsc_diff;
+		perf_stats[t].l0 = next_load;
 
 		if (A_LTE_B(max_load, next_load)) {
 			max_load = next_load;
@@ -440,12 +519,15 @@ int update_perf_diffs(float *sum_norm_perf, int stat_init_only)
 /* close perf fd's */
 static void close_amperf_fd(int cpu)
 {
-	if (perf_stats[cpu].aperf_fd)
+	if (perf_stats[cpu].aperf_fd >= 0)
 		close(perf_stats[cpu].aperf_fd);
-	if (perf_stats[cpu].mperf_fd)
+	if (perf_stats[cpu].mperf_fd >= 0)
 		close(perf_stats[cpu].mperf_fd);
-	if (perf_stats[cpu].pperf_fd)
+	if (perf_stats[cpu].pperf_fd >= 0)
 		close(perf_stats[cpu].pperf_fd);
+	perf_stats[cpu].aperf_fd = -1;
+	perf_stats[cpu].mperf_fd = -1;
+	perf_stats[cpu].pperf_fd = -1;
 }
 
 /* cleanup perf_stat structure */
@@ -545,7 +627,7 @@ int state_max_avg(void)
 /* return multi threaded false if at least one cpu is under utilizied */
 int max_mt_detected(enum state_idx state)
 {
-	for (int t = 0; t < get_max_online_cpu(); t++) {
+	for (int t = 0; t <= get_max_online_cpu(); t++) {
 		if (!cpu_applicable(t, state))
 			continue;
 
@@ -560,7 +642,8 @@ int util_init_proxy(void)
 {
 	float dummy;
 
-	if (init_perf_calculations(get_max_online_cpu()) < 0) {
+	/* get_max_online_cpu() is the highest CPU index, not a count */
+	if (init_perf_calculations(get_max_online_cpu() + 1) < 0) {
 		lpmd_log_error("WLT_Proxy: error initializing perf calculations");
 		return LPMD_ERROR;
 	}
