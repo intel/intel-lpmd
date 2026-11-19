@@ -287,6 +287,39 @@ static int is_xml_true_value(const char *value)
 	       !strcasecmp(value, "yes") || !strcasecmp(value, "on");
 }
 
+static enum wlt_long_term_class_t parse_wlt_long_term_class(const char *value)
+{
+	char class_name[32];
+	const char *start;
+	size_t len;
+
+	if (!value)
+		return WLT_LONG_TERM_INVALID;
+
+	start = value;
+	while (*start && isspace((unsigned char)*start))
+		start++;
+
+	len = strlen(start);
+	while (len && isspace((unsigned char)start[len - 1]))
+		len--;
+
+	if (!len || len >= sizeof(class_name))
+		return WLT_LONG_TERM_INVALID;
+
+	memcpy(class_name, start, len);
+	class_name[len] = '\0';
+
+	if (!strcasecmp(class_name, "any"))
+		return WLT_LONG_TERM_ANY;
+	if (!strcasecmp(class_name, "performance"))
+		return WLT_LONG_TERM_PERFORMANCE;
+	if (!strcasecmp(class_name, "power"))
+		return WLT_LONG_TERM_POWER;
+
+	return WLT_LONG_TERM_INVALID;
+}
+
 static void lpmd_parse_state(xmlDoc *doc, xmlNode *a_node, struct lpmd_config_t *config, int idx)
 {
 	struct lpmd_config_state_t *state = &config->config_states[idx];
@@ -319,6 +352,12 @@ static void lpmd_parse_state(xmlDoc *doc, xmlNode *a_node, struct lpmd_config_t 
 			state->wlt_type_mask = strtol(tmp_value, &pos, 10);
 		else if (!strcmp((const char *)cur_node->name, "WLTType"))
 			state->wlt_type = strtol(tmp_value, &pos, 10);
+		else if (!strcmp((const char *)cur_node->name, "WLTLongTermClass")) {
+			state->wlt_long_term_class = parse_wlt_long_term_class(tmp_value);
+			if (state->wlt_long_term_class == WLT_LONG_TERM_INVALID)
+				lpmd_log_error("Invalid WLTLongTermClass value: '%s' in state ID %d\n",
+				       tmp_value, state->id);
+		}
 		if (!strcmp((const char *)cur_node->name, "EntrySystemLoadThres"))
 			state->entry_system_load_thres = strtol(tmp_value, &pos, 10);
 		if (!strcmp((const char *)cur_node->name, "ExitSystemLoadThres"))
