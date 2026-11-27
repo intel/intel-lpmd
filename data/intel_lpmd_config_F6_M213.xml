@@ -6,7 +6,7 @@ Intel Energy Optimizer (LPMD) configuration for Wildcat Lake
 
   Performance (PerformanceDef=-1) -> LPMD_OFF  -> all CPUs active (P+L)
   Balanced    (BalancedDef= 0)    -> LPMD_AUTO -> L-cores only (P-cores parked)
-  Powersaver  (PowersaverDef= 1)  -> LPMD_ON   -> L-cores only (forced)
+  Powersaver  (PowersaverDef= 0)  -> LPMD_AUTO -> L-cores only (P-cores parked)
 
 Design: verified on an Intel Core 5 320 (2 P-cores, 15W TDP) via the
 daemon's own CPUID-based core-type detection (lpmd_cpu.c:detect_cpu_topo,
@@ -27,13 +27,12 @@ Powersaver mode with zero active cores.
 Only the idle states park the P-cores. UTIL_IDLE uses ActiveLcores=ALL
 (topology-portable, not hardcoded CPU numbers); UTIL_IDLE_SUSTAIN and
 UTIL_IDLE_BURSTY release the full CPU set, following F6_M181 and F6_M204.
-EPP/EPB additionally vary per WLT state.
+SoC Power Slider varies per WLT state; EPP/EPB stay under PPD control.
 -->
 
 <Configuration>
 	<!--
 		CPU format example: 1,2,4..6,8-10
-		Used by the force-on path (PowersaverDef=1).
 	-->
 	<lp_mode_cpus></lp_mode_cpus>
 
@@ -52,7 +51,7 @@ EPP/EPB additionally vary per WLT state.
 		1: Cgroup v2 isolate
 		2: CPU idle injection
 	-->
-	<Mode>1</Mode>
+	<Mode>0</Mode>
 
 	<!--
 		Default behavior when Performance power setting is used
@@ -76,7 +75,7 @@ EPP/EPB additionally vary per WLT state.
 		 1: force on. (Always stay in Low Power Mode)
 		 0: auto. (opportunistic Low Power Mode enter/exit)
 	-->
-	<PowersaverDef>1</PowersaverDef>
+	<PowersaverDef>0</PowersaverDef>
 
 	<!--
 		Use HFI LPM hints
@@ -97,7 +96,7 @@ EPP/EPB additionally vary per WLT state.
 		0 : No
 		1 : Yes
 	-->
-	<WLTHintPollEnable>1</WLTHintPollEnable>
+	<WLTHintPollEnable>0</WLTHintPollEnable>
 
 	<!--
 		Use HFI SUV hints
@@ -142,19 +141,19 @@ EPP/EPB additionally vary per WLT state.
 		0: disable ITMT upon LP-mode enter and re-enable ITMT upon LP-mode exit
 		1: do not touch ITMT setting during LP-mode enter/exit
 
-		lpmd parks P-cores via cgroup isolation; ITMT tells the scheduler
+		lpmd parks P-cores via cgroup cpuset; ITMT tells the scheduler
 		to *prefer* P-cores, the opposite of what LPM does here. Kept at
 		0 for consistency with upstream configs (F6_M170/189/204/197).
 	-->
 	<IgnoreITMT>0</IgnoreITMT>
 
 	<!--
-		SoC Power Slider (BalancedSliderAC/DC, SliderOffsetAC/DC): omitted.
-		Not yet confirmed present on Wildcat Lake via the int340x thermal
-		driver on this sample; can be added once verified on hardware that
-		exposes the slider mailbox. See F6_M204 (Panther Lake) for the
-		values to model if/when confirmed.
+		Slider default configuration for AC and DC
 	-->
+	<BalancedSliderAC>1</BalancedSliderAC>
+	<BalancedSliderDC>3</BalancedSliderDC>
+	<SliderOffsetAC>0</SliderOffsetAC>
+	<SliderOffsetDC>3</SliderOffsetDC>
 
 	<!--
 		WorkLoad Type hint states for Wildcat Lake.
@@ -185,21 +184,12 @@ EPP/EPB additionally vary per WLT state.
 		intel_lpmd_config.xml(5), "if [WLTType] is defined then
 		utilization based entry triggers are not used".
 
-		EPP/EPB are differentiated per WLT state:
+		SoC Power Slider values are differentiated per WLT state
+		(matching F6_M204), while EPP/EPB remain under PPD control:
 
-		  UTIL_IDLE (WLT 0+1): EPP=192 "balance_power", EPB=8
-		    Idle or light activity. Power-biased, P-cores parked, but
-		    the L-cores can still respond to light interactive tasks.
-
-		  UTIL_IDLE_SUSTAIN (WLT 2): EPP=64, EPB=4
-		    Sustained compute. Full CPU set, performance-biased.
-
-		  UTIL_IDLE_BURSTY (WLT 3): EPP=128 "balance_performance", EPB=6
-		    Bursty spikes. Full CPU set so bursts retire quickly, but
-		    biased more toward power than the sustained state.
-
-		EPP/EPB values for states 2 and 3 are taken from F6_M181, whose
-		WLTTypeMask=3 idle state this config otherwise mirrors.
+		  UTIL_IDLE (WLT 0+1): BalanceSlider=3, SliderOffset=3 (AC/DC)
+		  UTIL_IDLE_SUSTAIN (WLT 2): AC 1/0, DC 3/3
+		  UTIL_IDLE_BURSTY (WLT 3): AC 1/0, DC 3/3
 
 		WLTTypeMask=3 on UTIL_IDLE merges WLT=0 (WLT_IDLE / deep idle)
 		and WLT=1 (WLT_BATTERY_LIFE / light usage) into one state, since
@@ -221,25 +211,33 @@ EPP/EPB additionally vary per WLT state.
 			<Name> UTIL_IDLE </Name>
 			<WLTTypeMask> 3 </WLTTypeMask>
 			<ActiveLcores>ALL</ActiveLcores>
-			<IRQMigrate>1</IRQMigrate>
-			<EPP>192</EPP>
-			<EPB>8</EPB>
+			<IRQMigrate>-1</IRQMigrate>
+			<BalanceSliderAC>3</BalanceSliderAC>
+			<BalanceSliderDC>3</BalanceSliderDC>
+			<SliderOffsetAC>3</SliderOffsetAC>
+			<SliderOffsetDC>3</SliderOffsetDC>
 		</State>
 		<State>
 			<ID> 2 </ID>
 			<Name> UTIL_IDLE_SUSTAIN </Name>
 			<WLTType> 2 </WLTType>
 			<ActiveCPUs> * </ActiveCPUs>
-			<EPP>64</EPP>
-			<EPB>4</EPB>
+			<IRQMigrate>-1</IRQMigrate>
+			<BalanceSliderAC>1</BalanceSliderAC>
+			<BalanceSliderDC>3</BalanceSliderDC>
+			<SliderOffsetAC>0</SliderOffsetAC>
+			<SliderOffsetDC>3</SliderOffsetDC>
 		</State>
 		<State>
 			<ID> 3 </ID>
 			<Name> UTIL_IDLE_BURSTY </Name>
 			<WLTType> 3 </WLTType>
 			<ActiveCPUs> * </ActiveCPUs>
-			<EPP>128</EPP>
-			<EPB>6</EPB>
+			<IRQMigrate>-1</IRQMigrate>
+			<BalanceSliderAC>1</BalanceSliderAC>
+			<BalanceSliderDC>3</BalanceSliderDC>
+			<SliderOffsetAC>0</SliderOffsetAC>
+			<SliderOffsetDC>3</SliderOffsetDC>
 		</State>
 	</States>
 
