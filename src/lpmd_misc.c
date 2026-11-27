@@ -400,6 +400,8 @@ struct cpu_info {
 };
 
 static struct cpu_info *saved_cpu_info;
+static int epp_modified;
+static int epb_modified;
 
 static int get_epp(char *path, int *val, char *str, int size)
 {
@@ -480,6 +482,25 @@ static char *get_ppd_default_epp(void)
 	return "balance_performance";
 }
 
+static int get_ppd_default_epb(void)
+{
+	int ppd_mode = get_ppd_mode();
+
+	if (ppd_mode == PPD_INVALID)
+		return -1;
+
+	if (ppd_mode == PPD_PERFORMANCE)
+		return 0;
+
+	if (ppd_mode == PPD_POWERSAVER)
+		return 15;
+
+	if (is_on_battery())
+		return 8;
+
+	return 6;
+}
+
 int get_epp_epb(int *epp, char *epp_str, int size, int *epb)
 {
 	char path[MAX_STR_LENGTH];
@@ -503,6 +524,7 @@ int process_epp_epb(struct lpmd_config_state_t *state)
 {
 	int max_cpus = get_max_cpus();
 	char path[MAX_STR_LENGTH];
+	int apply_epp, apply_epb;
 	int ret;
 	int c;
 
@@ -510,7 +532,13 @@ int process_epp_epb(struct lpmd_config_state_t *state)
 		lpmd_log_info("Ignore EPP\n");
 	if (state->epb == SETTING_IGNORE)
 		lpmd_log_info("Ignore EPB\n");
-	if (state->epp == SETTING_IGNORE && state->epb == SETTING_IGNORE)
+
+	apply_epp = state->epp != SETTING_IGNORE &&
+		    (state->epp != SETTING_RESTORE || epp_modified);
+	apply_epb = state->epb != SETTING_IGNORE &&
+		    (state->epb != SETTING_RESTORE || epb_modified);
+
+	if (!apply_epp && !apply_epb)
 		return 0;
 
 	for (c = 0; c < max_cpus; c++) {
@@ -520,7 +548,7 @@ int process_epp_epb(struct lpmd_config_state_t *state)
 		if (!is_cpu_online(c))
 			continue;
 
-		if (state->epp != SETTING_IGNORE) {
+		if (apply_epp) {
 			if (state->epp == SETTING_RESTORE) {
 				val = -1;
 				str = get_ppd_default_epp();
@@ -542,23 +570,34 @@ int process_epp_epb(struct lpmd_config_state_t *state)
 						       c, val);
 				else
 					lpmd_log_debug("Set CPU%d EPP to %s\n",
-						       c, saved_cpu_info[c].epp_str);
+						       c, str);
 			}
 		}
 
-		if (state->epb != SETTING_IGNORE) {
-			if (state->epb == SETTING_RESTORE)
-				val = saved_cpu_info[c].epb;
-			else
+		if (apply_epb) {
+			if (state->epb == SETTING_RESTORE) {
+				val = get_ppd_default_epb();
+				if (val < 0)
+					val = saved_cpu_info[c].epb;
+			} else {
 				val = state->epb;
+			}
 
-			snprintf(path, MAX_STR_LENGTH,
-				 "/sys/devices/system/cpu/cpu%d/power/energy_perf_bias", c);
-			ret = lpmd_write_int(path, val, -1);
-			if (!ret)
-				lpmd_log_debug("Set CPU%d EPB to 0x%x\n", c, val);
+			if (val >= 0) {
+				snprintf(path, MAX_STR_LENGTH,
+					 "/sys/devices/system/cpu/cpu%d/power/energy_perf_bias", c);
+				ret = lpmd_write_int(path, val, -1);
+				if (!ret)
+					lpmd_log_debug("Set CPU%d EPB to 0x%x\n", c, val);
+			}
 		}
 	}
+
+	if (apply_epp)
+		epp_modified = (state->epp != SETTING_RESTORE);
+	if (apply_epb)
+		epb_modified = (state->epb != SETTING_RESTORE);
+
 	return 0;
 }
 
@@ -569,11 +608,16 @@ int epp_epb_init(void)
 	int ret;
 	int c;
 
+	epp_modified = 0;
+	epb_modified = 0;
 	saved_cpu_info = calloc(max_cpus, sizeof(struct cpu_info));
+	if (!saved_cpu_info)
+		return LPMD_ERROR;
 
 	for (c = 0; c < max_cpus; c++) {
 		saved_cpu_info[c].epp_str[0] = '\0';
 		saved_cpu_info[c].epp = -1;
+		saved_cpu_info[c].epb = -1;
 
 		if (!is_cpu_online(c))
 			continue;
